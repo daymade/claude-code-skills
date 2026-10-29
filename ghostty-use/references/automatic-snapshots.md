@@ -16,7 +16,7 @@ Ghostty, opens tabs, restores sessions or reads conversation history. Manual
 
 ## Install and verify
 
-Run the ordinary installer from the selected Skill source:
+For a new observer, run the ordinary installer from the selected Skill source:
 
 ```bash
 # Read-only deployment plan:
@@ -39,8 +39,8 @@ Expected install result: `installed: true`, with the verified runtime and schedu
 The installer creates its owned environment once with `uv` and registers the
 fixed interpreter directly. Reinstall updates the owned script copies and enables
 the same job without creating another label. The observer runs those byte-copies,
-not the skill source — re-run `install --apply` after any skill update, or the
-loaded job keeps the pre-update scripts.
+not the skill source. Use the upgrade procedure below after a script update;
+changing a source-backed Skill entry alone does not update this runtime.
 
 Use the read-only `install` plan for the currently requested definition and
 `status` for the loaded schedule. Install independently compares calendarinterval
@@ -48,6 +48,31 @@ minutes with the requested definition and disk plist. Status exposes active and
 disk minutes plus match or unknown; unrelated event-trigger fields are not evidence.
 `install --every-minutes 5 --apply` is an explicit interval request, not a statement
 of the current default. The calendar uses `RunAtLoad` without `KeepAlive`.
+
+### Upgrade an existing observer
+
+Read `status` and inspect the reported label in
+`launchctl print-disabled "gui/$(id -u)"` before applying an update. Preserve the
+user's enabled/stopped policy. Do not run `install --apply` merely to refresh a
+stopped or disabled job: it enables the job. Keep that state until the requested
+enablement is established; do not infer permission from an available installer.
+Report the installed-copy refresh as pending while that stopped state is retained;
+resume here when the requested enablement is authorized.
+
+For an enabled job, choose `--every-minutes` only when its read-only plan reproduces
+the complete active calendar. Compare the plan with the loaded job and disk plist;
+do not replace a custom, unknown or mismatched schedule with the default. Preserve
+the same selection when applying:
+
+```bash
+python3 <skill-dir>/scripts/ghostty_watch.py install --every-minutes <minutes>
+python3 <skill-dir>/scripts/ghostty_watch.py install --every-minutes <minutes> --apply
+```
+
+Wait for an in-flight observation before applying an update that would reload the
+job. Do not boot it out to speed up deployment. Read back the installed script
+copies against the selected source and verify a completed native round as below;
+an install receipt or source-link update alone does not prove the observer changed.
 
 The default suits recovery metadata for long-lived sessions: IDs, working
 directories and launch parameters. Chat-body persistence belongs to the conversation
@@ -129,8 +154,9 @@ manifest. These are backup coverage, not proof that every recorded tab is live.
 After reboot, restore recorded IDs using the ordinary route. Unresolved rows are
 not resumable sessions; use explicit indexed reconstruction and identity
 verification if their session IDs must be recovered. Partial snapshots may retain
-already-closed sessions conservatively; inspect the manifest or use `--only` when
-that distinction matters. Window grouping and UUID-less tab identity remain
+already-closed sessions conservatively; follow
+[current-set reconciliation](restore_mechanics.md#reconcile-the-current-wanted-set)
+before selecting or retrying them. Window grouping and UUID-less tab identity remain
 unavailable in automatic manifests. Manual snapshot/check/restore resolve
 UUID-less TUIs from transcript storage (session file born after process start,
 same cwd, identity verified); the watcher deliberately keeps its argv-only,

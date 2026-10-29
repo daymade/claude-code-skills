@@ -270,11 +270,10 @@ Matching the delivery's prose or keywords is not acceptance.
 
 ## Restore and resume an interrupted batch
 
-Apply the Skill entry's foreground check: use an authorized bounded Ghostty handoff
-or an existing explicit idle-desktop grant plus current exclusive ownership. Notify
-the user to leave keyboard and mouse untouched through reconciliation; do not ask
-again when the standing grant covers this action. Busy/unknown occupancy or takeover
-stops global input, while dry-run/check work continues. Do not bypass a host denial.
+Apply the Skill entry's
+[foreground authorization](../SKILL.md#ghostty-interaction-channel) before global input.
+Notify the user to leave keyboard and mouse untouched through reconciliation;
+dry-run/check work remains available when foreground execution is blocked.
 
 ```bash
 # Reopen missing sessions as tabs in one window:
@@ -308,9 +307,10 @@ report the parent ID; never independently resume the spawned agent.
 
 Bind progress to the fixed manifest and new account outside the Skill bundle.
 Serialize opening, re-probe account/process state before each send, stop on
-explicit send failure, and reconcile within `--reconcile-seconds` (0–60,
-default 10). Do not count processes predating the handoff or lacking independent
-mode. Rerun using persisted progress to open only missing IDs. If the account
+explicit send failure, and reconcile within `--reconcile-seconds`; use
+[`ghostty_session.py`](../scripts/ghostty_session.py)'s `bounded_seconds()` and
+`main()` definitions for its bounds and default. Do not count processes predating the
+handoff or lacking independent mode. Rerun using persisted progress to open only missing IDs. If the account
 changes again mid-handoff, stop and prepare a new handoff.
 
 Expect `reopened: N/M`, old/unverified processes and every missing ID. Exit 0
