@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **git-safety-net** (v1.24.0 → v1.24.1): Route worktree retirement and recovery-material selection to their canonical preservation procedure; remove a hand-maintained heading inventory and duplicated retirement instructions. Preserve the existing unique-work, occupancy, authority and recovery boundaries. Change type: lossless documentation deduplication.
+
 - **auto-repo-setup** (v2.1.8 → v2.1.9): Select persistent storage for resumable task checkouts and continuation evidence before creating a task copy; reserve system temporary directories for disposable scratch. Preserve unknown evidence loss during recovery. Change type: bounded workspace-lifetime guidance.
 - **tech-selection** (`daymade-claude-code` v4.33.9 → v4.33.10): Bind observability comparisons to the business decision and measurement scope; ship the usable existing path before optional collector expansion while retaining required coverage gaps. Change type: bounded evidence-selection clarification.
 

@@ -3,27 +3,6 @@
 Each practice below maps to a specific way work actually gets lost. They are cheap habits, not
 ceremony; adopt the ones whose failure mode you're exposed to.
 
-## Contents
-- Choose topology from current authority
-- Shared checkout and concurrent sessions: one writer
-- Exact-SHA handoff and scoped completion
-- Known automated writers are not session-owned WIP
-- Parallel / multi-branch work: commit before switching; exceptions follow current authority
-- Push work-in-progress branches early
-- Confirm the branch before every commit
-- Confirm the branch before every checkout/switch on a shared tree
-- Recover stranded work after a parallel session switched the shared tree
-- A foreign commit adopted onto your branch (the inverse case)
-- Distinguish live WIP, a stale copy, and a published projection by diff direction
-- Audit before rebase / branch-delete
-- Anchor dangling heads before deleting bundle files
-- Audit every authorized worktree before retirement
-- Snapshot before any history rewrite
-- Version / lockfile collisions between parallel branches
-- A whole-file gate cannot tell "my bump is too low" from "my branch is behind"
-- Commit-scope hygiene (don't sweep unrelated staged work)
-- Set a wider reflog safety window once
-
 ## Choose topology from current authority
 
 Before recommending branches, worktrees, or a second checkout, read the current user and project
@@ -577,30 +556,10 @@ command and expected output.
 **Failure mode:** checking `git status` in the primary checkout and assuming a linked worktree is
 also clean. The linked checkout may hold untracked files or a detached commit that no branch names.
 
-**Prevention:** run `git_loss_audit.sh` only when every surface it enumerates is in evidence scope.
-Then inspect each selected authorized path with both `git -C <worktree-path> status --porcelain=v1
---untracked-files=all` and the corresponding `--ignored` inventory. Otherwise skip the full script
-and inspect only the exact authorized retirement path. The first status must be empty; every ignored
-item must be proven reproducible
-or copied out with its relative path and verified against a recorded content hash because Git
-bundles cannot reach it. Record the exact HEAD in a full 40-hex ref-to-SHA manifest, prove containment against a freshly
-fetched maintained base, and apply [Preservation before
-retirement](merge_verification.md#preservation-before-retirement). Skip the redundant history bundle
-only when that exact tip remains reachable through freshly verified, independently retained remote
-main and no unique tracked, untracked, ignored or submodule state is threatened by removal.
-Otherwise create and verify the required targeted bundle from the worktree's branch or
-collision-checked recovery ref before current-session authorization and normal removal.
-Afterwards verify the path/registration disappeared and the recorded HEAD still resolves through
-the retained carrier or required bundle, then recheck every copied ignored item against its
-pre-removal hash. Immediately before removal, repeat the worktree status and source-hash checks,
-require the current tip to equal the frozen full SHA, independently recheck the retained carrier,
-and make removal the next operation; otherwise a writer can change ignored bytes after the early
-backup check. The § Worktree retirement procedure in
-[merge_verification.md](merge_verification.md) also covers recursive module preservation and
-occupancy, with one narrow single-`--force` branch after normal removal refuses a clean submodule
-worktree specifically because of its modules. Dirty, unknown, locked, occupied or incompletely
-preserved state still stops removal. Never reduce the worktree count with `rm -rf`; the safe
-target is one maintained primary checkout, not zero checkouts.
+**Prevention:** for the selected authorized linked path, follow
+[Worktree retirement](merge_verification.md#worktree-retirement--prove-the-checkout-is-disposable-before-removal).
+Select recovery material through that procedure's
+[Preservation before retirement](merge_verification.md#preservation-before-retirement).
 
 ## Snapshot before any history rewrite
 
