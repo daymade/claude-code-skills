@@ -298,6 +298,10 @@ checks. A peer window remains a coordination agreement, not a mechanical mutex.
 
 ### Merging PRs
 
+If local and hosted merge results disagree, first follow
+[the merge-semantics diagnostic](https://github.com/daymade/claude-code-skills/blob/main/github-review-pr/SKILL.md#when-local-and-hosted-merge-results-disagree)
+in `github-review-pr` before another branch update or merge attempt.
+
 Before merging, observe the checks required by the task/repository at the exact
 candidate; use `gh pr checks NUMBER -R OWNER/REPO --watch` and inspect its exit
 status. `--auto` follows the requirements actually configured on GitHub. If none

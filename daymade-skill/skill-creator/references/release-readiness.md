@@ -63,20 +63,19 @@ instead of editing the original independent review.
 
 ## GitHub says dirty; git says clean
 
-`mergeable_state: dirty` is an asynchronous cache, not a verdict. After the base
-moves under parallel mergers it can stick, and close/reopen does not reliably
-recompute it. The local oracle is `git merge-tree --write-tree <branch>
-origin/main` (exit 0 = clean); when git says clean and GitHub says dirty, pushing
-a branch that contains current main (a real integration merge) is the reliable
-refresher — the head changes, so rebind evidence to the new head.
+Enter `github-review-pr`'s
+[merge-semantics diagnostic](https://github.com/daymade/claude-code-skills/blob/main/github-review-pr/SKILL.md#when-local-and-hosted-merge-results-disagree)
+before treating this disagreement as a cache fault. The release executor retains
+both observations and checks identical objects, attributes and driver semantics;
+local clean does not override a hosted refusal.
 
-A strict up-to-date ruleset plus a fleet merging every few minutes is a
-livelock: each integration changes the head, CI reruns (~20 min class), and
-another peer lands in between. The only lever is merge latency — merge the
-instant checks go green (a background poller on the check-runs API, not a
-long-lived `--watch`), and keep the content diff byte-identical across every
-base move so the existing review stays valid: the review covers the content,
-not the parent commit.
+Do not repeat push, rebind, archive or CI cycles merely to refresh `DIRTY`.
+Integrate current main when the repository's integration requirement or an actual
+conflict requires it, preserving parallel changes. Bind any resulting new head
+through the existing exact-candidate procedure, then use the repository's required
+checks and `github-ops` merge preflight. Rebind remains limited to its unchanged
+distribution proof below; neither a cache hypothesis nor a peer publication window
+waives that proof, required checks or the fresh head/base check.
 
 ## External-archive helper and dispatcher
 
