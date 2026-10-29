@@ -92,6 +92,7 @@ For choosing or reviewing a library, framework, storage, data format, model,
 build-vs-buy or architecture — including 用哪个 / 选什么框架 / 要不要自建 / A 还是 B /
 这个方案行不行 — enter [tech-selection](daymade-claude-code/tech-selection/SKILL.md).
 Follow its full or lightweight route and linked execution owners.
+For observability collector choices, use its [measurement and business-decision guidance](daymade-claude-code/tech-selection/SKILL.md#step-2--probe-for-evidence).
 Before delegation, follow its [public orchestration route](daymade-claude-code/tech-selection/references/delegation-contract.md#agent-orchestration)
 within the current user/host contract.
 
