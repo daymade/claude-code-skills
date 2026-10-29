@@ -123,8 +123,13 @@ uv run scripts/convert.py document.pdf -o output.md --heavy --assets-dir ./image
 ```bash
 # Convert then validate
 uv run scripts/convert.py document.pdf -o output.md --heavy
-uv run scripts/validate_output.py document.pdf output.md --report quality.html
+uv run --with pymupdf python scripts/validate_output.py document.pdf output.md --report quality.html
 ```
+
+Pandoc is required for the validator's Markdown parsing. Read the reported
+status and differences; count coverage and the diagnostic score cannot certify
+question ownership, warnings or reader navigation. Follow
+[PDF acceptance](pdf-acceptance.md) for those checks and source-scope reconciliation.
 
 ## Troubleshooting
 

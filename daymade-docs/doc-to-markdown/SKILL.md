@@ -44,6 +44,15 @@ uv run --with pytest pytest scripts/test_convert.py -v
 | XLSX | markitdown | markitdown |
 | HTML/HTM | pandoc + source-href retention check | unsupported; use the HTML quick path |
 
+## PDF Manuals And Question Banks
+
+Before delivering a PDF conversion, read
+[references/pdf-acceptance.md](references/pdf-acceptance.md). Reconcile text and
+numbers separately from question ownership, list/paragraph boundaries, warnings
+and figures. A character-identical conversion can still have structural defects.
+Run a representative actual-reader check before publication or batch expansion;
+include directory return links and the existing original-file retrieval path.
+
 ## Saved HTML And Website Manuals
 
 For HTML/HTM, read [references/html-conversion.md](references/html-conversion.md)
@@ -139,20 +148,26 @@ Output:
 ## Quality Validation
 
 ```bash
-# Validate conversion quality
+# Compare extractable text and coarse asset counts (Pandoc required)
 uv run --with pymupdf scripts/validate_output.py document.pdf output.md
 
 # Generate HTML report
 uv run --with pymupdf scripts/validate_output.py document.pdf output.md --report report.html
 ```
 
-### Quality Metrics
+The validator retains the positional PDF/DOCX CLI, JSON compatibility keys and
+HTML report. It requires Pandoc to parse Markdown labels and code correctly.
+Character-count coverage (`text_retention`) and ordered text similarity are
+separate; any text difference is at least `warn`, changed numeric sequences fail,
+and unavailable/empty source text fails. PDF fallback counts remain unmeasured.
+The score is a 0–100 diagnostic, not overall accuracy; `structure_verified` stays
+false. `warn` exits 0 for compatibility, so read the status and difference samples.
+The [PDF acceptance procedure](references/pdf-acceptance.md) owns source-scope
+reconciliation and the structural/native-reader checks this script cannot perform.
 
-| Metric | Pass | Warn | Fail |
-|--------|------|------|------|
-| Text Retention | >95% | 85-95% | <85% |
-| Table Retention | 100% | 90-99% | <90% |
-| Image Retention | 100% | 80-99% | <80% |
+From this Skill's source checkout, run the validator's bidirectional controls with
+`python3 -m unittest discover -s tests -v` (Pandoc required). Default packages
+exclude this development test directory; a zero-test run is not validation.
 
 ## Merge Outputs Manually
 
@@ -212,6 +227,8 @@ brew install pandoc
 - `references/tool-comparison.md` - Tool capabilities comparison
 - `references/conversion-examples.md` - Batch operation examples
 - `references/html-conversion.md` - Saved HTML scope, link retention, assets and manual heading assembly
+- `references/pdf-acceptance.md` - PDF text/structure checks, synthetic boundary controls, reader and original-file handoff
+- `references/obsidian-link-examples.md` - Native heading/citation and same-name book-index navigation controls
 
 ## Next Step: Clean Up Converted Content
 
