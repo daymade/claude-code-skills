@@ -9,7 +9,10 @@ output rather than assumed from its comments.
 from __future__ import annotations
 
 import json
+import os
 import re
+import shlex
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -34,6 +37,13 @@ class ClassifyRefsTests(unittest.TestCase):
         temp_parent = "/tmp" if Path("/tmp").is_dir() else None
         self.temp_dir = tempfile.TemporaryDirectory(prefix="git-classify-refs-", dir=temp_parent)
         self.root = Path(self.temp_dir.name)
+        fixture_home = self.root / "home"
+        fixture_home.mkdir()
+        self.env = {key: value for key, value in os.environ.items()
+                    if not key.startswith("GIT_")}
+        self.env.update(HOME=str(fixture_home), GIT_CONFIG_GLOBAL=os.devnull,
+                        GIT_CONFIG_NOSYSTEM="1", GIT_GUARD_OSASCRIPT="/usr/bin/false",
+                        GIT_GUARD_TTY="/dev/null")
         self.remote = self.root / "remote.git"
         self.repo = self.root / "repo"
         self.git("init", "-q", "-b", "main", "--bare", str(self.remote))
@@ -48,7 +58,8 @@ class ClassifyRefsTests(unittest.TestCase):
     # ---- helpers ---------------------------------------------------------
 
     def git(self, *args: str) -> subprocess.CompletedProcess:
-        return subprocess.run(["git", *args], capture_output=True, text=True, check=True)
+        return subprocess.run(["git", *args], env=self.env,
+                              capture_output=True, text=True, check=True)
 
     def in_repo(self, *args: str) -> subprocess.CompletedProcess:
         return self.git("-C", str(self.repo), *args)
@@ -64,7 +75,8 @@ class ClassifyRefsTests(unittest.TestCase):
 
     def run_script(self, *args: str) -> subprocess.CompletedProcess:
         return subprocess.run(
-            ["bash", str(SCRIPT), *args], cwd=str(self.repo), capture_output=True, text=True
+            ["bash", str(SCRIPT), *args], cwd=str(self.repo), env=self.env,
+            capture_output=True, text=True
         )
 
     def rev(self, ref: str) -> str:
@@ -410,11 +422,262 @@ class ClassifyRefsTests(unittest.TestCase):
         result = subprocess.run(
             ["bash", str(SCRIPT), "--base", "HEAD"],
             cwd=str(outside),
+            env=self.env,
             capture_output=True,
             text=True,
         )
         self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
         self.assertIn("not inside a Git repository", result.stderr)
+
+
+    # ---- canonical repository and exact-target binding -------------------
+
+    def bound_args(self, manifest: Path, expected: Path | None = None) -> tuple[str, ...]:
+        return (
+            "--expected-common-dir", str(expected or (self.repo / ".git")),
+            "--target-manifest", str(manifest),
+        )
+
+    def manifest(self, name: str, text: str) -> Path:
+        path = self.root / name
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def summary(self, stdout: str) -> dict[str, str]:
+        lines = [line for line in stdout.splitlines() if line.startswith("# summary ")]
+        self.assertEqual(len(lines), 1, stdout)
+        result: dict[str, str] = {}
+        for field in lines[0].removeprefix("# summary ").split():
+            key, value = field.split("=", 1)
+            result[key] = value
+        return result
+
+    def run_bound(self, manifest: Path, base: str, cwd: Path | None = None,
+                  expected: Path | None = None) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            ["bash", str(SCRIPT), "--base", base, *self.bound_args(manifest, expected)],
+            cwd=str(cwd or self.repo), env=self.env, capture_output=True, text=True,
+        )
+
+    def test_bound_mode_outputs_full_oids_and_computes_summary_from_rows(self) -> None:
+        self.seed_base()
+        self.in_repo("branch", "anc")
+        self.in_repo("switch", "-qc", "feature")
+        self.write("feature.txt", "unique\n")
+        self.commit("unique feature")
+        feature_tip = self.rev("feature")
+        self.in_repo("switch", "-q", "main")
+        base = self.rev("main")
+        manifest = self.manifest(
+            "targets.tsv",
+            f"refs/heads/anc\t{base}\nrefs/heads/feature\t{feature_tip}\n",
+        )
+        result = self.run_bound(manifest, base)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        row = self.row_for(result.stdout, "refs/heads/feature")
+        self.assertEqual(row[2], feature_tip)
+        self.assertEqual(len(row[2]), 40)
+        summary = self.summary(result.stdout)
+        self.assertEqual(summary["expected"], "2")
+        self.assertEqual(summary["examined"], "2")
+        self.assertEqual(summary["needs-review"], "1")
+        self.assertEqual(summary["errors"], "0")
+        self.assertEqual(summary["scope_complete"], "true")
+        self.assertEqual(summary["classification_only"], "true")
+        self.assertIn(str(self.repo.resolve()), result.stdout)
+
+        only_anc = self.manifest("anc.tsv", f"refs/heads/anc\t{base}\n")
+        second = self.run_bound(only_anc, base)
+        self.assertEqual(self.summary(second.stdout)["needs-review"], "0", second.stdout)
+        self.assertEqual(self.summary(second.stdout)["examined"], "1")
+
+    def test_same_remote_same_base_independent_clone_is_rejected_before_refs(self) -> None:
+        self.seed_base()
+        self.in_repo("branch", "shared")
+        other = self.root / "independent"
+        self.git("clone", "-q", str(self.remote), str(other))
+        self.git("-C", str(other), "branch", "shared")
+        base = self.rev("main")
+        manifest = self.manifest("same-name.tsv", f"refs/heads/shared\t{base}\n")
+        result = self.run_bound(manifest, base, cwd=other)
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertIn("repository identity mismatch", result.stderr)
+        self.assertIn(str((other / ".git").resolve()), result.stdout + result.stderr)
+        self.assertNotIn("ANCESTOR", result.stdout)
+        self.assertNotIn("# summary", result.stdout)
+
+    def test_linked_worktree_and_symlinked_expected_common_dir_pass(self) -> None:
+        self.seed_base()
+        self.in_repo("branch", "anc")
+        worktree = self.root / "linked workspace"
+        self.in_repo("worktree", "add", "-q", str(worktree), "anc")
+        alias = self.root / "common alias"
+        alias.symlink_to(self.repo / ".git", target_is_directory=True)
+        base = self.rev("main")
+        manifest = self.manifest("linked.tsv", f"refs/heads/anc\t{base}\n")
+        result = self.run_bound(manifest, base, cwd=worktree, expected=alias)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(f"actual-top-level={worktree.resolve()}", result.stdout)
+        self.assertIn(f"expected-common-dir={(self.repo / '.git').resolve()}", result.stdout)
+        self.assertEqual(self.summary(result.stdout)["examined"], "1")
+
+    @unittest.skipUnless(Path("/bin/bash").is_file(), "native /bin/bash unavailable")
+    def test_native_bash_runs_bound_mode_through_a_spaced_symlink_entry(self) -> None:
+        self.seed_base()
+        self.in_repo("branch", "anc")
+        base = self.rev("main")
+        manifest = self.manifest("targets.tsv", f"refs/heads/anc\t{base}\n")
+        entry = self.root / "installed entry with spaces.sh"
+        entry.symlink_to(SCRIPT)
+        result = subprocess.run(
+            ["/bin/bash", str(entry), "--base", base, *self.bound_args(manifest)],
+            cwd=str(self.repo), env=self.env, capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.summary(result.stdout)["expected"], "1")
+        self.assertEqual(self.summary(result.stdout)["examined"], "1")
+        self.assertEqual(self.row_for(result.stdout, "refs/heads/anc")[2], base)
+
+    def test_missing_and_moved_bound_refs_fail_closed(self) -> None:
+        self.seed_base()
+        self.in_repo("branch", "anc")
+        base = self.rev("main")
+        missing = self.manifest("missing.tsv", f"refs/heads/absent\t{base}\n")
+        result = self.run_bound(missing, base)
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(self.summary(result.stdout)["missing"], "1")
+        self.assertEqual(self.summary(result.stdout)["scope_complete"], "false")
+
+        moved = self.manifest("moved.tsv", f"refs/heads/anc\t{'0' * 40}\n")
+        result = self.run_bound(moved, base)
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(self.summary(result.stdout)["moved"], "1")
+        self.assertEqual(self.summary(result.stdout)["examined"], "0")
+
+    def test_malformed_target_manifests_are_rejected(self) -> None:
+        self.seed_base()
+        base = self.rev("main")
+        cases = {
+            "empty.tsv": "",
+            "missing-oid.tsv": "refs/heads/main\n",
+            "short-oid.tsv": f"refs/heads/main\t{base[:12]}\n",
+            "duplicate.tsv": f"refs/heads/main\t{base}\nrefs/heads/main\t{base}\n",
+            "partial-ref.tsv": f"main\t{base}\n",
+            "extra-column.tsv": f"refs/heads/main\t{base}\textra\n",
+        }
+        for name, text in cases.items():
+            with self.subTest(name=name):
+                result = self.run_bound(self.manifest(name, text), base)
+                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                self.assertNotIn("ANCESTOR", result.stdout)
+
+    def test_unreadable_manifest_and_explicit_empty_values_are_rejected(self) -> None:
+        self.seed_base()
+        base = self.rev("main")
+        unreadable = self.manifest("unreadable.tsv", f"refs/heads/main\t{base}\n")
+        unreadable.chmod(0)
+        try:
+            result = self.run_bound(unreadable, base)
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+            self.assertIn("not readable", result.stderr)
+        finally:
+            unreadable.chmod(0o600)
+        for option in ("--expected-common-dir", "--target-manifest"):
+            with self.subTest(option=option):
+                args = ["--base", base, option, ""]
+                args += ["--target-manifest", str(unreadable)] if option == "--expected-common-dir" else ["--expected-common-dir", str(self.repo / ".git")]
+                result = self.run_script(*args)
+                self.assertEqual(result.returncode, 2)
+                self.assertIn("must not be empty", result.stderr)
+
+    def test_default_mode_keeps_legacy_rows_and_has_no_binding_summary(self) -> None:
+        self.seed_base()
+        self.in_repo("branch", "anc")
+        base = self.rev("main")
+        candidate = self.run_script("--base", base)
+        self.assertEqual(candidate.returncode, 0, candidate.stdout + candidate.stderr)
+        expected_refs = {"refs/heads/main", "refs/heads/anc", "refs/remotes/origin/main"}
+        rows = [line.split("\t") for line in candidate.stdout.splitlines()
+                if line and not line.startswith("#")]
+        self.assertEqual({row[3] for row in rows}, expected_refs)
+        self.assertEqual(len(rows), 3)
+        for row in rows:
+            self.assertEqual(row[:3], ["ANCESTOR", "0", base[:12]])
+            self.assertEqual(row[4], "")
+        self.assertNotIn("# summary", candidate.stdout)
+        self.assertNotIn("actual-common-dir", candidate.stdout)
+        self.assertEqual(len(self.row_for(candidate.stdout, "refs/heads/anc")[2]), 12)
+
+    def test_binding_options_distinguish_missing_arguments_from_missing_pair(self) -> None:
+        self.seed_base()
+        base = self.rev("main")
+        manifest = self.manifest("targets.tsv", f"refs/heads/main\t{base}\n")
+        cases = [
+            (("--expected-common-dir",), "needs a directory path"),
+            (("--target-manifest",), "needs a file path"),
+            (("--expected-common-dir", str(self.repo / ".git")), "supplied together"),
+            (("--target-manifest", str(manifest)), "supplied together"),
+        ]
+        for arguments, message in cases:
+            with self.subTest(arguments=arguments):
+                result = self.run_script("--base", base, *arguments)
+                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                self.assertIn(message, result.stderr)
+                self.assertNotIn("# summary", result.stdout)
+
+    @unittest.skipUnless(HAS_WRITE_TREE, "git merge-tree --write-tree needs git >= 2.38")
+    def test_bound_mode_reports_tool_failure_as_incomplete_not_conflict(self) -> None:
+        self.seed_base()
+        self.in_repo("switch", "-qc", "feature")
+        self.write("unique.txt", "retain this feature\n")
+        self.commit("feature")
+        tip = self.rev("HEAD")
+        self.in_repo("switch", "-q", "main")
+        base = self.rev("main")
+        manifest = self.manifest("targets.tsv", f"refs/heads/feature\t{tip}\n")
+        wrapper_dir = self.root / "wrapper"
+        wrapper_dir.mkdir()
+        real_git = shutil.which("git")
+        self.assertIsNotNone(real_git)
+        wrapper = wrapper_dir / "git"
+        env = dict(self.env, PATH=str(wrapper_dir) + os.pathsep + self.env["PATH"])
+        for command, code in (("merge-tree", 2), ("diff", 128)):
+            with self.subTest(command=command):
+                wrapper.write_text(
+                    '#!/usr/bin/env bash\n'
+                    f'if [ "$1" = {command} ]; then echo "synthetic Git failure" >&2; exit {code}; fi\n'
+                    f'exec {shlex.quote(real_git)} "$@"\n', encoding="utf-8",
+                )
+                wrapper.chmod(0o755)
+                failed = subprocess.run(
+                    ["bash", str(SCRIPT), "--base", base, *self.bound_args(manifest)],
+                    cwd=str(self.repo), env=env, capture_output=True, text=True,
+                )
+                self.assertEqual(failed.returncode, 1, failed.stdout + failed.stderr)
+                self.assertEqual(self.row_for(failed.stdout, "refs/heads/feature")[0],
+                                 f"ERROR-rc{code}")
+                summary = self.summary(failed.stdout)
+                self.assertEqual(summary["examined"], "1")
+                self.assertEqual(summary["errors"], "1")
+                self.assertEqual(summary["scope_complete"], "false")
+        healthy = self.run_bound(manifest, base)
+        self.assertEqual(healthy.returncode, 0, healthy.stdout + healthy.stderr)
+        self.assertEqual(self.summary(healthy.stdout)["needs-review"], "1")
+        self.assertEqual(self.summary(healthy.stdout)["errors"], "0")
+        wrapper.write_text(
+            '#!/usr/bin/env bash\n'
+            'if [ "$1" = diff ]; then echo "synthetic diff warning" >&2; fi\n'
+            f'exec {shlex.quote(real_git)} "$@"\n', encoding="utf-8",
+        )
+        warned = subprocess.run(
+            ["bash", str(SCRIPT), "--base", base, *self.bound_args(manifest)],
+            cwd=str(self.repo), env=env, capture_output=True, text=True,
+        )
+        self.assertEqual(warned.returncode, 0, warned.stdout + warned.stderr)
+        self.assertIn("synthetic diff warning", warned.stderr)
+        self.assertEqual(self.row_for(warned.stdout, "refs/heads/feature")[1], "1")
+        self.assertEqual(self.summary(warned.stdout)["errors"], "0")
+
 
 
 if __name__ == "__main__":
