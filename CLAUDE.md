@@ -623,6 +623,8 @@ owns candidate output. An unfulfilled
 reset promise, missing execution signals or deadline-bound quota work enters the Skill's
 [monitoring and stop contract](tibo-reset-codex/SKILL.md#监测轮从信息到可行动信号) and
 [output contract](tibo-reset-codex/SKILL.md#输出合同先给结论再交代边界).
+For a missed reset notification, enter its
+[notification-chain diagnosis](tibo-reset-codex/SKILL.md#已有监测与通知链诊断).
 Before interpreting tracker timestamps, Yes/No labels or mixed X reply results,
 follow [signal readings](tibo-reset-codex/references/signal-readings.md).
 For recurring community queries, follow
@@ -766,6 +768,8 @@ Before expensive checks on a concurrently edited base, follow GitHub Operations'
 [publication coordination](github-ops/references/pr_operations.md#coordinate-publication-before-expensive-checks).
 Before diagnosing conflicts or differing local and hosted merge results, use its
 [fresh-base verification](github-ops/references/pr_operations.md#fresh-base-verification).
+When the same verified objects still yield different local and hosted results, use
+[the merge-semantics diagnostic](github-review-pr/SKILL.md#when-local-and-hosted-merge-results-disagree).
 Before a merge or selecting `--auto`, enter its
 [merge preflight](github-ops/references/pr_operations.md#merging-prs).
 For hosted-state writes through `gh`, follow its
@@ -951,22 +955,6 @@ or saved version bump; that working copy cannot establish the baseline.
 For a stale marketplace guard, a foreign plugin's apparent version regression,
 or a release candidate missing current main, follow
 [integration before review binding](daymade-skill/skill-creator/references/release-readiness.md#integrate-current-main-before-binding-review).
-
-**CHANGELOG.md merges as a union** (`.gitattributes`). Merging `origin/main`
-into a branch locally, or rebasing onto it, keeps parallel additions under
-`## [Unreleased]`. Limits:
-
-- GitHub's mergeability check ignores the attribute, so a PR can still show
-  CONFLICTING until `origin/main` is merged into it locally.
-- Git reads the attribute from the branch you are on. A branch cut before
-  `.gitattributes` existed conflicts as before: commit the file onto it first
-  (`git checkout origin/main -- .gitattributes`, then commit), then merge.
-
-Read the merged section before you push. Union keeps lines, not structure:
-lines can come out duplicated or interleaved, a blank line can go missing, and
-across a release cut an entry can land under the new version heading instead of
-`[Unreleased]`. The CHANGELOG structure check still fails a duplicated
-`[Unreleased]` heading; it cannot see a misplaced entry.
 
 ## Available Skills
 
