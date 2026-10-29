@@ -489,6 +489,61 @@ def append_record(path, command, data, now=None):
         return row
 
 
+def read_account_followups(path):
+    if not path.exists():
+        return []
+    with path.open(encoding="utf-8") as stream:
+        fcntl.flock(stream, fcntl.LOCK_SH)
+        rows = read_rows(stream, kinds=("account_followup",))
+    for row in rows:
+        if (row.get("status") not in ("open", "closed")
+                or not isinstance(row.get("account_ref"), str)
+                or not re.fullmatch(r"[0-9a-f]{8}", row["account_ref"])):
+            raise ValueError("invalid account followup; original retained")
+        required_text(row, "forecast_id")
+        required_text(row, "reason")
+    return rows
+
+
+def append_account_followup(path, data, now=None):
+    """Change the work queue without rewriting an account's arrival evidence."""
+    now = now or datetime.now(timezone.utc)
+    fid, account = required_text(data, "forecast_id"), required_text(data, "account_ref")
+    if not re.fullmatch(r"[0-9a-f]{8}", account):
+        raise ValueError("account_ref must be the local eight-character account hash")
+    if data.get("status") not in ("open", "closed"):
+        raise ValueError("status must be open or closed")
+    reason = required_text(data, "reason")
+    refs = evidence_refs(data, path.parent / "findings.jsonl")
+    if not refs.get("evidence_refs"):
+        raise ValueError("account followup requires nonempty evidence_refs")
+    if not path.exists():
+        raise ValueError("account followup target not found")
+    with path.open(encoding="utf-8") as stream:
+        fcntl.flock(stream, fcntl.LOCK_SH)
+        rows = read_rows(stream)
+    forecasts = rows + read_announcements(path.parent / "announcements.jsonl")
+    if (not any(r["record_type"] == "forecast" and r["id"] == fid for r in forecasts)
+            or not any(r["record_type"] == "review" and r["forecast_id"] == fid
+                       and r.get("account_ref") == account and r.get("account_checked_at")
+                       for r in rows)):
+        raise ValueError("account followup target not found")
+    body = {"forecast_id": fid, "account_ref": account, "status": data["status"],
+            "reason": reason, **refs}
+    target = path.parent / "account_followups.jsonl"
+    with locked_journal(target, kinds=("account_followup",)) as (stream, rows):
+        previous = next((r for r in reversed(rows) if r["forecast_id"] == fid
+                         and r["account_ref"] == account), None)
+        if previous and all(previous.get(key) == value for key, value in body.items()):
+            return previous
+        row = {"schema_version": 1, "id": str(uuid.uuid4()),
+               "record_type": "account_followup", "recorded_at": now.isoformat(), **body}
+        stream.write(json.dumps(row, ensure_ascii=False, allow_nan=False) + "\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+        return row
+
+
 def summarize(path, kind=None, now=None):
     now = now or datetime.now(timezone.utc)
     if not path.exists():
@@ -518,7 +573,9 @@ def summarize(path, kind=None, now=None):
     forecasts = [r for r in rows if r["record_type"] == "forecast" and
                  (kind is None or r["kind"] == kind)]
     pending, resolved, withdrawn, conflicts, counts = [], [], [], [], {}
-    confirmed_unscored, account_followup = [], []
+    followup_states = {(r["forecast_id"], r["account_ref"]): r
+                       for r in read_account_followups(path.parent / "account_followups.jsonl")}
+    confirmed_unscored, account_followup, closed_account_followups = [], [], []
     for forecast in forecasts:
         review = latest.get(forecast["id"])
         score_review = latest_score.get(forecast["id"])
@@ -548,6 +605,14 @@ def summarize(path, kind=None, now=None):
                                           **{k: r[k] for k in ("account_ref", "account_status", "account_checked_at")
                                              if k in r}} for r in account_reviews]}
         for account_row in account_reviews:
+            decision = followup_states.get((forecast["id"], account_row.get("account_ref")))
+            if decision and decision["status"] == "closed":
+                closed_account_followups.append({"id": forecast["id"], "kind": forecast["kind"],
+                    "account_ref": account_row["account_ref"],
+                    "account_status": account_row["account_status"],
+                    "followup_id": decision["id"], "reason": decision["reason"],
+                    "evidence_refs": decision["evidence_refs"]})
+                continue
             if (not withdrawal and account_row.get("account_ref")
                     and account_row.get("account_status") in ("unknown", "not_delivered")
                     and account_row.get("account_checked_at")):
@@ -613,6 +678,7 @@ def summarize(path, kind=None, now=None):
             "cycle_counts": counts,
             "due_for_followup": due,
             "confirmed_unscored": confirmed_unscored, "account_followup": account_followup,
+            **({"closed_account_followups": closed_account_followups} if closed_account_followups else {}),
             "pending": pending, "recent_resolved": resolved[-10:],
             "recent_withdrawn": withdrawn[-10:],
             "withdrawal_conflicts": conflicts,
@@ -667,6 +733,8 @@ def followup_plan(path, now=None):
                      "unavailable_source_policy": "Record unknown and its next retry condition; do not infer absence."})
     return {"checked_at": summary["checked_at"], "event_tasks": tasks,
             "account_tasks": summary["account_followup"],
+            **({"closed_account_tasks": summary["closed_account_followups"]}
+               if summary.get("closed_account_followups") else {}),
             "confirmed_unscored_count": len(summary["confirmed_unscored"]),
             "handoff": latest_monitor_handoff(path.parent / "findings.jsonl"),
             "background_monitoring": False}
@@ -798,7 +866,8 @@ def snapshot(state_dir, filename, record_type, enabled=True, retry=False, timeou
             run_lock.close()
 
 
-JOURNALS = ("forecasts.jsonl", "announcements.jsonl", "findings.jsonl", "withdrawals.jsonl")
+JOURNALS = ("forecasts.jsonl", "announcements.jsonl", "findings.jsonl", "withdrawals.jsonl",
+            "account_followups.jsonl")
 
 
 def snapshot_health(state_dir, enabled=True):
@@ -848,7 +917,7 @@ def main():
     summary.add_argument("--kind", choices=KINDS)
     summary.add_argument("--compact", action="store_true",
                          help="omit long narrative fields while preserving decision fields")
-    for command in ("record", "announce", "review", "withdraw", "finding"):
+    for command in ("record", "announce", "review", "withdraw", "finding", "account-followup"):
         p = sub.add_parser(command)
         p.add_argument("--input", type=Path, required=True, help="UTF-8 JSON object file")
     listing = sub.add_parser("findings", help="List recent raw data findings")
@@ -882,6 +951,12 @@ def main():
             names = [args.journal] if args.journal else [n for n in JOURNALS if (state / n).exists()]
             result = {"snapshots": {n: snapshot(state, n, "retry", enabled=not args.no_git,
                                                 retry=True) for n in names}}
+        elif args.command == "account-followup":
+            target = state / "account_followups.jsonl"
+            result = append_account_followup(path, json.loads(args.input.read_text(encoding="utf-8")))
+            snap = snapshot(state, target.name, "account_followup", enabled=not args.no_git)
+            if not args.full:
+                result = append_receipt(result, target, snap)
         elif args.command == "finding":
             target = state / "findings.jsonl"
             result = append_finding(target, json.loads(args.input.read_text(encoding="utf-8")))

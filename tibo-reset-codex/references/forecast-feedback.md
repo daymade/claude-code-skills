@@ -8,6 +8,7 @@
 在 Skill 目录运行 `scripts/forecast_log.py`，需要 Python 3.10+ 与 macOS/Linux。
 默认状态目录是 `${XDG_STATE_HOME:-~/.local/state}/tibo-reset-codex/`；其中
 `forecasts.jsonl` 保存预测与核验，`withdrawals.jsonl` 保存撤回，`findings.jsonl` 保存原始读数。
+`account_followups.jsonl` 单独保存逐事件、逐账号的追查开关，不改到账证据或评分。
 有明确时刻的官宣由 `announce` 追加到独立的 `announcements.jsonl`，标为
 `entry_type=official_announcement`；它不进入预测样本数或命中率统计。官宣的 review 仍保存为
 旧格式兼容的 review 行，旧读取器可继续读 forecasts.jsonl，不会碰到缺少窗口字段的新官宣行。
@@ -78,6 +79,10 @@ uv run python scripts/forecast_log.py summary
 `read-wechat-messages`，沿其入口核对部署、账号、talker 和预检，再读取其
 阅读请求参考页的「最近消息与分页」接口；该 Skill 是独立依赖，不随本包分发。
 依赖或预检不可用时保留 `uncovered` 和具体恢复条件，不绕过身份检查。
+
+先明确这次补读要区分的未决问题，按相关事件和既有游标选择连续片段。当前状态已有充分
+依据时，不为补齐无关旧媒体而扩大本轮读取；保留原坐标和未读原因。选中的承重图片、语音、
+引用仍完整处理，不能靠关键词零命中或不读媒体宣布无新信号。
 
 1. 从上轮 handoff 取得同一部署与 talker 的时间、seq 游标及独立的媒体缺口；只有日期而
    没有消息游标时，从该日近期小片段开始，不能用旧消息总数推算新 offset。
@@ -290,6 +295,26 @@ hit/early/late 不因补一条到账记录消失。`score_review_id` 与 `score_
 `account_ref` 沿用查询脚本的八位本地哈希，不保存邮箱。脚本验证字段形状与时间，原始读数的
 真实性、账号绑定和归因仍由调用者核对，需用 `evidence_refs` 链接本轮账号 finding。
 未提供账号状态仍为 unknown，不能把事件 confirmed 当作账号 delivered。
+
+### 关闭或恢复账号追查
+
+`account_status` 描述是否到账；`account-followup` 描述还要不要在监测轮继续查，两者独立。
+账号已切离监测上下文、该次核查无法继续时，在保留到账 `unknown` 的同时显式关闭追查：
+
+```bash
+uv run python scripts/forecast_log.py account-followup --input /absolute/path/followup-decision.json
+uv run python scripts/forecast_log.py followup
+```
+
+输入必填 `forecast_id`、`account_ref`、`status`（`closed` 或 `open`）、`reason` 与非空
+`evidence_refs`；引用必须指向已有 finding，目标必须已有该账号的观测。关闭只移出
+`account_tasks`，仍在 `closed_account_tasks` / summary 的 `closed_account_followups` 中保留
+账号、到账状态、原因与证据。它不修改原 review、事件确认、预测窗口或分数，不证明发生切号。
+恢复必须显式写 `status=open`；新的余额或到账 review 不自动恢复已关闭追查。
+
+决定追加到独立 sidecar，原 journal 保持兼容。旧脚本可继续读原预测与到账事实，但不认识
+追查开关；关闭后运行监测必须使用支持 `account-followup` 的版本。写入后以新进程 `followup`
+读回，确认仅目标事件/账号退出队列，其他账号和全局未决项仍在；不要把关闭追查填成 delivered。
 
 事件确认、评分 unknown 的记录进入 `confirmed_unscored`，不再进入 `pending` 或
 `due_for_followup`；其 unknown 分数仍留在预测统计中，不伪造命中，也不靠 withdraw 隐藏。
