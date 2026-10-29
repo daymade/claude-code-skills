@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **auto-repo-setup** (v2.1.8 → v2.1.9): Select persistent storage for resumable task checkouts and continuation evidence before creating a task copy; reserve system temporary directories for disposable scratch. Preserve unknown evidence loss during recovery. Change type: bounded workspace-lifetime guidance.
+- **tech-selection** (`daymade-claude-code` v4.33.9 → v4.33.10): Bind observability comparisons to the business decision and measurement scope; ship the usable existing path before optional collector expansion while retaining required coverage gaps. Change type: bounded evidence-selection clarification.
+
 - **local-conversation-history / read-codex-history** (`daymade-claude-code` v4.33.8 → v4.33.9): Align ancestor-resolution docstrings and the repository's provider routing with the existing implementation. Remove derived enumeration counts from the history router; preserve commands and runtime behavior. Change type: factual documentation correction and lossless wording cleanup.
 
 - **ghostty-use** (v1.8.6 → v1.8.7): Require Kimi for Ghostty computer-use observation and interaction, prohibit Codex computer use, and retain the existing AppleScript batch restore under its foreground and reconciliation rules. Change type: bounded channel-selection guidance.
