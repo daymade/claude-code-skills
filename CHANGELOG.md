@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-permissions** (`daymade-macos` v1.26.8 → v1.27.0): Add Local Network diagnosis for app-specific LAN failures. Compare requester and launch context, inspect the actual permission, and verify the original operation after authorized repair; preserve unknown causes, existing privacy protections and all TCC/Keychain paths. Change type: additive diagnostic branch.
 - **git-safety-net** (v1.23.2 → v1.23.3): Align the worktree audit reminder with the existing conditional history-preservation procedure. Retain unique-file and submodule preservation, exact-tip manifests, final carrier checks and occupancy protection. Change type: factual SOP correction.
 - **local-codex** (`daymade-codex` v2.1.0 → v2.1.1): Scope OAuth recovery to the actual native owner and version. Document the verified 0.165 browser-login lifecycle, shared-owner authorization, completion/readback and subsequent-work checks; preserve independent grants, legacy recovery and Account Manager boundaries. Change type: authoritative factual correction.
 

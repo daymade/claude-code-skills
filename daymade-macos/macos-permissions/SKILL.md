@@ -1,11 +1,11 @@
 ---
 name: macos-permissions
 description: >-
-  Diagnoses TCC denials and stuck Keychain dialogs: Full Disk Access, Screen Recording,
-  Microphone, Camera, Accessibility, Automation. Use for recurring prompts, LaunchAgent/uv jobs
-  that fail only in background, broken grants, or automating Full Disk Access (权限弹窗 / 授权了没用 /
-  完全磁盘访问). Checks requester and grants first. Not for launchd design
-  (macos-watchdog) or app permission UX (developing-ios-apps).
+  Diagnoses TCC denials, Local Network access and stuck Keychain dialogs: Full Disk Access,
+  Screen Recording, Microphone, Camera, Accessibility, Automation. Use for repeated prompts,
+  background-only LaunchAgent/uv failures, broken grants or FDA automation
+  (权限弹窗 / 授权了没用 / 完全磁盘访问 / 本地网络权限). Checks requester/grants first.
+  Not launchd design (macos-watchdog) or app permission UX (developing-ios-apps).
 ---
 
 # macOS Permission Dialogs
@@ -26,6 +26,7 @@ never switch tools to bypass a host restriction or GUI lock.
 | Observed dialog or failure | Route |
 |---|---|
 | Confirmed Keychain item access failure, a `login` keychain password, or a blocked Keychain window | Read [Keychain recovery](references/keychain-dialog-recovery.md) |
+| Local Network alert, or a local connection/discovery failure specific to one app or background agent | Read [Local Network diagnosis](references/local-network.md); an error string or another process's success does not establish the cause |
 | Privacy resource request or a protected operation failing without a visible dialog | Continue with the TCC procedure below |
 | Script, Git hook, or application-specific confirmation | Inspect that request through its owning task/tool; do not change TCC or Keychain settings |
 | Content or owner still unknown | Keep it unknown; obtain only the missing permitted observation or ask the user for the visible text |
