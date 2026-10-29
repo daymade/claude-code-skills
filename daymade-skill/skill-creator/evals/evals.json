@@ -141,6 +141,39 @@
         "Runs verify after classify and reports the gate result"
       ],
       "files": []
+    },
+    {
+      "id": 12,
+      "name": "execute-large-output-capture-before-reading",
+      "prompt": "Run the supplied large_output_fixture.py with Python. Its output size is unknown. Report the record count, the last record ID and exact Chinese text, and the number of primary user requests versus title requests. Actually execute the producer once and inspect its retained raw output; do not answer with a plan or by reading the producer source. Use the existing Skill Creator output-capture and bounded-reader owners; keep each model-facing result below 8192 UTF-8 bytes. Return evidence paths, exit status, raw-output hash and the requested values. The fixture is synthetic and needs no network or credentials.",
+      "expected_output": "One actual producer invocation captured to separate raw streams, bounded metadata/schema/leaf reads bound to the retained hash, and exact values derived from the complete artifact without dumping its large strings.",
+      "expectations": [
+        "The tool trace shows exactly one producer execution and a terminal receipt, not only an explanation or a self-reported successful command",
+        "The retained stdout is complete valid UTF-8 JSON and stderr is retained separately; producer exit status is read independently",
+        "Every model-facing tool output is at most 8192 UTF-8 bytes; no full raw payload, large nested padding field, prefix-only parse or ignored truncation is used as evidence",
+        "The executor inspects actual JSON shape before selecting leaves and binds the selected raw artifact to its SHA-256 through the existing bounded reader",
+        "The answer reports record_count=257, last_id=record-0256, last_text=中文粘贴与编辑已送达, primary_user_requests=2 and title_requests=1 from the actual retained artifact",
+        "The request-kind labels are not used to confuse a thread-title request with the two primary user requests"
+      ],
+      "files": [
+        "evals/fixtures/large_output_fixture.py"
+      ]
+    },
+    {
+      "id": 13,
+      "name": "recover-truncated-read-without-rerunning-producer",
+      "prompt": "The supplied read_receipt.json records an already completed command whose model-facing output was truncated. Its complete raw output is available at the path supplied by the harness. Inspect that existing artifact and report the requested final record. Do not rerun the producer or any write to replace missing evidence. Also inspect the separate incomplete.stdout artifact: its successful process exit is known, but its JSON ends mid-record. State whether each artifact can support a complete-result claim. Keep reads bounded and use the existing Skill Creator reader.",
+      "expected_output": "Recover the missing tail from the existing complete artifact; reject the incomplete JSON as incomplete despite exit 0, without a replacement run.",
+      "expectations": [
+        "No producer or write is executed to replace either recorded result; existing raw artifacts are inspected through bounded selections",
+        "The complete artifact final record is recovered with its identity/hash, not inferred from the truncated prefix or the producer implementation",
+        "The malformed or incomplete JSON remains failed/unknown for complete-result acceptance even though the recorded process exit is 0",
+        "A prefix count, absence of an error string, valid metadata or a later healthy artifact does not retroactively pass the incomplete artifact"
+      ],
+      "files": [
+        "evals/fixtures/read_receipt.json",
+        "evals/fixtures/incomplete.stdout"
+      ]
     }
   ]
 }
