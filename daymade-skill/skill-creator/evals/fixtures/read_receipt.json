@@ -2,9 +2,9 @@
   "status": "child_exited",
   "returncode": 0,
   "stdout": {
-    "path": "complete.stdout",
+    "path": null,
     "model_facing_truncated": true
   },
-  "requested_record": "records[256]",
-  "scope": "Synthetic recorded read receipt; the harness supplies the actual file and hash before dispatch."
+  "requested_record": "the final record in the complete records array",
+  "scope": "Synthetic recorded-read template; resolve its output path and hash through the corpus preparation procedure before dispatch."
 }

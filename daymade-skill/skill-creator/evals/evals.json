@@ -152,8 +152,8 @@
         "The retained stdout is complete valid UTF-8 JSON and stderr is retained separately; producer exit status is read independently",
         "Every model-facing tool output is at most 8192 UTF-8 bytes; no full raw payload, large nested padding field, prefix-only parse or ignored truncation is used as evidence",
         "The executor inspects actual JSON shape before selecting leaves and binds the selected raw artifact to its SHA-256 through the existing bounded reader",
-        "The answer reports record_count=257, last_id=record-0256, last_text=中文粘贴与编辑已送达, primary_user_requests=2 and title_requests=1 from the actual retained artifact",
-        "The request-kind labels are not used to confuse a thread-title request with the two primary user requests"
+        "The reported record count, final record identity and exact text, and primary-user/title request counts equal an independent parse of the complete captured artifact; calculate these values during grading instead of copying a cached answer",
+        "The request-kind labels distinguish thread-title requests from primary-user requests"
       ],
       "files": [
         "evals/fixtures/large_output_fixture.py"

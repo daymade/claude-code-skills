@@ -333,6 +333,9 @@ uv run --frozen python -m scripts.quick_validate <skill-path> --audience public
 
 ### Review and evaluation input preparation
 
+Before dispatching source evaluation cases, follow
+[source-case input preparation](daymade-skill/skill-creator/references/eval_pipeline_schemas.md#source-case-input-preparation).
+
 For Skill eval grading, aggregation or previous-iteration review, follow
 [the eval schemas](daymade-skill/skill-creator/references/eval_pipeline_schemas.md)
 and [the viewer workflow](daymade-skill/skill-creator/references/paired-evaluation.md#step-4-grade-aggregate-and-launch-the-viewer).

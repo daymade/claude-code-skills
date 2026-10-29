@@ -15,6 +15,18 @@ Capture identifiable Claude Code and Codex terminal sessions before a reboot and
 reopen recorded IDs afterwards. Manual snapshots grade liveness; automatic backups
 store recovery metadata with explicit partial coverage and unknown liveness.
 
+## Ghostty interaction channel
+
+For computer-use observation or interaction with Ghostty, use **Kimi computer use**
+(`kimi-cu` / `mcp__kimi_cu__*`). **Never use Codex computer use** (`mcp__cua_repl`)
+for Ghostty, including screenshots, clicks, typing and tab/window management.
+Prefer Kimi for ad hoc interaction. The existing `osascript` / System Events batch
+restore helpers remain allowed under the foreground and reconciliation rules below.
+Snapshot, planning and read-only checks may continue through their existing scripts.
+If Kimi is unavailable, report that gap rather than substituting Codex computer use;
+use an existing script only when it supports the task and is already authorized.
+Never use either channel to bypass a host denial.
+
 Snapshot, reconstruction, dry-run and reconciliation can proceed without taking
 the desktop. Actual restore uses global keyboard/clipboard input and is foreground
 work even when launched as a background shell job. Before restore, use a concrete
