@@ -61,7 +61,7 @@ Full explanation: ISSUE-003.
 | `## H2` and deeper | Left-aligned heading |
 | Paragraph, no line breaks inside | Justified body with the configured first-line indent |
 | Paragraph **with** soft/hard line breaks | **Left-aligned** body, no indent — this is the info-block and signature-block rule, ISSUE-004 |
-| `**bold**` | Bold run; Chinese bold set in 黑体 (宋体 has no true bold — ISSUE-014), nested inline emphasis preserved |
+| `**bold**` | Bold run; Chinese emphasis uses the family selected by `RunProps` rather than faux bold; nested inline emphasis preserved (ISSUE-014) |
 | `1.` / `-` lists | Numbered or bulleted, each list restarting at 1, hanging indent |
 | Pipe tables | Complete borders, bold header row and configured table width |
 | `---` | Horizontal rule as a bottom-bordered empty paragraph |

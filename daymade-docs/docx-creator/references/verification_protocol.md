@@ -41,11 +41,15 @@ The remaining steps describe the DOCX-specific chain.
 ## Step 0 — Prerequisites (check the binaries, not the installers)
 
 ```bash
-dotnet --version                                        # any SDK; see scripts/README.md
+dotnet --list-sdks                                      # inventory installed SDKs
 ls -l /Applications/LibreOffice.app/Contents/MacOS/soffice   # the file must exist
 which pdftoppm                                          # brew install poppler
 ls -d "/Applications/Microsoft Word.app" 2>/dev/null   # installation only; assess readiness in Step 3a
 ```
+
+Read `TargetFramework` in [`mmdocx-gen.csproj`](../scripts/mmdocx-gen.csproj) and confirm
+the selected installed SDK supports it. An SDK being present does not establish that the
+project can build; a missing compatible SDK remains an unmet prerequisite.
 
 `ls` on the soffice binary is the real installation check. `brew install --cask libreoffice`
 can exit 0 having installed nothing (ISSUE-009), so a `$?`-based check is worthless here.
