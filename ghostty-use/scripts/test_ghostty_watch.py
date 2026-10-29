@@ -61,6 +61,30 @@ def active_calendar(minutes, stream='com.apple.launchd.calendarinterval'):
 
 
 class ObserverTest(unittest.TestCase):
+    def test_terminal_inventory_keeps_other_shells_and_excludes_other_emulators(self):
+        with mock.patch.object(watch, 'run_bounded', side_effect=self.fake_run):
+            result = watch.observe(include_terminals=True)
+        self.assertEqual({r['tty'] for r in result['terminal_inventory']},
+                         {'ttys001', 'ttys002', 'ttys004'})
+        self.assertEqual([r['tty'] for r in result['other_terminals']], ['ttys004'])
+        self.assertNotIn('restore_command', result['other_terminals'][0])
+        self.assertEqual(result['counters']['lsof_calls'], 1)
+
+    def test_manual_inventory_uses_login_child_cwd_and_handles_no_ghostty(self):
+        def run(command, deadline, counters):
+            if command[0] == '/bin/ps':
+                return ('1 0 ?? /Applications/Ghostty.app/Contents/MacOS/ghostty\n'
+                        '2 1 ttys001 /usr/bin/login\n3 2 ttys001 /bin/zsh')
+            self.assertEqual(command[3], '3')
+            return 'p3\nn/tmp/work\n'
+        with mock.patch.object(watch, 'run_bounded', side_effect=run):
+            result = watch.observe(include_terminals=True)
+        self.assertEqual(result['other_terminals'][0]['cwd'], '/tmp/work')
+        with mock.patch.object(watch, 'run_bounded', return_value='1 0 ?? /bin/launchd'):
+            result = watch.observe(include_terminals=True)
+        self.assertEqual(result['terminal_inventory'], [])
+        self.assertEqual(result['other_terminals'], [])
+
     def process_graph(self):
         return '\n'.join([
             '1 0 ?? /Applications/Ghostty.app/Contents/MacOS/ghostty',

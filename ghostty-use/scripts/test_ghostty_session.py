@@ -197,6 +197,34 @@ class ClassifyTest(unittest.TestCase):
 
 
 class RestoreCmdTest(unittest.TestCase):
+    def test_fork_reopens_child_without_replaying_parent_selector(self):
+        for tool, cmd in [('codex', 'codex --model fork fork ' + S_HEALTHY),
+                          ('claude', 'claude --fork-session -r ' + S_HEALTHY)]:
+            with self.subTest(tool=tool):
+                row = dict(tool=tool, sid=S_CODEX, cwd='/tmp/demo', cmdline=cmd)
+                command = gs.restore_cmd(row, env_mapping={})
+                self.assertNotIn(S_HEALTHY, command)
+                self.assertEqual(command.count(S_CODEX), 1)
+                self.assertNotIn('--fork-session', command)
+                if tool == 'codex':
+                    self.assertEqual(command, 'cd -- /tmp/demo && codex resume ' + S_CODEX + ' --model fork')
+
+    def test_preserves_captured_executable_and_selector_word_option_values(self):
+        row = dict(tool='codex', sid=S_CODEX, cwd='/tmp/demo',
+                   cmdline='/opt/saved/bin/codex --model resume resume ' + S_CODEX)
+        self.assertEqual(gs.restore_cmd(row, env_mapping={}),
+                         'cd -- /tmp/demo && /opt/saved/bin/codex resume ' + S_CODEX + ' --model resume')
+
+    def test_resume_does_not_resend_captured_positional_prompt(self):
+        for tool, command in [('codex', 'codex resume ' + S_CODEX + ' explain this again'),
+                              ('claude', 'claude -r' + S_HEALTHY + ' explain this again')]:
+            with self.subTest(tool=tool):
+                row = dict(tool=tool, sid=S_CODEX, cwd='/tmp/demo', cmdline=command)
+                result = gs.restore_cmd(row, env_mapping={})
+                self.assertNotIn('explain', result)
+                self.assertNotIn(S_HEALTHY, result)
+                self.assertEqual(result.count(S_CODEX), 1)
+
     def test_codex_replay(self):
         s = {"tool": "codex", "sid": S_CODEX, "cwd": "/tmp/proj",
              "cmdline": "codex resume " + S_CODEX}
@@ -436,6 +464,107 @@ class RecoveryWorkflowTest(unittest.TestCase):
         self.assertIn("PRESENT ttys099", output.getvalue())
         self.assertNotIn("ttys001", output.getvalue())
 
+    def test_explicit_exclusions_preserve_saved_set_and_never_reopen_closed_session(self):
+        sessions = [entry(S_CODEX), entry(S_HEALTHY)]
+        path = self.snapshot(sessions)
+        before = Path(path).read_bytes()
+        args = self.args(snapshot=path, exclude=[S_HEALTHY[:8]])
+        with mock.patch.object(gs, 'list_sessions', return_value=[sessions[0]]), \
+                mock.patch.object(gs, '_paste_tab') as paste:
+            self.assertEqual(gs.cmd_restore(args), 0)
+            paste.assert_not_called()
+        self.assertEqual(Path(path).read_bytes(), before)
+        with mock.patch.object(gs, 'list_sessions', return_value=[sessions[0]]), redirect_stdout(io.StringIO()):
+            self.assertEqual(gs.cmd_check(argparse.Namespace(snapshot=path, strict=True,
+                                                            exclude=[S_HEALTHY[:8]])), 0)
+
+    def test_unknown_exclusion_fails_before_gui_instead_of_silently_reopening(self):
+        with mock.patch.object(gs, '_paste_tab') as paste:
+            with self.assertRaises(gs.RecoveryError):
+                gs.cmd_restore(self.args(snapshot=self.snapshot([entry()]), exclude=['ffffffff']))
+            paste.assert_not_called()
+
+    def test_all_explicitly_excluded_sessions_are_not_a_zero_work_failure(self):
+        with mock.patch.object(gs, 'list_sessions') as observe, \
+                mock.patch.object(gs, '_paste_tab') as paste:
+            self.assertEqual(gs.cmd_restore(self.args(snapshot=self.snapshot([entry()]),
+                                                       exclude=[S_CODEX])), 0)
+            observe.assert_not_called()
+            paste.assert_not_called()
+
+    def test_exclusions_do_not_hide_the_active_only_empty_selection(self):
+        rows = [entry(S_CODEX, 'waiting'), entry(S_HEALTHY)]
+        with mock.patch.object(gs, '_paste_tab') as paste:
+            with self.assertRaisesRegex(gs.RecoveryError, 'no sessions selected'):
+                gs.cmd_restore(self.args(snapshot=self.snapshot(rows), all=False, exclude=[S_HEALTHY]))
+            paste.assert_not_called()
+
+    def test_missing_is_an_observation_not_a_failure_diagnosis(self):
+        output = io.StringIO()
+        with mock.patch.object(gs, 'list_sessions', return_value=[]), redirect_stdout(output):
+            self.assertEqual(gs.cmd_check(argparse.Namespace(snapshot=self.snapshot([entry()]), strict=True)), 1)
+        self.assertIn('not observed running; cause unknown', output.getvalue())
+        self.assertIn('intentional closures are not restore failures', output.getvalue())
+
+    def test_snapshot_persists_non_ai_and_unresolved_records_without_replay_commands(self):
+        unknown = dict(pid=3, tty='ttys003', tool='codex', cmd='codex', cwd='/tmp/new')
+        shell = dict(pid=4, tty='ttys004', cwd='/tmp/shell', cmdline='/bin/zsh', kind='other')
+        inventory = [dict(tty='ttys001', kind='ai'), dict(tty='ttys003', kind='ai'), shell]
+        live = gs.SessionList([entry()], unresolved=[unknown],
+                              terminal_inventory=inventory, other_terminals=[shell])
+        path = gs.write_snapshot(live, expected_tabs=2)
+        doc = gs.load_snapshot(path)
+        self.assertEqual(len(doc['sessions']), 1)
+        self.assertEqual(doc['unresolved'], [unknown])
+        self.assertEqual(doc['other_terminals'], [shell])
+        self.assertEqual(doc['terminal_surface_count'], 3)
+        self.assertEqual(doc['expected_tab_count'], 2)
+        self.assertEqual(doc['window_tab_mapping'], 'unknown')
+        self.assertNotIn('restore_command', doc['unresolved'][0])
+        self.assertNotIn('restore_command', doc['other_terminals'][0])
+        self.assertEqual(json.loads(Path(gs.SNAP_DIR, 'latest.json').read_text()), doc)
+
+    def test_legacy_snapshot_missing_metadata_is_valid_but_malformed_lists_are_not(self):
+        path = Path(self.snapshot([entry()]))
+        legacy = path.read_bytes()
+        self.assertEqual(gs.load_snapshot(str(path))['sessions'], [entry()])
+        for field in ('unresolved', 'other_terminals', 'terminal_inventory'):
+            for bad in (None, '', {}, [None], [1]):
+                with self.subTest(field=field, bad=bad):
+                    doc = json.loads(legacy)
+                    doc[field] = bad
+                    path.write_text(json.dumps(doc))
+                    with self.assertRaises(gs.RecoveryError):
+                        gs.load_snapshot(str(path))
+                    self.assertEqual(json.loads(path.read_text())[field], bad)
+            doc[field] = []
+            path.write_text(json.dumps(doc))
+            self.assertEqual(gs.load_snapshot(str(path))[field], [])
+
+    def test_empty_observation_does_not_replace_prior_backup(self):
+        Path(gs.SNAP_DIR).mkdir(parents=True)
+        latest = Path(gs.SNAP_DIR, 'latest.json')
+        latest.write_text(json.dumps({'sessions': [entry()]}))
+        before = latest.read_bytes()
+        with mock.patch.object(gs, 'list_sessions', return_value=gs.SessionList()):
+            with self.assertRaisesRegex(gs.RecoveryError, 'previous snapshot retained'):
+                gs.cmd_snapshot(argparse.Namespace(out=None))
+        self.assertEqual(latest.read_bytes(), before)
+
+    def test_restore_scope_reports_unhandled_records_even_when_all_ai_are_present(self):
+        path = Path(self.snapshot([entry()]))
+        doc = json.loads(path.read_text())
+        doc.update(other_terminals=[{'tty': 'ttys002'}], unresolved=[{'tty': 'ttys003'}],
+                   window_tab_mapping='unknown')
+        path.write_text(json.dumps(doc))
+        output = io.StringIO()
+        with mock.patch.object(gs, 'list_sessions', return_value=[entry()]), \
+                mock.patch.object(gs, '_paste_tab') as paste, redirect_stdout(output):
+            self.assertEqual(gs.cmd_restore(self.args(snapshot=str(path))), 0)
+            paste.assert_not_called()
+        self.assertIn('window/tab membership and order are unverified', output.getvalue())
+        self.assertIn('1 other terminals, 1 unresolved TUIs', output.getvalue())
+
     def test_paste_timeout_returns_failure_for_reconciliation(self):
         with mock.patch.object(gs.subprocess, "run", side_effect=subprocess.TimeoutExpired("osascript", 15)):
             self.assertFalse(gs._paste_tab("echo synthetic"))
@@ -649,16 +778,29 @@ class AssignTranscriptsTest(unittest.TestCase):
 class ListSessionsAnchorTest(unittest.TestCase):
     PS_HEADER = "  PID TTY      COMMAND\n"
 
-    def _run_list(self, ps_rows, resolve):
-        def fake_run(args, **kw):
-            if args[:3] == ["ps", "-eo", "pid,tty,command"]:
-                return subprocess.CompletedProcess(args, 0, stdout=self.PS_HEADER + ps_rows)
-            raise AssertionError(f"unexpected subprocess call: {args}")
-        with mock.patch.object(gs.subprocess, "run", side_effect=fake_run), \
-             mock.patch.object(gs, "_proc_cwd", return_value="/Users/x/demo"), \
+    def _run_list(self, ps_rows, resolve, *, resolve_uuidless=True, cwds=None):
+        import ghostty_watch as watch
+        graph = ['1 0 ?? /Applications/Ghostty.app/Contents/MacOS/ghostty',
+                 '2 1 ?? /bin/zsh']
+        wrappers = {}
+        for line in ps_rows.splitlines():
+            pid, tty, cmd = line.split(None, 2)
+            parent = wrappers.get(tty, '2')
+            graph.append(f'{pid} {parent} {tty} {cmd}')
+            if cmd.startswith('node '):
+                wrappers[tty] = pid
+        def fake_run(args, deadline, counters):
+            counters['commands'] += 1
+            if args[0] == '/bin/ps':
+                return '\n'.join(graph)
+            if args[0] == '/usr/sbin/lsof':
+                return ''.join('p' + pid + '\nn' + (cwds or {}).get(int(pid), '/Users/x/demo') + '\n'
+                               for pid in args[3].split(','))
+            raise AssertionError(f'unexpected subprocess call: {args}')
+        with mock.patch.object(watch, 'run_bounded', side_effect=fake_run), \
              mock.patch.object(gs, "_proc_start", return_value=1000.0), \
              mock.patch.object(gs, "_transcript_candidates", side_effect=resolve):
-            return gs.list_sessions()
+            return gs.list_sessions(resolve_uuidless=resolve_uuidless)
 
     def test_no_daemon_and_daemon_option_values_remain_live(self):
         for command in (
@@ -706,6 +848,32 @@ class ListSessionsAnchorTest(unittest.TestCase):
         self.assertEqual(by_sid[S_DEAD]["anchor"], "argv")
         self.assertEqual(sessions.unresolved, [])
 
+    def test_fork_anchors_child_from_transcript_and_never_claims_parent(self):
+        for command in ('codex fork ' + S_HEALTHY,
+                        'claude --fork-session -r ' + S_HEALTHY):
+            with self.subTest(command=command):
+                rows = '  500 ttys042 ' + command + '\n'
+                saved = self._run_list(rows, lambda *args: [(2.0, S_CODEX, '/synthetic/child.jsonl')])
+                self.assertEqual([s['sid'] for s in saved], [S_CODEX])
+                self.assertEqual(saved[0]['anchor'], 'transcript')
+                unknown = self._run_list(rows, lambda *args: [])
+                self.assertEqual(list(unknown), [])
+                self.assertEqual(len(unknown.unresolved), 1)
+                self.assertNotIn('sid', unknown.unresolved[0])
+
+    def test_parent_and_forked_child_are_two_live_sessions(self):
+        rows = ('  400 ttys041 codex resume ' + S_HEALTHY + '\n'
+                '  500 ttys042 codex fork ' + S_HEALTHY + '\n')
+        sessions = self._run_list(rows, lambda *args: [(2.0, S_CODEX, '/synthetic/child.jsonl')])
+        self.assertEqual({s['sid'] for s in sessions}, {S_HEALTHY, S_CODEX})
+        self.assertEqual({s['tty'] for s in sessions}, {'ttys041', 'ttys042'})
+
+    def test_uuid_option_value_is_not_an_argv_session_id(self):
+        sessions = self._run_list('  500 ttys042 codex --model ' + S_HEALTHY + '\n', lambda *args: [])
+        self.assertEqual(list(sessions), [])
+        self.assertEqual(len(sessions.unresolved), 1)
+        self.assertNotIn('sid', sessions.unresolved[0])
+
     def test_unresolvable_tui_is_reported_not_dropped(self):
         rows = "  500 ttys042 claude --dangerously-skip-permissions\n"
         sessions = self._run_list(rows, lambda tool, cwd, started: [])
@@ -723,17 +891,8 @@ class ListSessionsAnchorTest(unittest.TestCase):
                 "  503 ttys043 /x/vendor/codex\n")
         offers = {"/Users/x/demo": [(1.0, S_HEALTHY, "/a"), (90.0, S_DEAD, "/b")],
                   "/Users/x/other": [(1.0, S_PROSE, "/c")]}
-        def fake_run(args, **kw):
-            if args[:3] == ["ps", "-eo", "pid,tty,command"]:
-                return subprocess.CompletedProcess(args, 0, stdout=self.PS_HEADER + rows)
-            raise AssertionError(f"unexpected subprocess call: {args}")
         cwds = {500: "/Users/x/demo", 501: "/Users/x/demo", 502: "/Users/x/other", 503: "/Users/x/other"}
-        with mock.patch.object(gs.subprocess, "run", side_effect=fake_run), \
-             mock.patch.object(gs, "_proc_cwd", side_effect=lambda pid: cwds[pid]), \
-             mock.patch.object(gs, "_proc_start", return_value=1000.0), \
-             mock.patch.object(gs, "_transcript_candidates",
-                               side_effect=lambda tool, cwd, started: offers[cwd]):
-            sessions = gs.list_sessions()
+        sessions = self._run_list(rows, lambda tool, cwd, started: offers[cwd], cwds=cwds)
         by_tty = {s["tty"]: s["sid"] for s in sessions}
         self.assertEqual(by_tty, {"ttys042": S_HEALTHY, "ttys043": S_PROSE})
         self.assertEqual(sessions.unresolved, [])
@@ -742,19 +901,11 @@ class ListSessionsAnchorTest(unittest.TestCase):
     def test_opaque_prompt_uuid_never_becomes_manual_identity_or_transcript_candidate(self):
         rows = (f"  500 ttys042 codex resume {S_CODEX}\n"
                 f"  501 ttys043 codex discuss {S_DEAD} in prompt-with-quote\"\n")
-        def fake_run(args, **kw):
-            if args[:3] == ["ps", "-eo", "pid,tty,command"]:
-                return subprocess.CompletedProcess(args, 0, stdout=self.PS_HEADER + rows)
-            raise AssertionError(f"unexpected subprocess call: {args}")
         for resolve in (False, True):
             with self.subTest(resolve_uuidless=resolve), \
-                    mock.patch.object(gs.subprocess, "run", side_effect=fake_run), \
-                    mock.patch.object(gs, "_proc_cwd", return_value="/Users/x/demo"), \
-                    mock.patch.object(gs, "_proc_start", return_value=1000.0), \
-                    mock.patch.object(gs, "_transcript_candidates",
-                                      side_effect=AssertionError("opaque transcript lookup forbidden")), \
                     mock.patch.object(gs, "_assign_transcripts", return_value=[]) as assign:
-                sessions = gs.list_sessions(resolve_uuidless=resolve)
+                sessions = self._run_list(rows, lambda *args: self.fail('opaque transcript lookup forbidden'),
+                                          resolve_uuidless=resolve)
             self.assertEqual([row["sid"] for row in sessions], [S_CODEX])
             self.assertNotIn(S_DEAD, [row["sid"] for row in sessions])
             self.assertEqual(assign.call_args.args[0], [])
@@ -767,13 +918,8 @@ class ListSessionsAnchorTest(unittest.TestCase):
 
     def test_resolve_disabled_keeps_argv_only(self):
         rows = "  500 ttys042 claude --dangerously-skip-permissions\n"
-        def fake_run(args, **kw):
-            if args[:3] == ["ps", "-eo", "pid,tty,command"]:
-                return subprocess.CompletedProcess(args, 0, stdout=self.PS_HEADER + rows)
-            raise AssertionError(f"unexpected subprocess call: {args}")
-        with mock.patch.object(gs.subprocess, "run", side_effect=fake_run), \
-             mock.patch.object(gs, "_transcript_candidates") as resolver:
-            sessions = gs.list_sessions(resolve_uuidless=False)
+        with mock.patch.object(gs, '_transcript_candidates') as resolver:
+            sessions = self._run_list(rows, resolver, resolve_uuidless=False)
         self.assertEqual(list(sessions), [])
         resolver.assert_not_called()
 

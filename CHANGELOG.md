@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **feishu-doc-scraper** (v1.10.3 → v1.10.4): Recognize embedded wikilinks across Pandoc AST variants using source positions, preserving external-media rejection and escaped ordinary links. Change type: deterministic parser compatibility repair.
+- **ghostty-use** (v1.8.7 → v1.9.0): Scope manual capture to Ghostty descendants, persist ordinary terminals and unresolved TUIs, and keep reported tab counts separate from process coverage. Resolve forked children without replaying parent selectors; preserve the captured executable. Add explicit restore/check exclusions and neutral missing-session guidance without changing the saved snapshot. Change types: identity bug fixes, additive capture metadata and bounded recovery selection.
 - **auto-repo-setup** (v2.1.8 → v2.1.9): Select persistent storage for resumable task checkouts and continuation evidence before creating a task copy; reserve system temporary directories for disposable scratch. Preserve unknown evidence loss during recovery. Change type: bounded workspace-lifetime guidance.
 - **tech-selection** (`daymade-claude-code` v4.33.9 → v4.33.10): Bind observability comparisons to the business decision and measurement scope; ship the usable existing path before optional collector expansion while retaining required coverage gaps. Change type: bounded evidence-selection clarification.
 
