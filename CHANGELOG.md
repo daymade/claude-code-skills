@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **qa-expert** (v1.2.8 → v1.2.9): Add a job-scoped runtime capability case before long validation, distinguishing missing or denied APIs from a healthy operation under the selected interpreter. Preserve platform and path compatibility cases. Change type: bounded acceptance guidance.
+
 - **github-ops** (v1.14.12 → v1.14.13): Verify the base branch directly from the remote and match its fetched commit before diagnosing conflicts or merging. Keep required checks, exact-head matching and readback; distinguish base drift from delayed mergeability. Change type: bounded verification-workflow correction.
 - **skill-creator** (`daymade-skill` v1.74.4 → v1.74.5): Route mergeability diagnosis and check waiting to GitHub Operations; preserve fresh-base verification and complete-distribution constraints on review reuse. Change type: scoped workflow alignment.
 - **github-ops** (v1.14.12): Continue authorized Confirm access recovery through the normal credential route while retaining physical-challenge and account-selection handoffs. Change type: bounded authentication recovery clarification.
