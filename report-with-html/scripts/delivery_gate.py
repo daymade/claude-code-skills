@@ -421,6 +421,7 @@ def _with_original_base(src: str, page: Path) -> str:
         def __init__(self) -> None:
             super().__init__(convert_charrefs=True)
             self.head_end = 0
+            self.document_start = 0
             self.base = None
             self.template_depth = 0
 
@@ -429,11 +430,13 @@ def _with_original_base(src: str, page: Path) -> str:
                 self.template_depth += 1
             if self.template_depth:
                 return
-            if tag not in {"head", "base"}:
+            if tag not in {"html", "head", "base"}:
                 return
             line, column = self.getpos()
             start = sum(len(part) + 1 for part in src.split("\n")[:line - 1]) + column
             raw = self.get_starttag_text()
+            if tag == "html" and not self.document_start:
+                self.document_start = start + len(raw)
             if tag == "head" and not self.head_end:
                 self.head_end = start + len(raw)
             if tag == "base" and self.base is None:
@@ -445,6 +448,12 @@ def _with_original_base(src: str, page: Path) -> str:
         def handle_endtag(self, tag) -> None:
             if tag == "template" and self.template_depth:
                 self.template_depth -= 1
+
+        def handle_decl(self, decl) -> None:
+            if decl.lower().startswith("doctype") and not self.document_start:
+                line, column = self.getpos()
+                start = sum(len(part) + 1 for part in src.split("\n")[:line - 1]) + column
+                self.document_start = src.index(">", start) + 1
 
     locator = BaseLocator()
     locator.feed(src)
@@ -458,7 +467,8 @@ def _with_original_base(src: str, page: Path) -> str:
         ) + ">"
         return src[:start] + base + src[start + length:]
     base = f'<base href="{html.escape(document_url, quote=True)}">'
-    return src[:locator.head_end] + base + src[locator.head_end:]
+    position = locator.head_end or locator.document_start
+    return src[:position] + base + src[position:]
 
 
 def render_masked(page: Path, out_png: Path, height: int) -> None:

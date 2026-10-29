@@ -806,6 +806,20 @@ window.addEventListener('load', () => {{
             self.assertEqual(len(observed), 1)
             self.assertFalse(observed[0].exists())
 
+    def test_masked_documents_without_head_preserve_rendering_mode(self) -> None:
+        source = Path.cwd() / "source.html"
+        for html in ["<!doctype html><style>p{font-size:16px}</style><p>Standards mode</p>",
+                     '<!doctype html><html lang="en"><style>p{font-size:16px}</style><body><p>Standards mode</p></body></html>',
+                     "<style>p{font-size:16px}</style><p>Fragment in quirks mode</p>"]:
+            with self.subTest(html=html):
+                script = """<script>window.addEventListener('load', () => {
+document.title = 'RWH_RESULT:' + JSON.stringify({standards: document.compatMode === 'CSS1Compat',
+  masked: getComputedStyle(document.querySelector('p')).color === 'rgba(0, 0, 0, 0)'});
+});</script>"""
+                masked = GATE_MODULE.inject_mask(GATE_MODULE._with_original_base(html, source))
+                state = self.browser_probe("masked-document-mode", masked + script)
+                self.assertEqual(state, {"standards": html.startswith("<!doctype"), "masked": True})
+
     def test_citation_drawer_is_keyboard_modal_and_tabs_work(self) -> None:
         block = component_block("citation-drawer")
         long_title = "超长无断点文档标题" * 40
