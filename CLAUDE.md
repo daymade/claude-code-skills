@@ -671,15 +671,11 @@ re-add a marketplace: removing it uninstalls plugins installed from that
 marketplace. Do not `cp -r` a second Skill tree into a user Skill directory; that
 copy immediately creates an independent drift owner.
 
-For maintainer source-backed activation or source-watcher deployment, follow
+For maintainer source-backed activation, source-watcher deployment, or authorized plugin-to-personal
+Skill conversion, follow
 [Local Source Sync Architecture](daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md).
-That reference owns the activation-manifest contract, host-specific selection,
-legacy compatibility, and repair workflow. An approved whole-marketplace policy
-includes newly registered members; a source checkout or registration alone does
-not establish that policy. Do not hand-create user Skill links.
-For intentional same-name source variants, use the owner's explicit source-selection
-contract; retain every candidate and reject undeclared collisions. Audit tools must
-consume the owner's selected inventory rather than choose a source independently.
+Do not hand-create user Skill links. Intentional same-name source variants follow
+that owner's [explicit source preferences](daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md#explicit-source-preferences).
 For Skill authoring in an approved independent Fleet clone, follow the
 [leased-authoring owner procedure](daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md#leased-fleet-authoring-clones).
 
@@ -762,7 +758,8 @@ For local snapshot failures involving an index lock or commit-hook refusal, use 
 [snapshot recovery procedure](git-safety-net/references/recovery_playbook.md#blocked-local-snapshots).
 For Tibo's application retry and acceptance, follow
 [the forecast journal owner](tibo-reset-codex/references/forecast-feedback.md#快照诊断与显式恢复).
-For inherited upload restrictions or source paths hidden by ignore rules, read its
+For inherited upload restrictions, source paths hidden by ignore rules, or selected/delegated
+classification batches, read its
 [convergence authority and source-inventory procedure](git-safety-net/references/merge_verification.md#1-freeze-the-outcome-and-the-first-ref-snapshot).
 
 For GitHub-hosted state — PRs, issues, Actions, repository or organization settings, permissions,
