@@ -18,6 +18,12 @@
 
 ```bash
 uv run python scripts/forecast_log.py --help
+uv run python scripts/forecast_log.py activity
+# next_cursor 非 null 时，使用上一页的 view_id 继续；直到 next_cursor=null 才读完
+uv run python scripts/forecast_log.py activity --cursor 10 --expect-view <上一页view_id>
+# 按 ID 读取完整原件（包括反馈、来源与原始 readings）
+uv run python scripts/forecast_log.py show --id <完整记录id>
+# 旧 compact 接口仍可用，保留原投影语义；它不承诺输出大小
 uv run python scripts/forecast_log.py summary --compact
 # 审计、复盘或需要完整叙述时：
 uv run python scripts/forecast_log.py summary
@@ -38,7 +44,16 @@ uv run python scripts/forecast_log.py summary
 
 ## 每次调用先回看
 
-1. 正常监测轮运行 `summary --compact`；审计、复盘或需要完整叙述时运行 `summary`。compact
+1. 正常监测轮先运行 `activity`，按 `totals` 核对所有队列，沿 `next_cursor` 翻完全部页；后续页
+   必须带首轮 `view_id` 的 `--expect-view`，状态变化报错后从第一页重读，不拼接两个版本。
+   每页默认最多 10 项、16000 UTF-8 字节（参数 `--limit` / `--max-output-bytes` 可显式调整），
+   包含到期、未决、账号、撤回冲突、最近结果与撤回的定位，以及完整的逐条交接 notes，附快照状态。
+   不截断单条；单条超预算会明确失败并给原件 ID，改用 `show --id` 通过宿主现有大输出捕获与
+   分段读取流程读完，或显式提高预算。`totals` 非零且该类尚未读到时不能宣布没有待办。
+   最近核验与撤回的 `lesson` 完整保留；历史 `reason`、完整证据和交接 `readings` 按 ID
+   读取原件。分页投影不改写原件。
+   需要完整交接时仍用 `handoff`；输出可能很大，先落新的私有文件再按需读取，不依赖终端截断。
+   审计、复盘或需要完整叙述时运行 `summary`。旧 `summary --compact` 接口保持兼容：compact
    是同一个完整 summary 的投影，只省略 forecast 的 `rationale`、`feedback_applied`，以及
    `latest_review` / `latest_withdrawal` 的 `reason`、`lesson`；其他字段保持不变，包括各队列及其顺序、ID、kind、状态、窗口、`revision_trigger`、
    证据引用、账号观测、`withdrawal_conflicts` 与 `snapshot`。先读 `due_for_followup`（窗口已过期或即将关闭、尚无定论的 pending；
@@ -49,7 +64,8 @@ uv run python scripts/forecast_log.py summary
    需要其他轮次的原始读数时再读数据目录的 `findings.jsonl` 原始行。
    `findings` 命令只返回摘要（id/invocation/query/endpoints 数），不含 `readings` 与 `notes`。
    `confirmed_unscored` 是已确认事件但仍不可评分的记录，已退出事件待查队列；
-   `account_followup` 是绑定账号后仍未确认到账的独立队列。运行 `followup` 取得本轮证据任务，
+   `account_followup` 是绑定账号后仍未确认到账的独立队列。需问题与来源配方时运行 `followup`，
+   先将完整输出保存到新的私有文件，再按目标 ID 读取证据任务，避免重复读取其中完整 handoff；
    再按主 Skill 的监测轮实际获取；它不联网、不安排后台任务，也不证明清单已完成。
    `summary` 还带 `snapshot`（只读探测，不创建目录）：`ok` 表示已存在的台账文件都已进 git
    快照（还没有任何台账文件时也是 `ok`）；`lagging` 并列出 `uncommitted` 文件（含被
@@ -146,6 +162,10 @@ uv run python scripts/forecast_log.py handoff               # 最新完整监测
 保留账号未知，不把多条「当前账号」读数自动接成同一账号的历史。用户纠正时先逐字记录原话；时间格式、被核对的账号与因果归因若未明说，
 放在 `notes` 标为推断，不改写成用户直接观测。
 
+实时 CLI 额度优先按[账号查询单次命令](account-usage.md)使用 `query_usage.py --output-dir ...
+--finding-state-dir ...`，同一次查询自动保存去邮箱读数并调用本 `finding` 写入路径，保留原查询
+时刻与 `account_ref`；不要从 stdout 手抄百分比或再生成一份长记账脚本。其它来源仍用通用 finding。
+
 完全相同的输入重试返回原记录。`evidence_refs` 链接规则：先 `finding` 后 `record`/`review`
 ——record/review 输入里的 `evidence_refs` 是 finding id 数组（完整 id，或能唯一解析的短
 id 前缀），每个引用必须已存在于 findings.jsonl，否则报错退出（防断链）；缺省不写该键，
@@ -155,8 +175,25 @@ id 前缀），每个引用必须已存在于 findings.jsonl，否则报错退�
 
 **用户纠正作废旧归因时，仍走追加，不改原始读数**：
 
-1. 先追加一条纠正 finding，逐字保存用户原话，并用 `invalidates` 指向被证伪的旧 finding；
-   需要接替监测状态时，把这条直接写成新的 `invocation=monitor` 完整交接，或紧接着再追加一条完整交接。
+1. 只更正当前交接的一条事实时，使用 `correct-handoff`，不手工重建 monitor。先读当前完整交接，
+   将完整 `id`、一条完整旧 note、完整新 note 与用户纠正依据写进新的私有 JSON 输入：
+
+   ```json
+   {"expected_handoff_id":"<当前完整id>","old_note":"合成例：窗口已重置。","new_note":"合成例：只确认百分比变化，原因 unknown。","reason":"合成用户纠正：未确认发生 reset。"}
+   ```
+
+   ```bash
+   uv run python scripts/forecast_log.py correct-handoff --input /path/to/private/correction.json
+   uv run python scripts/forecast_log.py handoff
+   ```
+
+   脚本在同一文件锁内核对当前 ID，只允许唯一、逐字匹配的一条完整 note 替换，继承其余全部
+   notes、readings、来源、session_ref 与其它状态，并追加新 monitor 及 `invalidates`；原行不变。
+   `reason` 保存纠正依据，不作为新抓取读数。缺键、null、空串、未命中或多次命中拒绝写入。
+   ID 漂移先重读，不自动套到新交接；完全相同的重试仅在其结果仍是当前交接时返回原记录。
+   该工具保证机械保留，不判断用户原有交接语义是否完整。需更正多个独立事实时逐项读回、
+   绑定新的当前 ID 再改。通用 `finding` / `invalidates` 仍兼容其它原始证据纠正；非交接证据
+   纠正时先逐字保存用户原话并指向旧 finding，不用 correction-only monitor 接替完整交接。
 2. `handoff` 只返回当前有效的最新 monitor 行：若最新 monitor 已被后续 finding 作废且没有更正规程交接，
    返回 `null`，不会悄悄复活更早的旧交接。此时必须先写纠正后的 monitor，再按它继续。
 3. 若旧证据还造成预测 false-hit，沿用既有 `review` 追加 `unknown:true`、`event_status:"unknown"`、
