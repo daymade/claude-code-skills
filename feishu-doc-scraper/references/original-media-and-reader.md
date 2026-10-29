@@ -78,8 +78,8 @@ uv run --script <skill-dir>/scripts/render_api_capture.py \
 
 The renderer defines its archive root as the manifest's parent directory. Put the
 manifest at that root; its local artifact paths are relative to the same directory.
-Use the same Feishu/Lark host family accepted by the archive storage contract
-(`feishu.cn`, `larkoffice.com`, `larksuite.com`). `--discussion` is optional;
+The source host suffix list is defined by `FEISHU_HOST_SUFFIXES` in
+[the storage validator](../scripts/check_archive_storage.py). `--discussion` is optional;
 when supplied, its target must be an existing relative Markdown file inside the
 archive, and the renderer adds a visible **Comments and feedback** link.
 

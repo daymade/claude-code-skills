@@ -365,7 +365,7 @@ A `tests/` directory under a Skill does **not** automatically run in CI.
 [The registry](scripts/ci/test-suites.txt) owns suite admission and membership;
 [the dispatcher](scripts/ci/run_registered_tests.sh) owns their execution commands.
 [The workflow](.github/workflows/ci.yml) owns job environments, dependency installation,
-timeouts and additional test steps. For required-check readback, installation stalls,
+timeouts and additional test steps. For required-check readback, bootstrap mismatches, installation stalls,
 test failures and temporary-Git cleanup, follow [CI operations](references/ci-operations.md).
 
 For CI demand, notification overload, exhausted allowance or repeated validation,
@@ -464,6 +464,9 @@ To find an existing Feishu recording by date, enter
 
 For Feishu document reads and archives, enter
 [feishu-doc-scraper](feishu-doc-scraper/SKILL.md). Its
+[API extraction SOP](feishu-doc-scraper/references/lark-cli-api-extraction.md)
+owns resolved Wiki target dispatch and the authorized reference-traversal scope.
+Its
 [comments and feedback SOP](feishu-doc-scraper/references/comments-and-feedback.md)
 owns discussion capture and interpretation; the bundled helper owns the CLI
 interface. Before permanent filing or choosing an authorized archive destination,
