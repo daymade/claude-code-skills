@@ -1309,7 +1309,7 @@
       "description": "Produces the reader-facing HTML artifact — report, dashboard, architecture view, data browser, or review workbench — evidence-backed, browser-verified. Use when the deliverable IS a visual HTML report, or the user asks for an HTML/web presentation. Load data-visualization-discipline for chart judgment. Not for chat status or Markdown prose unless asked to become a report; not for PowerPoint (deck-creator Route C).",
       "source": "./report-with-html",
       "strict": false,
-      "version": "1.4.4",
+      "version": "1.4.5",
       "category": "documentation",
       "keywords": [
         "HTML报告",
@@ -1338,7 +1338,7 @@
       "description": "Snapshots/restores Ghostty Claude Code/Codex tabs across reboots. Use before Mac updates (保存终端会话/重启前备份终端), after restart to reopen original session IDs (恢复之前的窗口/restore my ghostty tabs), audit survivors, or periodic change-only snapshots (定期增量快照/没变化不记录). Also for unmanaged/legacy Codex account switches (额度耗尽换号/换号后恢复全部 Codex); Minions native_runtime uses Account Manager. Not for --resume, screenshots or tmux.",
       "source": "./ghostty-use",
       "strict": false,
-      "version": "1.8.7",
+      "version": "1.9.0",
       "category": "developer-tools",
       "keywords": [
         "ghostty",
