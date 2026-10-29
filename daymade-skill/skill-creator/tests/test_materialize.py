@@ -112,9 +112,18 @@ class MaterializeTests(unittest.TestCase):
         self.assertEqual(summary["state"], "finished")
         self.assertEqual(summary["outcome_before_finish"], "child_failed")
         self.assertEqual(summary["last_run"]["returncode"], 7)
-        self.assertTrue(self.read()["cleanup"]["inventory_complete"])
-        self.assertEqual(len(self.read()["cleanup"]["removed"]), 2)
-        self.assertNotIn("cleanup", summary)
+        record = self.read()
+        self.assertTrue(record["cleanup"]["inventory_complete"])
+        self.assertEqual(len(record["cleanup"]["removed"]), 2)
+        # Intentional additive enhancement (was assertNotIn): the summary now
+        # projects the declared-input cleanup scope and counts from the record.
+        cleanup = summary["cleanup"]
+        self.assertEqual(cleanup["scope"], "declared_inputs")
+        self.assertIs(cleanup["inventory_complete"], True)
+        self.assertEqual(cleanup["removed_count"], len(record["cleanup"]["removed"]))
+        self.assertEqual(cleanup["retained_count"], len(record["cleanup"]["retained"]))
+        self.assertNotIn("removed", cleanup)
+        self.assertNotIn("retained", cleanup)
 
     def test_cli_summary_keeps_prelaunch_budget_failure_and_absent_returncode(self):
         self.prepare()
@@ -190,7 +199,69 @@ class MaterializeTests(unittest.TestCase):
             self.assertEqual(summary["last_run"], latest)
             self.assertIsNone(summary["outcome_before_finish"])
             self.assertNotIn("charged_bytes", summary)
+            self.assertNotIn("cleanup", summary)
             self.assertEqual(json.dumps(record, sort_keys=True), before)
+
+    def test_summary_cleanup_projection_unknown_stays_unknown(self):
+        complete = {"inventory_complete": True, "removed": ["arms/a/x", "arms/b/x"],
+                    "retained": ["artifacts/keep.log"]}
+        cases = [
+            ({}, {"scope": "declared_inputs", "inventory_complete": None,
+                  "removed_count": None, "retained_count": None}),
+            ({"inventory_complete": None}, {"scope": "declared_inputs", "inventory_complete": None,
+                                            "removed_count": None, "retained_count": None}),
+            ({"inventory_complete": "yes"}, {"scope": "declared_inputs", "inventory_complete": None,
+                                             "removed_count": None, "retained_count": None}),
+            ({"inventory_complete": False, "removed": [], "retained": ["partial/entry"]},
+             {"scope": "declared_inputs", "inventory_complete": False,
+              "removed_count": None, "retained_count": None}),
+            (complete, {"scope": "declared_inputs", "inventory_complete": True,
+                        "removed_count": 2, "retained_count": 1}),
+            ({"inventory_complete": True, "removed": [], "retained": []},
+             {"scope": "declared_inputs", "inventory_complete": True,
+              "removed_count": 0, "retained_count": 0}),
+            ({"inventory_complete": True, "removed": None, "retained": []},
+             {"scope": "declared_inputs", "inventory_complete": True,
+              "removed_count": None, "retained_count": None}),
+            ({"inventory_complete": True, "retained": ["c"]},
+             {"scope": "declared_inputs", "inventory_complete": True,
+              "removed_count": None, "retained_count": None}),
+            ({"inventory_complete": True, "removed": "corrupt", "retained": ["c"]},
+             {"scope": "declared_inputs", "inventory_complete": True,
+              "removed_count": None, "retained_count": None}),
+        ]
+        for cleanup, expected in cases:
+            with self.subTest(cleanup=cleanup):
+                record = {"root": "/synthetic/task", "state": "finished", "cleanup": cleanup}
+                before = json.dumps(record, sort_keys=True)
+                summary = m.receipt_summary(record)
+                self.assertEqual(summary["cleanup"], expected)
+                # A finished state never invents a cleared directory: counts
+                # follow the recorded inventory, not the lifecycle state.
+                self.assertNotIn("removed", summary["cleanup"])
+                self.assertNotIn("retained", summary["cleanup"])
+                self.assertEqual(json.dumps(record, sort_keys=True), before)
+        for cleanup in (None, "corrupt", ["not", "a", "dict"]):
+            with self.subTest(cleanup=cleanup):
+                record = {"root": "/synthetic/task", "state": "prepared", "cleanup": cleanup}
+                self.assertNotIn("cleanup", m.receipt_summary(record))
+
+    def test_failed_cleanup_inventory_summary_reports_unknown_counts(self):
+        self.prepare()
+        unknown = self.root / "artifacts" / "evidence-unique.txt"
+        unknown.write_text("retained evidence")
+        with mock.patch.object(m.os, "walk", side_effect=OSError("unreadable inventory")):
+            with self.assertRaises(m.MaterializationError):
+                m.finish(self.root, "fixture-session")
+        self.assertEqual(self.read()["state"], "cleanup_failed")
+        self.assertFalse(self.read()["cleanup"]["inventory_complete"])
+        summary = m.receipt_summary(self.read())
+        cleanup = summary["cleanup"]
+        self.assertEqual(cleanup["scope"], "declared_inputs")
+        self.assertIs(cleanup["inventory_complete"], False)
+        self.assertIsNone(cleanup["removed_count"])
+        self.assertIsNone(cleanup["retained_count"])
+        self.assertNotIn("arms/with/selected/input.txt", json.dumps(cleanup))
 
     def test_scan_file_removed_between_walk_and_lstat_is_sampled_absent(self):
         self.root.mkdir()
