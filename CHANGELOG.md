@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **ghostty-use** (v1.9.0 → v1.9.1): Align recovery entry points with current-set verification and existing foreground authorization; preserve observer cadence and stopped state during upgrades. Keep detailed procedures with their owners and remove copied timing values. Change type: bounded SOP alignment.
 - **llm-eval-harness** (v1.7.0 → v1.7.1): Distinguish exhausted quota from transient rate limits in HTTP 429 guidance; retain status/code evidence and quota recovery instead of unconditional concurrency retries. Change type: factual SOP correction.
+- **prior-work-retrieval** (`daymade-claude-code` v4.33.11): Native `exec` retrieval envelopes; quoted `cmd`/`command` keys and JavaScript-escaped command separators.
+
 - **skill-creator** (`daymade-skill` v1.74.6 → v1.74.7): Load the existing publication and dependency-bound review-reuse prerequisites before the first independent review. Change type: bounded entry-order correction.
 - **git-safety-net** (v1.24.0 → v1.24.1): Add a read-only batch regular-file hash example with exact path/output pairing, changed-file checks and failure handling; retain complete ignored inventories, symlink targets and retirement gates. Change type: bounded operating example.
 - **github-ops** (v1.14.14 → v1.14.15): Diagnose bootstrap and dependency failures from exact run/job/image evidence, retain unrun test status and use job-log fallback before authorizing a rerun. Change type: bounded diagnostic guidance.
