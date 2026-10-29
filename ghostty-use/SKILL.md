@@ -104,14 +104,28 @@ python3 <skill-dir>/scripts/ghostty_session.py restore --all  # include waiting/
 ```
 
 The snapshot lands in `~/.ghostty-session/snapshots/` (home-relative, survives reboot).
-The report accounts for every live TUI: captured sessions plus an `unresolved`
-section for fresh tabs that have no transcript yet — a session count lower than
-the tab count is explained there, not silently lost.
+Manual snapshots record Ghostty process descendants only. They persist resumable
+AI `sessions`, `unresolved` TUIs, `other_terminals` with cwd/process evidence, and
+the observed `terminal_inventory`. Other terminal emulators are excluded.
+Treat a TTY as a terminal surface, not a tab: splits and window membership are
+unknown. If the user supplies a tab count, record it with `snapshot --expected-tabs <N>`;
+do not use matching session/TTY totals as proof of current-window coverage.
+State the unmapped window/tab boundary before the update. An empty observation
+refuses to replace the previous backup. Non-AI commands and unresolved argv are
+evidence, not instructions to execute automatically.
 `restore` skips already-live IDs by default. It finishes with a bounded auto-check
 that prints `N/M present`, a manual reopen command and a retry command containing only
 missing IDs. Read that result before declaring success; per-tab `SENT (unverified)`
 is a paste acknowledgement, not proof that a session reopened. Re-running the same
 manifest opens only the IDs still missing. `--dry-run` prints commands without GUI actions.
+Read `MISSING` as not observed running, with cause unknown. Confirm which recorded
+sessions are still wanted before recommending a retry; intentional user closures
+are not failures. Use `check` or `restore --exclude <ID> [...]` for explicitly
+excluded IDs or unique prefixes without rewriting the preserved snapshot. Never
+infer those IDs from a statement such as "I closed a few". Follow
+[current-set reconciliation](references/restore_mechanics.md#reconcile-the-current-wanted-set)
+after a manual handoff or any change in the user's selection. A full AI-session
+match does not establish restored window order, ordinary shells or usable model requests.
 
 ## Automatic change-only backups
 
@@ -176,16 +190,18 @@ or unavailable evidence. Dry-run output is JSON for inspection.
 
 ## What manual snapshot records per session
 
-- **Anchor**: the session UUID from the process command line when present (never
+- **Anchor**: the session UUID from a recognized resume/session selector (never
   match on process names — argv[0] flips between bare `claude` and
-  `/usr/local/bin/claude`). Fresh TUIs carry no UUID on argv (only
-  resume/fork writes one), so they are anchored from transcript storage instead:
+  `/usr/local/bin/claude`). Option values and prompt text cannot establish identity.
+  A fork selector names the parent; resolve the child's own ID from verified
+  transcript evidence, then resume that child without replaying `fork` or
+  `--fork-session`. Fresh TUIs likewise use transcript storage:
   the session file born at or after the process started, in the project bucket
   of the same cwd, internal identity verified. When several
   fresh TUIs share one bucket, transcripts are assigned disjointly — one file
   per TUI; an undecidable race (equidistant claims) refuses to the unresolved
-  section rather than guessing. Live TUIs matching neither way are printed as
-  unresolved rows in the snapshot report — visible, never silently dropped.
+  section rather than guessing. Live TUIs matching neither way are persisted as
+  unresolved rows and printed in the snapshot report — visible, never silently dropped.
 - **Liveness**: last real interaction time read from the *content* of the session file —
   not the file mtime, which can change without real interaction.
 - **Channel health**: `dead-channel` when a Claude transcript's tail carries a
@@ -238,7 +254,7 @@ user-local data outside the skill bundle; no default mapping ships.
 
 | Symptom | Cause / fix |
 |---|---|
-| `restore` reports `STILL MISSING` | run the printed missing-only retry, or the exact reopen command by hand in a new tab |
+| `restore` reports `NOT OBSERVED` | reconcile the current wanted set first; retry only still-wanted IDs, excluding intentional closures |
 | `no-artifact` on a Codex session | the verified indexed session has no usable rollout; resume remains best-effort |
 | `unknown` Codex liveness | reader/index unavailable or identity ambiguous; resolve the dependency/store instead of choosing the first filename match |
 | `dead-channel` sessions restored anyway | expected: history reopens, session stops at `/login`; re-auth or switch provider |
