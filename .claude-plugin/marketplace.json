@@ -619,7 +619,7 @@
       "description": "Tests/benchmarks a third-party LLM endpoint (OpenAI- or Anthropic-compatible): availability, fidelity, speed, concurrency, protocol compliance, quality regression. Use before hand-rolling a curl loop, when onboarding a provider, or debugging \"system prompt 不生效\" / a tok/s claim — 测评/压测一个模型或渠道. Not for TTS/voice-clone supplier eval (use the audio skill).",
       "source": "./llm-eval-harness",
       "strict": false,
-      "version": "1.7.0",
+      "version": "1.7.1",
       "category": "developer-tools",
       "keywords": [
         "llm",
