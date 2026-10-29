@@ -88,7 +88,8 @@ stdin/heredoc 及 Python/Node 子进程调用却可能报 `Failed to start ego l
   evidence_refs 挂链（见[预测反馈的 findings 节](references/forecast-feedback.md)）。
   **实时 banked 查询不能被 §2 替代**：rollout 快照结构上没有备用重置字段。本轮已有身份
   核实、时间仍适用的实时读数时直接复用；缺失、查询期间发生切号或新事件使旧读数失效时，
-  再运行 `scripts/query_usage.py` 补查。把 `account_ref` 连同读数记进 findings；计数的可比范围
+  再运行 `scripts/query_usage.py` 补查。用账号 SOP 的 `--output-dir` + `--finding-state-dir` 单次命令
+  将去邮箱读数与 `account_ref` 直接保存、记进 findings；无需手抄 stdout 或另写记账脚本。计数的可比范围
   与字段读法见[账号 SOP](references/account-usage.md)。本条不授权切号或兑换备用。
   **scan 与 banked 独立执行并分别记录退出状态**：`scan_rollouts.py` 无快照时退出非零，
   只表示所选窗口没有观测，不能据此认定没有重置，也不能短路实时 banked 查询。参数、
@@ -215,21 +216,28 @@ stdin/heredoc 及 Python/Node 子进程调用却可能报 `Failed to start ego l
 到达复查条件时升级为正常轮。每轮按以下顺序执行，停止于证据已足够改变或维持当前行动、
 且下一次需要什么新信息已经写清，而不是停止于固定端点返回空值。
 
-1. **接上上轮的问题。** 读 `forecast_log.py summary --compact`（审计或需要完整叙述时读 `summary`；compact 保留本步全部决策字段），先看 `due_for_followup`（窗口已过期或
+1. **接上上轮的问题。** 读 `forecast_log.py activity`，按首轮 `view_id` 和 `next_cursor` 翻完全部页
+   （有界大小、异常恢复与原件读取见[本地预测反馈](references/forecast-feedback.md#每次调用先回看)；
+   旧 `summary --compact` 保留兼容）。先看 `due_for_followup`（窗口已过期或
    即将关闭、尚无定论的预测——到期跟进项从这里第一眼读，不用翻 rationale；closing_soon 的
    阈值定义见 forecast-feedback.md）；若有 `withdrawal_conflicts`，先核对冲突的撤回与旧版核验；
    若有 `recent_withdrawn`，先排除已撤回的旧窗口；也看 `snapshot.status`——`lagging` 表示台账
    的 git 快照落后（原因与处置见 forecast-feedback.md 的 findings 节），要在本轮汇报里说明；
-   再从同一 state-dir 运行 `forecast_log.py handoff`
-   读取最新一条 `invocation=monitor` 的完整原始行；`findings` 子命令的紧凑列表不显示
-   `notes`，不能用它代替交接正文。`handoff` 返回 `null` 表示尚无监测交接，不能推断此前
+   activity 的 `handoff_notes` 逐条保留最新有效交接；需完整 readings 时，从同一 state-dir 用
+   `show --id <handoff_id>` 或 `handoff` 读取原行，大输出先落新的私有文件再分段读完。
+   `findings` 子命令的紧凑列表不显示 `notes`，不能用它代替交接正文。`handoff_id` 或 `handoff`
+   返回 `null` 表示尚无监测交接，不能推断此前
    没有值得追的线索。
    其中的 `notes` 记录上轮尚未解决的具体问题、候选来源、下一次复查条件和用户反馈。上轮
    没有记录就从当前问题与现有预测的 `revision_trigger` 建立这些项，不把空台账说成已覆盖。
    本轮即使只做降频查询，也要在新 finding 的 `notes` 里结转未决项或写明已由哪条证据关闭，
    使它始终能从最新轮次读回；逐字读数仍只放 `readings`，判断不得伪装成原始数据。
-   同一 state-dir 再运行 `forecast_log.py followup`，执行其 `event_tasks` 与
-   `account_tasks`，不要把输出清单当成已经查过。`confirmed_unscored` 表示事件已经确认、
+   只纠正一条现有交接事实时，按[安全纠错入口](references/forecast-feedback.md#findings原始读数层)
+   使用 `correct-handoff` 绑定当前完整 ID，继承其余未决项、账号和游标后逐字替换完整 note，
+   不另写一条只有纠正内容的 monitor。
+   按 activity 的到期事件与 `account_followup` 逐项取证；需现有问题与来源配方时，再运行同一
+   state-dir 的 `forecast_log.py followup`，完整输出先落私有文件，按目标 ID 读取其 `event_tasks`
+   与 `account_tasks`，不重复把整份交接塞进上下文，也不把输出清单当成已经查过。`confirmed_unscored` 表示事件已经确认、
    预测仍不可评分，不为它继续问「重置发生了吗」；`account_followup` 单独保留已绑定账号的
    未到账项。官宣的具体时刻用 `announce` 保存，字段与状态读
    [本地预测反馈](references/forecast-feedback.md#官宣单点时间与事件账号状态)。

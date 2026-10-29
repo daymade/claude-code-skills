@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **tibo-reset-codex** (v2.6.2 → v2.7.0): Preserve complete monitor state when correcting one note, save and journal the same redacted usage response, and provide byte-bounded activity pages with exact record lookup. Explain quota-percentage changes caused by a larger limit without inferring a reset. Preserve existing query, summary and append-only journal interfaces. Change types: additive local CLI capabilities and bounded attribution guidance.
+
 - **feishu-doc-scraper** (v1.10.3 → v1.10.4): Recognize embedded wikilinks across Pandoc AST variants using source positions, preserving external-media rejection and escaped ordinary links. Change type: deterministic parser compatibility repair.
 - **git-safety-net** (v1.24.1 → v1.24.2): Route worktree retirement and recovery-material selection to their canonical preservation procedure; remove a hand-maintained heading inventory and duplicated retirement instructions. Preserve the existing unique-work, occupancy, authority and recovery boundaries. Change type: lossless documentation deduplication.
 
