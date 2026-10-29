@@ -315,7 +315,8 @@ stdin/heredoc 及 Python/Node 子进程调用却可能报 `Failed to start ego l
 辅助元数据不替代正文、产品观测或 claim gate。
 
 **正常轮次必须实际尝试 Radar、Tibo 主帖时间线与下文的有界 reply 发现。** Radar 可能
-完全没有索引一条新的独立主帖；主帖时间线也不含 replies，所以前两条都无新仍不能跳过 reply
+完全没有索引一条新的独立主帖（2026-10-30 实测：Day25 翻倍官宣发出约 1 小时后 Radar
+仍未索引——滞后是常态而非例外，官宣发现不能依赖 Radar）；主帖时间线也不含 replies，所以前两条都无新仍不能跳过 reply
 发现。宿主没有可用的已登录 X 通道时，reply 腿的执行结果是 `unknown`，不是静默省略。按时段
 降频的已批准例外仍按入口分流执行：降频轮只查 Radar 时，把 `main_posts` 与 `replies` 都记为
 `uncovered`，不能把结果写成全量无新。
@@ -396,9 +397,15 @@ curl -sS --max-time 20 "https://api.fxtwitter.com/<user>/status/<status-id>" \
   无新项，或某个 CLI search 返回 404，都不能写成「没有回复」。
 - 已知候选帖（官宣帖、落地帖）的回复链核验可用 `twitter tweet <id> --json`；返回集合可能混有
   主帖、回复和无关条目，不能把 `len(data)` 当回复数或穷尽信号。作者字段是
-  `data[].author.screenName`，不是 `userName`。按[回复样本判读](references/signal-readings.md#回复样本判读)
+  `data[].author.screenName`，不是 `userName`。CLI 间歇失败时顶层是 `{ok:false, error:{...}}`
+  ——解析脚本先判 `ok` 再取 `data`，否则失败被 `2>/dev/null` 吞成静默空输出（2026-10-30 实测）。
+  找本人追加回复用两跳法：先对承重主帖跑 `tweet <id>` 扫 `data[]` 里 `screenName==thsottiaux`
+  的非主帖条目，命中后对**该回复的 id** 再跑一次 `tweet <回复id>` 取完整 parent 上下文——
+  `data[]` 按相关性混排，本人回复与 parent 常不相邻（2026-10-30 实测：靠第二次调用才拿到
+  「$500 档 50x?」的 parent）。按[回复样本判读](references/signal-readings.md#回复样本判读)
   核对作者、时间和线程关系；未见本人回复只报告「本次样本中未见」。它不枚举本人全部回复；「他最近回过谁」
-  的发现性扫描仍走下面的网页滚动法。`twitter search`（含 `from:` 查询）实测 HTTP 404，搜索路线不可用。
+  的发现性扫描仍走下面的网页滚动法。`twitter search`（含 `from:` 查询）实测 HTTP 404，搜索路线不可用
+  （2026-09-24 首测，2026-10-30 复测仍 404）。
 - **有界 reply 发现路径**（2026-09-23 已登录 X 原站实测能看到一条主帖入口遗漏的旧回复）：
   1. 先固定起点：上次**可靠** reply 检查的 UTC；没有就用本任务窗口或当前未决承诺的起点。
      打开 `https://x.com/thsottiaux/with_replies`，记录本轮 URL、起点与开始时间。
