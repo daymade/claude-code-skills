@@ -20,6 +20,7 @@ import os
 from pathlib import Path, PureWindowsPath
 import re
 import subprocess
+import unicodedata
 import urllib.parse
 from check_archive_storage import validate_manifest
 
@@ -80,7 +81,8 @@ def references(text):
     # Pandoc 3.1 marks wikilinks in the title; newer versions use a class.
     # Source positions distinguish the old marker from an ordinary link whose
     # user-supplied title is also "wikilink", and preserve escaped exclamations.
-    lines = text.expandtabs(4).splitlines()
+    # Pandoc expands tabs before NFC normalization; sourcepos counts that input.
+    lines = unicodedata.normalize('NFC', text.expandtabs(4)).splitlines()
 
     def wiki_embed(c):
         if 'wikilink' not in c[0][1] and c[2][1] != 'wikilink':
