@@ -20,6 +20,7 @@ import os
 from pathlib import Path, PureWindowsPath
 import re
 import subprocess
+import unicodedata
 import urllib.parse
 from check_archive_storage import validate_manifest
 
@@ -74,24 +75,43 @@ class HtmlRefs(HTMLParser):
 
 
 def references(text):
-    result = subprocess.run(['pandoc', '-f', 'gfm+wikilinks_title_after_pipe', '-t', 'json'],
+    result = subprocess.run(['pandoc', '-f', 'gfm+wikilinks_title_after_pipe+sourcepos', '-t', 'json'],
                             input=text, capture_output=True, text=True, check=True)
     refs = []
+    # Pandoc 3.1 marks wikilinks in the title; newer versions use a class.
+    # Source positions distinguish the old marker from an ordinary link whose
+    # user-supplied title is also "wikilink", and preserve escaped exclamations.
+    # Match Pandoc's source-position input: one BOM and CRs removed, tabs
+    # expanded before NFC normalization, and LF as the only line separator.
+    source = text.removeprefix('\ufeff').replace('\r', '').expandtabs(4)
+    lines = unicodedata.normalize('NFC', source).split('\n')
 
-    def walk(value, embedded_wikilink=False):
+    def wiki_embed(c):
+        if 'wikilink' not in c[0][1] and c[2][1] != 'wikilink':
+            return False
+        position = dict(c[0][2]).get('data-pos', '')
+        match = re.match(r'^(\d+):(\d+)-', position)
+        if not match:
+            raise ValueError('Pandoc did not retain wikilink source positions')
+        row, column = (int(value) - 1 for value in match.groups())
+        if row < 0 or row >= len(lines) or column < 0 or column >= len(lines[row]):
+            raise ValueError('Pandoc wikilink source position is outside the note')
+        line = lines[row]
+        if not line[column:].startswith('[[') or column == 0 or line[column - 1] != '!':
+            return False
+        preceding = line[:column - 1]
+        return (len(preceding) - len(preceding.rstrip('\\'))) % 2 == 0
+
+    def walk(value):
         if isinstance(value, list):
-            for i, child in enumerate(value):
-                previous = value[i-1] if i else None
-                wiki_embed = (isinstance(child, dict) and child.get('t') == 'Link' and
-                              'wikilink' in child['c'][0][1] and isinstance(previous, dict) and
-                              previous.get('t') == 'Str' and previous.get('c', '').endswith('!'))
-                walk(child, wiki_embed)
+            for child in value:
+                walk(child)
         elif isinstance(value, dict):
             kind, c = value.get('t'), value.get('c')
             if kind in {'Code', 'CodeBlock'}:
                 return
             if kind in {'Link', 'Image'}:
-                refs.append((c[2][0], kind == 'Image' or embedded_wikilink, 'markdown'))
+                refs.append((c[2][0], kind == 'Image' or wiki_embed(c), 'markdown'))
                 walk(c[1])  # A linked thumbnail has its own image reference.
             elif kind in {'RawBlock', 'RawInline'} and c[0] == 'html':
                 parser = HtmlRefs()
