@@ -81,8 +81,10 @@ def references(text):
     # Pandoc 3.1 marks wikilinks in the title; newer versions use a class.
     # Source positions distinguish the old marker from an ordinary link whose
     # user-supplied title is also "wikilink", and preserve escaped exclamations.
-    # Pandoc expands tabs before NFC normalization; sourcepos counts that input.
-    lines = unicodedata.normalize('NFC', text.expandtabs(4)).splitlines()
+    # Match Pandoc's source-position input: one BOM and CRs removed, tabs
+    # expanded before NFC normalization, and LF as the only line separator.
+    source = text.removeprefix('\ufeff').replace('\r', '').expandtabs(4)
+    lines = unicodedata.normalize('NFC', source).split('\n')
 
     def wiki_embed(c):
         if 'wikilink' not in c[0][1] and c[2][1] != 'wikilink':

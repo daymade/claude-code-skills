@@ -143,7 +143,9 @@ class ReaderDeliveryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'embed is not a movable'):self.inspect()
 
     def test_wikilink_source_positions_preserve_unicode_tabs_and_escaping(self):
-        for prefix in ('', '中文 ', 'a\t中', '> ', '- ', 'e\u0301', 'e\u0301\t', 'a\u0301\u0302', '中\u0301', '👩\u200d💻'):
+        for prefix in ('', '中文 ', 'a\t中', '> ', '- ', 'e\u0301', 'e\u0301\t', 'a\u0301\u0302', '中\u0301', '👩\u200d💻',
+                       '\ufeff', '\ufeff\ufeff', '\ufeffa\t', 'head\r', 'head\r\n', 'a\r\t',
+                       *(f'head{separator}body\n' for separator in ('\u2028', '\u2029', '\x85', '\x0b', '\x0c'))):
             with self.subTest(prefix=prefix):
                 refs = gate.references(prefix + '![[https://example.org/external.png]]')
                 self.assertEqual(refs, [('https://example.org/external.png', True, 'markdown')])
