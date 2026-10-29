@@ -18,7 +18,12 @@ and app-server config contract:
 - <https://github.com/openai/codex/blob/main/codex-rs/core/config.schema.json>
 - <https://github.com/openai/codex/blob/main/codex-rs/app-server-protocol/src/protocol/v2/config.rs>
 
-The script calls `codex doctor --json` to resolve the selected model and
+Use `show` to read only the two base-config numeric settings, without invoking
+Codex or exposing unrelated config. Use `set-compact --tokens N` for an explicit
+threshold-only update; its local `codex features list` check confirms config
+loading, not model compatibility or live-session adoption.
+
+For full expansion, the script calls `codex doctor --json` to resolve the selected model and
 `codex debug models` to retrieve the current catalog. The live catalog wins over
 documentation and remembered limits.
 
@@ -32,8 +37,9 @@ The policy requests at most 1,000,000 raw tokens:
    session window.
 4. Set auto-compaction to 60% of the configured raw window.
 
-The fixed 60% ratio is the user-approved operating policy. The attainable raw and
-usable windows remain model facts and are discovered at runtime.
+Treat 60% as the full-expansion preset. An explicitly requested threshold-only
+update takes precedence and leaves the window untouched. The attainable raw and
+usable windows remain model facts and are discovered at runtime for expansion.
 
 ## Why a 1M request can display less
 
@@ -53,7 +59,8 @@ model exposes exactly one million usable tokens.
 ## Auto-compaction behavior
 
 Codex normally caps an explicit auto-compaction threshold at 90% of the resolved raw
-window. This Skill's 60% value remains below that guard:
+window. The expansion preset remains below that guard; a saved custom threshold
+does not prove the runtime used that exact value:
 
 <https://github.com/openai/codex/blob/main/codex-rs/protocol/src/openai_models.rs>
 
@@ -79,7 +86,9 @@ context window of the thread that is already running.
 
 Last source-grounding pass: 2026-08-27 with `codex-cli 0.150.1`.
 
-The release gate must exercise every documented command against the current Codex
-binary, run deterministic rollback/idempotency tests, and re-read the live catalog.
+For local-setting changes, exercise field-only readback, unrelated-byte preservation,
+rollback/idempotency and the local config-load command. Do not require live catalog
+access for those jobs. For expansion changes, exercise the documented expansion
+commands against the current Codex binary and re-read the live catalog.
 If the upstream fields or commands drift, update the implementation and this
 reference together; do not add a compatibility fallback that guesses the old shape.
