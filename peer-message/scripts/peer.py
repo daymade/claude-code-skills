@@ -1670,6 +1670,42 @@ def coordination_actor_key(current_identity: str) -> str:
     return "claude:" + identity[1] if identity else current_identity
 
 
+def coordination_current_address(args) -> str:
+    """Disambiguate an inherited host identity without selecting another session."""
+    explicit = getattr(args, "actor", None)
+    sender = getattr(args, "sender", None)
+    if explicit is not None and sender is not None and explicit != sender:
+        raise PeerError("coord --actor and --from must identify the same current host", EXIT_TARGET)
+    selected = explicit if explicit is not None else sender
+    if selected is None:
+        return current_address(args.claude_home, args.codex_home)
+    match = re.fullmatch(r"(codex|claude-session):([0-9a-f-]{36})", selected)
+    if match is None:
+        raise PeerError("coord --actor requires an exact codex: or claude-session: UUID", EXIT_TARGET)
+    provider, session_id = match.groups()
+    try:
+        if str(uuid.UUID(session_id)) != session_id:
+            raise ValueError("noncanonical UUID")
+    except ValueError as exc:
+        raise PeerError("coord --actor requires a canonical full UUID", EXIT_TARGET) from exc
+    if provider == "codex":
+        keys = ("CODEX_THREAD_ID", "CODEX_SESSION_ID")
+        observed = [os.environ[key] for key in keys if key in os.environ]
+        if not observed or any(value != session_id for value in observed):
+            raise PeerError("coord --actor differs from the current Codex host identity", EXIT_TARGET)
+    else:
+        if os.environ.get("CLAUDE_CODE_SESSION_ID") != session_id:
+            raise PeerError("coord --actor differs from the current Claude host identity", EXIT_TARGET)
+        if "CLAUDE_CODE_SESSION_NAME" in os.environ:
+            name = os.environ["CLAUDE_CODE_SESSION_NAME"]
+            if not name.strip():
+                raise PeerError("current Claude session name is empty", EXIT_TARGET)
+            entry = _select_claude(f"claude:{name}", claude_registry(args.claude_home))
+            if entry.get("sessionId") != session_id:
+                raise PeerError("current Claude session identities conflict", EXIT_TARGET)
+    return selected
+
+
 def prepare_coordination(board, args, target, body, sender):
     validate_body(body)
     if args.expires_at is not None and args.expires_in is not None:
@@ -1735,7 +1771,7 @@ def cmd_coord(args):
                 print(rendered, end="")
             return 0
         else:
-            actor = current_address(args.claude_home, args.codex_home)
+            actor = coordination_current_address(args)
             # prepare still resolves the typed actor. The other operations compare
             # the current actor directly with persisted keys, even after exit.
             if args.operation != "prepare":
@@ -1858,6 +1894,8 @@ def build_parser() -> argparse.ArgumentParser:
     finish_parser.add_argument("--message-id", required=True)
     for entry in (status_parser, prepare_parser, commit_parser, receive_parser, finish_parser,
                   *[operations.choices[n] for n in ("claim", "release")]):
+        if entry is not status_parser:
+            entry.add_argument("--actor", help="exact current-host address matching its provider environment; disambiguates inherited host identities")
         entry.set_defaults(handler=cmd_coord)
 
     list_parser = subparsers.add_parser("list", help="list local peer targets")
