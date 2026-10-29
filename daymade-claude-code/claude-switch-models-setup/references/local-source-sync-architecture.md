@@ -208,8 +208,10 @@ components have an authorized replacement.
 2. Check `claude plugin uninstall --help` in the owning default profile. With `PLUGIN_ID` set
    to the verified `plugin@marketplace` identity, run
    `claude plugin uninstall "${PLUGIN_ID:?}" --scope user --keep-data --json`.
-   Read back that exact plugin's uninstall result and installed/enabled state. Retain its cache
-   data for existing sessions; never remove the marketplace to convert one plugin.
+   Read back that exact plugin's uninstall result and installed/enabled state. `--keep-data`
+   retains persistent plugin data; it does not prove cache retention. Verify cache paths still
+   required by existing sessions separately and do not purge them. Never remove the marketplace
+   to convert one plugin.
 3. Run the deployed owner's dry-run below. Keep discovery of every marketplace named by the
    manifest: restricting `--repo` to just this Skill's repo can fail the policy preflight.
    Inspect all proposed changes; proceed only when they are within the authorized conversion.
@@ -223,8 +225,18 @@ components have an authorized replacement.
    repair to Claude personal links; they do not install or change the Codex selection. A watcher
    may already have created the requested link, so a no-change plan is valid only after readback.
 4. Resolve both requested host entries to the intended canonical source, then use the
+   official CLI to close any remaining enabled plugin route. If its user-scope setting is still
+   enabled, run `claude plugin disable "${PLUGIN_ID:?}" --scope user --json` and read back the
+   disabled state. Do this only after the personal source link exists: the syncer preserves
+   that existing route independently, but refuses to create one for a disabled plugin.
+   An enabled setting left after uninstall can cause native initialization to install the
+   plugin again. If its install record reappeared, uninstall that exact user-scope plugin
+   again after disabling it; require the record to be absent and retain the verified source link.
+5. Use the
    [host availability and task-behavior checks](../../../daymade-skill/skill-governance/references/skill-surface-governance.md#14-verify-a-newly-registered-skill)
-   for fresh-host discovery and actual consumption. Existing sessions can retain old catalogs.
+   for fresh-host discovery and actual consumption. After initialization, re-read the exact
+   plugin state and source links to ensure the old route was not reinstalled. Existing sessions
+   can retain old catalogs.
    If uninstall succeeded but sync failed, report that partial state, preserve the source/cache,
    and repair through this owner or restore the verified plugin through the official CLI;
    do not manufacture success with a manual link.

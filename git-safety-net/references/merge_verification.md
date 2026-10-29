@@ -955,18 +955,25 @@ session this skill was distilled from: a solo pass mis-judged a genuine 2-line f
 merged" by matching the wrong call site; a fan-out of independent agents caught it). For a
 high-stakes "is *everything* merged?" verdict, fan out:
 
+Before fan-out, the coordinated sole writer produces trial-merge classifications against the
+frozen snapshot. Supply that report and its exact input OIDs to the read-only reviewers;
+`merge-tree --write-tree` is not a read-only reviewer command. Missing trial-merge evidence
+leaves containment unverified until the sole writer supplies it.
+
 1. **Partition** the branches across N agents (e.g. large feature-adding branches, small fix
-   branches, local-only-history branches, plus one agent that independently re-runs the loss
-   check and re-derives the "should this old branch be merged?" verdict from content).
+   branches, local-only-history branches, plus one agent that independently reviews the supplied
+   scoped loss inventory and re-derives the "should this old branch be merged?" verdict from content).
 2. **Frame each agent adversarially**: "Default to the assumption that these branches still have
-   unmerged unique content, and try to *prove* it. Judge by content (the trial-merge check above),
+   unmerged unique content, and try to *prove* it. Judge by content using the supplied trial-merge
+   report and immutable objects,
    never by commit count. Report per branch: MERGED / **UNMERGED / NEEDS REVIEW (with the file(s)
    the trial merge would change)**."
 3. **Lock them read-only** (see rules below) so concurrent agents don't corrupt each other's tree.
-   The sole writer refreshes authority first and hands them frozen SHAs; reviewers never fetch.
+   The sole writer refreshes authority first and hands them frozen SHAs and trial-merge evidence;
+   reviewers never fetch or run trial merges in that shared repository.
 4. **Counter-review every finding yourself.** An agent's "UNMERGED" is a *hypothesis*: re-run the
-   trial-merge / inspect the specific files before believing it (agents produce false positives
-   too). An agent's "all merged" is only as good as its method — spot-check that it judged by
+   trial merge as the sole writer, or inspect the specific immutable files before believing it
+   (agents produce false positives too). An agent's "all merged" is only as good as its method — spot-check that it judged by
    content, not counts.
 5. **Converge**: everything merged across all agents = strong confirmation; any single
    content-backed UNMERGED finding = a real gap to land.
@@ -978,13 +985,14 @@ a subagent cannot spawn subagents.
 
 Put these in every agent's prompt — they are what make parallel verification safe and correct:
 
-- **Read-only, always.** Only `merge-base`, `merge-tree`, `diff`, `log`, `show`, `cat-file`,
+- **Read-only, always.** Only `merge-base`, `diff`, `log`, `show`, `cat-file`,
   `rev-list`, `rev-parse`, `ls-tree`, `for-each-ref`, `branch -r --contains`. **Never** `fetch`,
   `checkout`, `switch`, `reset`, `rebase`, `commit`, `push`, `update-ref`, or `gc`. The sole writer
   refreshes once before fan-out and supplies immutable SHAs; a reviewer does not move even a
-  remote-tracking ref.
+  remote-tracking ref or create trial-merge objects. Trial merges belong to the sole writer.
 - **Explicit frozen SHAs first.** Use the supplied immutable object IDs for conclusions. Named refs
   (`origin/main`, `origin/<branch>`) may be displayed for attribution but are not merge authority.
-- **Judge by content via the trial merge, not by counts** — restate the check in the prompt.
+- **Judge by content via the supplied trial-merge evidence, not by counts** — restate the
+  check and its evidence source in the prompt.
 - **Return structured per-branch verdicts with the file(s) the trial merge would change for any
   UNMERGED**, not prose.

@@ -144,7 +144,7 @@ report-only until the user expands the authorized targets.
 5. **Verify "merged" by CONTENT, never by commit count — and know that most content checks are
    also unsound.** After a squash-merge, `main..branch` shows the branch's original commits as
    "unmerged" even though their content is on main — often 100+ phantom commits. But swapping
-   counts for the *nearest* content check is not enough: in one audit, three successive
+   counts for the *nearest* content check is not enough: in one audit, successive
    "surely this is content-level now" instruments each returned a wrong answer — `git cherry`
    (squash rewrites patch-ids → false UNMERGED), a **three-dot** `diff base...ref` used to ask
    "what does base lack" (three-dot answers a different question and **under-reported missing
