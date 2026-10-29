@@ -28,6 +28,40 @@ hook = load_module("prior_work_hook_under_test", SCRIPTS_DIR / "prior_work_hook.
 
 
 class PriorWorkHookTests(unittest.TestCase):
+    def test_native_exec_retrieval_query_is_data_for_both_key_spellings(self):
+        command = "python scripts/prior_work.py retrieve --query 'install-policy-consolidation'"
+        for name in ('exec', 'functions.exec'):
+            for key in ('cmd', '"cmd"', "'command'"):
+                source = 'text(await tools.exec_command({' + key + ': ' + json.dumps(command) + '}));'
+                event = {'tool_name': name, 'tool_input': {'code': source}}
+                self.assertFalse(hook.substantial_tool_use(event)[0], event)
+                event['tool_input']['code'] = source + '\ntext(await tools.apply_patch("*** Add File: /tmp/new"));'
+                self.assertTrue(hook.substantial_tool_use(event)[0])
+
+    def test_native_exec_escaped_command_separator_does_not_exempt_write(self):
+        for name in ('exec', 'functions.exec'):
+            for command in ('python scripts/prior_work.py check\nmkdir /tmp/new',
+                            'python scripts/prior_work.py check && git commit -a'):
+                source = 'await tools.exec_command(' + json.dumps({'cmd': command}) + ');'
+                self.assertTrue(hook.substantial_tool_use({'tool_name': name, 'tool_input': {'code': source}})[0])
+
+    def test_literal_read_does_not_hide_computed_write_in_same_cell(self):
+        for name in ('exec', 'functions.exec'):
+            for read in ('pwd', 'python scripts/prior_work.py check'):
+                source = ('const command = "mkdir /tmp/new"; '
+                          'await tools.exec_command({cmd: command}); '
+                          'await tools.exec_command({cmd: ' + json.dumps(read) + '});')
+                self.assertTrue(hook.substantial_tool_use({'tool_name': name, 'tool_input': {'code': source}})[0])
+
+    def test_all_static_js_quote_forms_decode_shell_separators(self):
+        for name in ('exec', 'functions.exec'):
+            for quote in ('"', "'", '`'):
+                for separator in (r'\n', r'\x0a', r'\u000a', r'\u{a}'):
+                    source = ('await tools.exec_command({cmd: ' + quote +
+                              'python scripts/prior_work.py check ' + separator +
+                              ' mkdir /tmp/new' + quote + '});')
+                    self.assertTrue(hook.substantial_tool_use({'tool_name': name, 'tool_input': {'code': source}})[0], source)
+
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
