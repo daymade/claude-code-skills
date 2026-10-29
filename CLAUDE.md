@@ -522,6 +522,8 @@ Keep selectors, pairing, source scope and incomplete-output handling in that own
 
 For a Claude session briefing or expansion of folded runtime Skill bodies, enter
 [Exact Session evidence](daymade-claude-code/read-claude-code-history/SKILL.md#exact-session-evidence).
+Large or unmeasured briefing output follows that reader's
+[file-backed reading procedure](daymade-claude-code/read-claude-code-history/references/large-session-briefing.md).
 
 For Claude history discovery without a known Session, use
 [read-claude-code-history's indexed search entry](daymade-claude-code/read-claude-code-history/SKILL.md#indexed-content-search).
