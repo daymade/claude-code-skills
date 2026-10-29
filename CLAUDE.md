@@ -92,6 +92,7 @@ For choosing or reviewing a library, framework, storage, data format, model,
 build-vs-buy or architecture — including 用哪个 / 选什么框架 / 要不要自建 / A 还是 B /
 这个方案行不行 — enter [tech-selection](daymade-claude-code/tech-selection/SKILL.md).
 Follow its full or lightweight route and linked execution owners.
+For observability collector choices, use its [measurement and business-decision guidance](daymade-claude-code/tech-selection/SKILL.md#step-2--probe-for-evidence).
 Before delegation, follow its [public orchestration route](daymade-claude-code/tech-selection/references/delegation-contract.md#agent-orchestration)
 within the current user/host contract.
 
@@ -728,6 +729,8 @@ Before selecting an environment for an authorized repair, follow its
 [carrier and source-owner selection](github-review-pr/SKILL.md#2-fetch-the-exact-objects-without-touching-the-users-worktree).
 For cross-runtime staged-content validation or isolated task-copy setup, enter
 [auto-repo-setup's Git safety reference](auto-repo-setup/references/git_safety.md).
+Before choosing a task checkout's storage location, follow its
+[isolated checkout preparation](auto-repo-setup/references/git_safety.md#isolated-checkout-preparation).
 
 For already-authorized delivery in a shared checkout, enter
 [auto-repo-setup's scoped delivery route](auto-repo-setup/references/git_safety.md#authorized-shared-checkout-delivery).

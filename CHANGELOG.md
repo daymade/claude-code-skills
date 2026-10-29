@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **auto-repo-setup** (v2.1.8 → v2.1.9): Select persistent storage for resumable task checkouts and continuation evidence before creating a task copy; reserve system temporary directories for disposable scratch. Preserve unknown evidence loss during recovery. Change type: bounded workspace-lifetime guidance.
 - **tech-selection** (`daymade-claude-code` v4.33.9 → v4.33.10): Bind observability comparisons to the business decision and measurement scope; ship the usable existing path before optional collector expansion while retaining required coverage gaps. Change type: bounded evidence-selection clarification.
 
 - **local-conversation-history / read-codex-history** (`daymade-claude-code` v4.33.8 → v4.33.9): Align ancestor-resolution docstrings and the repository's provider routing with the existing implementation. Remove derived enumeration counts from the history router; preserve commands and runtime behavior. Change type: factual documentation correction and lossless wording cleanup.
@@ -21,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **skill-creator** (`daymade-skill` v1.74.6 → v1.74.7): Add declared-input cleanup scope and known removed/retained counts to materialization summaries. Keep missing or failed inventories unknown, preserve child outcomes and exit codes, and leave undeclared generated work untouched. Change type: additive summary interface.
 
 - **local-codex** (`daymade-codex` v2.1.0 → v2.1.1): Scope OAuth recovery to the actual native owner and version. Document the verified 0.165 browser-login lifecycle, shared-owner authorization, completion/readback and subsequent-work checks; preserve independent grants, legacy recovery and Account Manager boundaries. Change type: authoritative factual correction.
+- **git-safety-net** (v1.23.3 → v1.24.0): Bind selected classification batches to the canonical Git common directory and exact ref/OID inventory. Reject wrong clones and missing or moved targets, expose failed Git measurements and classification-only coverage, and keep content adoption and authorized retirement as separate required outcomes. Preserve default output and unique-work protection; add positive closure and ignored-work controls.
 - **skill-creator** (`daymade-skill` v1.74.5 → v1.74.6): Prepare source-case inputs before executor dispatch, keep grading material outside the consumer context, and resolve recorded-output paths from actual capture. Remove cached derived answers and align the evaluation schema, caller, Skill and repository entries. Change type: bounded workflow correction.
 
 - **github-review-pr** (v1.4.5 → v1.4.6), **github-ops** (v1.14.13 → v1.14.14): Diagnose local/hosted merge disagreements against identical objects and inspected attributes/drivers before declaring a cache fault or repeating release cycles. Preserve both results, hosted merge refusals, exact-candidate evidence and required checks. Change type: bounded diagnostic correction.

@@ -554,7 +554,7 @@
       "description": "Audits, preserves and recovers local Git state before cleanup: unpushed or wrong-branch commits, dirty worktrees, duplicate clones, stashes, dangling commits, squash-merge uncertainty. Use when the user fears lost work, wants to recover a commit, asks if a branch is actually merged, asks whether a branch, worktree or clone is safe to delete, or wants one clean main (误删分支 / 还有没有丢的东西). Not for GitHub PR operations.",
       "source": "./git-safety-net",
       "strict": false,
-      "version": "1.23.3",
+      "version": "1.24.0",
       "category": "developer-tools",
       "keywords": [
         "git",
@@ -994,7 +994,7 @@
       "description": "Evidence-driven repository setup, repair, handoff, and safe Git workflow for Claude Code or Codex. Detects the actual stack from project instructions and manifests instead of assuming Python, ffmpeg, uv, or .env; preserves local work during sync/conflict handling; diagnoses repeated SessionStart output before editing config; and defaults routine startup behavior to AGENTS.md/CLAUDE.md or a normal Agent request. Lifecycle hooks are an explicit pre-prompt exception with guarded, idempotent Claude Code setup and runtime-specific Codex verification.",
       "source": "./auto-repo-setup",
       "strict": false,
-      "version": "2.1.8",
+      "version": "2.1.9",
       "category": "developer-tools",
       "keywords": [
         "repo-setup",
