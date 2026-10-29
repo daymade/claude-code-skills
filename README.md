@@ -3809,6 +3809,18 @@ Specialist retrieval and video Skills are optional; no bundled runtime dependenc
 
 ---
 
+### **xzai-me-media** - AI Video/Image/Speech Generation (Seedance & Seedream)
+
+> **Install**: `claude plugin install xzai-me-media@daymade-skills`
+
+Generate videos, images and speech through the Xiaozhi AI (xzai.me) API — Seedance 2.0/2.5 video (10s/15s/30s, ratios up to 21:9), Seedream 5.0 images (2048×2048), 7-voice TTS, and OpenAI-compatible chat. The zero-dependency CLI validates model/duration combos (the upstream API silently falls back on bad input — a billing trap), polls async tasks (videos 4–20 min) and downloads results locally since CDN links expire.
+
+**Example usage:**
+```text
+用小智AI生成一段视频：一只柯基犬在雪地里奔跑，16:9
+→ 提交 Seedance 任务 → 自动轮询 → 下载 1280×720 成品到本地
+```
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).

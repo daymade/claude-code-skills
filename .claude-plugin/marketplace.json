@@ -16,7 +16,14 @@
       "strict": false,
       "version": "1.0.0",
       "category": "utilities",
-      "keywords": ["cookies", "chrome", "session-migration", "login", "backup", "restore"]
+      "keywords": [
+        "cookies",
+        "chrome",
+        "session-migration",
+        "login",
+        "backup",
+        "restore"
+      ]
     },
     {
       "name": "floorplan-finder",
@@ -25,7 +32,13 @@
       "strict": false,
       "version": "1.0.0",
       "category": "utilities",
-      "keywords": ["floor-plan", "property-search", "layout-verification", "户型图", "房源"]
+      "keywords": [
+        "floor-plan",
+        "property-search",
+        "layout-verification",
+        "户型图",
+        "房源"
+      ]
     },
     {
       "name": "app-evolver",
@@ -1369,6 +1382,22 @@
         "causal-inference",
         "增长",
         "留存"
+      ]
+    },
+    {
+      "name": "xzai-me-media",
+      "description": "Generate Seedance videos (10s/15s/30s), Seedream 5.0 images, TTS speech and OpenAI-compatible chat via the xzai.me API. Zero-dependency CLI, async polling, local download. 视频生成/图片生成/语音合成技能。",
+      "source": "./xzai-me-media",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "media",
+      "keywords": [
+        "video-generation",
+        "seedance",
+        "seedream",
+        "tts",
+        "image-generation",
+        "media"
       ]
     }
   ]
