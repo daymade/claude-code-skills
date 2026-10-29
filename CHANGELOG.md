@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **git-safety-net** (v1.23.2 → v1.23.3): Align the worktree audit reminder with the existing conditional history-preservation procedure. Retain unique-file and submodule preservation, exact-tip manifests, final carrier checks and occupancy protection. Change type: factual SOP correction.
 - **local-codex** (`daymade-codex` v2.1.0 → v2.1.1): Scope OAuth recovery to the actual native owner and version. Document the verified 0.165 browser-login lifecycle, shared-owner authorization, completion/readback and subsequent-work checks; preserve independent grants, legacy recovery and Account Manager boundaries. Change type: authoritative factual correction.
 
 - **github-review-pr** (v1.4.5 → v1.4.6), **github-ops** (v1.14.13 → v1.14.14): Diagnose local/hosted merge disagreements against identical objects and inspected attributes/drivers before declaring a cache fault or repeating release cycles. Preserve both results, hosted merge refusals, exact-candidate evidence and required checks. Change type: bounded diagnostic correction.
