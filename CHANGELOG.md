@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **git-safety-net** (v1.23.2 → v1.23.3): Align the worktree audit reminder with the existing conditional history-preservation procedure. Retain unique-file and submodule preservation, exact-tip manifests, final carrier checks and occupancy protection. Change type: factual SOP correction.
+
 - **skill-creator** (`daymade-skill` v1.74.3 → v1.74.4): Add source-only oversized-output and truncated-read regression cases with actual-tool evidence and an incomplete-output negative control; preserve runtime instructions.
 
 - **peer-message** (v1.24.5 → v1.24.6): Connect exact inbound-envelope inspection to checked original-byte reception with an explicit current-host actor. Stop on unsuccessful inspection or incomplete envelope data; retain native-tool routing and the supported-wrapper boundary. Change type: bounded operating recipe.
