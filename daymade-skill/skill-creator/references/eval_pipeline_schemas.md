@@ -4,22 +4,6 @@ This document defines the JSON schemas used by skill-creator's evaluation pipeli
 
 **Coverage rule:** when a new pipeline artifact is introduced — or an existing one gains a second consumer — pin its canonical location and each consumer's lookup behavior here. Two scripts relying on an undocumented location convention is a bug waiting for a user report (#443: the aggregator and the viewer disagreed on `eval_metadata.json`'s directory level until the convention was pinned in this document).
 
-## Contents
-
-- **evals.json** — test case definitions (prompts, expected output, assertions)
-- **eval_metadata.json** — per-eval-case prompt/metadata consumed by both the aggregator and the viewer
-- **history.json** — description optimization loop history
-- **Trigger evaluation results** — invocation observations, attempts and incomplete queries
-- **Description loop output** — complete-iteration selection and final nullable best result
-- **grading.json** — per-run assertion results (viewer depends on exact field names)
-- **metrics.json** — per-run quantitative metrics
-- **timing.json** — token/duration data captured from task notifications
-- **benchmark.json** — aggregated cross-configuration comparison (viewer input)
-- **comparison.json** — blind A/B comparison verdicts
-- **analysis.json** — analyst-pass observations over benchmark data
-
----
-
 ## evals.json
 
 Defines the evals for a skill. Located at `evals/evals.json` within the skill directory.
@@ -47,8 +31,31 @@ Defines the evals for a skill. Located at `evals/evals.json` within the skill di
 - `evals[].id`: Unique integer identifier
 - `evals[].prompt`: The task to execute
 - `evals[].expected_output`: Human-readable description of success
-- `evals[].files`: Optional list of input file paths (relative to skill root)
+- `evals[].files`: Optional source input paths, relative to the selected Skill root; resolve them through the input-preparation contract below before dispatch
 - `evals[].expectations`: List of verifiable statements
+
+### Source-case input preparation
+
+Treat `files` as the default consumer input list, not an executable setup plan.
+Neither this JSON nor `materialize.py` filters records, creates generated inputs,
+or replaces unresolved paths. Read the selected corpus's `evals/README.md` when
+present before preparing or dispatching its cases. When it declares preparation,
+the orchestrator performs it within the authorized task and records the source
+ref/hash, selected case, transformations, actual output paths/hashes and readiness
+result in the existing run evidence. Do not add an unconsumed `setup` field.
+
+Pass only the resulting, existing case inputs to a fresh consumer. Replace the
+dispatch file list with those actual paths; keep preparation instructions,
+`expected_output`, `expectations` and grading notes outside the consumer context.
+Check required artifact identities and withheld fields before dispatch. An
+unresolved path, missing artifact or failed preparation leaves that case unready;
+do not send the shared source fixture or guess a path as fallback. Cases without
+preparation use their resolved source files directly.
+
+Record a prepared fixture as a harness adaptation, not as an action performed by
+the consumer. Follow the existing [replay-fidelity contract](independent-review-protocol.md#behavior-replay-fidelity)
+for the first answer, interventions and coverage claims. This preparation route
+does not authorize additional arms or a paired evaluation.
 
 ---
 
