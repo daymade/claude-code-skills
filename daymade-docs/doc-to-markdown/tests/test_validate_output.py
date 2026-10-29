@@ -5,6 +5,7 @@ All documents and text are synthetic and stay inside a temporary directory.
 """
 
 import importlib.util
+import html
 import json
 from pathlib import Path
 import subprocess
@@ -12,8 +13,6 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch
-from xml.sax.saxutils import escape
-import zipfile
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "validate_output.py"
 SPEC = importlib.util.spec_from_file_location("validate_output", SCRIPT)
@@ -31,11 +30,9 @@ class ValidationTests(unittest.TestCase):
         self.output = self.root / "converted note.md"
 
     def compare(self, source, output):
-        xml = ('<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
-               '<w:body><w:p><w:r><w:t>' + escape(source) +
-               '</w:t></w:r></w:p></w:body></w:document>')
-        with zipfile.ZipFile(self.source, "w") as archive:
-            archive.writestr("word/document.xml", xml)
+        source_html = '<p>' + html.escape(source).replace('\n', '<br>') + '</p>'
+        subprocess.run(['pandoc', '-f', 'html', '-t', 'docx', '-o', str(self.source)],
+                       input=source_html, capture_output=True, text=True, check=True)
         self.output.write_text(output, encoding="utf-8")
         return validator.validate_conversion(self.source, self.output)
 
@@ -77,6 +74,28 @@ class ValidationTests(unittest.TestCase):
                 result = self.compare("Limit -2.5 V", changed)
                 self.assertNotEqual(result.status, "pass")
         self.assertFalse(self.compare("-2.5", "2.5").numeric_sequences_equal)
+
+    def test_numeric_boundaries_are_checked_before_whitespace_removal(self):
+        for changed in ("Readings: 1 234", "Readings: 1\n\n234"):
+            with self.subTest(changed=changed):
+                result = self.compare("Readings: 12 34", changed)
+                self.assertEqual(result.status, "fail")
+                self.assertFalse(result.numeric_sequences_equal)
+        self.assertTrue(self.compare("Readings: 12 34", "Readings: 12\n\n34").numeric_sequences_equal)
+
+    def test_faithful_docx_generated_numbering_survives_conversion(self):
+        text = "1. First instruction.\n2. Second instruction.\n"
+        subprocess.run(['pandoc', '-f', 'gfm', '-t', 'docx', '-o', str(self.source)],
+                       input=text, capture_output=True, text=True, check=True)
+        subprocess.run([sys.executable, str(SCRIPT.with_name('convert.py')),
+                        str(self.source), '--output', str(self.output)],
+                       capture_output=True, text=True, check=True)
+        result = validator.validate_conversion(self.source, self.output)
+        self.assertEqual(result.status, "pass", result.errors)
+        self.assertTrue(result.text_equal)
+        self.assertTrue(result.numeric_sequences_equal)
+        self.output.write_text("1. First instruction.\nSecond instruction.\n")
+        self.assertEqual(validator.validate_conversion(self.source, self.output).status, "fail")
 
     def test_empty_source_does_not_become_success(self):
         for output in ("", "unrelated text"):

@@ -107,14 +107,8 @@ def extract_text_from_docx(docx_path: Path) -> tuple[str, int, int]:
                 tree = ET.parse(f)
                 root = tree.getroot()
 
-                # Extract text
                 wordprocessing_ns = 'http' + '://schemas.openxmlformats.org/wordprocessingml/2006/main'
                 ns = {'w': wordprocessing_ns}
-                text_parts = []
-                for t in root.iter(f'{{{wordprocessing_ns}}}t'):
-                    if t.text:
-                        text_parts.append(t.text)
-
                 # Count tables
                 tables = root.findall('.//w:tbl', ns)
                 table_count = len(tables)
@@ -123,51 +117,62 @@ def extract_text_from_docx(docx_path: Path) -> tuple[str, int, int]:
             image_count = sum(1 for name in z.namelist()
                             if name.startswith('word/media/'))
 
-            return ' '.join(text_parts), table_count, image_count
+            # Word stores generated list labels outside w:t. Use the same
+            # semantic parser as Markdown so faithful numbered lists compare.
+            result = subprocess.run(
+                ['pandoc', '-f', 'docx', '-t', 'json', str(docx_path)],
+                capture_output=True, text=True, timeout=60, check=True,
+            )
+            ast = json.loads(result.stdout)
+            return body_text(ast.get('blocks', [])), table_count, image_count
 
     except Exception as exc:
         raise ValueError(f"Cannot extract DOCX: {exc}") from exc
+
+
+def body_text(node):
+    """Flatten Pandoc body text while retaining numeric token boundaries."""
+    if isinstance(node, list):
+        return ''.join(body_text(child) for child in node)
+    if not isinstance(node, dict):
+        return ''
+    kind, children = node.get('t'), node.get('c')
+    if kind == 'Str':
+        return children
+    if kind in ('Space', 'SoftBreak', 'LineBreak'):
+        return ' '
+    if kind in ('Code', 'CodeBlock', 'Math'):
+        return children[-1] + (' ' if kind == 'CodeBlock' else '')
+    if kind == 'Image':
+        return ''  # alt captions are not independent source body text
+    if kind == 'Link':
+        return body_text(children[1])
+    if kind == 'OrderedList':
+        start = children[0][0]
+        return ' '.join(f'{i}. ' + body_text(item) for i, item in
+                        enumerate(children[1], start=start)) + ' '
+    if kind == 'BulletList':
+        return ' '.join(body_text(item) for item in children) + ' '
+    if kind in ('RawInline', 'RawBlock'):
+        return ''  # raw markup is diagnosed separately below
+    if kind == 'Quoted':
+        quote = '“' if children[0]['t'] == 'DoubleQuote' else '‘'
+        close = '”' if quote == '“' else '’'
+        return quote + body_text(children[1]) + close
+    text = body_text(children)
+    return text + ' ' if kind in ('Para', 'Plain', 'Header') else text
 
 
 def analyze_markdown(md_path: Path) -> dict:
     """Analyze markdown file structure and content."""
     content = md_path.read_text(encoding="utf-8")
 
-    # Parse presentation syntax; retain link labels, code, signs and punctuation.
     # A missing parser is an explicit prerequisite failure, never a regex PASS.
     result = subprocess.run(
         ['pandoc', '-f', 'gfm', '-t', 'json'], input=content,
         capture_output=True, text=True, timeout=60, check=True,
     )
     ast = json.loads(result.stdout)
-
-    def body_text(node):
-        if isinstance(node, list):
-            return ''.join(body_text(child) for child in node)
-        if not isinstance(node, dict):
-            return ''
-        kind, children = node.get('t'), node.get('c')
-        if kind == 'Str':
-            return children
-        if kind in ('Space', 'SoftBreak', 'LineBreak'):
-            return ' '
-        if kind in ('Code', 'CodeBlock', 'Math'):
-            return children[-1]
-        if kind == 'Image':
-            return ''  # alt captions are not independent source body text
-        if kind == 'Link':
-            return body_text(children[1])
-        if kind == 'OrderedList':
-            start = children[0][0]
-            return ''.join(f'{i}. ' + body_text(item) for i, item in
-                           enumerate(children[1], start=start))
-        if kind in ('RawInline', 'RawBlock'):
-            return ''  # raw markup is diagnosed separately below
-        if kind == 'Quoted':
-            quote = '“' if children[0]['t'] == 'DoubleQuote' else '‘'
-            close = '”' if quote == '“' else '’'
-            return quote + body_text(children[1]) + close
-        return body_text(children)
 
     clean_text = body_text(ast.get('blocks', []))
     counts = {'Table': 0, 'Image': 0, 'Header': 0, 'CodeBlock': 0, 'list_items': 0}
@@ -255,7 +260,9 @@ def validate_conversion(
     metrics.text_equal = source == output
     matcher = SequenceMatcher(None, source, output, autojunk=False)
     metrics.text_similarity = 1.0 if metrics.text_equal else matcher.ratio()
-    metrics.numeric_sequences_equal = numeric_sequences(source) == numeric_sequences(output)
+    metrics.numeric_sequences_equal = (
+        numeric_sequences(source_text) == numeric_sequences(md_analysis['clean_text'])
+    )
     if not metrics.text_equal:
         for tag, i, j, a, b in matcher.get_opcodes():
             if tag != 'equal' and len(metrics.differences) < 10:

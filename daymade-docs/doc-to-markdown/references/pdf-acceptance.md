@@ -45,6 +45,10 @@ cannot return a silent pass. `warn` still exits 0 for CLI compatibility: inspect
 `status`, warnings and scope before acceptance. Failure exits 1. `--json` remains
 valid JSON even with `--report`; report paths go to stderr.
 
+Numeric tokens are compared before whitespace removal, so `12 34` and `1 234`
+remain different. DOCX text uses Pandoc's semantic list numbering on both sides;
+generated Word list labels are not missing body text.
+
 The default comparison covers the complete extractable source body and one
 Markdown file. For split books, preserve all parts in a temporary ordered
 comparison input and explicitly reconcile added navigation and transformed
