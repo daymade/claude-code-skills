@@ -181,8 +181,11 @@ uv run --with aiohttp python scripts/concurrency_probe.py \
   pooling (`force_close`) — otherwise you measure the proxy's limit or one pinned upstream
   replica, not the model. It prints a "concurrency proof" (overlapping request pairs) so you
   can confirm requests really ran in parallel.
-- Distinguish failure modes from the output: HTTP 429 (clean throttle, retriable) vs a TCP
-  drop that hangs to timeout (much worse for UX) vs 5xx. They imply very different fixes.
+- Distinguish failure modes using the status and structured error code/type. HTTP 429 can
+  mean a transient rate limit or exhausted quota; retry only the former with the provider's
+  backoff/reset guidance. Quota exhaustion needs entitlement/quota recovery, not a concurrency
+  retry loop. A TCP drop that hangs to timeout (much worse for UX) and 5xx remain
+  separate observations with different fixes.
 
 ## Dimension 3 — Protocol compliance (Anthropic thinking block: generation AND history-replay)
 
