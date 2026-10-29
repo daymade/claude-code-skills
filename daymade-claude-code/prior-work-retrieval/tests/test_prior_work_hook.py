@@ -53,6 +53,15 @@ class PriorWorkHookTests(unittest.TestCase):
                           'await tools.exec_command({cmd: ' + json.dumps(read) + '});')
                 self.assertTrue(hook.substantial_tool_use({'tool_name': name, 'tool_input': {'code': source}})[0])
 
+    def test_all_static_js_quote_forms_decode_shell_separators(self):
+        for name in ('exec', 'functions.exec'):
+            for quote in ('"', "'", '`'):
+                for separator in (r'\n', r'\x0a', r'\u000a', r'\u{a}'):
+                    source = ('await tools.exec_command({cmd: ' + quote +
+                              'python scripts/prior_work.py check ' + separator +
+                              ' mkdir /tmp/new' + quote + '});')
+                    self.assertTrue(hook.substantial_tool_use({'tool_name': name, 'tool_input': {'code': source}})[0], source)
+
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)

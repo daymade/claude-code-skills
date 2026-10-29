@@ -401,15 +401,60 @@ def _shell_fragments(event: dict[str, Any]) -> list[str]:
     if _base_tool_name(event) == "exec":
         fragments = []
         for match in EXEC_COMMAND_LITERAL.finditer(payload):
-            body = match.group("body")
-            if match.group(1) == '"':
-                try:
-                    body = json.loads('"' + body + '"')
-                except ValueError:
-                    pass
+            body = _decode_exec_literal(match.group(1), match.group("body"))
+            if body is None:
+                # Do not grant a retrieval exemption to an unknown literal.
+                return [payload]
             fragments.append(body)
         return fragments
     return [payload]
+
+
+def _decode_exec_literal(quote: str, body: str) -> str | None:
+    """Decode static JavaScript string escapes without executing the cell."""
+    if quote == "`" and "${" in body:
+        return None
+    simple = {"n": "\n", "r": "\r", "t": "\t", "b": "\b", "f": "\f", "v": "\v"}
+    output: list[str] = []
+    index = 0
+    while index < len(body):
+        char = body[index]
+        index += 1
+        if char != "\\":
+            output.append(char)
+            continue
+        if index == len(body):
+            return None
+        escaped = body[index]
+        index += 1
+        if escaped in "\r\n":
+            if escaped == "\r" and body[index:index+1] == "\n":
+                index += 1
+            continue
+        if escaped in ("x", "u"):
+            if escaped == "u" and body[index:index+1] == "{":
+                end = body.find("}", index+1)
+                if end < 0:
+                    return None
+                digits = body[index+1:end]
+                index = end+1
+            else:
+                width = 2 if escaped == "x" else 4
+                digits = body[index:index+width]
+                if len(digits) != width:
+                    return None
+                index += width
+            if not re.fullmatch(r"[0-9a-fA-F]+", digits):
+                return None
+            try:
+                output.append(chr(int(digits, 16)))
+            except ValueError:
+                return None
+        elif escaped.isdigit():
+            return None  # Legacy octal/NUL spellings are outside this exemption.
+        else:
+            output.append(simple.get(escaped, escaped))
+    return "".join(output)
 
 
 def _shell_segments(fragment: str) -> list[str]:
