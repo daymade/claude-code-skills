@@ -23,7 +23,7 @@ Delegate coding tasks to the local OpenAI Codex CLI agent using the authorized C
 **CRITICAL**: Use ChatGPT OAuth through the selected credential store. **Do NOT set `OPENAI_API_KEY` or pass API keys** for this workflow. Keep the authentication route separate from the account's allowance and extra Credit policy; OAuth does not guarantee that long work cannot consume extra Credit.
 
 - Resolve the actual `CODEX_HOME` and store; the desktop app and CLI can share credentials.
-- Before login, account switching or token recovery, read [the OAuth guide](references/oauth-guide.md) and follow its [recovery recipe](references/oauth-guide.md#remote-account-switch-and-expired-login-recovery). Use fresh empty stores for independent grants, retain explicitly authorized single-owner transfers, and verify actual access and existing-process adoption separately.
+- Before login, account switching or token recovery, read [the OAuth guide](references/oauth-guide.md) and select its [verified existing-owner branch](references/oauth-guide.md#existing-native-owner-oauth-adoption) or [independent-grant recovery](references/oauth-guide.md#remote-account-switch-and-expired-login-recovery); retain explicit single-owner transfers and verify actual access, process adoption and business continuation separately.
 - Before a native quota query, read [refresh ownership](references/oauth-guide.md#bind-refresh-ownership-before-native-queries); a nominally read-only query can refresh credentials.
 - For quota-driven continuation on another authorized account, use [the included-usage check](references/oauth-guide.md#quota-driven-continuation) before substantial execution; cached login or a new default file is not that check.
 
