@@ -226,6 +226,11 @@ after substantive fixes recheck the failed axes plus preservation with fresh
 context. Persist and commit the current review in the private review archive,
 not public source or disposable eval scratch. Stop at the declared boundary.
 
+For repository publication, enter [release readiness](references/release-readiness.md)
+before requesting the first review. Select the destination's publication contract,
+integrate the required base and declare any opt-in rebind dependency scope there;
+do not discover those prerequisites only when attesting the completed review.
+
 ## Step 5: Sanitization Review
 
 Before public delivery, read [publishing and packaging](references/publishing-and-packaging.md)
