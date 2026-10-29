@@ -2,22 +2,23 @@
 """Snapshot, restore and reconcile Claude Code / Codex sessions inside Ghostty tabs.
 
 Usage:
-  ghostty_session.py snapshot                 # capture live sessions + liveness to ~/.ghostty-session/
-  ghostty_session.py check [--snapshot F]     # reconcile snapshot vs currently-running sessions
-  ghostty_session.py restore [--all|--stale-too] [--only ID]...
+  ghostty_session.py snapshot [--expected-tabs N]  # capture Ghostty process-backed terminals
+  ghostty_session.py check [--snapshot F] [--exclude ID ...]
+  ghostty_session.py restore [--all|--stale-too] [--only ID]... [--exclude ID ...]
                                               # reopen tabs per snapshot, then auto-check
 
-Session anchor is the session UUID found on the process command line when present
-(resume/fork) — never the process name. argv[0] flips between bare (`claude`) and
+Session anchor is the UUID from a recognized resume selector, never a UUID in an
+option value or a fork's parent selector. argv[0] flips between bare (`claude`) and
 fully-qualified (`/usr/local/bin/claude`) depending on how the tab was started;
 matching on names produces silent false "missing" rows (measured 2026-10-04).
-Fresh TUIs carry no UUID on argv (only resume/fork writes one), so they are anchored
+Fresh and forked TUIs need their own identity from transcript evidence. They are anchored
 from transcript storage instead: the session file must appear after the process
 started, in the project bucket of the same cwd (measured 2026-10-07: 11 of 25 live
 Ghostty sessions were invisible to argv-only matching). When several fresh TUIs
 share one bucket, candidates are assigned disjointly (one transcript per TUI);
 live TUI processes that match neither way, or lose an ambiguous race, are
-reported as unresolved rows, never dropped silently.
+persisted and reported as unresolved rows, never dropped silently. Capture ordinary
+terminals separately; TTY/session totals cannot prove current-window tab coverage.
 
 Liveness reads the last event timestamp *inside* the session file, never the file
 mtime: idle TUI processes still touch their files, and a fresh mtime on a dead
@@ -65,19 +66,22 @@ FIRST_WRITE_WINDOW_SECONDS = 1200  # first message may lag the tab opening
 class SessionList(list):
     """Session entries plus the live TUI rows that could not be anchored.
 
-    .unresolved rows carry pid/tty/tool/cmd only (no sid); they are accounting
-    evidence for the snapshot report, never manifest members.
+    .unresolved rows carry process evidence without a sid. Persist them separately
+    from resumable sessions, alongside the process-backed terminal inventory.
     """
 
-    def __init__(self, entries=(), unresolved=()):
+    def __init__(self, entries=(), unresolved=(), terminal_inventory=(), other_terminals=()):
         super().__init__(entries)
         self.unresolved = list(unresolved)
+        self.terminal_inventory = list(terminal_inventory)
+        self.other_terminals = list(other_terminals)
 
 
 def list_sessions(resolve_uuidless=True):
     """One entry per live claude/codex session.
 
-    Anchor is the argv UUID when present (resume/fork). A fresh TUI has no UUID
+    Anchor is a parsed resume UUID. A fork's argv UUID belongs to its parent.
+    A fresh TUI has no UUID
     on its command line, so with resolve_uuidless its sid is recovered from
     transcript storage (session file born after process start, same cwd). When
     several UUID-less TUIs share one cwd bucket, candidates are assigned
@@ -88,60 +92,26 @@ def list_sessions(resolve_uuidless=True):
     own argv-only path; this resolution reads a bounded set of per-cwd buckets,
     never a history scan.
     """
-    result = subprocess.run(["ps", "-eo", "pid,tty,command"], capture_output=True, text=True)
-    if result.returncode:
-        raise RecoveryError("live session inventory failed: " + result.stderr.strip())
-    out = result.stdout
-    procs = {}
-    for line in out.splitlines()[1:]:
-        parts = line.split(None, 2)
-        if len(parts) < 3 or not parts[1].startswith("ttys"):
-            continue
-        procs[int(parts[0])] = (parts[1], parts[2])
+    from ghostty_watch import observe, cli_identity, OPAQUE_REASON
+    try:
+        observed = observe(include_terminals=True)
+    except (ValueError, OSError, subprocess.TimeoutExpired) as error:
+        raise RecoveryError("live Ghostty inventory failed: " + str(error)) from error
     seen = {}
-    uuidless_by_tui = {}
-    opaque_by_tui = {}
-    for pid, (tty, cmd) in sorted(procs.items()):
-        if any(p in cmd for p in SKIP_PATTERNS):
-            continue
-        # match on argv token boundaries: bare or path-qualified binary names only
-        tool = "codex" if re.search(r"(^|/)codex( |$)", cmd) else (
-            "claude" if re.search(r"(^|/)claude( |$)", cmd) else None)
-        if tool is None:
-            continue
-        if tool == "codex":
-            # Share the watcher's option-aware command classification: daemon is
-            # a service subcommand, while --no-daemon and option values are TUIs.
-            from ghostty_watch import OPAQUE_REASON, cli_identity
-            identity = cli_identity({"cmdline": cmd})
-            if identity is None:
-                continue
-            if identity[2] is None:
-                key = (tool, tty)
-                if key not in opaque_by_tui:
-                    opaque_by_tui[key] = {"pid": pid, "tty": tty, "tool": tool,
-                                          "cmd": cmd, "reason": OPAQUE_REASON}
-                continue  # prompt text is evidence, never an argv SID or transcript query
-        m = UUID_RE.search(cmd)
-        if m:
-            sid = m.group(0)
-            if sid not in seen:
-                seen[sid] = {
-                    "tty": tty, "tool": tool,
-                    "sid": sid, "cwd": _proc_cwd(pid), "cmdline": cmd.strip(),
-                    "profile": _detect_profile(cmd),
-                    "anchor": "argv", "transcript": None,
-                }
-            continue  # node wrapper + vendor binary share one session
-        if resolve_uuidless:
-            key = (tool, tty)
-            if key not in uuidless_by_tui:
-                uuidless_by_tui[key] = {"pid": pid, "tty": tty, "cmd": cmd, "tool": tool,
-                                        "cwd": _proc_cwd(pid), "started": _proc_start(pid)}
-            continue  # a node wrapper and its vendor child share one pty — one TUI
-                      # (sorted pids keep the wrapper; their lstarts agree to ~1s)
-    unresolved = list(opaque_by_tui.values())
-    for proc in _assign_transcripts(list(uuidless_by_tui.values()), seen):
+    for row in observed['sessions']:
+        seen[row['sid']] = dict(row, anchor='argv', transcript=None)
+    fresh, unresolved = [], []
+    for row in observed['unresolved']:
+        proc = dict(row, cmd=row['cmdline'])
+        identity = cli_identity(row)
+        # An unparseable command is evidence only, never a transcript selector.
+        if row.get('reason') == OPAQUE_REASON or identity is None or identity[2] is None:
+            unresolved.append(proc)
+        elif resolve_uuidless:
+            fresh.append(dict(proc, started=_proc_start(row['pid'])))
+        else:
+            unresolved.append(proc)
+    for proc in _assign_transcripts(fresh, seen):
         if "sid" in proc:
             seen[proc["sid"]] = {
                 "tty": proc["tty"], "tool": proc["tool"],
@@ -150,8 +120,10 @@ def list_sessions(resolve_uuidless=True):
                 "anchor": "transcript", "transcript": proc["transcript"],
             }
         else:
-            unresolved.append({k: proc[k] for k in ("pid", "tty", "tool", "cmd")})
-    return SessionList(sorted(seen.values(), key=lambda e: e["tty"]), unresolved=unresolved)
+            unresolved.append({k: v for k, v in proc.items() if k != 'started'})
+    return SessionList(sorted(seen.values(), key=lambda e: e["tty"]), unresolved=unresolved,
+                       terminal_inventory=observed['terminal_inventory'],
+                       other_terminals=observed['other_terminals'])
 
 
 def _assign_transcripts(procs, seen):
@@ -591,10 +563,19 @@ def snapshot_sessions(sessions):
     return sessions
 
 
-def write_snapshot(sessions, out_path=None):
+def write_snapshot(sessions, out_path=None, *, expected_tabs=None):
     from ghostty_storage import atomic_manifest, snapshot_lock
     doc = {"captured_at": datetime.now().isoformat(timespec="seconds"),
-           "active_hours_threshold": ACTIVE_HOURS, "sessions": sessions}
+           "active_hours_threshold": ACTIVE_HOURS, "sessions": list(sessions),
+           "unresolved": getattr(sessions, 'unresolved', []),
+           "other_terminals": getattr(sessions, 'other_terminals', []),
+           "terminal_inventory": getattr(sessions, 'terminal_inventory', []),
+           "scope": "Ghostty process descendants" if isinstance(sessions, SessionList) else "unspecified",
+           "window_tab_mapping": "unknown"}
+    if isinstance(sessions, SessionList):
+        doc['terminal_surface_count'] = len(sessions.terminal_inventory)
+    if expected_tabs is not None:
+        doc['expected_tab_count'] = expected_tabs
     path = out_path or os.path.join(SNAP_DIR, f"snapshot-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}.json")
     with snapshot_lock(Path(SNAP_DIR).parent):
         atomic_manifest(path, doc, replace=out_path is not None)
@@ -604,12 +585,19 @@ def write_snapshot(sessions, out_path=None):
 
 def cmd_snapshot(args):
     live = list_sessions()
+    if not live and not live.unresolved and not live.terminal_inventory:
+        raise RecoveryError("no Ghostty terminal surfaces observed; previous snapshot retained")
     sessions = snapshot_sessions(live)
-    path = write_snapshot(sessions, args.out)
+    path = write_snapshot(sessions, args.out, expected_tabs=getattr(args, 'expected_tabs', None))
     unresolved = live.unresolved if isinstance(live, SessionList) else []
     anchored = len([s for s in sessions if s.get("anchor") == "transcript"])
     act = [s for s in sessions if s["status"].startswith("active")]
     print(f"captured {len(sessions)} sessions -> {path}")
+    if isinstance(live, SessionList):
+        print(f"  Ghostty terminal surfaces: {len(live.terminal_inventory)}; "
+              f"other terminals: {len(live.other_terminals)}; window/tab mapping: unknown")
+    if getattr(args, 'expected_tabs', None) is not None:
+        print(f"  user-reported tabs: {args.expected_tabs}; not comparable to TTY/session counts")
     print(f"  active(<{ACTIVE_HOURS}h): {len(act)}   other: {len(sessions) - len(act)}   "
           f"transcript-anchored: {anchored}")
     for s in sessions:
@@ -619,7 +607,7 @@ def cmd_snapshot(args):
     if unresolved:
         print(f"  unresolved live TUIs (no argv UUID, no transcript match): {len(unresolved)}")
         for u in unresolved:
-            print(f"    {u['tty']:<8} {u['tool']:<6} {u['cmd'][:110]}")
+            print(f"    {u['tty']:<8} {u['tool']:<6} {u.get('cmdline', u.get('cmd', ''))[:110]}")
         print("  a brand-new tab may not have written its transcript yet; re-run snapshot to catch it")
     return 0
 
@@ -636,6 +624,10 @@ def load_snapshot(path, optional=False):
         doc = json.load(fh)
     if not isinstance(doc, dict) or not isinstance(doc.get("sessions"), list):
         raise RecoveryError("snapshot must contain a sessions list")
+    for field in ('unresolved', 'other_terminals', 'terminal_inventory'):
+        if field in doc and (not isinstance(doc[field], list)
+                             or any(not isinstance(row, dict) for row in doc[field])):
+            raise RecoveryError("snapshot " + field + " must be a list of records")
     seen = set()
     for s in doc["sessions"]:
         if not isinstance(s, dict) or s.get("tool") not in ("claude", "codex") or not UUID_RE.fullmatch(str(s.get("sid", ""))):
@@ -646,18 +638,39 @@ def load_snapshot(path, optional=False):
     return doc
 
 
-def select_sessions(sessions, prefixes):
+def select_sessions(sessions, prefixes, *, option="--only"):
     if not prefixes:
         return list(sessions)
     selected = set()
     for prefix in prefixes:
         if not prefix.strip():
-            raise RecoveryError("--only requires a nonempty ID prefix")
+            raise RecoveryError(option + " requires a nonempty ID prefix")
         matches = [s["sid"] for s in sessions if s["sid"].startswith(prefix)]
         if len(matches) != 1:
-            raise RecoveryError(f"--only {prefix!r} matched {len(matches)} sessions; use an unambiguous ID")
+            raise RecoveryError(f"{option} {prefix!r} matched {len(matches)} sessions; use an unambiguous ID")
         selected.add(matches[0])
     return [s for s in sessions if s["sid"] in selected]
+
+
+def requested_sessions(doc, args):
+    """Apply explicit current intent without modifying the preserved snapshot."""
+    sessions = select_sessions(doc['sessions'], getattr(args, 'only', None))
+    excluded = getattr(args, 'exclude', None)
+    if excluded:
+        ids = {s['sid'] for s in select_sessions(doc['sessions'], excluded, option='--exclude')}
+        sessions = [s for s in sessions if s['sid'] not in ids]
+        print(f"excluded by explicit selection: {len(ids)}")
+    return sessions
+
+
+def report_scope(doc):
+    if doc.get('window_tab_mapping') == 'unknown':
+        print(f"scope: {doc.get('scope', 'unspecified')}; "
+              "window/tab membership and order are unverified")
+    other, unknown = len(doc.get('other_terminals', [])), len(doc.get('unresolved', []))
+    if other or unknown:
+        print(f"additional captured records: {other} other terminals, {unknown} unresolved TUIs; "
+              "AI session restore does not reopen these records")
 
 
 def cmd_reconstruct(args):
@@ -705,6 +718,12 @@ def cmd_reconstruct(args):
                "source_snapshot": args.snapshot or (os.path.join(SNAP_DIR, "latest.json") if doc else None),
                "discovery": {"since": since, "limit": args.limit, "terminal_sources": sources, "terminal_originators": originators,
                              "indexed_rows": len(candidates), "rejected": rejected}, "sessions": sessions}
+    # Preserve capture evidence; indexed reconstruction does not establish new
+    # window membership or recover the unresolved/non-AI records by itself.
+    for field in ('unresolved', 'other_terminals', 'terminal_inventory', 'scope',
+                  'window_tab_mapping', 'terminal_surface_count', 'expected_tab_count'):
+        if doc and field in doc:
+            rebuilt[field] = doc[field]
     if not sessions:
         raise RecoveryError("no verified recovery sessions selected; latest snapshot untouched")
     if args.dry_run:
@@ -726,15 +745,20 @@ def cmd_check(args):
     doc = load_snapshot(args.snapshot)
     if doc is None:
         return 2
+    sessions = requested_sessions(doc, args)
+    report_scope(doc)
     live = {s["sid"]: s for s in list_sessions()}
     now = set(live)
-    present = [s for s in doc["sessions"] if s["sid"] in now]
-    missing = [s for s in doc["sessions"] if s["sid"] not in now]
+    present = [s for s in sessions if s["sid"] in now]
+    missing = [s for s in sessions if s["sid"] not in now]
     print(f"snapshot {doc.get('captured_at', 'unknown')}: {len(present)} present, {len(missing)} missing")
     for s in present:
         print(f"  PRESENT {live[s['sid']].get('tty', 'unknown'):<8} {s['tool']:<6} {s['sid'][:13]}")
     for s in missing:
-        print(f"  MISSING {'gone':<8} {s['tool']:<6} {s['sid'][:13]}  {restore_cmd(s)}")
+        print(f"  MISSING {'unseen':<8} {s['tool']:<6} {s['sid'][:13]}  {restore_cmd(s)}")
+    if missing:
+        print("MISSING means not observed running; cause unknown. Confirm the current wanted set "
+              "before retrying; intentional closures are not restore failures.")
     return 1 if (args.strict and missing) else 0
 
 
@@ -752,20 +776,49 @@ def restore_cmd(s, *, env_mapping=None):
     if start is None:
         raise RecoveryError("captured command has no matching tool executable")
     flags = []
-    tail = iter(tokens[start + 1:])
-    for token in tail:
+    tail = tokens[start + 1:]
+    from ghostty_watch import CODEX_REQUIRED, CLAUDE_REQUIRED, CODEX_VARIADIC, CLAUDE_VARIADIC, CLAUDE_OPTIONAL
+    required = CODEX_REQUIRED if s['tool'] == 'codex' else CLAUDE_REQUIRED
+    variadic = CODEX_VARIADIC if s['tool'] == 'codex' else CLAUDE_VARIADIC
+    optional = set() if s['tool'] == 'codex' else CLAUDE_OPTIONAL
+    cursor = 0
+    while cursor < len(tail):
+        token = tail[cursor]
+        cursor += 1
         if token in ("-r", "--resume", "--session-id"):
-            value = next(tail, None)
+            value = tail[cursor] if cursor < len(tail) else None
             if not value or value.startswith("-"):
                 raise RecoveryError("captured resume selector is missing its ID")
-        elif token == "resume" or token == s["sid"]:
-            continue
+            cursor += 1
+        elif s['tool'] == 'codex' and token in ('resume', 'fork'):
+            # A fork's selector names its parent, never the child's restore ID.
+            if cursor < len(tail) and not tail[cursor].startswith('-'):
+                cursor += 1
+        elif token in required:
+            value = tail[cursor] if cursor < len(tail) else None
+            if value is None:
+                raise RecoveryError("captured option is missing its value: " + token)
+            flags.extend([token, value])
+            cursor += 1
+        elif token in variadic | optional:
+            flags.append(token)
+            while cursor < len(tail) and not tail[cursor].startswith('-'):
+                flags.append(tail[cursor])
+                cursor += 1
+                if token in optional:
+                    break
+        elif token in ("--fork-session", "--continue", "-c", "--last", "--all"):
+            continue  # restore this saved ID, without forking or selecting another
         elif token.startswith(("--resume=", "--session-id=")):
             continue
-        else:
+        elif s['tool'] == 'claude' and token.startswith('-r') and not token.startswith('--'):
+            continue
+        elif token.startswith('-'):
             flags.append(token)
-    command = ([s["tool"], "resume", s["sid"]] + flags if s["tool"] == "codex"
-               else [s["tool"]] + flags + ["-r", s["sid"]])
+        # Positional prompt text is capture evidence, not a new model request.
+    executable = tokens[start]
+    command = ([executable, "resume", s["sid"]] + flags if s["tool"] == "codex"
+               else [executable] + flags + ["-r", s["sid"]])
     cwd = s.get("cwd") or HOME
     return f"cd -- {shlex.quote(cwd)} && {_profile_env_prefix(s, env_mapping)}{shlex.join(command)}"
 
@@ -797,7 +850,11 @@ def reconcile(sessions, timeout=10):
 
 def cmd_restore(args):
     doc = load_snapshot(args.snapshot)
-    sel = select_sessions(doc["sessions"], args.only)
+    sel = requested_sessions(doc, args)
+    report_scope(doc)
+    if not sel and getattr(args, 'exclude', None):
+        print("no requested sessions remain after explicit exclusions")
+        return 0
     automatic = doc.get("kind") == "automatic-recovery-snapshot"
     if not automatic and not args.only and not args.all and not args.stale_too:
         sel = [s for s in sel if s.get("status", "").startswith("active")]
@@ -820,8 +877,10 @@ def cmd_restore(args):
     still_missing = reconcile(sel, args.reconcile_seconds)
     print(f"\nauto-check: {len(sel) - len(still_missing)}/{len(sel)} present")
     for s in still_missing:
-        print(f"  STILL MISSING {s['sid']} -> reopen manually: {commands[s['sid']]}")
+        print(f"  NOT OBSERVED {s['sid']} -> if still wanted: {commands[s['sid']]}")
     if still_missing:
+        print("Not observed is not a failure diagnosis. Check for intentional closures "
+              "before using this retry; do not reopen excluded sessions.")
         retry = [sys.executable, str(Path(__file__).resolve()), "restore"]
         if args.snapshot:
             retry += ["--snapshot", args.snapshot]
@@ -890,14 +949,20 @@ def main(argv=None):
     sub = ap.add_subparsers(dest="cmd", required=True)
     p1 = sub.add_parser("snapshot")
     p1.add_argument("--out", type=nonempty)
+    p1.add_argument("--expected-tabs", type=positive,
+                    help="user-reported tab count; recorded separately from terminal surfaces")
     p2 = sub.add_parser("check")
     p2.add_argument("--snapshot", type=nonempty)
     p2.add_argument("--strict", action="store_true", help="exit 1 when anything is missing")
+    p2.add_argument("--exclude", nargs="+", type=nonempty, metavar="ID",
+                    help="explicitly exclude intentionally closed session IDs or unique prefixes")
     p3 = sub.add_parser("restore")
     p3.add_argument("--snapshot", type=nonempty)
     p3.add_argument("--all", action="store_true", help="include stale/dead/waiting/unknown sessions")
     p3.add_argument("--stale-too", action="store_true", dest="stale_too")
     p3.add_argument("--only", nargs="+", type=nonempty, metavar="ID")
+    p3.add_argument("--exclude", nargs="+", type=nonempty, metavar="ID",
+                    help="do not reopen these intentionally closed session IDs or unique prefixes")
     p3.add_argument("--dry-run", action="store_true")
     p3.add_argument("--reconcile-seconds", type=bounded_seconds, default=10)
     p4 = sub.add_parser("reconstruct")
