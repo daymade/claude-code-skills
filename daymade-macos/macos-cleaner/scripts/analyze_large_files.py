@@ -92,7 +92,9 @@ def find_large_files(search_path, threshold_bytes, limit):
         limit: Maximum results
 
     Returns:
-        List of (path, size_bytes) tuples
+        (files, issues) where files is a list of (path, size_bytes) tuples and
+        issues lists every reason the scan is incomplete (empty means the scan
+        completed and the result is authoritative).
     """
     # Convert bytes to 512-byte blocks (find -size uses 512-byte blocks)
     threshold_blocks = threshold_bytes // 512
@@ -114,6 +116,8 @@ def find_large_files(search_path, threshold_bytes, limit):
     for exclude in exclude_dirs:
         cmd.extend(['-not', '-path', f'*/{exclude}/*'])
 
+    issues = []
+    output = ''
     try:
         result = subprocess.run(
             cmd,
@@ -121,29 +125,32 @@ def find_large_files(search_path, threshold_bytes, limit):
             text=True,
             timeout=120
         )
-
+    except subprocess.TimeoutExpired as expired:
+        issues.append("find timed out; partial results below are incomplete")
+        # TimeoutExpired output remains bytes even when text=True was requested.
+        output = os.fsdecode(expired.stdout or b'')
+    else:
         if result.returncode != 0:
-            print(f"⚠️  Warning: find command had errors", file=sys.stderr)
+            detail = (result.stderr or '').strip().splitlines()
+            reason = detail[0] if detail else f'exit status {result.returncode}'
+            issues.append(f'find reported errors ({reason}); results are incomplete')
+        output = result.stdout
 
-        files = []
-        for line in result.stdout.strip().split('\n'):
-            if not line:
-                continue
-            try:
-                path = Path(line)
-                if path.exists():
-                    size = path.stat().st_size
-                    files.append((path, size))
-            except (OSError, PermissionError):
-                continue
+    files = []
+    for line in output.strip().split('\n'):
+        if not line:
+            continue
+        path = Path(line)
+        try:
+            size = path.stat().st_size
+        except OSError:
+            issues.append(f'could not measure file: {line}')
+            continue
+        files.append((path, size))
 
-        # Sort by size descending
-        files.sort(key=lambda x: x[1], reverse=True)
-        return files[:limit]
-
-    except subprocess.TimeoutExpired:
-        print("⚠️  Search timed out, showing partial results", file=sys.stderr)
-        return []
+    # Sort by size descending
+    files.sort(key=lambda x: x[1], reverse=True)
+    return files[:limit], issues
 
 
 def main():
@@ -177,9 +184,25 @@ def main():
     print("=" * 80)
     print("This may take a few minutes...\n")
 
-    large_files = find_large_files(search_path, threshold_bytes, args.limit)
+    large_files, scan_issues = find_large_files(search_path, threshold_bytes, args.limit)
+
+    if scan_issues:
+        print("\n⚠️  INCOMPLETE SCAN — results may be missing entries:")
+        for issue in scan_issues:
+            print(f"   - {issue}")
 
     if not large_files:
+        if scan_issues:
+            print(
+                "❌ The scan did not complete, so entries may be missing; "
+                "this is not a clean result.",
+                file=sys.stderr
+            )
+            print(
+                "   Resolve the cause (permissions, timeout) or narrow --path, then rerun.",
+                file=sys.stderr
+            )
+            return 1
         print("✅ No large files found above the threshold.")
         return 0
 
@@ -236,6 +259,11 @@ def main():
     print("   2. For videos/archives: consider moving to external storage")
     print("   3. For databases/VMs: verify they're not in use")
     print("   4. Return exact candidates to the main skill's impact and confirmation gate")
+
+    if scan_issues:
+        print("\n⚠️  Exit 1: the scan was incomplete (see warnings above); "
+              "the listed findings are valid but not exhaustive.", file=sys.stderr)
+        return 1
 
     return 0
 
