@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **codex-1m-context-window-setup** (`daymade-codex` v2.1.1 → v2.2.0): Add local field-only `show` and transactional `set-compact --tokens N` without model discovery. Preserve unrelated config bytes, distinguish saved settings from session adoption, and retain the full-expansion 60% preset. Change type: additive local configuration workflow.
+
 - **feishu-doc-scraper** (v1.10.3 → v1.10.4): Recognize embedded wikilinks across Pandoc AST variants using source positions, preserving external-media rejection and escaped ordinary links. Change type: deterministic parser compatibility repair.
 - **git-safety-net** (v1.24.1 → v1.24.2): Route worktree retirement and recovery-material selection to their canonical preservation procedure; remove a hand-maintained heading inventory and duplicated retirement instructions. Preserve the existing unique-work, occupancy, authority and recovery boundaries. Change type: lossless documentation deduplication.
 
