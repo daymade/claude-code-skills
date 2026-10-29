@@ -173,11 +173,24 @@ def collect_codex_from_database(
         "rollout_path",
     )
     query = f"SELECT {dynamic_select(database.columns, fields)} FROM threads"
+    parameters: tuple[str, ...] = ()
+    session_id = getattr(args, "session_id", None)
+    if session_id:
+        # Select explicit-ID candidates in SQLite so title normalization never
+        # touches unrelated rows. The non-exact form preserves the reader's
+        # existing unambiguous-fragment behavior, including UUID prefixes.
+        operator = (
+            "id = ?"
+            if getattr(args, "session_id_exact", False)
+            else "instr(id, ?) > 0"
+        )
+        query += f" WHERE {operator}"
+        parameters = (session_id,)
     connection = sqlite3.connect(sqlite_uri(database.path), uri=True, timeout=1.0)
     connection.row_factory = sqlite3.Row
     try:
         connection.execute("PRAGMA query_only = ON")
-        rows = connection.execute(query)
+        rows = connection.execute(query, parameters)
         for row in rows:
             cwd = str(row["cwd"] or "")
             if not args.all_projects and not workspace_matches(
