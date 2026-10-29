@@ -20,14 +20,14 @@ The only trustworthy question is: **is the branch's content already contained in
 
 `scripts/git_verify_branch_merged.sh <branch> [base]` answers that question with Git's own merge
 machinery instead of per-file guesses. It rejects the base ref itself as a deletion target, then
-runs two checks in order:
+runs these checks in order:
 
 1. **Ancestor** — the branch is literally in the base's history:
    ```bash
    git merge-base --is-ancestor origin/<branch> origin/main && echo "MERGED (ancestor)"
    ```
 
-2. **Content-contained** — do a trial 3-way merge of the branch *into* the base, in memory, and
+2. **Content-contained** — do a trial 3-way merge of the branch *into* the base, without checkout, and
    ask whether it changes anything. If merging the branch produces the base's exact tree, the
    branch adds nothing the base lacks — which is precisely the squash/rebase case where the count
    says "ahead" but the content is already upstream:
@@ -190,7 +190,7 @@ whatever base did afterward (the same double-apply hazard SKILL.md's troubleshoo
 already warns about for a mis-timed rescue); the right response is to find and understand the
 regression, not to re-ship.
 
-**Two ways to find it, in order of how targeted the loss is:**
+**Find it in order of how targeted the loss is:**
 
 1. **Walk base's own history for the regression, first-parent, comparing one tracked value per
    commit.** Useful whenever the lost content is (or is summarized by) an orderable or
@@ -472,18 +472,26 @@ Two independent clones may share the same remote and base but hold different loc
 
 ```bash
 # REPO is the already authorized canonical checkout; TASK_DIR is its existing external scratch.
-COMMON_DIR=$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir)
-BASE=$(git -C "$REPO" rev-parse --verify 'origin/main^{commit}')
+(
+COMMON_DIR=$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir) || exit 2
+BASE=$(git -C "$REPO" rev-parse --verify 'origin/main^{commit}') || exit 2
 # Replace this explicit list with the selected, inspect-authorized refs; a missing ref is an error.
 for ref in refs/heads/feature-a refs/heads/feature-b; do
   oid=$(git -C "$REPO" rev-parse --verify "$ref") || exit 2
-  printf '%s\t%s\n' "$ref" "$oid"
-done > "$TASK_DIR/targets.tsv"
+  printf '%s\t%s\n' "$ref" "$oid" || exit 2
+done > "$TASK_DIR/targets.tsv" || exit 2
 (cd "$REPO" && bash "$SKILL_DIR/scripts/git_classify_refs.sh" --base "$BASE" \
   --expected-common-dir "$COMMON_DIR" --target-manifest "$TASK_DIR/targets.tsv")
+)
 ```
 
-Use absolute input paths. Bound mode requires both options and nonempty two-column TSV with
+The task owner runs this recipe with absolute input paths. Its checked prerequisites stop the
+subshell before classification when repository/base resolution or manifest creation fails;
+an old manifest must not become a successful substitute. Trial merges can write unreferenced
+Git objects, so this is not a repository-read-only probe: refs, index and working files stay
+unchanged, but existing sole-writer coordination still applies.
+
+Bound mode requires both options and nonempty two-column TSV with
 full refnames and 40-hex OIDs; it cannot be combined with `--all-namespaces`. Missing, moved or
 invalid targets return 2 instead of disappearing from the inventory; classification errors return 1.
 Exit 0 means the selected objects were classified, including any `NEEDS-REVIEW` rows. Read
@@ -1015,18 +1023,25 @@ session this skill was distilled from: a solo pass mis-judged a genuine 2-line f
 merged" by matching the wrong call site; a fan-out of independent agents caught it). For a
 high-stakes "is *everything* merged?" verdict, fan out:
 
+Before fan-out, the coordinated sole writer produces trial-merge classifications against the
+frozen snapshot. Supply that report and its exact input OIDs to the read-only reviewers;
+`merge-tree --write-tree` is not a read-only reviewer command. Missing trial-merge evidence
+leaves containment unverified until the sole writer supplies it.
+
 1. **Partition** the branches across N agents (e.g. large feature-adding branches, small fix
-   branches, local-only-history branches, plus one agent that independently re-runs the loss
-   check and re-derives the "should this old branch be merged?" verdict from content).
+   branches, local-only-history branches, plus one agent that independently reviews the supplied
+   scoped loss inventory and re-derives the "should this old branch be merged?" verdict from content).
 2. **Frame each agent adversarially**: "Default to the assumption that these branches still have
-   unmerged unique content, and try to *prove* it. Judge by content (the trial-merge check above),
+   unmerged unique content, and try to *prove* it. Judge by content using the supplied trial-merge
+   report and immutable objects,
    never by commit count. Report per branch: MERGED / **UNMERGED / NEEDS REVIEW (with the file(s)
    the trial merge would change)**."
 3. **Lock them read-only** (see rules below) so concurrent agents don't corrupt each other's tree.
-   The sole writer refreshes authority first and hands them frozen SHAs; reviewers never fetch.
+   The sole writer refreshes authority first and hands them frozen SHAs and trial-merge evidence;
+   reviewers never fetch or run trial merges in that shared repository.
 4. **Counter-review every finding yourself.** An agent's "UNMERGED" is a *hypothesis*: re-run the
-   trial-merge / inspect the specific files before believing it (agents produce false positives
-   too). An agent's "all merged" is only as good as its method — spot-check that it judged by
+   trial merge as the sole writer, or inspect the specific immutable files before believing it
+   (agents produce false positives too). An agent's "all merged" is only as good as its method — spot-check that it judged by
    content, not counts.
 5. **Converge**: everything merged across all agents = strong confirmation; any single
    content-backed UNMERGED finding = a real gap to land.
@@ -1038,13 +1053,14 @@ a subagent cannot spawn subagents.
 
 Put these in every agent's prompt — they are what make parallel verification safe and correct:
 
-- **Read-only, always.** Only `merge-base`, `merge-tree`, `diff`, `log`, `show`, `cat-file`,
+- **Read-only, always.** Only `merge-base`, `diff`, `log`, `show`, `cat-file`,
   `rev-list`, `rev-parse`, `ls-tree`, `for-each-ref`, `branch -r --contains`. **Never** `fetch`,
   `checkout`, `switch`, `reset`, `rebase`, `commit`, `push`, `update-ref`, or `gc`. The sole writer
   refreshes once before fan-out and supplies immutable SHAs; a reviewer does not move even a
-  remote-tracking ref.
+  remote-tracking ref or create trial-merge objects. Trial merges belong to the sole writer.
 - **Explicit frozen SHAs first.** Use the supplied immutable object IDs for conclusions. Named refs
   (`origin/main`, `origin/<branch>`) may be displayed for attribution but are not merge authority.
-- **Judge by content via the trial merge, not by counts** — restate the check in the prompt.
+- **Judge by content via the supplied trial-merge evidence, not by counts** — restate the
+  check and its evidence source in the prompt.
 - **Return structured per-branch verdicts with the file(s) the trial merge would change for any
   UNMERGED**, not prose.

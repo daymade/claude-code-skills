@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 # git_classify_refs.sh — batch content-level classification of every local/remote-tracking
-# branch against ONE frozen base. READ-ONLY, never fetches, never writes a ref, never checks
-# out anything.
+# branch against ONE frozen base. Never fetches or changes refs, index, or working files.
+# Trial merges can write unreferenced objects into the Git object database.
 #
 # Runs the same ladder git_verify_branch_merged.sh runs one branch at a time (ancestor ->
-# trial merge into base), for the WHOLE repository in one pass, against a base the caller has
-# already pinned to a SHA. Pin it once with `git rev-parse origin/main` before the run — never
-# pass a moving name like `origin/main` directly, or a ref that advances mid-batch (someone
-# else pushing) silently changes what "already merged" means partway through the report.
+# trial merge into base), for enumerated branches or a bound target set in one pass.
+# The script resolves --base to one commit at entry. For an agreed or delegated batch,
+# the caller must pin that SHA before dispatch so every receiver uses the agreed snapshot.
 #
 # Verdicts (TSV column 1):
 #   ANCESTOR              — branch is in base's history already
@@ -23,7 +22,7 @@
 #                            see references/merge_verification.md's "Landed, then lost".
 #   NEEDS-REVIEW-CLEAN     — trial merge into base succeeds but changes base's tree
 #   NEEDS-REVIEW-CONFLICT  — trial merge into base reports a real conflict
-#   ERROR-rcN              — merge-tree returned an unexpected code (git too old, or a genuine
+#   ERROR-rcN              — a Git merge/count measurement failed (git too old, or a genuine
 #                            repository problem) — never silently folded into another verdict
 #   NOT-A-COMMIT           — a non-branch ref does not peel to a commit (report-only)
 #
@@ -47,7 +46,7 @@
 # compare the repository common directory before reading any target ref, then require every
 # target to exist at its frozen OID. Bound rows print full OIDs and the summary distinguishes
 # classification coverage from merge/retirement completion. Any missing, moved, malformed,
-# unreadable, duplicate, or empty target input fails closed. Without both options the legacy
+# unreadable, duplicate, or empty target input fails closed. With neither option the legacy
 # enumeration, 12-character SHA column, and exit contract remain unchanged.
 # Bound-mode exits: 0 = every named object classified (NEEDS-REVIEW may remain),
 # 1 = classification incomplete, 2 = invalid input or repository/ref snapshot mismatch.
