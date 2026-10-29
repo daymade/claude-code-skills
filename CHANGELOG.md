@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **local-codex** (`daymade-codex` v2.2.0 → v2.3.0): Distinguish adoption of an already saved login from token recovery and new OAuth authorization. Add the authorized shared-daemon restart and original-session continuation recipe, including stable message reconciliation and separate execution acceptance. Change type: additive recovery recipe.
+- **ghostty-use** (v1.9.2 → v1.9.3): Route unmanaged shared-daemon recovery to Local Codex before planning independent terminal exits; preserve managed Account Manager ownership and legacy snapshot/restore. Change type: bounded routing clarification.
 - **doc-to-markdown** (`daymade-docs` v1.27.1 → v1.28.0): Separate ordered text/numeric comparison from count coverage, fix diagnostic scoring and fail visibly on unavailable extraction. Add PDF question/paragraph/warning acceptance, native same-name index controls and original-file retrieval handoff. Change types: validator repair and bounded acceptance workflow.
 
 - **tibo-reset-codex** (v2.6.2 → v2.7.0): Preserve complete monitor state when correcting one note, save and journal the same redacted usage response, and provide byte-bounded activity pages with exact record lookup. Explain quota-percentage changes caused by a larger limit without inferring a reset. Preserve existing query, summary and append-only journal interfaces. Change types: additive local CLI capabilities and bounded attribution guidance.

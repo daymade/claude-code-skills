@@ -16,6 +16,14 @@ actions. Keep the existing reboot and automatic-backup routes available.
 
 ## Choose the account owner first
 
+First distinguish a shared native daemon from an independent TUI; appearing in
+Ghostty does not mean every session needs to exit and reopen. For an eligible
+unmanaged shared owner, follow [Local Codex's existing-owner recovery](https://github.com/daymade/claude-code-skills/blob/main/daymade-codex/local-codex/references/oauth-guide.md#existing-native-owner-recovery)
+to compare the live account and saved login before planning terminal exits.
+That owner requires explicit authority and preservation for a shared restart;
+this batch script neither performs it nor certifies its affected sessions.
+Keep the independent-process snapshot/restore route below when reopening is needed.
+
 This route applies only to unmanaged/legacy Ghostty Codex sessions. A Minions
 `native_runtime` row, a Minions-managed launch command, or a managed account-adoption
 error belongs to the owning Account Manager's native session flow. Do not run an
