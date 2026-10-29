@@ -64,7 +64,7 @@ instead of editing the original independent review.
 ## GitHub says dirty; git says clean
 
 The release executor first follows GitHub Operations'
-[fresh-base verification](../../../github-ops/references/pr_operations.md#fresh-base-verification).
+[fresh-base verification](https://github.com/daymade/claude-code-skills/blob/main/github-ops/references/pr_operations.md#fresh-base-verification).
 A PR-reported base or cached `origin/main` can be stale; `dirty` alone does not
 distinguish a real conflict from delayed mergeability state. Diagnose only after
 reading the actual base branch and comparing the exact candidate with it.
@@ -74,7 +74,7 @@ Reuse unchanged evidence only within its proved scope; the opt-in rebind below
 still requires the complete distribution and dependency closure to match. Changed
 shared files can invalidate reuse even when the Skill directory is identical.
 Wait for checks and merge through GitHub Operations'
-[merge preflight](../../../github-ops/references/pr_operations.md#merging-prs),
+[merge preflight](https://github.com/daymade/claude-code-skills/blob/main/github-ops/references/pr_operations.md#merging-prs),
 including its `gh pr checks --watch` exit-status check. Do not replace that owner
 with a separate poller or bypass checks to shorten a concurrent release cycle.
 
