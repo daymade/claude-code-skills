@@ -78,11 +78,13 @@ major app update rather than trusting the dates.
    structured flag only.
 3. **argv[0] instability** — matching processes by name missed every bare-name
    process and produced two false "all sessions gone" reports in one session.
-   Rule: anchor on the command-line UUID at argv-token boundaries, skipping
+   Rule: anchor on the recognized session selector at argv-token boundaries, skipping
    companion/snapshot/daemon processes. (For argv that carries no UUID — fresh
    TUIs — this rule is extended by item 4.)
-4. **Fresh-TUI invisibility** — only resume/fork writes the session UUID into
-   argv; a brand-new TUI has none. On 2026-10-07, 11 of 25 live Ghostty
+4. **Fresh-TUI invisibility** — a resume selector can carry the current ID;
+   a fork selector carries its parent ID, and a brand-new TUI has none.
+   Resolve forks as UUID-less children rather than claiming their parent is live.
+   On 2026-10-07, 11 of 25 live Ghostty
    sessions were fresh TUIs, and argv-only anchoring silently dropped them
    from the snapshot, from `check` presence (false "gone"), and from
    `restore`'s already-live filter (which would have reopened duplicate tabs).
@@ -105,7 +107,7 @@ major app update rather than trusting the dates.
    fresh TUIs share one bucket, candidates bind disjointly (one file per TUI,
    closest verified claim first, fallback to the TUI's next candidate);
    equidistant claims refuse to the unresolved section, and whatever still
-   matches nothing is reported as an unresolved row, never dropped silently.
+   matches nothing is persisted and reported as an unresolved row, never dropped silently.
    Corpse files from dead earlier TUIs are the standing theft hazard: the
    2026-10-07 pkm bucket held one born 10s before a live TUI's start, and the
    disjoint-assignment rule plus the ½s leeway are what keep it from winning.
