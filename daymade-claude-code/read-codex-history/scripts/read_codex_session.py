@@ -2220,6 +2220,16 @@ def _print_session_list(convs: list, limit: int) -> None:
         print(f"    cwd: {conv.cwd}")
 
 
+def _session_metadata(
+    session_id: str, project_path: str, *, exact: bool = False
+):
+    """Query only explicit-ID candidates; keep index failures distinguishable."""
+    args = _discovery_args(project_path, all_projects=True, explicit_id=True)
+    args.session_id = session_id
+    args.session_id_exact = exact
+    return collect_codex(args, CODEX_HOME)
+
+
 def _find_session_by_id(session_id: str, project_path: str):
     """Resolve an explicit `--session` id across all projects.
 
@@ -2228,7 +2238,16 @@ def _find_session_by_id(session_id: str, project_path: str):
     session). Archived / sub-agent / automated sessions are included. Returns the
     conv, or None after printing why.
     """
-    convs, _ = list_sessions(project_path, all_projects=True, explicit_id=True)
+    result = _session_metadata(session_id, project_path)
+    if result.backend == "index-unavailable":
+        print(
+            f"Error: Codex session inventory unavailable while resolving id {session_id}",
+            file=sys.stderr,
+        )
+        for warning in result.warnings:
+            print(f"  {warning}", file=sys.stderr)
+        return None
+    convs = result.conversations
     exact = [c for c in convs if c.session_id == session_id]
     if exact:
         return exact[0]
@@ -2258,10 +2277,9 @@ def _make_exact_rollout_resolver(
     the user-facing `--session` selector, a lineage edge never accepts an
     unambiguous prefix: `history_base.thread_id` is already an exact identity.
     """
-    indexed: Optional[dict[str, Any]] = None
+    indexed: dict[str, Any] = {}
 
     def resolve(session_id: str) -> Optional[Path]:
-        nonlocal indexed
         # history_base.thread_id names an immutable ROLLOUT, which may no
         # longer have a SQLite thread row after revert. Preselect by physical
         # suffix before reading metadata; never substitute the current thread.
@@ -2277,13 +2295,13 @@ def _make_exact_rollout_resolver(
                 if _rollout_session_id(path) != _rollout_ids(path)[0]:
                     raise LineageResolutionError(f"physical rollout identity mismatch: {path}")
             return _resolve_rollout_copies(list(unique.values()), session_id)
-        if indexed is None:
-            convs, _ = list_sessions(
-                project_path, all_projects=True, explicit_id=True
+        if session_id not in indexed:
+            result = _session_metadata(session_id, project_path, exact=True)
+            indexed[session_id] = (
+                result.conversations[0] if result.conversations else None
             )
-            indexed = {conv.session_id: conv for conv in convs}
 
-        conv = indexed.get(session_id)
+        conv = indexed[session_id]
         if conv is None:
             conv = SimpleNamespace(path="", session_id=session_id)
         path = resolve_rollout(conv)
