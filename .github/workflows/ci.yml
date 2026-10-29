@@ -246,12 +246,23 @@ jobs:
       # explicit and its selected stdlib suite separate from unrelated tests.
       # Keep Pandoc in this phase: provisioning it before the registry changes
       # which optional parser suites run in otherwise unchanged skills.
-      - name: HTML reader pilot and batch safety
-        if: ${{ !cancelled() && (steps.scope.outcome != 'success' || steps.scope.outputs.html_reader != 'false') }}
+      - name: Install selected reader runtime
+        if: ${{ !cancelled() && (steps.scope.outcome != 'success' || steps.scope.outputs.html_reader != 'false' || steps.scope.outputs.feishu_reader != 'false') }}
         run: |
           scripts/ci/apt_install_bounded.sh pandoc
           pandoc --version
+
+      - name: HTML reader pilot and batch safety
+        if: ${{ !cancelled() && (steps.scope.outcome != 'success' || steps.scope.outputs.html_reader != 'false') }}
+        run: |
+          pandoc --version
           python3 -m unittest discover -s daymade-docs/doc-to-markdown/scripts -p test_reader_pilot_gate.py
+
+      - name: Feishu reader delivery with real Pandoc
+        if: ${{ !cancelled() && (steps.scope.outcome != 'success' || steps.scope.outputs.feishu_reader != 'false') }}
+        run: |
+          pandoc --version
+          python3 -m unittest discover -s feishu-doc-scraper/tests -p test_reader_delivery.py -v
 
       # Not in the registry: its point is that a leaked child process surfaces as a
       # ResourceWarning, which only fails the run under -W error.
