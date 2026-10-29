@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-permissions** (`daymade-macos` v1.26.8 → v1.27.0): Add Local Network diagnosis for app-specific LAN failures. Compare requester and launch context, inspect the actual permission, and verify the original operation after authorized repair; preserve unknown causes, existing privacy protections and all TCC/Keychain paths. Change type: additive diagnostic branch.
 - **tibo-reset-codex** (v2.6.1 → v2.6.2): Preserve independent scan and live-banked results, distinguish missing observations from command failures, and replace command-text workaround advice with cause-based retries. Align repository instruction routes and retire duplicated merge-attribute prescriptions. Change type: factual operating-procedure correction.
 
 - **qa-expert** (v1.2.8 → v1.2.9): Add a job-scoped runtime capability case before long validation, distinguishing missing or denied APIs from a healthy operation under the selected interpreter. Preserve platform and path compatibility cases. Change type: bounded acceptance guidance.
