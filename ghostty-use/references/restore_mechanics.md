@@ -33,7 +33,8 @@ Verified on Ghostty 1.3.1, macOS 26 (Darwin 25/27), 2026-10-04.
    its manual reopen command. Never declare success from paste receipts alone —
    an interrupted paste can leave a recorded ID absent. Per-tab `SENT (unverified)` is
    delivery acknowledgement only. Poll live UUIDs for a bounded interval using
-   `--reconcile-seconds`; read its default and accepted bounds from CLI help. Exit 1
+   `--reconcile-seconds`; its default is defined in `main()` and its bounds in
+   `bounded_seconds()` in the linked script above. Exit 1
    prints unobserved IDs, exact shell-quoted reopen commands, and an invocation
    restricted to those IDs. Review current retention intent before using it;
    absence does not establish a failed launch. A rerun skips already-present IDs.

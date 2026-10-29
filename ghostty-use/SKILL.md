@@ -255,7 +255,7 @@ user-local data outside the skill bundle; no default mapping ships.
 | `dead-channel` sessions restored anyway | expected: history reopens, session stops at `/login`; re-auth or switch provider |
 | `check` says present but tab looks empty | another live process already claimed that session id (e.g. resumed in another tab) |
 | osascript refuses keystrokes | grant Accessibility (System Events) permission; verify with `osascript -e 'tell application "System Events" to get UI elements enabled'` |
-| a brand-new tab is missing from the session list | a fresh TUI has no argv UUID and its transcript file appears with its first message; until then it shows under unresolved live TUIs. Follow the [identity resolver's birth-window rules](references/session_liveness.md) when a late first message remains unresolved |
+| a brand-new tab is missing from the session list | a fresh TUI has no argv UUID and its transcript file appears with its first message; until then it shows under unresolved live TUIs. A late first message can fall outside the upper window defined by `FIRST_WRITE_WINDOW_SECONDS` and the candidate filters in [the resolver](scripts/ghostty_session.py) |
 
 ## One-shot helper terminals and original sessions
 

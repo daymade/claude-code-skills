@@ -307,9 +307,10 @@ report the parent ID; never independently resume the spawned agent.
 
 Bind progress to the fixed manifest and new account outside the Skill bundle.
 Serialize opening, re-probe account/process state before each send, stop on
-explicit send failure, and reconcile within `--reconcile-seconds` (0–60,
-default 10). Do not count processes predating the handoff or lacking independent
-mode. Rerun using persisted progress to open only missing IDs. If the account
+explicit send failure, and reconcile within `--reconcile-seconds`; use
+[`ghostty_session.py`](../scripts/ghostty_session.py)'s `bounded_seconds()` and
+`main()` definitions for its bounds and default. Do not count processes predating the
+handoff or lacking independent mode. Rerun using persisted progress to open only missing IDs. If the account
 changes again mid-handoff, stop and prepare a new handoff.
 
 Expect `reopened: N/M`, old/unverified processes and every missing ID. Exit 0
