@@ -255,7 +255,8 @@ RETRIEVAL_GLOBAL_VALUE_OPTIONS = {
 }
 DIRECT_EXEC_WRITE_SIGNAL = re.compile(r"\b(?:tools\.)?apply_patch\s*\(")
 EXEC_COMMAND_LITERAL = re.compile(
-    r"\b(?:cmd|command)\s*:\s*([\"'`])(?P<body>.*?)(?<!\\)\1",
+    r"(?<![\w$])(?:cmd|command|\"cmd\"|\"command\"|'cmd'|'command')"
+    r"\s*:\s*([\"'`])(?P<body>.*?)(?<!\\)\1",
     re.DOTALL,
 )
 FILE_REDIRECTION = re.compile(
@@ -397,8 +398,17 @@ def _tool_payload_text(event: dict[str, Any]) -> str:
 
 def _shell_fragments(event: dict[str, Any]) -> list[str]:
     payload = _tool_payload_text(event)
-    if _tool_name(event).endswith("functions.exec"):
-        return [match.group("body") for match in EXEC_COMMAND_LITERAL.finditer(payload)]
+    if _base_tool_name(event) == "exec":
+        fragments = []
+        for match in EXEC_COMMAND_LITERAL.finditer(payload):
+            body = match.group("body")
+            if match.group(1) == '"':
+                try:
+                    body = json.loads('"' + body + '"')
+                except ValueError:
+                    pass
+            fragments.append(body)
+        return fragments
     return [payload]
 
 

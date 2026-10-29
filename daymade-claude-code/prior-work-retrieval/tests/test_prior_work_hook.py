@@ -28,6 +28,23 @@ hook = load_module("prior_work_hook_under_test", SCRIPTS_DIR / "prior_work_hook.
 
 
 class PriorWorkHookTests(unittest.TestCase):
+    def test_native_exec_retrieval_query_is_data_for_both_key_spellings(self):
+        command = "python scripts/prior_work.py retrieve --query 'install-policy-consolidation'"
+        for name in ('exec', 'functions.exec'):
+            for key in ('cmd', '"cmd"', "'command'"):
+                source = 'text(await tools.exec_command({' + key + ': ' + json.dumps(command) + '}));'
+                event = {'tool_name': name, 'tool_input': {'code': source}}
+                self.assertFalse(hook.substantial_tool_use(event)[0], event)
+                event['tool_input']['code'] = source + '\ntext(await tools.apply_patch("*** Add File: /tmp/new"));'
+                self.assertTrue(hook.substantial_tool_use(event)[0])
+
+    def test_native_exec_escaped_command_separator_does_not_exempt_write(self):
+        for name in ('exec', 'functions.exec'):
+            for command in ('python scripts/prior_work.py check\nmkdir /tmp/new',
+                            'python scripts/prior_work.py check && git commit -a'):
+                source = 'await tools.exec_command(' + json.dumps({'cmd': command}) + ');'
+                self.assertTrue(hook.substantial_tool_use({'tool_name': name, 'tool_input': {'code': source}})[0])
+
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
