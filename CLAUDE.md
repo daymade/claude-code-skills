@@ -507,8 +507,10 @@ For input appended after an operation's current-thread request, use [read-codex-
 For conversation-backup health checks or recent unfinished-request inventories, follow
 [`local-conversation-history`](daymade-claude-code/local-conversation-history/SKILL.md).
 
-For the latest conversation about a topic across continuations, enter
+For the latest Codex conversation about a topic across continuations, enter
 [latest-topic discovery](daymade-claude-code/read-codex-history/SKILL.md#latest-topic-across-continuations).
+For an unknown or cross-provider scope, start at the
+[history router](daymade-claude-code/local-conversation-history/SKILL.md).
 
 For remembered facts or a repeated search request, use that router's evidence
 selection contract. The provider readers own original-record retrieval;

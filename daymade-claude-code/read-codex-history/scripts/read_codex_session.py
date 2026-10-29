@@ -2234,8 +2234,8 @@ def _find_session_by_id(session_id: str, project_path: str):
     """Resolve an explicit `--session` id across all projects.
 
     Prefers an exact id match; a substring fragment is accepted only when it is
-    unambiguous (otherwise the fragment silently binds to the newest matching
-    session). Archived / sub-agent / automated sessions are included. Returns the
+    unambiguous; ambiguous fragments are rejected. Archived / sub-agent /
+    automated sessions are included. Returns the
     conv, or None after printing why.
     """
     result = _session_metadata(session_id, project_path)
@@ -2272,8 +2272,8 @@ def _make_exact_rollout_resolver(
 ) -> Callable[[str], Optional[Path]]:
     """Return a lazy exact-id resolver for inherited parent sessions.
 
-    State indexes are preferred, but lineage must survive a stale/missing DB,
-    so the fallback checks both live and archived rollout directories. Unlike
+    Check exact physical rollout suffixes in live and archived directories first;
+    when none exist, query exact indexed metadata and use the rollout locator. Unlike
     the user-facing `--session` selector, a lineage edge never accepts an
     unambiguous prefix: `history_base.thread_id` is already an exact identity.
     """
