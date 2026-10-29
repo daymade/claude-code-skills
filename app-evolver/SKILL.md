@@ -87,6 +87,10 @@ observed behavior from claims. Treat source access, architectural inspiration,
 code reuse and distribution permission as separate questions; reading a repository
 does not authorize copying its implementation.
 
+When using Mobbin screens or flows, read the [Mobbin evidence recipe](references/mobbin-evidence.md)
+before collecting references or selecting an adaptation. Keep the existing
+application contract, research authorization and acceptance owners.
+
 ### Compose reverse-analysis Skills when the target needs them
 
 Read [Skill composition](references/skill-composition.md) when investigating a

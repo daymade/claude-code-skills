@@ -32,7 +32,7 @@
       "description": "Improves an existing application using its code, product contract, authorized work history and competitor evidence. Use for 取长补短、取其精华去其糟粕、参考竞品优化应用 or evolving an app from successful and failed work. Carries authorized changes through implementation and user-result verification, including REA and reverse Skill composition; use skill-evolver for Skills.",
       "source": "./app-evolver",
       "strict": false,
-      "version": "1.1.10",
+      "version": "1.1.11",
       "category": "developer-tools",
       "keywords": [
         "app-improvement",
@@ -1309,7 +1309,7 @@
       "description": "Produces the reader-facing HTML artifact — report, dashboard, architecture view, data browser, or review workbench — evidence-backed, browser-verified. Use when the deliverable IS a visual HTML report, or the user asks for an HTML/web presentation. Load data-visualization-discipline for chart judgment. Not for chat status or Markdown prose unless asked to become a report; not for PowerPoint (deck-creator Route C).",
       "source": "./report-with-html",
       "strict": false,
-      "version": "1.4.5",
+      "version": "1.4.6",
       "category": "documentation",
       "keywords": [
         "HTML报告",

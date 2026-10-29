@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **app-evolver** (v1.1.10 → v1.1.11): Bind Mobbin screens and inspected flows to exact source material, observation limits and a contract-preserving target journey; retain optional-access recovery and existing engineering owners. Change type: bounded evidence-adaptation guidance.
+- **report-with-html** (v1.4.5 → v1.4.6): Define incremental updates from an accepted baseline, source-bound changed fields and retained components; reuse unaffected checks while preserving fresh rendering and independent reader/source acceptance. Change type: bounded maintenance guidance.
+
 - **codex-1m-context-window-setup** (`daymade-codex` v2.1.1 → v2.2.0): Add local field-only `show` and transactional `set-compact --tokens N` without model discovery. Preserve unrelated config bytes, distinguish saved settings from session adoption, and retain the full-expansion 60% preset. Change type: additive local configuration workflow.
 
 - **git-safety-net** (v1.24.2 → v1.24.3): Stop the bound-batch recipe before classification when prerequisite resolution or manifest creation fails. Align helper help and mutation boundaries with actual trial-merge behavior; remove derived prose totals. Change type: operating-recipe repair and factual documentation correction.

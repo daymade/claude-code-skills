@@ -241,8 +241,10 @@ Every interaction must work without a pointer:
    start from `assets/report-template.html` or an approved example. The calling Skill
    owns template approval and storage; this Skill owns report generation and visual QA.
    Keep customer facts and conclusions tied to current evidence, and do not copy the
-   caller's template into this Skill's update-owned `assets/`. Use actual shelf
-   components. If the page embeds mutable source documents, follow the long-lived-report
+   caller's template into this Skill's update-owned `assets/`. Before updating an accepted
+   report's facts or content, follow the [incremental maintenance recipe](references/long-lived-report-maintenance.md#63-已验收报告的有界增量更新).
+   Use actual shelf components for new or changed interactions; retain the approved
+   embedded implementation during a data-only update. If the page embeds mutable source documents, follow the long-lived-report
    reference and keep generated and authored regions separate.
 5. **Run the delivery gate — it produces the artifacts the judgment steps otherwise skip.**
 
