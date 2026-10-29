@@ -20,6 +20,7 @@ class SelectionTests(unittest.TestCase):
         self.assertFalse(result["full"])
         self.assertEqual({target for _, target in result["suites"]}, {"tests", "git-safety-net/tests", "daymade-claude-code/marketplace-dev/tests"})
         self.assertFalse(result["html_reader"])
+        self.assertFalse(result["feishu_reader"])
         self.assertFalse(result["report"])
 
     def test_prompt_and_fixture_changes_keep_owner_tests(self):
@@ -50,6 +51,7 @@ class SelectionTests(unittest.TestCase):
                 self.assertTrue(result["full"])
                 self.assertEqual(len(result["suites"]), expected)
                 self.assertTrue(result["html_reader"])
+                self.assertTrue(result["feishu_reader"])
                 self.assertTrue(result["report"])
 
     def test_extra_jobs_include_source_tests_and_shared_inputs(self):
@@ -60,6 +62,16 @@ class SelectionTests(unittest.TestCase):
         result = scope.select(["daymade-docs/doc-to-markdown/scripts/html_to_markdown.py"])
         self.assertTrue(result["html_reader"])
         self.assertFalse(result["report"])
+
+    def test_feishu_parser_check_runs_for_its_source_prompt_and_tests(self):
+        for path in ("feishu-doc-scraper/SKILL.md", "feishu-doc-scraper/scripts/check_reader_delivery.py",
+                     "feishu-doc-scraper/tests/test_reader_delivery.py"):
+            result = scope.select([path])
+            self.assertTrue(result["feishu_reader"])
+            self.assertFalse(result["html_reader"])
+            self.assertFalse(result["report"])
+            self.assertIn(["python-unittest", "feishu-doc-scraper/tests"], result["suites"])
+        self.assertFalse(scope.select(["cookie-copy/SKILL.md"])["feishu_reader"])
 
     def test_known_empty_diff_still_checks_repository_contracts(self):
         self.assertEqual(self.targets([]), {"tests", "daymade-claude-code/marketplace-dev/tests"})
