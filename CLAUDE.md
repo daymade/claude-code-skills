@@ -611,10 +611,11 @@ Skill links.
 
 For snapshotting, restoring or reconciling Claude Code / Codex sessions confirmed
 to run in Ghostty across reboots, enter [`ghostty-use`](ghostty-use/SKILL.md). Unmanaged/legacy manual Codex account
-switches and blocked/delegated reopening enter its
-[account-switch SOP](ghostty-use/references/codex-account-switch.md), including
-the original-set handoff and actual-continuation acceptance. Minions `native_runtime`
-rows use the owning Account Manager instead. Its bundled script owns
+switches start at its
+[account-owner selection](ghostty-use/references/codex-account-switch.md#choose-the-account-owner-first).
+For blocked/delegated reopening, follow its
+[original-set route](ghostty-use/references/codex-account-switch.md#reopen-the-original-recorded-set-not-a-blank-session).
+Its bundled script owns
 liveness classification and the paste-restore + auto-reconciliation loop; keep the
 storage-layout facts and macOS Ghostty limits in its references rather than here.
 Before a restore or retry, follow its
@@ -631,9 +632,11 @@ For selected-site Cookie copying between local profiles of the same macOS Chrome
 enter [cookie-copy](cookie-copy/SKILL.md). For its quota-query caller, follow
 [Tibo's Cookie Copy handoff](tibo-reset-codex/references/browser-session-migration.md).
 
-For a remote Codex sign-in prompt or terminal refresh rejection, start at
+For an existing Codex session failing after login changes, start at
+[Local Codex existing-owner recovery](daymade-codex/local-codex/references/oauth-guide.md#existing-native-owner-recovery).
+For a remote Codex sign-in prompt or independent-grant recovery, start at
 [Local Codex authentication recovery](daymade-codex/local-codex/references/oauth-guide.md#remote-account-switch-and-expired-login-recovery).
-That owner defines project-authorization recovery, credential-store selection and usable-access verification; quota checks below remain a separate route.
+Keep quota checks on the separate route below.
 
 For Codex reset announcements or account quota questions, enter
 [tibo-reset-codex](tibo-reset-codex/SKILL.md). Follow its

@@ -50,52 +50,20 @@ For missing Codex terminals without confirmed Ghostty ownership, load the instal
 | Rebooted, want tabs back ("恢复之前的窗口") | Use a suitable snapshot; if absent or outdated, `reconstruct`, then `restore --all` on the selected manifest |
 | "Was anything lost?" / suspicion after restore | `check` |
 | One specific session to bring back | `restore --only <id-prefix>` |
-| Minions `native_runtime` session or managed account-adoption error | Do not use the manual switch route; use the owning Account Manager's native session flow |
-| Unmanaged/legacy Codex quota running out; manually switching account, keeping all Codex work | Read codex-account-switch.md; `switch-prepare [--only <unmanaged-uuid>...]` → manual exit/login → `switch-restore` |
-| After a switch, want the same sessions back ("换号后恢复原会话"); opening blocked or delegated | Same SOP's original-set route: deliver the fixed manifest's exact per-SID commands with per-item status; a blank tab is not a recovery |
+| Minions `native_runtime` session or managed account-adoption error | Follow [account-owner selection](references/codex-account-switch.md#choose-the-account-owner-first) |
+| Unmanaged/legacy Codex quota running out; manually switching account, keeping all Codex work | Start with [account-owner selection](references/codex-account-switch.md#choose-the-account-owner-first) |
+| After a switch, want the same sessions back ("换号后恢复原会话"); opening blocked or delegated | Follow [the original-set recovery route](references/codex-account-switch.md#reopen-the-original-recorded-set-not-a-blank-session) |
 
 ## Codex account switch
 
-Preserve unmanaged/legacy Ghostty Codex sessions before the user manually switches
-ChatGPT accounts, then reopen the original session IDs in one batch. Exclude Claude
-Code and Minions `native_runtime` sessions; those managed rows use the owning Account
-Manager, not this route's manual logout/login or batch restore.
-Read [codex-account-switch.md](references/codex-account-switch.md) before this route.
-Use `scripts/ghostty_session.py switch-prepare` and `switch-restore`; the bundled
-`scripts/ghostty_switch.py` owns fixed-manifest selection, account/process checks,
-duplicate-safe retries and separate authentication reporting.
-If login already changed before capture, use the explicit `switch-restore
---after-login` branch. For a controlled exit sequence including the executing
-session, use `switch-plan --current-session <full-uuid>` first; it defers that
-session until an independent executor exists. Save its recovery inputs outside the
-exiting terminal with `switch-handoff`, then recheck them with
-`switch-handoff-check`; these commands preserve the host-adapter gap rather than
-authorize an exit. The reference specifies the exact commands and durable
-literal-control receipt.
-
-```bash
-python3 <skill-dir>/scripts/ghostty_session.py switch-prepare
-# Mixed managed/unmanaged inventory: capture only the eligible unmanaged/legacy UUIDs.
-python3 <skill-dir>/scripts/ghostty_session.py switch-prepare --only <unmanaged-uuid> [...]
-# User: finish work, exit the saved Codex TUIs and manually switch account.
-python3 <skill-dir>/scripts/ghostty_session.py switch-restore
-```
-
-Default to tabs in one window; use `--layout windows` only when independent windows are requested.
-Keep the printed fixed manifest through the handoff. Treat unresolved capture,
-unverified original processes and missing sessions as incomplete. Recovery means
-reopening the fixed manifest's original IDs; when reopening is blocked or
-delegated (kept old processes, user-managed locks, denied UI automation), follow
-[the original-set route](references/codex-account-switch.md#reopen-the-original-recorded-set-not-a-blank-session)
-and deliver the complete exact per-session commands with per-item status — a
-blank tab is never a recovery. Mode selection,
-account preconditions and partial-restore readiness belong to
-[the switch SOP](references/codex-account-switch.md). Never send process-termination
-signals or switch credentials through this route; normal local exit controls use
-that SOP's authorized-host protocol. Apply the foreground
-conditions above before actual opening; ask only when the required authorization is missing. `--dry-run` and `--check`
-remain read-only. Distinguish reopened IDs from new-account requests that worked:
-the script reports authentication as `not_checked` and sends no test prompt.
+Start with [account-owner selection](references/codex-account-switch.md#choose-the-account-owner-first).
+For the selected independent-TUI workflow, follow
+[save before switching](references/codex-account-switch.md#save-before-switching)
+and [restore or resume the batch](references/codex-account-switch.md#restore-and-resume-an-interrupted-batch).
+For blocked or delegated reopening, follow
+[the original-set route](references/codex-account-switch.md#reopen-the-original-recorded-set-not-a-blank-session).
+Keep command examples, handoff, authorization and acceptance in that SOP.
+Implementation: [ghostty_switch.py](scripts/ghostty_switch.py).
 
 ## Quick start
 
