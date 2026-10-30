@@ -52,8 +52,8 @@ bias):
 ```bash
 stat -f "%z bytes mtime=%Sm" -t "%Y-%m-%d %H:%M" "<copy-A>/<sample-file>"
 stat -f "%z bytes mtime=%Sm" -t "%Y-%m-%d %H:%M" "<copy-B>/<sample-file>"
-# identical size AND identical mtime = same file (copy), not independently
-# created content
+# identical size AND identical mtime = candidate clue only, not proof of
+# equal content; compare complete SHA-256 values on both ends
 ```
 
 Then compare directory-level structure (per-subdirectory `du -sk`): matching
@@ -195,7 +195,7 @@ unprovable:
 
 | Proposition | Evidence | Verdict |
 |---|---|---|
-| Content duplicated in canonical copy | name+size+mtime triple, structure match | proven |
+| Content duplicated in canonical copy | name+size+mtime triple (candidate clue), structure match, complete two-end SHA-256 | candidate from metadata; content equality proven only by complete two-end SHA-256 match |
 | Candidate was created FROM canonical | creation command verbatim | proven |
 | Agent read/process usage in covered records | original calls/results, source coordinates, providers and time window | observed use or no use found in stated coverage; gaps remain unknown |
 | Project's own decision record | log.md / _decisions quote | proven |
