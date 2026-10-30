@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sqlite3
+import subprocess
 import sys
 from pathlib import Path
 
@@ -23,7 +25,10 @@ from core.correction_service import CorrectionService
 
 TARGET_PATTERN = r"alpha(?= cue)"
 OTHER_PATTERN = r"beta(?= cue)"
+LITERAL_GLOBAL_PATTERN = r"literal-global(?= cue)"
+NULL_GLOBAL_PATTERN = r"null-global(?= cue)"
 REASON = "synthetic reversible state check"
+CLI_SCRIPT = Path(__file__).resolve().parent.parent / "fix_transcription.py"
 
 
 def _rows(db_path: Path, table: str):
@@ -47,6 +52,106 @@ def _new_service(db_path: Path, initialize_schema: bool = True):
     return CorrectionService(
         CorrectionRepository(db_path, initialize_schema=initialize_schema)
     )
+
+
+def _database_snapshot(db_path: Path, exclude: set[str] | None = None):
+    excluded = exclude or set()
+    with sqlite3.connect(db_path) as conn:
+        tables = [
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master "
+                "WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+            )
+            if row[0] not in excluded
+        ]
+        return {
+            table: conn.execute(f'SELECT * FROM "{table}" ORDER BY rowid').fetchall()
+            for table in tables
+        }
+
+
+def _run_state_cli(
+    db_path: Path,
+    action: str,
+    rule_id: int,
+    domain: str | None,
+    pattern: str,
+    config_dir: Path,
+    reason: str = REASON,
+):
+    argv = [
+        sys.executable,
+        str(CLI_SCRIPT),
+        action,
+        str(rule_id),
+        "--db",
+        str(db_path),
+    ]
+    if domain is not None:
+        argv.extend(["--context-rule-domain", domain])
+    argv.extend([
+        "--context-rule-pattern",
+        pattern,
+        "--reason",
+        reason,
+        "--json",
+    ])
+    env = os.environ.copy()
+    env["TRANSCRIPT_FIXER_CONFIG_DIR"] = str(config_dir)
+    env["TRANSCRIPT_FIXER_DB_PATH"] = str(config_dir / "decoy.db")
+    completed = subprocess.run(
+        argv,
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+        timeout=20,
+    )
+    try:
+        payload = json.loads(completed.stdout)
+    except json.JSONDecodeError as exc:
+        raise AssertionError(
+            f"CLI did not emit one JSON result: exit={completed.returncode}, "
+            f"stdout={completed.stdout!r}, stderr={completed.stderr!r}"
+        ) from exc
+    return completed, payload
+
+
+def _loaded_patterns(db_path: Path) -> set[str]:
+    service = _new_service(db_path, initialize_schema=False)
+    try:
+        return {
+            rule["pattern"]
+            for rule in service.load_context_rules([
+                "project-alpha", "project-beta", "global",
+            ])
+        }
+    finally:
+        service.close()
+
+
+def _add_representation_rules(db_path: Path):
+    service = _new_service(db_path)
+    ids = {
+        "ordinary": service.add_context_rule(
+            TARGET_PATTERN, "omega", domain="project-alpha"
+        ),
+        "literal": service.add_context_rule(
+            LITERAL_GLOBAL_PATTERN, "delta", domain="global"
+        ),
+        "null": service.add_context_rule(
+            NULL_GLOBAL_PATTERN, "theta"
+        ),
+        "control": service.add_context_rule(
+            OTHER_PATTERN, "gamma", domain="project-beta"
+        ),
+    }
+    service.add_correction(
+        "garbled-token", "fixed-token", domain="project-alpha"
+    )
+    service.close()
+    return ids
 
 
 @pytest.fixture
@@ -372,6 +477,172 @@ def test_state_command_conflicts_fail_before_any_database_dispatch(
     assert "must be the only command" in capsys.readouterr().err
     assert _snapshot(db_path) == before_target
     assert _snapshot(configured_db) == before_configured
+
+
+def test_cli_domain_representations_disable_enable_and_reload(tmp_path):
+    db_path = tmp_path / "representations.db"
+    ids = _add_representation_rules(db_path)
+    patterns = {
+        "ordinary": TARGET_PATTERN,
+        "literal": LITERAL_GLOBAL_PATTERN,
+        "null": NULL_GLOBAL_PATTERN,
+        "control": OTHER_PATTERN,
+    }
+    cases = [
+        ("ordinary", "project-alpha", "project-alpha"),
+        ("literal", "domain:global", "global"),
+        ("null", "global", None),
+    ]
+    before_non_audit = _database_snapshot(db_path, exclude={"audit_log"})
+    before_audit_count = _audit_count(db_path)
+    expected_loaded = set(patterns.values())
+    assert _loaded_patterns(db_path) == expected_loaded
+
+    for action, active in (("--disable-context-rule", False), ("--enable-context-rule", True)):
+        for key, cli_domain, stored_domain in cases:
+            completed, payload = _run_state_cli(
+                db_path,
+                action,
+                ids[key],
+                cli_domain,
+                patterns[key],
+                tmp_path / "config",
+            )
+            assert completed.returncode == 0, completed.stderr
+            assert completed.stderr == ""
+            assert payload == {
+                "status": "enabled" if active else "disabled",
+                "rule_id": ids[key],
+                "domain": stored_domain,
+                "pattern": patterns[key],
+                "is_active": active,
+                "changed": True,
+                "audit_written": True,
+            }
+            with sqlite3.connect(db_path) as conn:
+                assert conn.execute(
+                    "SELECT domain, is_active FROM context_rules WHERE id = ?",
+                    (ids[key],),
+                ).fetchone() == (stored_domain, int(active))
+            if active:
+                expected_loaded.add(patterns[key])
+            else:
+                expected_loaded.remove(patterns[key])
+            assert _loaded_patterns(db_path) == expected_loaded
+
+    assert _database_snapshot(db_path, exclude={"audit_log"}) == before_non_audit
+    assert _audit_count(db_path) == before_audit_count + 6
+    with sqlite3.connect(db_path) as conn:
+        transitions = conn.execute(
+            "SELECT action, entity_id FROM audit_log "
+            "WHERE action IN ('disable_context_rule', 'enable_context_rule') "
+            "ORDER BY id"
+        ).fetchall()
+    assert transitions == [
+        (action, ids[key])
+        for action in ("disable_context_rule", "enable_context_rule")
+        for key, _cli_domain, _stored_domain in cases
+    ]
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        {
+            "name": "wrong id",
+            "rule_id": 999999,
+            "error": "does not exist",
+        },
+        {
+            "name": "wrong pattern",
+            "pattern": r"wrong(?= cue)",
+            "error": "pattern mismatch",
+        },
+        {
+            "name": "wrong literal domain",
+            "domain": "domain:project-alpha",
+            "error": "domain mismatch",
+        },
+        {
+            "name": "NULL representation cannot select literal global",
+            "domain": "global",
+            "error": "domain mismatch",
+        },
+        {
+            "name": "literal representation cannot select SQL NULL",
+            "target": "null",
+            "domain": "domain:global",
+            "error": "domain mismatch",
+        },
+        {
+            "name": "missing domain",
+            "domain": None,
+            "error": "--context-rule-domain",
+        },
+        {
+            "name": "empty domain",
+            "domain": "",
+            "error": "expected context rule domain",
+        },
+        {
+            "name": "empty prefixed payload",
+            "domain": "domain:",
+            "error": "expected context rule domain",
+        },
+        {
+            "name": "blank prefixed payload",
+            "domain": "domain:   ",
+            "error": "expected context rule domain",
+        },
+        {
+            "name": "invalid prefixed payload",
+            "domain": "domain:bad/domain",
+            "error": "invalid characters",
+        },
+        {
+            "name": "only one prefix is stripped",
+            "domain": "domain:domain:global",
+            "error": "invalid characters",
+        },
+    ],
+    ids=lambda case: case["name"],
+)
+def test_cli_state_rejections_preserve_entire_database(tmp_path, case):
+    db_path = tmp_path / "rejections.db"
+    ids = _add_representation_rules(db_path)
+    patterns = {
+        "ordinary": TARGET_PATTERN,
+        "literal": LITERAL_GLOBAL_PATTERN,
+        "null": NULL_GLOBAL_PATTERN,
+        "control": OTHER_PATTERN,
+    }
+    target = case.get("target", "literal")
+    before = _database_snapshot(db_path)
+    before_hash = hashlib.sha256(db_path.read_bytes()).hexdigest()
+
+    completed, payload = _run_state_cli(
+        db_path,
+        "--disable-context-rule",
+        case.get("rule_id", ids[target]),
+        case.get("domain", "domain:global"),
+        case.get("pattern", patterns[target]),
+        tmp_path / "config",
+    )
+
+    assert completed.returncode == 2
+    assert completed.stderr == ""
+    assert payload["error"] == "context_rule_state_error"
+    assert case["error"] in payload["message"]
+    assert "no changes applied" in payload["message"]
+    assert _database_snapshot(db_path) == before
+    assert hashlib.sha256(db_path.read_bytes()).hexdigest() == before_hash
+    assert _loaded_patterns(db_path) == set(patterns.values())
+
+
+def test_state_domain_help_distinguishes_null_and_literal_global():
+    help_text = create_argument_parser().format_help()
+    assert "SQL NULL" in help_text
+    assert "domain:global" in help_text
 
 
 def test_parser_accepts_state_identity_and_db_arguments(tmp_path):
