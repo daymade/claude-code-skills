@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.21.28 → v1.21.29): Judge reference-faithful content and authorized expressive interactions against separate visible contracts. Compare native display semantics with source text and display ranges without rewriting raw data. Change type: bounded reference-parity guidance.
 - **tech-selection** (`daymade-claude-code` v4.33.16 → v4.33.17): Assign database and object-storage responsibilities from query, authorization, transaction and recovery needs. Add complete-body and cross-store failure probes while retaining size and format exceptions. Change type: bounded storage-selection guidance.
 - **ghostty-use** (v1.9.4 → v1.9.5): Route account-switch entry points through the canonical owner selection before choosing a recovery workflow. Remove copied switch commands and acceptance rules from the Skill entry, and align repository recovery navigation. Change type: operating-document alignment and lossless deduplication.
 
