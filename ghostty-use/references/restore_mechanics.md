@@ -1,10 +1,10 @@
 # Restore mechanics: why paste-based reopen and how it stays honest
 
-Verified on Ghostty 1.3.1, macOS 26 (Darwin 25/27), 2026-10-04.
+Earlier CLI/System Events probes: Ghostty 1.3.1 on macOS, 2026-10-04.
 
 ## Current native observation boundary
 
-| Attempted path | Result on Ghostty 1.3.1 macOS |
+| Observed path | Observation and scope |
 |---|---|
 | `ghostty +new-window` CLI action | `+new-window is not supported on this platform` (verified) |
 | AppleScript tab dictionary / System Events | earlier probes found no usable tab restore interface; this does not establish what other AX adapters expose |
@@ -113,19 +113,6 @@ saved snapshot. Exit 1 from strict verification means a requested ID is not
 observed, not that the user must restore it. Exit 0 covers only the selected AI
 set; report captured ordinary terminals and unresolved TUIs separately. Their
 recorded cwd and raw process evidence are not automatically replayed.
-
-## Profile env mapping
-
-Claude profiles that boot via environment (e.g. `CLAUDE_CONFIG_DIR`) cannot be
-recovered from the process command line (env is invisible to `ps`). Restore
-replays captured settings, model/profile and permission flags; if profile context beyond settings is
-needed, record prefixes in the user-local `~/.ghostty-session/profile-env.json`:
-
-```json
-{"research": "CLAUDE_CONFIG_DIR=~/.claude-profiles/research", "profile-name": "ENV=k v"}
-```
-
-No default mapping ships; the file is user data outside the bundle.
 
 ## Snapshot schema (output contract)
 

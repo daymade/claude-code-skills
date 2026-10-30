@@ -123,7 +123,7 @@ or state index fails explicitly; do not replace it with a rollout corpus scan.
 ```bash
 # Review candidates without writing state or opening tabs:
 python3 <skill-dir>/scripts/ghostty_session.py reconstruct \
-  --history-reader <reader-skill-dir> --recent-hours 72 --limit 100 --dry-run
+  --history-reader <reader-skill-dir> --dry-run
 
 # Build one chosen set in a NEW file; --only accepts unambiguous ID prefixes:
 python3 <skill-dir>/scripts/ghostty_session.py reconstruct \
@@ -273,11 +273,8 @@ snapshots and restores. Keep the following evidence boundaries:
 
 ## Deeper details
 
-- [references/session_liveness.md](references/session_liveness.md) — storage layouts
-  (Claude projects / Codex sessions), transcript structures, resume-fork naming,
-  liveness rules, time-window candidate selection and misclassification cases. Read
-  before filtering recovery by activity, when a liveness result looks wrong, or when
-  layouts changed after an app update.
-- [references/restore_mechanics.md](references/restore_mechanics.md) — why Ghostty
-  uses the batch paste path, current native observation limits, and separate
-  process/history-readiness checks. Read before restoring or modifying that path.
+- [references/session_liveness.md](references/session_liveness.md) — Read before
+  filtering recovery by activity, investigating a liveness result, or adapting to a
+  changed transcript layout.
+- [references/restore_mechanics.md](references/restore_mechanics.md) — Read before
+  restoring sessions, investigating a restore result, or modifying the restore path.
