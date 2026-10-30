@@ -68,7 +68,7 @@ Credentials are stored in XDG style, decoupled from any agent's skill directory:
 - `~/.config/ima/api_key` (mode `600`)
 - `~/.config/ima/` (mode `700`)
 
-Environment variables `IMA_OPENAPI_CLIENTID` and `IMA_OPENAPI_APIKEY` act as fall-back overrides — the wrapper reads the environment first, then the config file.
+Environment variables `IMA_OPENAPI_CLIENTID` and `IMA_OPENAPI_APIKEY` take precedence; missing values fall back to the config files.
 
 Step through the setup with the user:
 
@@ -131,7 +131,7 @@ After the repair, run `diagnose.sh` a second time and show the user the diff. Th
 
 ### An important note about upstream updates
 
-Every repair is **temporary in the sense that ima-skill upgrades replace everything**. This is by design: the skill does not fight upstream for persistent state. When the user upgrades ima-skill via Capability 1, Step 4 of diagnose will again flag the fixed issue, and the user can rerun the repair. This is a feature, not a bug — if upstream eventually fixes the issue, the repair becomes unnecessary and `diagnose.sh` will report ✅ with no prompt.
+Upgrading ima-skill can replace local repairs. After an upgrade, rerun `diagnose.sh` and follow the existing repair workflow only for issues that return. If upstream has fixed the issue, diagnosis reports it healthy and no repair is needed.
 
 ## Capability 4: Personalized fan-out search
 
