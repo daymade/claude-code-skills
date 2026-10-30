@@ -8,7 +8,7 @@ Rationale for this shape:
   into the same pattern:
     1. No cross-KB endpoint — search_knowledge takes a single knowledge_base_id.
     2. No relevance score in results — ranking must be client-side.
-    3. Silent 100-hit truncation with no cursor — queries that saturate a KB
+    3. Silent truncation with no cursor — queries that saturate a KB
        are invisibly capped.
 
   Given those constraints, the most useful thing a personal wrapper can do
@@ -157,8 +157,7 @@ def search_one_kb(kb, query, client_id, api_key):
         return {"kb": kb, "hits": [], "truncated": False, "error": str(e)}
 
     hits = data.get("info_list", []) or []
-    # Silent truncation detection: exact 100 hits with no is_end/next_cursor
-    # in the response is the upstream tell-tale.
+    # Reaching HARD_HIT_CAP without is_end/next_cursor is the upstream tell-tale.
     truncated = len(hits) >= HARD_HIT_CAP and not data.get("is_end") and not data.get("next_cursor")
     return {"kb": kb, "hits": hits, "truncated": truncated, "error": None}
 
