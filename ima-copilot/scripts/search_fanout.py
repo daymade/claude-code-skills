@@ -318,7 +318,8 @@ def render_json(query, priority, others, denied, skipped_cfg):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description=__doc__.split("\n")[1])
+    description = __doc__.strip().split("\n\n", 1)[0].replace("\n", " ")
+    ap = argparse.ArgumentParser(description=description)
     ap.add_argument("query", help="Search query string")
     ap.add_argument(
         "--max-results",
