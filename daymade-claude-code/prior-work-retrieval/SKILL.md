@@ -292,20 +292,29 @@ those remain the verification duties above.
 
 ## Companion hooks
 
-Install after the manifest is valid and the self-test is green:
+For standalone registration, install after the manifest is valid and the
+self-test is green:
 
 ```bash
 scripts/prior-work-retrieval.sh --selftest
 scripts/prior-work-retrieval.sh --install
+scripts/prior-work-retrieval.sh --check-install
 ```
 
-The versioned wrapper is the synchronous hook-runtime SSOT. It resolves a
-direct Python interpreter and never enters a package-manager/cache lifecycle;
-keep the `uv run ... prior_work.py` commands above as explicit retrieval and
+`--check-install` compares the standalone handler entries and wrapper link. It
+does not inspect a managed dispatcher's activation, selected rules or loaded
+source. If the host already delegates this rule to a managed-hook owner, use
+that owner's update and verification procedure instead of adding standalone
+handlers. Confirm the active rule and source, then probe the affected behavior;
+a missing/stale standalone result alone does not establish integration failure.
+
+The versioned wrapper owns standalone hook launch and interpreter selection.
+It resolves a direct Python interpreter and never enters a package-manager/cache
+lifecycle. Keep the `uv run ... prior_work.py` commands above as explicit retrieval and
 receipt operations, not as hook launchers.
 
-The installer adds the required handlers to both Claude and Codex without replacing
-unrelated hooks:
+The standalone installer adds the required handlers to both Claude and Codex
+without replacing unrelated hooks:
 
 - `UserPromptSubmit` creates a prompt-scoped requirement only for an explicit
   prior-work/reuse/history signal and injects the Skill route. The filters keep

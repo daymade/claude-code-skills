@@ -39,12 +39,9 @@ until the missing bounded authorization is supplied. Host denials remain binding
 
 ## Entry decision tree
 
-Bind the terminal host before selecting a snapshot. For ToDesk-created or other
-headless Codex terminals without evidence of Ghostty ownership, use the maintained
-`read-codex-history` Skill's terminal-session recovery recipe. Its index and exact
-reader identify saved work; a similarly sized Ghostty snapshot does not establish
-that it contains the missing terminals. Resume this workflow only for confirmed
-Ghostty surfaces.
+For missing Codex terminals without confirmed Ghostty ownership, load the installed
+`read-codex-history` Skill and follow its
+[terminal-session recovery recipe](https://github.com/daymade/claude-code-skills/blob/main/daymade-claude-code/read-codex-history/references/terminal-session-recovery.md).
 
 | You just said / want | Run |
 |---|---|
