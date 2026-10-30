@@ -1159,7 +1159,13 @@ def _cmd_context_rule_state(
         )
 
     raw_domain = required["--context-rule-domain"]
-    domain = None if raw_domain == "global" else raw_domain
+    if raw_domain == "global":
+        domain = None
+    elif raw_domain.startswith("domain:"):
+        # Strip exactly one prefix; the service still validates the literal name.
+        domain = raw_domain[len("domain:"):]
+    else:
+        domain = raw_domain
     service = None
     try:
         repository = CorrectionRepository(
