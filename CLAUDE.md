@@ -637,8 +637,8 @@ That owner defines project-authorization recovery, credential-store selection an
 
 For Codex reset announcements or account quota questions, enter
 [tibo-reset-codex](tibo-reset-codex/SKILL.md). Follow its
-[account usage SOP](tibo-reset-codex/references/account-usage.md) for authentication,
-per-account verification, adjacent-reset attribution and browser restoration.
+[account usage SOP](tibo-reset-codex/references/account-usage.md) before authentication,
+per-account queries, saving a live reading, adjacent-reset attribution or browser restoration.
 For unused quota, reset gains or avoidable waste, follow
 [waste and added capacity](tibo-reset-codex/references/account-usage.md#浪费与新增容量).
 Treat
@@ -660,8 +660,9 @@ For recurring community queries, follow
 when preparing the next monitor invocation, follow
 [handoff carry-forward](tibo-reset-codex/references/forecast-feedback.md#交接结转).
 [Next-reset forecast](tibo-reset-codex/references/next-reset-forecast.md) owns
-date judgments; [forecast feedback](tibo-reset-codex/references/forecast-feedback.md)
-owns recording, review and withdrawal, with
+date judgments. Before paged journal reads, original lookup, handoff correction,
+or recording, reviewing or withdrawing a forecast, load
+[forecast feedback](tibo-reset-codex/references/forecast-feedback.md), with
 [forecast_log.py](tibo-reset-codex/scripts/forecast_log.py) as the executable
 authority for CLI and local journal layout. Keep detailed commands and changing
 account or forecast state out of this file.
