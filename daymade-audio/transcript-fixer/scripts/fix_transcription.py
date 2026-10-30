@@ -48,6 +48,8 @@ from cli import (
     cmd_add_correction,
     cmd_add_context_rule,
     cmd_list_context_rules,
+    cmd_disable_context_rule,
+    cmd_enable_context_rule,
     cmd_audit,
     cmd_list_corrections,
     cmd_export_corrections,
@@ -98,7 +100,8 @@ def main() -> None:
         other_commands = (
             "init", "health", "metrics", "config_action", "migration_action",
             "audit_retention_action", "validate", "add_correction", "add_context_rule",
-            "list_context_rules", "audit_dictionary", "list_corrections", "export_path",
+            "list_context_rules", "disable_context_rule", "enable_context_rule",
+            "audit_dictionary", "list_corrections", "export_path",
             "import_path", "review_learned", "approve", "report_false_positive",
             "load_presets", "extract_uncertain", "enqueue_review", "list_review",
             "reanchor_review", "scan_traps", "probe_term", "close_sidecars", "lookup_term",
@@ -180,6 +183,10 @@ def main() -> None:
         cmd_add_context_rule(args)
     elif getattr(args, 'list_context_rules', False):
         cmd_list_context_rules(args)
+    elif getattr(args, 'disable_context_rule', None) is not None:
+        cmd_disable_context_rule(args)
+    elif getattr(args, 'enable_context_rule', None) is not None:
+        cmd_enable_context_rule(args)
     elif getattr(args, 'audit_dictionary', False):
         cmd_audit(args)
     elif args.list_corrections:

@@ -27,7 +27,8 @@ class _TranscriptArgumentParser(argparse.ArgumentParser):
             other_commands = (
                 "init", "health", "metrics", "config_action", "migration_action",
                 "audit_retention_action", "validate", "add_correction", "add_context_rule",
-                "list_context_rules", "audit_dictionary", "list_corrections", "export_path",
+                "list_context_rules", "disable_context_rule", "enable_context_rule",
+                "audit_dictionary", "list_corrections", "export_path",
                 "import_path", "review_learned", "approve", "report_false_positive",
                 "load_presets", "extract_uncertain", "enqueue_review", "list_review",
                 "show_review", "attach_authority", "resolve_review", "scan_traps",
@@ -81,6 +82,46 @@ def create_argument_parser() -> argparse.ArgumentParser:
         action="store_true",
         dest="list_context_rules",
         help="List context rules (--domain filters to one domain plus globals)"
+    )
+    parser.add_argument(
+        "--disable-context-rule",
+        metavar="ID",
+        type=int,
+        dest="disable_context_rule",
+        help="Disable one exact context rule ID; requires --db, "
+             "--context-rule-domain, --context-rule-pattern and --reason"
+    )
+    parser.add_argument(
+        "--enable-context-rule",
+        metavar="ID",
+        type=int,
+        dest="enable_context_rule",
+        help="Re-enable one exact context rule ID with the same required "
+             "identity and reason arguments as --disable-context-rule"
+    )
+    parser.add_argument(
+        "--db",
+        metavar="PATH",
+        dest="db_path",
+        help="With --disable/enable-context-rule: explicit existing SQLite "
+             "database path (required; no default)"
+    )
+    parser.add_argument(
+        "--context-rule-domain",
+        metavar="DOMAIN",
+        help="Expected domain for context-rule state changes; the literal "
+             "'global' means SQL NULL (required)"
+    )
+    parser.add_argument(
+        "--context-rule-pattern",
+        metavar="PATTERN",
+        help="Expected exact pattern for context-rule state changes (required)"
+    )
+    parser.add_argument(
+        "--reason",
+        metavar="TEXT",
+        help="Non-empty reason recorded in context-rule state audit details "
+             "(required)"
     )
     parser.add_argument(
         "--all",
@@ -206,7 +247,9 @@ def create_argument_parser() -> argparse.ArgumentParser:
              "always present. Lets "
              "consumers stop inferring no-op vs failure from whether a *_stage1.md "
              "sidecar exists. Also applies to the review-queue commands "
-             "(--enqueue-review/--list-review/--show-review/--resolve-review)."
+             "(--enqueue-review/--list-review/--show-review/--resolve-review) "
+             "and context-rule state commands "
+             "(--disable-context-rule/--enable-context-rule)."
     )
 
     # Evidence commands (advisory, read-only): turn the native pass's manual

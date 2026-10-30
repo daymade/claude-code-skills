@@ -1119,6 +1119,99 @@ def cmd_list_context_rules(args: argparse.Namespace) -> None:
               f" (priority {r['priority']}){desc}{inactive}")
 
 
+def cmd_disable_context_rule(args: argparse.Namespace) -> None:
+    """Disable one exact context rule (--disable-context-rule)."""
+    _cmd_context_rule_state(args, False, args.disable_context_rule)
+
+
+def cmd_enable_context_rule(args: argparse.Namespace) -> None:
+    """Enable one exact context rule (--enable-context-rule)."""
+    _cmd_context_rule_state(args, True, args.enable_context_rule)
+
+
+def _cmd_context_rule_state(
+    args: argparse.Namespace, active: bool, rule_id: int
+) -> None:
+    """Shared CLI path for reversible, identity-checked context-rule state."""
+    other_name = "disable_context_rule" if active else "enable_context_rule"
+    if getattr(args, other_name, None) is not None:
+        _queue_cmd_error(
+            args,
+            "context_rule_state_error",
+            "--disable-context-rule and --enable-context-rule cannot be combined; "
+            "no changes applied",
+            2,
+        )
+    required = {
+        "--db": getattr(args, "db_path", None),
+        "--context-rule-domain": getattr(args, "context_rule_domain", None),
+        "--context-rule-pattern": getattr(args, "context_rule_pattern", None),
+        "--reason": getattr(args, "reason", None),
+    }
+    missing = [flag for flag, value in required.items() if value is None]
+    if missing:
+        _queue_cmd_error(
+            args,
+            "context_rule_state_error",
+            f"missing required argument(s): {', '.join(missing)}; "
+            "no changes applied",
+            2,
+        )
+
+    raw_domain = required["--context-rule-domain"]
+    domain = None if raw_domain == "global" else raw_domain
+    service = None
+    try:
+        repository = CorrectionRepository(
+            Path(required["--db"]).expanduser(),
+            initialize_schema=False,
+        )
+        service = CorrectionService(repository)
+        # Validate through a separate read-only connection before the pool's
+        # connection setup can issue PRAGMAs or any write can begin.
+        service.preflight_context_rule_state(
+            rule_id,
+            domain,
+            required["--context-rule-pattern"],
+            required["--reason"],
+        )
+        if active:
+            result = service.enable_context_rule(
+                rule_id,
+                domain,
+                required["--context-rule-pattern"],
+                required["--reason"],
+                changed_by="cli",
+            )
+        else:
+            result = service.disable_context_rule(
+                rule_id,
+                domain,
+                required["--context-rule-pattern"],
+                required["--reason"],
+                changed_by="cli",
+            )
+    except Exception as exc:
+        message = str(exc)
+        if "no changes applied" not in message:
+            message = f"{message}; no changes applied"
+        _queue_cmd_error(args, "context_rule_state_error", message, 2)
+    finally:
+        if service is not None:
+            service.close()
+
+    if getattr(args, "json_output", False):
+        _emit_json(result)
+        return
+    scope = result["domain"] or "global"
+    print(
+        f"Context rule #{result['rule_id']} [{scope}] {result['status']}: "
+        f"is_active={str(result['is_active']).lower()}, "
+        f"audit_written={str(result['audit_written']).lower()}, "
+        f"pattern={result['pattern']!r}"
+    )
+
+
 def cmd_scan_traps(args: argparse.Namespace) -> None:
     """Scan --input for every trap documented in a domain context file.
 
