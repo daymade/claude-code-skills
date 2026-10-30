@@ -24,7 +24,8 @@ with a separate note when needed; conversion does not authorize factual rewritin
 
 ## Mechanical comparison
 
-Run the existing validator from this Skill directory (Windows: use `python`):
+Run the existing validator from this Skill directory. It accepts PDF or DOCX
+source files; substitute the DOCX filename for a DOCX comparison:
 
 ```bash
 uv run --with pymupdf python scripts/validate_output.py source.pdf converted.md --json --report comparison.html
@@ -37,11 +38,13 @@ as unmeasured. A missing tool, failed/empty source extraction or unsupported sou
 fails explicitly. Image-only PDFs need an authorized OCR workflow before textual
 acceptance; an empty extraction cannot establish that the source was blank.
 
-The JSON separates character-count coverage, ordered text similarity/equality,
+The legacy JSON key `text_retention` means character-count coverage, not retained
+content. The JSON separates that coverage, ordered text similarity/equality,
 ordered numeric sequences and bounded difference samples. Counts and the 0–100
 diagnostic score do not measure total accuracy. Signs, punctuation and units
 remain significant; whitespace is normalized on both sides. Nonidentical text
-cannot return a silent pass. `warn` still exits 0 for CLI compatibility: inspect
+cannot return a silent pass. `structure_verified` remains false: this script does
+not perform the structural checks below. `warn` still exits 0 for CLI compatibility: inspect
 `status`, warnings and scope before acceptance. Failure exits 1. `--json` remains
 valid JSON even with `--report`; report paths go to stderr.
 
@@ -77,7 +80,7 @@ Use the neutral [boundary sample](../assets/pdf-fidelity/expected.md) and its
 [deliberately broken version](../assets/pdf-fidelity/broken.md) against their
 [source PDF](../assets/pdf-fidelity/source.pdf) and
 [HTML layout](../assets/pdf-fidelity/source.html) for a bounded operator replay.
-It includes an unnumbered question, a three-item explanation, a warning and a
+It includes an unnumbered question, an enumeration, a warning and a
 healthy wrapped word. These are synthetic examples, not excerpts from a client.
 
 ## Recipient handoff

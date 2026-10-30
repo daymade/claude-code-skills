@@ -160,6 +160,11 @@ including refused/unavailable checks and reviewable handoff. DOCX comparison fol
 [the input-identity and coverage procedure](daymade-docs/read-docx-review/references/full-comparison.md);
 keep sending evidence, revision-view selection and comparison limits with that owner.
 
+For PDF → Markdown manuals or question banks, enter
+[docs-router](daymade-docs/docs-router/SKILL.md) and follow
+[PDF acceptance](daymade-docs/doc-to-markdown/references/pdf-acceptance.md).
+Keep that procedure authoritative for conversion and recipient acceptance.
+
 For saved HTML batches, follow [the conversion owner](daymade-docs/doc-to-markdown/references/html-conversion.md#gate-a-batch-through-the-existing-recipe)
 and its actual-reader pilot before expansion. Keep conversion evidence and reader
 observations separate; this file does not define another batch recipe.
@@ -486,28 +491,32 @@ Its
 owns discussion capture and interpretation; the bundled helper owns the CLI
 interface. Before permanent filing or choosing an authorized archive destination,
 follow the [destination handoff](feishu-doc-scraper/references/archive-destination-handoff.md).
+Use that handoff for authorized source access instructions alongside original links.
 For storage decisions, use its
 [archive storage contract](feishu-doc-scraper/references/archive-storage-contract.md)
 alongside the destination repository's storage SOP.
+Keep generated manifest metadata aligned with that contract's on-demand statistics rule.
 For local originals, Obsidian delivery or a personal source-catalog handoff, follow the Skill's
 [original-media and reader SOP](feishu-doc-scraper/references/original-media-and-reader.md).
 
 ### Prior Work Retrieval Boundary
 
-`prior-work-retrieval` creates an obligation only for an explicit prior-work,
-reuse, or history request. Ordinary implementation, reports, and read-only
-inspection do not arm it; PreToolUse and Stop may enforce only a requirement
-already created by the current prompt. Artifact selection and runtime-read
-comparison are owned by that Skill; a receipt about a locator is not proof of
-the delivered artifact. For retrieval freshness, changed-source recovery and
-receipt lifetime, follow the [Prior Work operating contract](daymade-claude-code/prior-work-retrieval/SKILL.md).
+For an explicit prior-work, reuse or history request, follow the
+[Prior Work operating contract](daymade-claude-code/prior-work-retrieval/SKILL.md).
 Requests to repeat a previously successful method or reuse/improve an older rendered artifact enter its
 [candidate verification](daymade-claude-code/prior-work-retrieval/SKILL.md#4-verify-candidates-at-authority).
 
 For CLI/hook manifest selection or continuation in an already-running host, read
 [the manifest-selection contract](daymade-claude-code/prior-work-retrieval/SKILL.md#2-validate-the-explicit-source-manifest).
 
+For an existing hook integration or a blocked read-only discovery command, use its
+[companion-hook procedure](daymade-claude-code/prior-work-retrieval/SKILL.md#companion-hooks)
+and [discovery boundaries](daymade-claude-code/prior-work-retrieval/SKILL.md#boundaries).
+
 ### Local Conversation History Boundary
+
+For missing Codex terminals, including ToDesk/headless sessions, enter
+[terminal-session recovery](daymade-claude-code/read-codex-history/references/terminal-session-recovery.md).
 
 For reconciliation of an already-resumed native Goal, read
 [native Goal reconciliation](daymade-claude-code/continue-codex-work/references/native-goal-reconciliation.md)
@@ -549,9 +558,8 @@ For Claude history discovery without a known Session, use
 [read-claude-code-history's indexed search entry](daymade-claude-code/read-claude-code-history/SKILL.md#indexed-content-search).
 Keep executable examples and coverage requirements in that owner.
 
-Codex inventory must use the index-only command in
-`daymade-claude-code/read-codex-history/SKILL.md`. If its state database is
-unavailable, report an unknown inventory; do not substitute a raw rollout scan.
+For Codex session inventory, use
+[the inventory route](daymade-claude-code/read-codex-history/SKILL.md#route-by-the-requested-result).
 Edit shared reader code in `daymade-claude-code/_conversation_core/`, then run
 `python3 daymade-claude-code/sync_core.py sync` and `check` before shipping;
 bundled `scripts/_core/` copies are generated projections.
@@ -597,8 +605,8 @@ Skill links.
 
 ### Ghostty Terminal Sessions
 
-For snapshotting, restoring or reconciling Claude Code / Codex sessions in Ghostty
-across reboots, enter [`ghostty-use`](ghostty-use/SKILL.md). Unmanaged/legacy manual Codex account
+For snapshotting, restoring or reconciling Claude Code / Codex sessions confirmed
+to run in Ghostty across reboots, enter [`ghostty-use`](ghostty-use/SKILL.md). Unmanaged/legacy manual Codex account
 switches and blocked/delegated reopening enter its
 [account-switch SOP](ghostty-use/references/codex-account-switch.md), including
 the original-set handoff and actual-continuation acceptance. Minions `native_runtime`

@@ -2,32 +2,31 @@
 
 Comparison of document-to-markdown conversion tools.
 
-## Feature Matrix
-
-| Feature | pymupdf4llm | markitdown | pandoc |
-|---------|-------------|------------|--------|
-| **PDF Support** | ✅ Excellent | ✅ Good | ⚠️ Limited |
-| **DOCX Support** | ❌ No | ✅ Good | ✅ Excellent |
-| **PPTX Support** | ❌ No | ✅ Good | ✅ Good |
-| **XLSX Support** | ❌ No | ✅ Good | ⚠️ Limited |
-| **Table Detection** | ✅ Multiple strategies | ⚠️ Basic | ✅ Good |
-| **Image Extraction** | ✅ With metadata | ❌ No | ✅ Yes |
-| **Heading Hierarchy** | ✅ Good | ⚠️ Variable | ✅ Excellent |
-| **List Formatting** | ✅ Good | ⚠️ Basic | ✅ Excellent |
-| **LLM Optimization** | ✅ Built-in | ❌ No | ❌ No |
+For the orchestrator's configured format routing, read [Tool Selection](../SKILL.md#tool-selection).
+For its actual candidate-selection behavior, read [Heavy Mode](heavy-mode-guide.md#selection-behavior).
 
 ## Installation
 
 ### pymupdf4llm
 
 ```bash
-pip install pymupdf4llm
+pip install pymupdf pymupdf4llm
 
 # Or with uv
-uv pip install pymupdf4llm
+uv pip install pymupdf pymupdf4llm
 ```
 
-**Dependencies:** None (pure Python with PyMuPDF)
+[PyMuPDF 2.0 consolidates PyMuPDF4LLM](https://pymupdf.io/blog/pymupdf-2-0)
+and retains `import pymupdf4llm` compatibility. Install `pymupdf` explicitly;
+the `pymupdf4llm` distribution name alone does not establish that the module exists.
+Before conversion, check the same runtime used to launch the orchestrator:
+
+```bash
+uv run --with pymupdf --with pymupdf4llm python -c 'import pymupdf4llm; print(callable(pymupdf4llm.to_markdown))'
+```
+
+A successful import establishes availability only; it does not verify extraction
+quality or a model's execution device.
 
 ### markitdown
 
@@ -55,62 +54,6 @@ choco install pandoc
 ```
 
 **Dependencies:** System installation required
-
-## Performance Benchmarks
-
-### PDF Conversion (100-page document)
-
-| Tool | Time | Memory | Output Quality |
-|------|------|--------|----------------|
-| pymupdf4llm | ~15s | 150MB | Excellent |
-| markitdown | ~45s | 200MB | Good |
-| pandoc | ~60s | 100MB | Variable |
-
-### DOCX Conversion (50-page document)
-
-| Tool | Time | Memory | Output Quality |
-|------|------|--------|----------------|
-| pandoc | ~5s | 50MB | Excellent |
-| markitdown | ~10s | 80MB | Good |
-
-## Best Practices
-
-### For PDFs
-
-1. **First choice:** pymupdf4llm
-   - Best table detection
-   - Image extraction with metadata
-   - LLM-optimized output
-
-2. **Fallback:** markitdown
-   - When pymupdf4llm fails
-   - Simpler documents
-
-### For DOCX/DOC
-
-1. **First choice:** pandoc
-   - Best structure preservation
-   - Proper heading hierarchy
-   - List formatting
-
-2. **Fallback:** markitdown
-   - When pandoc unavailable
-   - Quick conversion needed
-
-### For PPTX
-
-1. **First choice:** markitdown
-   - Good slide content extraction
-   - Handles speaker notes
-
-2. **Fallback:** pandoc
-   - Better structure preservation
-
-### For XLSX
-
-1. **Only option:** markitdown
-   - Table to markdown conversion
-   - Sheet handling
 
 ## Common Issues by Tool
 
