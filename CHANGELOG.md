@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **app-evolver** (v1.1.10 → v1.1.11): Bind Mobbin screens and inspected flows to exact source material, observation limits and a contract-preserving target journey; retain optional-access recovery and existing engineering owners. Change type: bounded evidence-adaptation guidance.
+- **report-with-html** (v1.4.6 → v1.4.7): Define incremental updates from an accepted baseline, source-bound changed fields and retained components; reuse unaffected checks while preserving fresh rendering and independent reader/source acceptance. Change type: bounded maintenance guidance.
 - **prior-work-retrieval** (`daymade-claude-code` v4.33.14 → v4.33.15): Distinguish standalone hook registration checks from managed-dispatcher verification. Route repository instructions to the canonical discovery and missing-terminal procedures instead of copying their rules. Change type: operating-document alignment.
 - **ghostty-use** (v1.9.3 → v1.9.4): Link unbound-terminal discovery directly to the maintained history recovery recipe and remove its copied explanation. Preserve confirmed-Ghostty snapshot, check and restore behavior. Change type: documentation deduplication.
 - **ima-copilot** (v1.2.1 → v1.2.2): Use the accepted knowledge-base listing page size while preserving cursor pagination and search results. Derive CLI default and truncation labels from their settings. Route operational detail to its search reference, remove generated inventories and counts, and describe access from actual API responses. Change types: API compatibility repair, generated-label consistency and lossless documentation deduplication.

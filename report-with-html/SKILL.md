@@ -47,10 +47,7 @@ contract, interaction contracts, and browser verification.
 - **Layout density (铺满画布 / 消灭空洞), page order as narrative rhythm, the HTML table
   micro-spec, and form → component implementation:** `references/visualization-patterns.md`.
   **Not conditional on having already chosen a form** — most of it applies to every page
-  regardless of what you draw. This line used to open with "Chosen form →", which reads as a
-  precondition; a 2026-08 delivery filed the file under "the implementation lookup I'll consult
-  if I build one of those components", never opened it, and shipped a page missing three of its
-  rules. The gate a step hides behind must not be a step you have not taken yet.
+  regardless of what you draw.
 - Approved corpus and register calibration:
   `references/approved-examples.md`
 - Reusable interactions and their keyboard contracts:
@@ -194,9 +191,7 @@ Every interaction must work without a pointer:
 2. **Calibrate.** Read the mandatory sources — `design-principles.md`,
    `references/visualization-patterns.md`, the closest entry in `approved-examples.md`, and
    `data-visualization-discipline` — then any component reference the artifact activates.
-   Use the nearest approved register; do not copy a skin blindly. (This step used to say
-   "the *activated* pattern reference", which let the patterns file be filed as not-yet-needed
-   and skipped; the SSOT map above explains why that filter cannot work here.)
+   Use the nearest approved register; do not copy a skin blindly.
 3. **Plan visual evidence and 造量纲 — before a line of HTML.** First follow
    `references/visual-evidence.md` for sections about concrete objects, physical choices,
    visual defects or relationships. Put representative images at the relevant options
@@ -225,24 +220,16 @@ Every interaction must work without a pointer:
    smaller number — a lie factor authored by the very page arguing against lie factors.
    Shipping the script also makes the drawing auditable: a reader re-runs it and diffs.
    Step 5's gate asks for that script's path and stats the file, so this rule has a machine
-   consumer rather than being one more thing only you referee. (It was prose-only for exactly
-   one version, and an independent audit named it the next rule likely to get skipped — the
-   variable that decides whether a step survives is not "does it produce an artifact" but
-   "does anything downstream consume the artifact". The visual-discipline gates were
-   already artifact steps when they got skipped.)
-
-   Why this is a numbered step rather than a principle: the rule already lived in
-   `design-principles.md` §2 *and* in `data-visualization-discipline`, and was read in both
-   places immediately before a delivery that shipped eight prose sections and one geometry.
-   A judgment step whose only referee is its author gets **comprehended instead of executed**.
-   These two attributes are what let a script see whether the step happened.
+   consumer rather than being one more thing only you referee.
 4. **Author.** If a calling Skill supplies a user-approved local report form that still
    fits this report's output contract, use that form as the starting point. Otherwise
    start from `assets/report-template.html` or an approved example. The calling Skill
    owns template approval and storage; this Skill owns report generation and visual QA.
    Keep customer facts and conclusions tied to current evidence, and do not copy the
-   caller's template into this Skill's update-owned `assets/`. Use actual shelf
-   components. If the page embeds mutable source documents, follow the long-lived-report
+   caller's template into this Skill's update-owned `assets/`. Before updating an accepted
+   report's facts or content, follow the [incremental maintenance recipe](references/long-lived-report-maintenance.md#63-已验收报告的有界增量更新).
+   Use actual shelf components for new or changed interactions; retain the approved
+   embedded implementation during a data-only update. If the page embeds mutable source documents, follow the long-lived-report
    reference and keep generated and authored regions separate.
 5. **Run the delivery gate — it produces the artifacts the judgment steps otherwise skip.**
 
@@ -502,7 +489,7 @@ Every interaction must work without a pointer:
    up only after confirming it still holds, then `check` again. Only then open the final HTML
    for the user. Do not open a pre-review draft as the delivered artifact.
 
-**Where a new lesson goes — two questions, in this order, before writing one into this skill.**
+**Where a new lesson goes — answer in this order before writing one into this skill.**
 
 **First: was the failure *"I forgot to do it"* or *"I did it and could not see it was
 wrong"*?** The first belongs in the workflow above; a reminder solves it. The second has to
@@ -594,7 +581,7 @@ never as a pass.
    first version), record that answer as given — an explicit skip is auditable, an assumed
    one is not.
 
-   Two outputs to read correctly rather than wave through. The reconciler prints **how many
+   Read tool output rather than wave it through. The reconciler prints **how many
    fragments it actually compared**; a near-zero count means "nothing was comparable", not
    "nothing was lost" — its extractor samples CJK-initial runs, so a non-Chinese page yields
    almost none. And if it times out — Chrome produced no complete DOM within its limit —
@@ -630,15 +617,15 @@ never as a pass.
    not as passed. A labeled late addition is not automatically disqualified; judge whether the
    audience really would already know it, same as any other entry.
 
-5. **Delivery gate ran, and its answers describe this page** — ask for three things, because
-   the first two are cheap to fake and the third is what makes them mean something:
+5. **Delivery gate ran, and its answers describe this page** — check the artifacts and
+   independently compare their recorded answers with the rendered evidence:
    (a) `page.html.gate.md` and `page--masked.png` **exist**, and `check` exits 0 right now
    (paste the output). A nonzero exit is a **FAIL of this item**, not an invitation to let the
    author re-run `init --force` and try again while you wait — the gate is supposed to be green
    before the page reaches you; (b) **count the distinct geometries visible in the masked PNG FIRST, write that
    number down, and only then open the gate table** — reading the table first makes you go
    looking for the shapes it lists, which is confirmation bias with a known direction. Then
-   compare the two counts — the masked render is the ground truth here. **Two things before you call a mismatch:** a
+   compare the two counts — the masked render is the ground truth here. **Before calling a mismatch:** a
    long page needs `crop_segments.py` first (a 19000px PNG is unreadable in one Read), and a
    *composite* geometry legitimately shows as several shapes — a timeline with a main axis and
    an inset, a paired before/after bar — so read the gate row's own `data-derived-from` before

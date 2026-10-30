@@ -118,6 +118,8 @@ For evidence-based improvement of an existing application, enter
 [app-evolver](app-evolver/SKILL.md). For released-artifact or runtime evidence,
 load its [Skill composition route](app-evolver/references/skill-composition.md);
 keep specialist selection and handoff boundaries in that owner.
+Before collecting Mobbin screens or flows or selecting an adaptation, follow its
+[Mobbin evidence recipe](app-evolver/references/mobbin-evidence.md).
 For domain-role extraction or scattered policy, use its
 [consumer-adoption recipe](app-evolver/references/implementation-and-acceptance.md#extract-a-domain-role-through-its-consumers).
 When the user corrects premises, research focus or scope, return first to its
@@ -213,6 +215,8 @@ owns concrete plans, cost boundaries and next-verification choices; do not turn 
 shortlist into purchase or deployment approval.
 For filtered evidence inspection, follow its
 [interactive-analysis recipe](report-with-html/references/interactive-analysis.md).
+Before updating an accepted report's facts or content, follow its
+[incremental maintenance recipe](report-with-html/references/long-lived-report-maintenance.md#63-已验收报告的有界增量更新).
 For transcript speaker-label updates, later reconciliation and consumer readback,
 follow its [maintenance contract](report-with-html/references/long-lived-report-maintenance.md).
 
