@@ -7,16 +7,16 @@ DOCX files get automatic post-processing to fix pandoc artifacts.
 
 Usage:
     # Quick Mode (default) - fast, single best tool
-    uv run --with pymupdf4llm --with markitdown scripts/convert.py document.pdf -o output.md
+    uv run --with pymupdf --with pymupdf4llm --with "markitdown[pdf]" scripts/convert.py document.pdf -o output.md
 
-    # Heavy Mode - multi-tool parallel execution with merge
-    uv run --with pymupdf4llm --with markitdown scripts/convert.py document.pdf -o output.md --heavy
+    # Heavy Mode - multi-tool execution with candidate selection
+    uv run --with pymupdf --with pymupdf4llm --with "markitdown[pdf]" scripts/convert.py document.pdf -o output.md --heavy
 
     # DOCX deep mode - python-docx direct parsing (experimental)
     uv run --with python-docx scripts/convert.py document.docx -o output.md --docx-deep
 
     # With image extraction
-    uv run --with pymupdf4llm scripts/convert.py document.pdf -o output.md --assets-dir ./images
+    uv run --with pymupdf --with pymupdf4llm scripts/convert.py document.pdf -o output.md --assets-dir ./images
 
 Dependencies:
     - pymupdf4llm: PDF conversion (LLM-optimized)
@@ -1073,7 +1073,7 @@ def convert_single(
 
 
 def merge_results(results: list[ConversionResult]) -> ConversionResult:
-    """Merge results from multiple tools, selecting best segments."""
+    """Select one scored Markdown body and deduplicate successful image metadata."""
     if not results:
         return ConversionResult(markdown="", tool="none", success=False)
 
@@ -1287,7 +1287,7 @@ Examples:
     if not tools:
         print("Error: No conversion tools available.", file=sys.stderr)
         print("Install with:", file=sys.stderr)
-        print("  pip install pymupdf4llm", file=sys.stderr)
+        print("  pip install pymupdf pymupdf4llm", file=sys.stderr)
         print("  uv tool install markitdown[pdf]", file=sys.stderr)
         print("  brew install pandoc", file=sys.stderr)
         sys.exit(1)

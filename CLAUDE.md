@@ -156,6 +156,11 @@ including refused/unavailable checks and reviewable handoff. DOCX comparison fol
 [the input-identity and coverage procedure](daymade-docs/read-docx-review/references/full-comparison.md);
 keep sending evidence, revision-view selection and comparison limits with that owner.
 
+For PDF → Markdown manuals or question banks, enter
+[docs-router](daymade-docs/docs-router/SKILL.md) and follow
+[PDF acceptance](daymade-docs/doc-to-markdown/references/pdf-acceptance.md).
+Keep that procedure authoritative for conversion and recipient acceptance.
+
 For saved HTML batches, follow [the conversion owner](daymade-docs/doc-to-markdown/references/html-conversion.md#gate-a-batch-through-the-existing-recipe)
 and its actual-reader pilot before expansion. Keep conversion evidence and reader
 observations separate; this file does not define another batch recipe.
