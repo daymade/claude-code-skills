@@ -44,10 +44,13 @@ Regex-based context-aware correction rules.
 | domain | TEXT | NULL = global; otherwise the one domain that loads the rule |
 
 Use `--disable-context-rule` / `--enable-context-rule` with an explicit database,
-exact ID, expected domain/pattern and reason for reversible state changes. Each
-real transition updates only this row's `is_active` and writes one `audit_log`
-entry in the same transaction; already-target-state calls do not add audit rows.
-This is separate from `--report-false-positive`, which manages `corrections`.
+exact ID, expected domain/pattern and reason for reversible state changes. For
+`--context-rule-domain`, `global` selects SQL NULL, while `domain:<name>` selects
+a literal named domain; `domain:global` therefore targets the string `global`,
+not NULL. Each real transition updates only this row's `is_active` and writes one
+`audit_log` entry in the same transaction; already-target-state calls do not add
+audit rows. This is separate from `--report-false-positive`, which manages
+`corrections`.
 
 ### learned_suggestions
 

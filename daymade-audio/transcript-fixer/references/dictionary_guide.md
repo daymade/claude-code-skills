@@ -40,7 +40,7 @@ uv run scripts/fix_transcription.py --add "错误词" "正确词" [--domain <dom
 | `--list [--domain <d>]` | 列出规则 |
 | `--audit [--domain <d>]` | 体检词典，报告可疑规则（短词 / 冲突等） |
 | `--report-false-positive "<from>" "<to>" -d <d>` | 停用一条误报规则、降低其置信度。**两个参数是规则在词典里存的 from→to 对**（照 `*_changes.md` 的 From/To 抄），不是「错词→对词」语义——详见 [native_ai_full_workflow.md](native_ai_full_workflow.md) step 2；只管理 `corrections` |
-| `--disable-context-rule <id> --db <path> --context-rule-domain <domain> --context-rule-pattern <pattern> --reason <text>` | 按精确 ID 停用一条 `context_rules`；`--enable-context-rule <id>` 用同样的必需参数恢复。每次都必须显式给出数据库、预期 domain、精确 pattern 和非空原因；全局规则用 `--context-rule-domain global`。真实状态变化与审计同事务提交，重复调用返回 `already_disabled`/`already_enabled` 且不重复审计。只管理 `context_rules`，不改 `corrections`、正文或队列，也不做身份判定；详见 [script_parameters.md](script_parameters.md#fix_transcriptionpy) |
+| `--disable-context-rule <id> --db <path> --context-rule-domain <domain> --context-rule-pattern <pattern> --reason <text>` | 按精确 ID 停用一条 `context_rules`；`--enable-context-rule <id>` 用同样的必需参数恢复。每次都必须显式给出数据库、预期 domain、精确 pattern 和非空原因；SQL NULL 全局规则用 `--context-rule-domain global`，字面命名域用 `domain:<domain>`（例如字面 `global` 域用 `domain:global`）。真实状态变化与审计同事务提交，重复调用返回 `already_disabled`/`already_enabled` 且不重复审计。只管理 `context_rules`，不改 `corrections`、正文或队列，也不做身份判定；详见 [script_parameters.md](script_parameters.md#fix_transcriptionpy) |
 | `--load-presets <domain>` | 导入某 domain 的预置规则集（如 `tech`） |
 
 ## 学习闭环（AI → 词典自动晋升）

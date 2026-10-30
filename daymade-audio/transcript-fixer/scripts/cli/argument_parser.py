@@ -109,8 +109,9 @@ def create_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--context-rule-domain",
         metavar="DOMAIN",
-        help="Expected domain for context-rule state changes; the literal "
-             "'global' means SQL NULL (required)"
+        help="Expected domain for context-rule state changes; 'global' means "
+             "SQL NULL, while 'domain:<name>' selects a literal named domain "
+             "(for example, 'domain:global') (required)"
     )
     parser.add_argument(
         "--context-rule-pattern",
