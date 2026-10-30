@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **ima-copilot** (v1.2.1 → v1.2.2): Use the accepted knowledge-base listing page size while preserving cursor pagination and search results. Document endpoint-specific parameter failures without patching upstream installations. Change type: API compatibility repair.
+- **ima-copilot** (v1.2.1 → v1.2.2): Use the accepted knowledge-base listing page size while preserving cursor pagination and search results. Derive CLI default and truncation labels from their settings. Route operational detail to its search reference, remove generated inventories and counts, and describe access from actual API responses. Change types: API compatibility repair, generated-label consistency and lossless documentation deduplication.
 - **feishu-doc-scraper** (v1.10.4 → v1.10.5): Carry authorized source access instructions into the destination's material entry. Stop persisting generated attachment counts and remove those legacy fields on resume while retaining independent status and evidence. Change types: bounded handoff clarification and manifest hygiene.
 - **local-codex** (`daymade-codex` v2.2.0 → v2.3.0): Distinguish adoption of an already saved login from token recovery and new OAuth authorization. Add the authorized shared-daemon restart and original-session continuation recipe, including stable message reconciliation and separate execution acceptance. Change type: additive recovery recipe.
 - **ghostty-use** (v1.9.2 → v1.9.3): Route unmanaged shared-daemon recovery to Local Codex before planning independent terminal exits; preserve managed Account Manager ownership and legacy snapshot/restore. Change type: bounded routing clarification.

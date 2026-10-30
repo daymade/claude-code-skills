@@ -45,7 +45,7 @@ import urllib.request
 from pathlib import Path
 
 API_BASE = "https://ima.qq.com/openapi"
-HARD_HIT_CAP = 100  # search_knowledge silently caps at 100, no cursor
+HARD_HIT_CAP = 100  # observed search_knowledge ceiling, with no response cursor
 KB_PAGE_SIZE = 20  # verified listing size; the previous request size was rejected
 
 
@@ -247,7 +247,7 @@ def render_text(query, priority, others, denied, skipped_cfg, total_kbs_listed, 
             if note:
                 label += f" {note}"
             if r["truncated"]:
-                label += " (⚠️ truncated at 100)"
+                label += f" (⚠️ truncated at {HARD_HIT_CAP})"
             print(label)
             for i, hit in enumerate(hits[:max_per_kb], 1):
                 title = hit.get("title", "(no title)")
@@ -279,7 +279,7 @@ def render_text(query, priority, others, denied, skipped_cfg, total_kbs_listed, 
 
     if truncated_kbs:
         print(
-            f"\n⚠️  {len(truncated_kbs)} kb(s) hit the 100-result ceiling; try a narrower query:"
+            f"\n⚠️  {len(truncated_kbs)} kb(s) hit the {HARD_HIT_CAP}-result ceiling; try a narrower query:"
         )
         for name in truncated_kbs:
             print(f"   - {name}")
@@ -324,13 +324,13 @@ def main(argv=None):
         "--max-results",
         type=int,
         default=5,
-        help="Max hits to render per KB in text mode (default: 5)",
+        help="Max hits to render per KB in text mode (default: %(default)s)",
     )
     ap.add_argument(
         "--workers",
         type=int,
         default=12,
-        help="Parallel worker count for fan-out calls (default: 12)",
+        help="Parallel worker count for fan-out calls (default: %(default)s)",
     )
     ap.add_argument("--json", action="store_true", help="Output JSON instead of text")
     args = ap.parse_args(argv)

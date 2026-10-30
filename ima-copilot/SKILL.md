@@ -12,15 +12,6 @@ description: >-
 
 One-command installer, troubleshooter, and personalization layer for the official Tencent IMA skill.
 
-## Overview
-
-The official Tencent IMA skill (ima-skill) exposes a powerful OpenAPI for notes and knowledge base operations, but its installation flow is designed for a specific proprietary agent and recent releases have shipped submodule files that fail strict SKILL.md loaders. IMA Copilot solves both problems:
-
-1. Installs ima-skill to Claude Code, Codex, and OpenClaw in a single command via the [vercel-labs/skills](https://github.com/vercel-labs/skills) open installer.
-2. Walks the user through API key setup with a live validation call.
-3. Detects known upstream issues and — with explicit user consent — fixes them in place, without ever forking, vendoring, or mirroring any part of the upstream package.
-4. Provides a fan-out search strategy that respects user-configured knowledge base priorities and boosts, with awareness of the 100-result per-KB truncation limit.
-
 ## Architectural principles (do not violate)
 
 This skill is a **wrapper layer** around ima-skill. The wrapper contract is non-negotiable:
@@ -103,7 +94,7 @@ bash scripts/diagnose.sh
 ✅ upstream ima-skill installed (claude-code)
 ✅ upstream ima-skill installed (codex)
 ❌ upstream ima-skill NOT installed (openclaw)
-✅ API credentials valid (search_knowledge_base returned 12 KBs)
+✅ API credentials valid (search_knowledge_base returned <count> KBs)
 ⚠️ ISSUE-001: notes/SKILL.md missing YAML frontmatter (claude-code)
 ⚠️ ISSUE-001: knowledge-base/SKILL.md missing YAML frontmatter (claude-code)
 ⚠️ ISSUE-001: notes/SKILL.md missing YAML frontmatter (codex)
@@ -144,25 +135,16 @@ Every repair is **temporary in the sense that ima-skill upgrades replace everyth
 
 ## Capability 4: Personalized fan-out search
 
-IMA's OpenAPI has constraints that any serious search workflow must account for:
-
-1. **No cross-knowledge-base endpoint.** `search_knowledge` requires a single `knowledge_base_id` per call. Cross-KB search is a client-side fan-out, not an API feature.
-2. **No relevance score in results.** `info_list` items only carry `media_id`, `title`, `parent_folder_id`, and `highlight_content`. Any ranking beyond insertion order must happen on the client.
-3. **Silent 100-result truncation.** `search_knowledge` returns at most 100 hits per KB with no `is_end` or `next_cursor` field in the response. High-frequency queries are silently capped.
-
-`scripts/search_fanout.py` implements the full workaround:
+Follow [the search workflow](references/search_best_practices.md) for API constraints,
+enumeration, ranking, permissions and truncation handling. Run its bundled helper:
 
 ```bash
 python3 scripts/search_fanout.py "<query>"
 ```
 
-The script reads `~/.config/ima/copilot.json` for personalization (priority KBs, skip list, strategy), calls `search_knowledge_base` to enumerate KBs, fans out `search_knowledge` calls in parallel, detects truncation by exact-100 length match, and renders results grouped by KB with priority groups at the top.
-
 The personalization file is **per-user** and private. This skill ships only a template — see `config-template/copilot.json.example`. A user with no config file gets a neutral default: fan out all accessible KBs, sort groups by hit count, no boosting.
 
-For the full algorithm, truncation handling strategy, rendering format, and a walkthrough of the evidence-based decision to allow a "subset KB skip" (e.g., a curated KB that is a strict subset of a master KB can be safely skipped to reduce duplicate hits), read `references/search_best_practices.md`.
-
-For knowledge-base listing parameter errors, use that reference's
+For knowledge-base listing parameter errors, use the search workflow's
 “Knowledge-base enumeration” procedure before diagnosing authentication or access.
 
 ## Capability 5: Import URLs and extract content
@@ -171,27 +153,6 @@ When the pages to read are ones the local machine cannot fetch but IMA's servers
 
 ## What this skill refuses to do
 
-- **Never vendor upstream content.** This directory does not contain and will never contain a copy of `ima-skill/SKILL.md`, `ima-skill/notes/**`, `ima-skill/knowledge-base/**`, or any other upstream file. Anyone adding such files to this skill should be rejected.
 - **Never pin an upstream version in SKILL.md.** The installer script carries a default version for fallback purposes, but SKILL.md itself is version-agnostic to survive upstream releases without requiring a skill bump.
-- **Never silently patch upstream files.** Every modification path requires an explicit AskUserQuestion and the user's active choice.
 - **Never hardcode a user's knowledge base names.** The `priority_kbs` and `skip_kbs` fields in `copilot.json` are 100% user-configured. Example values in `config-template/copilot.json.example` are illustrative only.
 - **Never skip the backup step** when executing a repair, no matter how trivial the diff.
-
-## File layout
-
-```
-ima-copilot/
-├── SKILL.md                         # This file — entry and routing
-├── scripts/
-│   ├── install_ima_skill.sh         # Download → stage → npx skills add to supported agents
-│   ├── diagnose.sh                  # Read-only health report
-│   └── search_fanout.py             # Fan-out search with priority grouping
-├── references/
-│   ├── installation_flow.md         # Capability 1 deep dive
-│   ├── api_key_setup.md             # Capability 2 deep dive
-│   ├── known_issues.md              # Issue registry — source of truth for repairs
-│   ├── search_best_practices.md     # Capability 4 deep dive
-│   └── import_and_extract.md        # Capability 5 deep dive
-└── config-template/
-    └── copilot.json.example         # Template for ~/.config/ima/copilot.json
-```

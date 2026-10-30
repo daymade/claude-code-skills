@@ -43,6 +43,16 @@ class KnowledgeBasePagination(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'code=51'):
                 search.list_all_kbs('synthetic-id', 'synthetic-key')
 
+    def test_truncation_labels_follow_the_canonical_ceiling(self):
+        result = {'kb': {'kb_name': 'Example'}, 'hits': [{'title': 'Example'}],
+                  'truncated': True}
+        output = io.StringIO()
+        with patch.object(search, 'HARD_HIT_CAP', 7), contextlib.redirect_stdout(output):
+            search.render_text('template', [], [result], [], [], 1, 1)
+        self.assertIn('truncated at 7', output.getvalue())
+        self.assertIn('7-result ceiling', output.getvalue())
+        self.assertNotIn('100', output.getvalue())
+
     def test_main_lists_then_searches_and_renders_results(self):
         paths = []
 
