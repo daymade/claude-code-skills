@@ -1,14 +1,5 @@
 # Codex context-window contract
 
-## Contents
-
-- Configuration authority
-- Model-aware calculations
-- Why a 1M request can display less
-- Auto-compaction behavior
-- Client and session boundaries
-- Verification evidence
-
 ## Configuration authority
 
 Codex reads `model_context_window` and `model_auto_compact_token_limit` from the
@@ -18,28 +9,15 @@ and app-server config contract:
 - <https://github.com/openai/codex/blob/main/codex-rs/core/config.schema.json>
 - <https://github.com/openai/codex/blob/main/codex-rs/app-server-protocol/src/protocol/v2/config.rs>
 
-Use `show` to read only the two base-config numeric settings, without invoking
-Codex or exposing unrelated config. Use `set-compact --tokens N` for an explicit
-threshold-only update; its local `codex features list` check confirms config
-loading, not model compatibility or live-session adoption.
-
-For full expansion, the script calls `codex doctor --json` to resolve the selected model and
-`codex debug models` to retrieve the current catalog. The live catalog wins over
-documentation and remembered limits.
+Choose the operation, prerequisites and verification through the
+[execution workflow](../SKILL.md#route-the-request).
 
 ## Model-aware calculations
 
-The policy requests at most 1,000,000 raw tokens:
-
-1. Read the selected model's `max_context_window`.
-2. Use the smaller of that maximum and 1,000,000.
-3. Multiply by the model's `effective_context_window_percent` to report the usable
-   session window.
-4. Set auto-compaction to 60% of the configured raw window.
-
-Treat 60% as the full-expansion preset. An explicitly requested threshold-only
-update takes precedence and leaves the window untouched. The attainable raw and
-usable windows remain model facts and are discovered at runtime for expansion.
+The bundled [policy implementation](../scripts/codex_context_window.py) owns the
+requested ceiling and expansion preset in its constants and `build_report`.
+Use its runtime report for the selected model's limits and usable window; do not
+persist another policy table or infer current capacity from the Skill name.
 
 ## Why a 1M request can display less
 
@@ -53,21 +31,19 @@ tool overhead, and output:
 
 <https://github.com/openai/codex/blob/main/codex-rs/core/src/session/turn_context.rs>
 
-Therefore the Skill name describes the requested ceiling, not a promise that every
-model exposes exactly one million usable tokens.
+The Skill name does not promise the same usable capacity for every model.
 
 ## Auto-compaction behavior
 
-Codex normally caps an explicit auto-compaction threshold at 90% of the resolved raw
-window. The expansion preset remains below that guard; a saved custom threshold
-does not prove the runtime used that exact value:
+Codex's runtime capping behavior is defined in its model contract:
 
 <https://github.com/openai/codex/blob/main/codex-rs/protocol/src/openai_models.rs>
 
-The full usable context window remains a hard cap independently of the compaction
-threshold:
+Context-window enforcement is defined separately:
 
 <https://github.com/openai/codex/blob/main/codex-rs/core/src/session/context_window.rs>
+
+A saved base-config threshold alone does not prove the resolved runtime value.
 
 ## Client and session boundaries
 
@@ -83,8 +59,6 @@ Configuration is read when a session starts. Applying the Skill never changes th
 context window of the thread that is already running.
 
 ## Verification evidence
-
-Last source-grounding pass: 2026-08-27 with `codex-cli 0.150.1`.
 
 For local-setting changes, exercise field-only readback, unrelated-byte preservation,
 rollback/idempotency and the local config-load command. Do not require live catalog
