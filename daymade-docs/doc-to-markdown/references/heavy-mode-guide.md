@@ -22,7 +22,7 @@ Use Quick Mode when:
 
 ## Tool Capabilities
 
-### PyMuPDF4LLM (Best for PDFs)
+### PyMuPDF4LLM (PDF Documents)
 
 **Strengths:**
 - Native table detection with multiple strategies
