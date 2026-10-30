@@ -1006,8 +1006,8 @@ def snapshot_health(state_dir, enabled=True):
     """Report whether the best-effort git snapshots are keeping up. Read-only.
 
     A failed snapshot prints one stderr note and never blocks the append, so a
-    journal can go on lagging for days with nothing on the read path showing it.
-    `summary` runs at the start of every round, which makes it the place to look.
+    journal can go on lagging with no append failure. Read paths expose snapshot
+    health separately so a successful append cannot imply a completed snapshot.
     """
     if not enabled:
         return {"status": "disabled"}

@@ -20,7 +20,7 @@
 uv run python scripts/forecast_log.py --help
 uv run python scripts/forecast_log.py activity
 # next_cursor 非 null 时，使用上一页的 view_id 继续；直到 next_cursor=null 才读完
-uv run python scripts/forecast_log.py activity --cursor 10 --expect-view <上一页view_id>
+uv run python scripts/forecast_log.py activity --cursor <上一页next_cursor> --expect-view <首轮view_id>
 # 按 ID 读取完整原件（包括反馈、来源与原始 readings）
 uv run python scripts/forecast_log.py show --id <完整记录id>
 # 旧 compact 接口仍可用，保留原投影语义；它不承诺输出大小
@@ -45,38 +45,40 @@ uv run python scripts/forecast_log.py summary
 ## 每次调用先回看
 
 1. 正常监测轮先运行 `activity`，按 `totals` 核对所有队列，沿 `next_cursor` 翻完全部页；后续页
-   必须带首轮 `view_id` 的 `--expect-view`，状态变化报错后从第一页重读，不拼接两个版本。
-   每页默认最多 10 项、16000 UTF-8 字节（参数 `--limit` / `--max-output-bytes` 可显式调整），
-   包含到期、未决、账号、撤回冲突、最近结果与撤回的定位，以及完整的逐条交接 notes，附快照状态。
+   必须带首轮 `view_id` 的 `--expect-view`；收到 `activity_changed` 时从第一页重读，不拼接两个版本。
+   时钟派生字段变化也可能触发该错误，不一定有台账追加；无法完成连续翻页时，分别保存完整 `summary`
+   与 `handoff` 到新的私有文件后分段读取，并按各自原始时间判读。每页数量和字节边界由
+   `--limit` / `--max-output-bytes` 控制，用 `activity --help` 查看参数，
+   默认值由[脚本](../scripts/forecast_log.py)定义。分页包含到期、未决、账号、撤回冲突、最近结果与
+   撤回的定位，以及完整的逐条交接 notes，附快照状态。
    不截断单条；单条超预算会明确失败并给原件 ID，改用 `show --id` 通过宿主现有大输出捕获与
    分段读取流程读完，或显式提高预算。`totals` 非零且该类尚未读到时不能宣布没有待办。
    最近核验与撤回的 `lesson` 完整保留；历史 `reason`、完整证据和交接 `readings` 按 ID
    读取原件。分页投影不改写原件。
    需要完整交接时仍用 `handoff`；输出可能很大，先落新的私有文件再按需读取，不依赖终端截断。
-   审计、复盘或需要完整叙述时运行 `summary`。旧 `summary --compact` 接口保持兼容：compact
-   是同一个完整 summary 的投影，只省略 forecast 的 `rationale`、`feedback_applied`，以及
-   `latest_review` / `latest_withdrawal` 的 `reason`、`lesson`；其他字段保持不变，包括各队列及其顺序、ID、kind、状态、窗口、`revision_trigger`、
-   证据引用、账号观测、`withdrawal_conflicts` 与 `snapshot`。先读 `due_for_followup`（窗口已过期或即将关闭、尚无定论的 pending；
+   审计、复盘或需要完整叙述时运行 `summary`；`summary --compact` 只省略叙述字段，不约束总输出大小。
+   先读 `due_for_followup`（窗口已过期或即将关闭、尚无定论的 pending；
    临近关闭阈值以脚本常量 `CLOSING_SOON_HOURS` 为准，完整 id 可直接喂 review），
-   再核对 `withdrawal_conflicts`，然后读 `pending`、`recent_resolved` 和 `recent_withdrawn`。`pending`
+   再核对 `withdrawal_conflicts`，排除 `recent_withdrawn` 中已撤回的窗口，然后读 `pending` 与 `recent_resolved`。`pending`
    同时含未核验与证据不足的记录；`window_elapsed` 只说明窗口已过，不判输赢。没有历史时
-   按当前证据给判断，记录为空不构成错误。接续监测轮用 `handoff` 读取最新完整交接；
+   按当前证据给判断，记录为空不构成错误。`handoff_id` 或 `handoff` 为 `null` 只表示没有当前交接，
+   不证明此前没有线索；从当前问题与已有预测的 `revision_trigger` 建立待跟进项。接续监测轮用 `handoff` 读取最新完整交接；
    需要其他轮次的原始读数时再读数据目录的 `findings.jsonl` 原始行。
    `findings` 命令只返回摘要（id/invocation/query/endpoints 数），不含 `readings` 与 `notes`。
-   `confirmed_unscored` 是已确认事件但仍不可评分的记录，已退出事件待查队列；
+   `confirmed_unscored` 是已确认事件但仍不可评分的记录，已退出事件待查队列，不再追问该事件是否发生；
    `account_followup` 是绑定账号后仍未确认到账的独立队列。需问题与来源配方时运行 `followup`，
    先将完整输出保存到新的私有文件，再按目标 ID 读取证据任务，避免重复读取其中完整 handoff；
    再按主 Skill 的监测轮实际获取；它不联网、不安排后台任务，也不证明清单已完成。
-   `summary` 还带 `snapshot`（只读探测，不创建目录）：`ok` 表示已存在的台账文件都已进 git
-   快照（还没有任何台账文件时也是 `ok`）；`lagging` 并列出 `uncommitted` 文件（含被
+   `snapshot` 为只读探测，不创建目录：`ok` 表示已存在的台账文件都已进 git
+   快照（已有 `.git` 且无台账文件时也是 `ok`）；`lagging` 时在本轮汇报中说明，输出的 `uncommitted` 列出文件（含被
    `.gitignore` 挡住、从没进过快照的），另带一句 `hint`。这只证明内容尚未进入快照，
    不区分锁阻塞、提交检查拒绝或其他 Git 失败；原因按下方恢复入口核实。
    追加成功不代表 Git 快照完成。自动快照只处理本次
    追加的台账；同一失败且 Git 控制状态未变化时返回 `deferred/unchanged_failure`，
    不因增加另一条读数反复启动已失败的提交。修正原因后按下面的快照恢复入口重试。
    `no_repo` 是快照还没建立（全新目录也是这样，不算故障）；`disabled` 是用了 `--no-git`；
-   `unknown` 是 git 自身出错。快照失败只在追加当时的 stderr 打一行，`summary` 是每轮第一眼
-   读到它的地方。
+   `unknown` 是 git 自身出错。追加时的 stderr 与只读入口的 `snapshot` 状态分别保留；
+   正常轮从 `activity` 首读，不能因追加命令成功就略过快照状态。
 2. 按主 Skill 取得本轮本来要查的事件证据，核对它能否回答未决预测。明确只有个人额度的
    查询无需为台账另开一轮全局调查；缺证据的记录继续保留，下次有相关证据再核验。
    窗口刚过期的未决预测趁观测区间未漂移立即核验；拖延会扩大观测区间，使窗口跨边界。
@@ -162,9 +164,8 @@ uv run python scripts/forecast_log.py handoff               # 最新完整监测
 保留账号未知，不把多条「当前账号」读数自动接成同一账号的历史。用户纠正时先逐字记录原话；时间格式、被核对的账号与因果归因若未明说，
 放在 `notes` 标为推断，不改写成用户直接观测。
 
-实时 CLI 额度优先按[账号查询单次命令](account-usage.md)使用 `query_usage.py --output-dir ...
---finding-state-dir ...`，同一次查询自动保存去邮箱读数并调用本 `finding` 写入路径，保留原查询
-时刻与 `account_ref`；不要从 stdout 手抄百分比或再生成一份长记账脚本。其它来源仍用通用 finding。
+实时 CLI 额度保存与记账执行[账号查询 SOP](account-usage.md#实时-api只读一个明确账号)；
+其它来源仍用通用 `finding`。
 
 完全相同的输入重试返回原记录。`evidence_refs` 链接规则：先 `finding` 后 `record`/`review`
 ——record/review 输入里的 `evidence_refs` 是 finding id 数组（完整 id，或能唯一解析的短
@@ -204,16 +205,14 @@ id 前缀），每个引用必须已存在于 findings.jsonl，否则报错退�
 
 每次成功追加后脚本尽力在数据目录做一次本地 git 快照（自动 `init`、目录 0700）；
 git 任何失败只在 stderr 打一行 note、绝不影响追加成功，也不构成备份承诺；`--no-git` 关闭。
-findings 隐私契约（本文件对它唯一的完整表述）：不放邮箱——`query_usage` 输出的 `email` 字段、
+findings 隐私契约：不放邮箱——`query_usage` 输出的 `email` 字段、
 `read-usage-profile.cjs` 输出的邮箱行、说明文字里的邮箱都不抄，账号一律用 `account_ref` 指代——
 也不放 token 或产品凭据；`readings` 只放逐字读数与公开 URL。
-**群/项目/人名一律写全称，不自创简称**（2026-10-07 撞 group-name-guard 后加）：台账会在后续轮次
-被 `handoff` 原样读回并照抄进回复——简称进了台账，等于每轮引用它的回复都再撞一次群名闸门。
-写微信群名/项目名/人名时，用全称（规则与执行细节在 group-name-guard hook 与 read-wechat-messages skill，本行不复制——写之前先经 chatlog 核对该群的 remark/nickName 全称）；
-本轮没核实过全称就写「未确认全称的群」，别从旧台账记录里照抄一个看着像简称的写法。
+群、项目与人名使用原始来源核实的全称；微信群名解析沿已加载的 `read-wechat-messages` 执行。
+群全称未核实时写「未确认全称的群」，不从旧交接补造当前名称。
 这条契约有执行层：机器上若配置了全局 pre-commit 的个人信息检查，findings 里出现
 邮箱就会让快照提交被拒——追加本身仍然成功，但被拒的内容留在暂存区。
-同一失败不会因后续追加自动消失；新脚本在控制状态未变时返回 deferred，显式重试仍会接受原 hooks 检查。
+同一失败不会因后续追加自动消失；控制状态未变时返回 deferred，显式重试仍会接受原 hooks 检查。
 首次快照失败时 stderr 的 note 是一行 JSON：
 `{"note": "git snapshot skipped: <git 报错首行，含命令行与状态目录路径> | <stderr 末三行>"}`
 （stderr 里含 `@` 的片段会被替换成 `<email>`），用 `git snapshot skipped:` 前缀就能认出。
