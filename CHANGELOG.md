@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **tech-selection** (`daymade-claude-code` v4.33.16 → v4.33.17): Assign database and object-storage responsibilities from query, authorization, transaction and recovery needs. Add complete-body and cross-store failure probes while retaining size and format exceptions. Change type: bounded storage-selection guidance.
 - **app-evolver** (v1.1.10 → v1.1.11): Bind Mobbin screens and inspected flows to exact source material, observation limits and a contract-preserving target journey; retain optional-access recovery and existing engineering owners. Change type: bounded evidence-adaptation guidance.
 - **report-with-html** (v1.4.6 → v1.4.7): Define incremental updates from an accepted baseline, source-bound changed fields and retained components; reuse unaffected checks while preserving fresh rendering and independent reader/source acceptance. Change type: bounded maintenance guidance.
 - **prior-work-retrieval** (`daymade-claude-code` v4.33.14 → v4.33.15): Distinguish standalone hook registration checks from managed-dispatcher verification. Route repository instructions to the canonical discovery and missing-terminal procedures instead of copying their rules. Change type: operating-document alignment.
