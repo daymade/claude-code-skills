@@ -615,11 +615,12 @@ switches start at its
 [account-owner selection](ghostty-use/references/codex-account-switch.md#choose-the-account-owner-first).
 For blocked/delegated reopening, follow its
 [original-set route](ghostty-use/references/codex-account-switch.md#reopen-the-original-recorded-set-not-a-blank-session).
-Its bundled script owns
-liveness classification and the paste-restore + auto-reconciliation loop; keep the
-storage-layout facts and macOS Ghostty limits in its references rather than here.
+When a snapshot looks too large or recovery is limited to an activity window, use
+[time-window selection](ghostty-use/references/session_liveness.md#select-recovery-candidates-by-a-time-window).
 Before a restore or retry, follow its
 [current-set reconciliation](ghostty-use/references/restore_mechanics.md#reconcile-the-current-wanted-set).
+After process reconciliation, follow
+[history-readiness acceptance](ghostty-use/references/restore_mechanics.md#verify-history-readiness-after-process-reconciliation).
 For change-only automatic backups, use its
 [automatic workflow](ghostty-use/references/automatic-snapshots.md).
 

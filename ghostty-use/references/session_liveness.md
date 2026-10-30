@@ -56,9 +56,9 @@ major app update rather than trusting the dates.
 
 ## Classification
 
-- `active` / `stale`: last in-file timestamp within / beyond 48h (threshold
-  is one constant in `scripts/ghostty_session.py`). This coarse classification
-  does not establish substantive work within a user-selected time window.
+- `active` / `stale`: compare the last in-file timestamp with `ACTIVE_HOURS` in
+  [`ghostty_session.py::classify`](../scripts/ghostty_session.py). This coarse
+  classification does not establish substantive work within a user-selected window.
 - `dead-channel`: structured `isApiErrorMessage` + "Login expired" text.
   Restore reopens history; the TUI stops at `/login`. The keychain may still
   hold a refreshToken with a future expiry while the account itself refuses
