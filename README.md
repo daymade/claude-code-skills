@@ -3588,32 +3588,8 @@ build or buy — evaluate the options
 
 ### **codex-1m-context-window-setup** - Model-Aware Long Context for Codex
 
-> **Install**: `claude plugin install daymade-codex@daymade-skills`
-> (suite-only — invoked as `daymade-codex:codex-1m-context-window-setup`)
-
-Configure the shared Codex CLI/Desktop base config for the largest context window
-the selected model actually declares, up to a one-million-token request. The Skill
-discovers the live model contract, explains the familiar ~258K default, applies a
-60% auto-compaction threshold, preserves unrelated TOML, backs up changed bytes,
-and rolls back if Codex strict-config validation fails.
-For a local value lookup or threshold-only change, use `show` or
-`set-compact --tokens N`: neither fetches the model catalog, and the latter leaves
-the window and unrelated settings untouched. Saved configuration and live-session
-adoption are reported separately.
-
-**Key features:**
-- Model-aware ceiling instead of a hard-coded 1M claim
-- Read-only `doctor`, transactional `apply`, and drift-detecting `verify` modes
-- Exact rollback, idempotent no-op behavior, and macOS/Windows support
-- Changes only `model_context_window` and `model_auto_compact_token_limit`
-
-**Example usage:**
-```text
-/daymade-codex:codex-1m-context-window-setup doctor
-set only the Codex auto-compaction threshold to 400000 tokens
-configure Codex CLI and Desktop for the largest verified context window
-verify that my long-context setup still matches the selected model
-```
+For local context inspection, threshold-only changes or full expansion, follow
+the [Codex context workflow](daymade-codex/codex-1m-context-window-setup/SKILL.md#route-the-request).
 
 ---
 
@@ -4021,7 +3997,6 @@ Each skill includes:
 - **read-codex-history**: See `daymade-claude-code/read-codex-history/references/storage_and_portability.md` for local-store selection, cross-platform paths, privacy boundaries, and diagnostics
 - **read-claude-code-history**: See `daymade-claude-code/read-claude-code-history/references/session_file_format.md` for JSONL structure and `daymade-claude-code/read-claude-code-history/references/workflow_examples.md` for recovery workflows
 - **prior-work-retrieval**: See `daymade-claude-code/prior-work-retrieval/SKILL.md` for the retrieval/verification workflow and `daymade-claude-code/prior-work-retrieval/references/source-manifest.md` for the explicit carrier contract
-- **codex-1m-context-window-setup**: See `daymade-codex/codex-1m-context-window-setup/SKILL.md` for local show/set-compact and expansion doctor/apply/verify workflows, and `daymade-codex/codex-1m-context-window-setup/references/context_window_contract.md` for model-cap, usable-window, and compaction semantics
 - **docs-cleaner**: See `daymade-docs/docs-cleaner/SKILL.md` for consolidation workflows
 - **deep-research**: See `deep-research/references/research_report_template.md` for report structure and `deep-research/references/source_quality_rubric.md` for source triage
 - **tech-selection**: See `daymade-claude-code/tech-selection/references/decision-axes.md` for the 13 core filter criteria, `daymade-claude-code/tech-selection/references/scoped-criteria.md` for scoped supplementary criteria, `daymade-claude-code/tech-selection/references/rejection-modes.md` for rejection patterns and anti-patterns, and `daymade-claude-code/tech-selection/references/delegation-contract.md` for domain ownership and the autonomy threshold
@@ -4064,7 +4039,7 @@ Each skill includes:
 
 
 - **Claude Code** 2.0.13 or higher
-- **Codex CLI with `doctor --json` and `debug models` + uv/Python 3.11+** (for codex-1m-context-window-setup)
+- **Codex context setup**: Follow its [per-command prerequisites](daymade-codex/codex-1m-context-window-setup/SKILL.md#prerequisites).
 - **gh CLI** (for github-ops and github-review-pr)
 - **git with `merge-tree --write-tree` + jq** (for github-review-pr)
 - **markitdown** (for doc-to-markdown)
