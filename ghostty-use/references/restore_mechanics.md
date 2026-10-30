@@ -2,14 +2,19 @@
 
 Verified on Ghostty 1.3.1, macOS 26 (Darwin 25/27), 2026-10-04.
 
-## Why there is no clean restore path
+## Current native observation boundary
 
 | Attempted path | Result on Ghostty 1.3.1 macOS |
 |---|---|
 | `ghostty +new-window` CLI action | `+new-window is not supported on this platform` (verified) |
-| AppleScript tab dictionary | none — System Events shows one window title only, no tab elements |
-| AX tab→window mapping | absent — grouping is not recoverable, report this boundary up front |
+| AppleScript tab dictionary / System Events | earlier probes found no usable tab restore interface; this does not establish what other AX adapters expose |
+| Kimi native AX observation | a later live probe exposed `AXTabGroup`, tab titles and selected `AXRadioButton` values; use these for observation, not as proof of a complete session-to-window map |
 | macOS window-state restore (Cmd+T…) | reopens empty shells only, never the sessions |
+
+Keep the batch-helper boundary separate from platform capability. The current
+manifest does not record original grouping, and the helper does not reconstruct
+it. Grouping restoration through other APIs remains unverified. Re-observe the
+current app and adapter before claiming a capability is unavailable.
 
 ## The working protocol
 
@@ -43,8 +48,42 @@ Verified on Ghostty 1.3.1, macOS 26 (Darwin 25/27), 2026-10-04.
 5. A host denial of Ghostty UI automation is a boundary, not a transport fault.
    Prepare the manifest and a user-run command; after the user runs it, reconcile
    read-only. Do not use osascript as an alternative to a denied UI tool.
-6. Window grouping is not recoverable (no AX tab→window mapping); all tabs
-   reopen into one window. Tell the user this boundary before a large restore.
+6. The ordinary batch helper opens missing sessions as tabs in the active window;
+   it does not restore original grouping or splits. Tell the user this boundary
+   before a large restore. A separate switch workflow's explicit layout selection
+   remains governed by that workflow.
+
+## Verify history readiness after process reconciliation
+
+The executing agent checks the same selected IDs at two distinct levels:
+
+- **Process presence:** `auto-check` / strict `check` observes the requested live
+  session IDs. `SENT (unverified)` alone does not establish this level.
+- **Readable conversation:** use Kimi computer use to observe the intended tabs
+  after loading. A title restored from history corroborates the observed identity;
+  readable prior turns and the normal input surface establish that the inspected
+  conversation loaded. `Resuming session…`, an empty shell, a login gate or an error
+  screen does not. Titles alone do not prove every selected tab is ready.
+
+Inspect remaining loading/uncertain tabs within a bounded wait. Bind observations
+to the current tab and the process/manifest identity; a generic title or cwd is
+insufficient. Report observed-ready, still-loading and unverified coverage separately
+when the whole set cannot be checked. Reuse already verified tabs and retry only
+still-wanted missing IDs; never reopen an existing process merely because history
+is loading. This procedure adds native observation, not a new script readiness check.
+Do not send prompts, resume the old business task or make model requests just to
+test an open-only restoration.
+
+After switching a tab, a Kimi action can report delivery while its automatic
+post-capture fails because the bound renderer/window identity changed. Re-observe
+the app with `get_app_state`, read the actual selected tab, and use the fresh
+snapshot/window identity for the next action. Do not repeat a delivered click
+from an unverified capture alone. A host denial remains binding.
+
+When observation confirms completion and no user takeover or competing input was
+seen, return to the initiating conversation, read back its selection and release
+the keyboard/mouse handoff. If takeover occurs, stop input and yield instead of
+restoring an old focus.
 
 ## Reconcile the current wanted set
 

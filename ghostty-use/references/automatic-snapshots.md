@@ -150,6 +150,10 @@ save nothing. A later complete, nonempty observation can record genuine removals
 `status` shows recorded total, identified-at-capture count, unresolved count and
 retained count from the saved
 manifest. These are backup coverage, not proof that every recorded tab is live.
+When presenting a large backup, show these separate coverage counts before its
+recorded total is treated as an active-session count. For an activity cutoff,
+follow [time-window selection](session_liveness.md#select-recovery-candidates-by-a-time-window)
+through the history readers; do not add transcript reads to the observer.
 
 After reboot, restore recorded IDs using the ordinary route. Unresolved rows are
 not resumable sessions; use explicit indexed reconstruction and identity

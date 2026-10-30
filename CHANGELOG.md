@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **ghostty-use** (v1.9.5 → v1.9.6): Clarify bounded time-window recovery selection, separate backup coverage from activity, and distinguish process presence from readable-history readiness. Correct adapter-specific AX limits while preserving restore selection, foreground ownership and account-switch behavior. Change types: bounded operating guidance and factual correction.
+
 - **transcript-fixer** (`daymade-audio` v1.53.3 → v1.54.0): Add exact-ID context-rule activation management with expected-target checks and transactional audit records. Keep dictionary corrections, transcript content and review queues separate. Change type: bounded rule-lifecycle capability addition.
 
 - **frontend-visual-qa** (v1.21.28 → v1.21.29): Judge reference-faithful content and authorized expressive interactions against separate visible contracts. Compare native display semantics with source text and display ranges without rewriting raw data. Change type: bounded reference-parity guidance.

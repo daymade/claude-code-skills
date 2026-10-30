@@ -49,6 +49,7 @@ For missing Codex terminals without confirmed Ghostty ownership, load the instal
 | Periodic backup, save only changes ("定期增量快照") | Read automatic-snapshots.md, then `ghostty_watch.py install --apply` |
 | Rebooted, want tabs back ("恢复之前的窗口") | Use a suitable snapshot; if absent or outdated, `reconstruct`, then `restore --all` on the selected manifest |
 | "Was anything lost?" / suspicion after restore | `check` |
+| Snapshot looks too large, or "which sessions were active after <time>?" | Follow [time-window selection](references/session_liveness.md#select-recovery-candidates-by-a-time-window) before choosing a restore set |
 | One specific session to bring back | `restore --only <id-prefix>` |
 | Minions `native_runtime` session or managed account-adoption error | Follow [account-owner selection](references/codex-account-switch.md#choose-the-account-owner-first) |
 | Unmanaged/legacy Codex quota running out; manually switching account, keeping all Codex work | Start with [account-owner selection](references/codex-account-switch.md#choose-the-account-owner-first) |
@@ -99,6 +100,8 @@ missing IDs. Read that result before declaring success; per-tab `SENT (unverifie
 is a paste acknowledgement, not proof that a session reopened. Re-running the same
 manifest opens only the IDs still missing. `--dry-run` prints commands without GUI actions.
 Repeat current-set reconciliation after a manual handoff or any change in selection.
+After process reconciliation, follow [history-readiness acceptance](references/restore_mechanics.md#verify-history-readiness-after-process-reconciliation)
+before claiming that the selected conversations are ready to read.
 
 ## Automatic change-only backups
 
@@ -169,8 +172,9 @@ or unavailable evidence. Dry-run output is JSON for inspection.
   per TUI; an undecidable race (equidistant claims) refuses to the unresolved
   section rather than guessing. Live TUIs matching neither way are persisted as
   unresolved rows and printed in the snapshot report — visible, never silently dropped.
-- **Liveness**: last real interaction time read from the *content* of the session file —
-  not the file mtime, which can change without real interaction.
+- **Liveness**: last timestamp read from the *content* of the session file — not
+  its mtime, which can change without real interaction. Use the time-window recipe
+  above to qualify actual work rather than treating every record as interaction.
 - **Channel health**: `dead-channel` when a Claude transcript's tail carries a
   structured `isApiErrorMessage` with "Login expired" — restoring such a tab reopens
   history but the session stops at `/login`; the snapshot marks it so you can skip it.
@@ -198,8 +202,10 @@ or unavailable evidence. Dry-run output is JSON for inspection.
   then reconcile after permitted execution. Reboot recovery uses read-only
   `check --snapshot <manifest> --strict`; account switching uses
   [the mode-bound switch check](references/codex-account-switch.md#restore-and-resume-an-interrupted-batch).
-- Window grouping is **not** restorable — Ghostty's macOS accessibility surface exposes
-  no tab→window mapping. All tabs reopen into one window; reorder manually if needed.
+- The batch restore does not reconstruct original window grouping or splits; it
+  opens missing sessions as tabs in the active window. Captured grouping remains
+  unknown. Do not infer a platform-wide AX limitation from this script boundary;
+  use the [current native observations](references/restore_mechanics.md#current-native-observation-boundary).
 - Rollout files that codex itself cannot find anymore print `no-artifact`; restoring
   them replays the same `codex resume <id>` and stays a best effort.
 
@@ -269,8 +275,9 @@ snapshots and restores. Keep the following evidence boundaries:
 
 - [references/session_liveness.md](references/session_liveness.md) — storage layouts
   (Claude projects / Codex sessions), transcript structures, resume-fork naming,
-  liveness rules and the misclassification cases behind them. Read when a liveness
-  result looks wrong or layouts changed after an app update.
+  liveness rules, time-window candidate selection and misclassification cases. Read
+  before filtering recovery by activity, when a liveness result looks wrong, or when
+  layouts changed after an app update.
 - [references/restore_mechanics.md](references/restore_mechanics.md) — why Ghostty
-  offers no CLI/AX restore path, the keystroke-paste protocol, reconciliation design,
-  and the window-grouping boundary. Read before modifying the restore path.
+  uses the batch paste path, current native observation limits, and separate
+  process/history-readiness checks. Read before restoring or modifying that path.
