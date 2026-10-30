@@ -39,6 +39,15 @@ Regex-based context-aware correction rules.
 | description | TEXT | Rule description |
 | priority | INTEGER | Higher = processed first |
 | is_active | BOOLEAN | Active flag |
+| added_at | TIMESTAMP | Creation time |
+| added_by | TEXT | Provenance label |
+| domain | TEXT | NULL = global; otherwise the one domain that loads the rule |
+
+Use `--disable-context-rule` / `--enable-context-rule` with an explicit database,
+exact ID, expected domain/pattern and reason for reversible state changes. Each
+real transition updates only this row's `is_active` and writes one `audit_log`
+entry in the same transaction; already-target-state calls do not add audit rows.
+This is separate from `--report-false-positive`, which manages `corrections`.
 
 ### learned_suggestions
 
