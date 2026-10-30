@@ -858,9 +858,12 @@ class CorrectionService:
     ) -> Dict:
         """Read and identity-check one rule, refusing incomplete schemas."""
         required_columns = {
-            "context_rules": {"id", "pattern", "domain", "is_active"},
+            "context_rules": {
+                "id", "pattern", "replacement", "description", "priority",
+                "is_active", "added_at", "added_by", "domain",
+            },
             "audit_log": {
-                "action", "entity_type", "entity_id", "user", "details",
+                "id", "timestamp", "action", "entity_type", "entity_id", "user", "details",
                 "success", "error_message",
             },
         }

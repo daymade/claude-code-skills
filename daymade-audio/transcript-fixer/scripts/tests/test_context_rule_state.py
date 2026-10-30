@@ -303,6 +303,77 @@ def test_audit_insert_failure_rolls_back_state(state_case):
     assert after["review_items"] == before["review_items"]
 
 
+@pytest.mark.parametrize(
+    "table,column,index",
+    [
+        ("context_rules", "replacement", None),
+        ("context_rules", "description", None),
+        ("context_rules", "priority", "idx_context_rules_priority"),
+        ("context_rules", "added_at", None),
+        ("context_rules", "added_by", None),
+        ("audit_log", "timestamp", "idx_audit_timestamp"),
+    ],
+)
+def test_incomplete_consumer_schema_rejects_without_state_or_audit_write(
+    state_case, table, column, index
+):
+    service, db_path, target_id, _other_id = state_case
+    with sqlite3.connect(db_path) as conn:
+        if index:
+            conn.execute(f"DROP INDEX {index}")
+        conn.execute(f"ALTER TABLE {table} DROP COLUMN {column}")
+    before = _snapshot(db_path)
+    before_bytes = db_path.read_bytes()
+    with pytest.raises(ValidationError, match="schema is incomplete"):
+        service.preflight_context_rule_state(
+            target_id, "project-alpha", TARGET_PATTERN, REASON
+        )
+    assert db_path.read_bytes() == before_bytes
+    with pytest.raises(DatabaseError, match="schema is incomplete"):
+        service.disable_context_rule(
+            target_id, "project-alpha", TARGET_PATTERN, REASON
+        )
+    assert _snapshot(db_path) == before
+
+
+@pytest.mark.parametrize(
+    "other_command",
+    [
+        ["--list-context-rules"],
+        ["--add-context-rule", "beta", "delta"],
+        ["--init"],
+        ["--consolidate-review", "--review-file", "synthetic.md"],
+        ["--resolve-review", "0"],
+        ["--input", "synthetic.md"],
+        ["--enable-context-rule", "1"],
+    ],
+)
+def test_state_command_conflicts_fail_before_any_database_dispatch(
+    state_case, tmp_path, monkeypatch, capsys, other_command
+):
+    from fix_transcription import main
+
+    _service, db_path, target_id, _other_id = state_case
+    configured_db = tmp_path / "configured.db"
+    configured = _new_service(configured_db)
+    configured.close()
+    before_target = _snapshot(db_path)
+    before_configured = _snapshot(configured_db)
+    monkeypatch.setenv("TRANSCRIPT_FIXER_DB_PATH", str(configured_db))
+    monkeypatch.setattr(sys, "argv", [
+        "fix_transcription.py", "--disable-context-rule", str(target_id),
+        "--db", str(db_path), "--context-rule-domain", "project-alpha",
+        "--context-rule-pattern", TARGET_PATTERN, "--reason", REASON,
+        "--json", *other_command,
+    ])
+    with pytest.raises(SystemExit) as exit_info:
+        main()
+    assert exit_info.value.code == 2
+    assert "must be the only command" in capsys.readouterr().err
+    assert _snapshot(db_path) == before_target
+    assert _snapshot(configured_db) == before_configured
+
+
 def test_parser_accepts_state_identity_and_db_arguments(tmp_path):
     parser = create_argument_parser()
     args = parser.parse_args([
