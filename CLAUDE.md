@@ -114,6 +114,8 @@ For evidence-based improvement of an existing application, enter
 [app-evolver](app-evolver/SKILL.md). For released-artifact or runtime evidence,
 load its [Skill composition route](app-evolver/references/skill-composition.md);
 keep specialist selection and handoff boundaries in that owner.
+Before collecting Mobbin screens or flows or selecting an adaptation, follow its
+[Mobbin evidence recipe](app-evolver/references/mobbin-evidence.md).
 For domain-role extraction or scattered policy, use its
 [consumer-adoption recipe](app-evolver/references/implementation-and-acceptance.md#extract-a-domain-role-through-its-consumers).
 When the user corrects premises, research focus or scope, return first to its
@@ -155,6 +157,11 @@ DOCX delivery follows docx-creator's
 including refused/unavailable checks and reviewable handoff. DOCX comparison follows
 [the input-identity and coverage procedure](daymade-docs/read-docx-review/references/full-comparison.md);
 keep sending evidence, revision-view selection and comparison limits with that owner.
+
+For PDF → Markdown manuals or question banks, enter
+[docs-router](daymade-docs/docs-router/SKILL.md) and follow
+[PDF acceptance](daymade-docs/doc-to-markdown/references/pdf-acceptance.md).
+Keep that procedure authoritative for conversion and recipient acceptance.
 
 For saved HTML batches, follow [the conversion owner](daymade-docs/doc-to-markdown/references/html-conversion.md#gate-a-batch-through-the-existing-recipe)
 and its actual-reader pilot before expansion. Keep conversion evidence and reader
@@ -204,6 +211,8 @@ owns concrete plans, cost boundaries and next-verification choices; do not turn 
 shortlist into purchase or deployment approval.
 For filtered evidence inspection, follow its
 [interactive-analysis recipe](report-with-html/references/interactive-analysis.md).
+Before updating an accepted report's facts or content, follow its
+[incremental maintenance recipe](report-with-html/references/long-lived-report-maintenance.md#63-已验收报告的有界增量更新).
 For transcript speaker-label updates, later reconciliation and consumer readback,
 follow its [maintenance contract](report-with-html/references/long-lived-report-maintenance.md).
 
@@ -367,6 +376,8 @@ For third-party model speed, protocol, concurrency or answer collection, enter
 [llm-eval-harness](llm-eval-harness/SKILL.md). For machine results, consumed inputs,
 retained answers, output-directory reuse or interrupted runs, read its
 [machine-result contract](llm-eval-harness/references/machine-results.md).
+For endpoint throttling or exhausted quota, follow its
+[concurrency failure guidance](llm-eval-harness/SKILL.md#dimension-2--concurrency--stability).
 Process exit alone does not establish the measured result.
 
 A `tests/` directory under a Skill does **not** automatically run in CI.
@@ -479,9 +490,11 @@ Its
 owns discussion capture and interpretation; the bundled helper owns the CLI
 interface. Before permanent filing or choosing an authorized archive destination,
 follow the [destination handoff](feishu-doc-scraper/references/archive-destination-handoff.md).
+Use that handoff for authorized source access instructions alongside original links.
 For storage decisions, use its
 [archive storage contract](feishu-doc-scraper/references/archive-storage-contract.md)
 alongside the destination repository's storage SOP.
+Keep generated manifest metadata aligned with that contract's on-demand statistics rule.
 For local originals, Obsidian delivery or a personal source-catalog handoff, follow the Skill's
 [original-media and reader SOP](feishu-doc-scraper/references/original-media-and-reader.md).
 
@@ -695,9 +708,12 @@ and generated watch paths are owned by `sync-local-skill-sources.py`; derive the
 from its constants/functions and `--print-watch-paths` output instead of copying
 their current members or counts into instructions or references.
 
-For context-window setting changes, keep the executable configuration and the
+For Claude Code context-window setting changes, keep the executable configuration and
 [context request probe](daymade-claude-code/claude-switch-models-setup/references/context-window-config.md)
 aligned. That reference owns the request fields and probe commands.
+
+For Codex context inspection, threshold-only changes or full expansion, follow
+[the Codex context workflow](daymade-codex/codex-1m-context-window-setup/SKILL.md#route-the-request).
 
 In Claude Code, use `/plugin ...` slash commands. In your terminal, use `claude plugin ...`.
 

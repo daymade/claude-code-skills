@@ -245,8 +245,10 @@ def archive(capture, output, source, profile=None, workers=4, timeout=90, resume
                 old = manifest['files'][matches[0]]
                 if any(old.get(k) != entry[k] for k in ('bytes', 'sha256')):
                     raise ValueError('Resume artifact metadata changed; preserve the existing manifest')
-        manifest.setdefault('resource_summary', {}).update({
-            'requested_attachments': len(items), 'verified_attachments': len(good),
+        summary = manifest.setdefault('resource_summary', {})
+        for key in ('requested_attachments', 'verified_attachments'):
+            summary.pop(key, None)
+        summary.update({
             'failed_attachments': [r for r in results if r['status'] != 'verified'],
             'other_references': pending})
         errors = validate_manifest(manifest)

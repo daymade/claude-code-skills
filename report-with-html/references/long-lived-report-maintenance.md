@@ -1,8 +1,6 @@
 # 长生命周期报告的维护工程（生成器 · 同步 · 单一版本锚点）
 
 > 触发判据（任一即读本文件）：这张页**会再改**（跨天多版迭代）／**嵌入了会变的源文档全文**（协议条款、SOP、规格）／带显式版本／同一页反复交付给同一读者。一次性交付页不需要本文件——**唯一例外是 §7 移动端交付基线**：长页迟早被转发到手机，这跟页面活多久无关，SKILL.md 的窄屏验收指的就是那一节，一次性页也要照它测。
->
-> 本文件从长期维护实战提炼；工作实现快照见 `assets/regen-docs-template.py`。
 
 ## 1. 嵌入全文是快照不是引用——必须配生成器
 
@@ -150,7 +148,7 @@
 抽屉交互（tab 切换 / 正文「第 N 条」linkify / 侧滑定位高亮 / 就地滚动）已经抽成自包含组件 `assets/components/citation-drawer.html`，登记在 `interaction-components.md` 货架。你**不再手写抽屉**——把它 BEGIN…END 整块拷进页面 `</body>` 前即可（生成器 `regen-docs-template.py` 会自动内嵌）。下面这些是固化在组件里的行为契约：
 
 - **滚动定位用 `getBoundingClientRect()` 差值，不用 `offsetTop`**：`offsetTop` 相对最近 positioned 祖先（往往是抽屉自身、含头部高度），不是滚动容器——会稳定偏到错误条款。正确：`delta = el.getBoundingClientRect().top - container.getBoundingClientRect().top; container.scrollTop += delta - 16`。
-- **linkify 的 TreeWalker acceptNode 排除 `a/button/code/.cite/.nocite/标题` 宿主**，防已是链接的引用被二次包裹。`.nocite` 是外部引用豁免：指向外部法条或外部文件的编号（POBO §9、架构 SSOT §3.1）不加它就会被链到本文档的同号条款——踩过一个自我演示的例子，正文写着「这是架构 SSOT §3.1（不是本协议的 §3.1）」而这两个 §3.1 都成了链接、点下去正好落到本协议 §3.1。豁免由生成器标注，两条判据：前缀（外部来源名）＋形态（§N(M) 是法条写法，本类文档的子条写 N.M）。
+- **linkify 的 TreeWalker acceptNode 排除 `a/button/code/.cite/.nocite/标题` 宿主**，防已是链接的引用被二次包裹。`.nocite` 是外部引用豁免：指向外部法条或外部文件的编号（POBO §9、架构 SSOT §3.1）不加它就会被链到本文档的同号条款——踩过一个自我演示的例子，正文写着「这是架构 SSOT §3.1（不是本协议的 §3.1）」而这两个 §3.1 都成了链接、点下去正好落到本协议 §3.1。豁免由生成器按前缀（外部来源名）与形态（§N(M) 是法条写法，本类文档的子条写 N.M）标注。
 - **子条定位与诚实降级**：引用带子号时先找 `c{N}-{M}` 锚点，找不到才退到母节——而退了就要在状态栏说出来。旧版对子条也照报「已定位并高亮该条」，那个失败分支永远不触发（母节锚点总在），于是读者以为眼前就是他点的那条，实际目标在一屏多以下。
 - **组件从 DOM 自读文档名/文件名**（tab 的 `.dt-t`、pane 的 `.dsrc`），不靠生成器注入数据数组——这是它能自包含、脱离生成器独立工作的关键。
 - **modal 焦点契约**：引用用原生 button；打开后背景 inert、焦点进关闭钮、Tab/Shift+Tab 留在抽屉；Escape/遮罩/关闭钮关闭后焦点回引用。tabs 用方向键/Home/End 切换并同步 `aria-selected`。

@@ -3541,29 +3541,8 @@ build or buy — evaluate the options
 
 ### **codex-1m-context-window-setup** - 为 Codex 设置模型感知的长上下文
 
-> **安装**：`claude plugin install daymade-codex@daymade-skills`
->（仅作为套件成员发布，调用方式 `daymade-codex:codex-1m-context-window-setup`）
-
-为 Codex CLI 与 Desktop 共用的基础配置写入当前模型真实支持的最大上下文，
-请求上限为 100 万 token。该 Skill 会读取实时模型契约、解释常见的约 258K
-默认值、把自动压缩阈值设为可达窗口的 60%，同时保留无关 TOML；若 Codex
-严格配置校验失败，则精确回滚。
-查询本机当前值或只改压缩阈值时，使用 `show` 或 `set-compact --tokens N`，
-无需请求模型目录；后者保留窗口和其他配置，并分别报告保存结果与会话采用状态。
-
-**核心功能：**
-- 按模型上限计算，不把「1M」硬说成每个模型都能达到
-- 提供只读 `doctor`、事务式 `apply` 与漂移检测 `verify`
-- 变更前备份、无变化不重复写入，并支持 macOS 与 Windows
-- 只修改 `model_context_window` 和 `model_auto_compact_token_limit`
-
-**使用示例：**
-```text
-/daymade-codex:codex-1m-context-window-setup doctor
-只把 Codex 自动压缩阈值设为 400000 token
-把 Codex CLI 和 Desktop 配成当前模型可验证的最大上下文
-验证长上下文设置在升级或切换模型后是否仍然正确
-```
+查询本机上下文、只调整压缩阈值或执行完整扩容时，进入
+[Codex 上下文操作流程](daymade-codex/codex-1m-context-window-setup/SKILL.md#route-the-request)。
 
 ---
 
@@ -3949,7 +3928,6 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 - **read-codex-history**：参见 `daymade-claude-code/read-codex-history/references/storage_and_portability.md` 了解本地数据源选择、跨平台路径、隐私边界和诊断方法
 - **read-claude-code-history**：参见 `daymade-claude-code/read-claude-code-history/references/session_file_format.md` 了解 JSONL 结构和 `daymade-claude-code/read-claude-code-history/references/workflow_examples.md` 了解恢复工作流
 - **prior-work-retrieval**：参见 `daymade-claude-code/prior-work-retrieval/SKILL.md` 了解检索／核验工作流，参见 `daymade-claude-code/prior-work-retrieval/references/source-manifest.md` 了解显式载体清单契约
-- **codex-1m-context-window-setup**：参见 `daymade-codex/codex-1m-context-window-setup/SKILL.md` 了解本机 show/set-compact 与扩容 doctor/apply/verify 工作流，参见 `daymade-codex/codex-1m-context-window-setup/references/context_window_contract.md` 了解模型上限、可用窗口和压缩语义
 - **docs-cleaner**：参见 `daymade-docs/docs-cleaner/SKILL.md` 了解整合工作流
 - **deep-research**：参见 `deep-research/references/research_report_template.md` 了解报告结构，并参见 `deep-research/references/source_quality_rubric.md` 了解来源分级标准
 - **tech-selection**：参见 `daymade-claude-code/tech-selection/references/decision-axes.md` 了解 13 条核心过滤轴，`daymade-claude-code/tech-selection/references/scoped-criteria.md` 了解范围限定补充判据，`daymade-claude-code/tech-selection/references/rejection-modes.md` 了解拒绝模式与反模式，以及 `daymade-claude-code/tech-selection/references/delegation-contract.md` 了解域归属与自主阈值
@@ -3992,7 +3970,7 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 
 
 - **Claude Code** 2.0.13 或更高版本
-- **支持 `doctor --json` 与 `debug models` 的 Codex CLI + uv/Python 3.11+**（用于 codex-1m-context-window-setup）
+- **Codex 上下文设置**：按[各命令前置条件](daymade-codex/codex-1m-context-window-setup/SKILL.md#prerequisites)准备。
 - **gh CLI**（用于 github-ops 和 github-review-pr）
 - **支持 `merge-tree --write-tree` 的 git + jq**（用于 github-review-pr）
 - **markitdown**（用于 doc-to-markdown）

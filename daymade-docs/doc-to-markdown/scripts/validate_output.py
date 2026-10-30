@@ -6,16 +6,18 @@ Compare original document with converted markdown to assess conversion quality.
 Generates HTML quality report with detailed metrics.
 
 Usage:
-    uv run --with pymupdf scripts/validate_output.py document.pdf output.md
-    uv run --with pymupdf scripts/validate_output.py document.pdf output.md --report report.html
+    uv run --with pymupdf python scripts/validate_output.py document.pdf output.md
+    uv run --with pymupdf python scripts/validate_output.py document.pdf output.md --report report.html
 """
 
 import argparse
 import html
+import json
+from difflib import SequenceMatcher
 import re
 import subprocess
 import sys
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Optional
 
@@ -26,17 +28,24 @@ class ValidationMetrics:
     # Text metrics
     source_char_count: int = 0
     output_char_count: int = 0
-    text_retention: float = 0.0
+    text_retention: float = 0.0  # character-count coverage, not accuracy
+    text_similarity: float = 0.0
+    text_equal: bool = False
+    numeric_sequences_equal: Optional[bool] = None
+    source_extracted: bool = False
+    structure_verified: bool = False
+    comparison_scope: str = "Extractable body text; whitespace ignored, punctuation retained"
+    differences: list[dict] = field(default_factory=list)
 
     # Table metrics
-    source_table_count: int = 0
+    source_table_count: Optional[int] = None
     output_table_count: int = 0
-    table_retention: float = 0.0
+    table_retention: Optional[float] = None
 
     # Image metrics
-    source_image_count: int = 0
+    source_image_count: Optional[int] = None
     output_image_count: int = 0
-    image_retention: float = 0.0
+    image_retention: Optional[float] = None
 
     # Structure metrics
     heading_count: int = 0
@@ -44,7 +53,7 @@ class ValidationMetrics:
     code_block_count: int = 0
 
     # Quality scores
-    overall_score: float = 0.0
+    overall_score: Optional[float] = None
     status: str = "unknown"  # pass, warn, fail
 
     # Details
@@ -52,7 +61,7 @@ class ValidationMetrics:
     errors: list[str] = field(default_factory=list)
 
 
-def extract_text_from_pdf(pdf_path: Path) -> tuple[str, int, int]:
+def extract_text_from_pdf(pdf_path: Path) -> tuple[str, Optional[int], Optional[int]]:
     """Extract text, table count, and image count from PDF."""
     try:
         import fitz  # PyMuPDF
@@ -76,17 +85,11 @@ def extract_text_from_pdf(pdf_path: Path) -> tuple[str, int, int]:
         return '\n'.join(text_parts), table_count, image_count
 
     except ImportError:
-        # Fallback to pdftotext if available
-        try:
-            result = subprocess.run(
-                ['pdftotext', '-layout', str(pdf_path), '-'],
-                capture_output=True,
-                text=True,
-                timeout=60
-            )
-            return result.stdout, 0, 0  # Can't count tables/images
-        except Exception:
-            return "", 0, 0
+        result = subprocess.run(
+            ['pdftotext', '-layout', str(pdf_path), '-'],
+            capture_output=True, text=True, timeout=60, check=True,
+        )
+        return result.stdout, None, None  # unavailable counts are not zero
 
 
 def extract_text_from_docx(docx_path: Path) -> tuple[str, int, int]:
@@ -104,14 +107,8 @@ def extract_text_from_docx(docx_path: Path) -> tuple[str, int, int]:
                 tree = ET.parse(f)
                 root = tree.getroot()
 
-                # Extract text
                 wordprocessing_ns = 'http' + '://schemas.openxmlformats.org/wordprocessingml/2006/main'
                 ns = {'w': wordprocessing_ns}
-                text_parts = []
-                for t in root.iter(f'{{{wordprocessing_ns}}}t'):
-                    if t.text:
-                        text_parts.append(t.text)
-
                 # Count tables
                 tables = root.findall('.//w:tbl', ns)
                 table_count = len(tables)
@@ -120,60 +117,106 @@ def extract_text_from_docx(docx_path: Path) -> tuple[str, int, int]:
             image_count = sum(1 for name in z.namelist()
                             if name.startswith('word/media/'))
 
-            return ' '.join(text_parts), table_count, image_count
+            # Word stores generated list labels outside w:t. Use the same
+            # semantic parser as Markdown so faithful numbered lists compare.
+            result = subprocess.run(
+                ['pandoc', '-f', 'docx', '-t', 'json', str(docx_path)],
+                capture_output=True, text=True, timeout=60, check=True,
+            )
+            ast = json.loads(result.stdout)
+            return body_text(ast.get('blocks', [])), table_count, image_count
 
-    except Exception as e:
-        return "", 0, 0
+    except Exception as exc:
+        raise ValueError(f"Cannot extract DOCX: {exc}") from exc
+
+
+def body_text(node):
+    """Flatten Pandoc body text while retaining numeric token boundaries."""
+    if isinstance(node, list):
+        return ''.join(body_text(child) for child in node)
+    if not isinstance(node, dict):
+        return ''
+    kind, children = node.get('t'), node.get('c')
+    if kind == 'Str':
+        return children
+    if kind in ('Space', 'SoftBreak', 'LineBreak'):
+        return ' '
+    if kind in ('Code', 'CodeBlock', 'Math'):
+        return children[-1] + (' ' if kind == 'CodeBlock' else '')
+    if kind == 'Image':
+        return ''  # alt captions are not independent source body text
+    if kind == 'Link':
+        return body_text(children[1])
+    if kind == 'OrderedList':
+        start = children[0][0]
+        return ' '.join(f'{i}. ' + body_text(item) for i, item in
+                        enumerate(children[1], start=start)) + ' '
+    if kind == 'BulletList':
+        return ' '.join(body_text(item) for item in children) + ' '
+    if kind in ('RawInline', 'RawBlock'):
+        return ''  # raw markup is diagnosed separately below
+    if kind == 'Quoted':
+        quote = '“' if children[0]['t'] == 'DoubleQuote' else '‘'
+        close = '”' if quote == '“' else '’'
+        return quote + body_text(children[1]) + close
+    text = body_text(children)
+    return text + ' ' if kind in ('Para', 'Plain', 'Header') else text
 
 
 def analyze_markdown(md_path: Path) -> dict:
     """Analyze markdown file structure and content."""
-    content = md_path.read_text()
+    content = md_path.read_text(encoding="utf-8")
 
-    # Count tables (markdown tables with |)
-    table_lines = [l for l in content.split('\n')
-                   if re.match(r'^\s*\|.*\|', l)]
-    # Group consecutive table lines
-    table_count = 0
-    in_table = False
-    for line in content.split('\n'):
-        if re.match(r'^\s*\|.*\|', line):
-            if not in_table:
-                table_count += 1
-                in_table = True
-        else:
-            in_table = False
+    # A missing parser is an explicit prerequisite failure, never a regex PASS.
+    result = subprocess.run(
+        ['pandoc', '-f', 'gfm', '-t', 'json'], input=content,
+        capture_output=True, text=True, timeout=60, check=True,
+    )
+    ast = json.loads(result.stdout)
 
-    # Count images
-    images = re.findall(r'!\[.*?\]\(.*?\)', content)
+    clean_text = body_text(ast.get('blocks', []))
+    counts = {'Table': 0, 'Image': 0, 'Header': 0, 'CodeBlock': 0, 'list_items': 0}
+    raw_markup = False
 
-    # Count headings
-    headings = re.findall(r'^#{1,6}\s+.+$', content, re.MULTILINE)
+    def count_nodes(node):
+        nonlocal raw_markup
+        if isinstance(node, list):
+            for child in node:
+                count_nodes(child)
+        elif isinstance(node, dict):
+            kind, children = node.get('t'), node.get('c')
+            if kind in counts:
+                counts[kind] += 1
+            if kind in ('RawInline', 'RawBlock'):
+                raw_markup |= bool(re.search(r'<(?![!/?])[^>]+>', children[-1]))
+            if kind == 'OrderedList':
+                counts['list_items'] += len(children[1])
+            elif kind == 'BulletList':
+                counts['list_items'] += len(children)
+            count_nodes(children)
 
-    # Count lists
-    list_items = re.findall(r'^[\s]*[-*+]\s+', content, re.MULTILINE)
-    list_items += re.findall(r'^[\s]*\d+\.\s+', content, re.MULTILINE)
-
-    # Count code blocks
-    code_blocks = re.findall(r'```', content)
-
-    # Clean text for comparison
-    clean_text = re.sub(r'```.*?```', '', content, flags=re.DOTALL)
-    clean_text = re.sub(r'!\[.*?\]\(.*?\)', '', clean_text)
-    clean_text = re.sub(r'\[.*?\]\(.*?\)', '', clean_text)
-    clean_text = re.sub(r'[#*_`|>-]', '', clean_text)
-    clean_text = re.sub(r'\s+', ' ', clean_text).strip()
-
+    count_nodes(ast.get('blocks', []))
     return {
-        'char_count': len(clean_text),
-        'table_count': table_count,
-        'image_count': len(images),
-        'heading_count': len(headings),
-        'list_count': len(list_items),
-        'code_block_count': len(code_blocks) // 2,
+        'char_count': len(normalize_text(clean_text)),
+        'table_count': counts['Table'],
+        'image_count': counts['Image'],
+        'heading_count': counts['Header'],
+        'list_count': counts['list_items'],
+        'code_block_count': counts['CodeBlock'],
         'raw_content': content,
-        'clean_text': clean_text
+        'clean_text': clean_text,
+        'raw_markup': raw_markup,
     }
+
+
+def normalize_text(text):
+    """Ignore layout whitespace only; never delete signs, units or punctuation."""
+    return re.sub(r'\s+', '', text)
+
+
+def numeric_sequences(text):
+    """Preserve ordered signed decimals, grouping separators and percentages."""
+    return re.findall(r'[-+−]?\d+(?:[,，]\d{3})*(?:[.．]\d+)?[%％]?', text)
 
 
 def validate_conversion(
@@ -183,88 +226,79 @@ def validate_conversion(
     """Validate conversion quality by comparing source and output."""
     metrics = ValidationMetrics()
 
-    # Analyze output markdown
-    md_analysis = analyze_markdown(output_path)
+    try:
+        md_analysis = analyze_markdown(output_path)
+        ext = source_path.suffix.lower()
+        if ext == '.pdf':
+            source_text, source_tables, source_images = extract_text_from_pdf(source_path)
+        elif ext == '.docx':
+            source_text, source_tables, source_images = extract_text_from_docx(source_path)
+        else:
+            raise ValueError(f"Unsupported source format: {ext}; use PDF or DOCX")
+    except Exception as exc:
+        metrics.errors.append(f"Comparison unavailable: {exc}")
+        metrics.status = 'fail'
+        return metrics
+
     metrics.output_char_count = md_analysis['char_count']
     metrics.output_table_count = md_analysis['table_count']
     metrics.output_image_count = md_analysis['image_count']
     metrics.heading_count = md_analysis['heading_count']
     metrics.list_count = md_analysis['list_count']
     metrics.code_block_count = md_analysis['code_block_count']
-
-    # Extract source content based on file type
-    ext = source_path.suffix.lower()
-    if ext == '.pdf':
-        source_text, source_tables, source_images = extract_text_from_pdf(source_path)
-    elif ext in ['.docx', '.doc']:
-        source_text, source_tables, source_images = extract_text_from_docx(source_path)
-    else:
-        # For other formats, estimate from file size
-        source_text = ""
-        source_tables = 0
-        source_images = 0
-        metrics.warnings.append(f"Cannot analyze source format: {ext}")
-
-    metrics.source_char_count = len(source_text.replace(' ', '').replace('\n', ''))
     metrics.source_table_count = source_tables
     metrics.source_image_count = source_images
+    source = normalize_text(source_text)
+    output = normalize_text(md_analysis['clean_text'])
+    metrics.source_char_count = len(source)
+    if not source:
+        metrics.errors.append('No source text extracted; OCR or a scoped source check is required')
+        metrics.status = 'fail'
+        return metrics
+    metrics.source_extracted = True
+    metrics.text_retention = min(len(output) / len(source), 1.0)
+    metrics.text_equal = source == output
+    matcher = SequenceMatcher(None, source, output, autojunk=False)
+    metrics.text_similarity = 1.0 if metrics.text_equal else matcher.ratio()
+    metrics.numeric_sequences_equal = (
+        numeric_sequences(source_text) == numeric_sequences(md_analysis['clean_text'])
+    )
+    if not metrics.text_equal:
+        for tag, i, j, a, b in matcher.get_opcodes():
+            if tag != 'equal' and len(metrics.differences) < 10:
+                metrics.differences.append({
+                    'kind': tag, 'source_offset': i, 'output_offset': a,
+                    'source': source[i:j][:80], 'output': output[a:b][:80],
+                })
+        if metrics.text_similarity < 0.85:
+            metrics.errors.append(f'Low ordered text similarity: {metrics.text_similarity:.1%}')
+        else:
+            metrics.warnings.append('Text differs; inspect bounded difference samples and source scope')
+    if not metrics.numeric_sequences_equal:
+        metrics.errors.append('Ordered numeric sequences differ; inspect values, signs and units')
+    if md_analysis['raw_markup']:
+        metrics.warnings.append('Raw HTML may carry visible text; verify it in the actual reader')
 
-    # Calculate retention rates
-    if metrics.source_char_count > 0:
-        # Use ratio of actual/expected, capped at 1.0
-        metrics.text_retention = min(
-            metrics.output_char_count / metrics.source_char_count,
-            1.0
-        )
-    else:
-        metrics.text_retention = 1.0 if metrics.output_char_count > 0 else 0.0
+    for name, expected, actual, fail_below in (
+        ('table', source_tables, metrics.output_table_count, 0.9),
+        ('image', source_images, metrics.output_image_count, 0.8),
+    ):
+        if expected is None:
+            metrics.warnings.append(f'Source {name} count unavailable')
+            continue
+        retention = min(actual / expected, 1.0) if expected else 1.0
+        setattr(metrics, name + '_retention', retention)
+        if retention < fail_below:
+            metrics.errors.append(f'{name.title()} count coverage low: {retention:.1%}')
+        elif retention < 1.0:
+            metrics.warnings.append(f'{name.title()} count coverage incomplete: {retention:.1%}')
 
-    if metrics.source_table_count > 0:
-        metrics.table_retention = min(
-            metrics.output_table_count / metrics.source_table_count,
-            1.0
-        )
-    else:
-        metrics.table_retention = 1.0  # No tables expected
-
-    if metrics.source_image_count > 0:
-        metrics.image_retention = min(
-            metrics.output_image_count / metrics.source_image_count,
-            1.0
-        )
-    else:
-        metrics.image_retention = 1.0  # No images expected
-
-    # Determine status based on thresholds
-    if metrics.text_retention < 0.85:
-        metrics.errors.append(f"Low text retention: {metrics.text_retention:.1%}")
-    elif metrics.text_retention < 0.95:
-        metrics.warnings.append(f"Text retention below optimal: {metrics.text_retention:.1%}")
-
-    if metrics.source_table_count > 0 and metrics.table_retention < 0.9:
-        metrics.errors.append(f"Tables missing: {metrics.table_retention:.1%} retained")
-    elif metrics.source_table_count > 0 and metrics.table_retention < 1.0:
-        metrics.warnings.append(f"Some tables may be incomplete: {metrics.table_retention:.1%}")
-
-    if metrics.source_image_count > 0 and metrics.image_retention < 0.8:
-        metrics.errors.append(f"Images missing: {metrics.image_retention:.1%} retained")
-    elif metrics.source_image_count > 0 and metrics.image_retention < 1.0:
-        metrics.warnings.append(f"Some images missing: {metrics.image_retention:.1%}")
-
-    # Calculate overall score (0-100)
-    metrics.overall_score = (
-        metrics.text_retention * 50 +
-        metrics.table_retention * 25 +
-        metrics.image_retention * 25
-    ) * 100
-
-    # Determine status
-    if metrics.errors:
-        metrics.status = "fail"
-    elif metrics.warnings:
-        metrics.status = "warn"
-    else:
-        metrics.status = "pass"
+    if metrics.table_retention is not None and metrics.image_retention is not None:
+        metrics.overall_score = (
+            metrics.text_similarity * 50 + metrics.table_retention * 25 +
+            metrics.image_retention * 25
+        )  # diagnostic 0–100; never an overall accuracy certification
+    metrics.status = 'fail' if metrics.errors else 'warn' if metrics.warnings else 'pass'
 
     return metrics
 
@@ -282,8 +316,10 @@ def generate_html_report(
     }
     status_color = status_colors.get(metrics.status, "#6c757d")
 
-    def metric_bar(value: float, thresholds: tuple) -> str:
-        """Generate colored progress bar."""
+    def metric_bar(value: Optional[float], thresholds: tuple) -> str:
+        """Generate colored progress bar or an explicit unavailable marker."""
+        if value is None:
+            return '<span>Not measured</span>'
         pct = int(value * 100)
         if value >= thresholds[0]:
             color = "#28a745"  # green
@@ -298,6 +334,7 @@ def generate_html_report(
         <span style="font-size: 14px; color: #666;">{pct}%</span>
         '''
 
+    score = f'{metrics.overall_score:.0f}/100' if metrics.overall_score is not None else 'Not measured'
     report = f'''<!DOCTYPE html>
 <html>
 <head>
@@ -325,8 +362,8 @@ def generate_html_report(
         <h1>📊 Conversion Quality Report</h1>
 
         <div style="text-align: center; margin: 30px 0;">
-            <div class="score">{metrics.overall_score:.0f}</div>
-            <div style="color: #666;">Overall Score</div>
+            <div class="score">{score}</div>
+            <div style="color: #666;">Diagnostic score; not accuracy</div>
             <div class="status" style="background: {status_color}; margin-top: 10px;">
                 {metrics.status.upper()}
             </div>
@@ -338,10 +375,16 @@ def generate_html_report(
             <tr><th>Output</th><td>{html.escape(str(output_path))}</td></tr>
         </table>
 
-        <h2>📏 Retention Metrics</h2>
+        <p>Mechanical comparison only. Structure, question ownership, warnings,
+        image identity and recipient navigation are not certified.</p>
+        <p>Text equal (whitespace ignored): {metrics.text_equal};
+        ordered similarity: {metrics.text_similarity:.1%};
+        numeric sequences equal: {metrics.numeric_sequences_equal}</p>
+        <pre>{html.escape(json.dumps(metrics.differences, ensure_ascii=False, indent=2))}</pre>
+        <h2>📏 Count Coverage</h2>
 
         <div class="metric">
-            <div class="metric-label">Text Retention (target: >95%)</div>
+            <div class="metric-label">Text character-count coverage (not content equality)</div>
             {metric_bar(metrics.text_retention, (0.95, 0.85))}
             <div style="font-size: 12px; color: #666; margin-top: 5px;">
                 Source: ~{metrics.source_char_count:,} chars | Output: {metrics.output_char_count:,} chars
@@ -374,7 +417,7 @@ def generate_html_report(
         {'<h2>⚠️ Issues</h2><div class="issues">' + ''.join(f'<div class="error">❌ {html.escape(e)}</div>' for e in metrics.errors) + ''.join(f'<div class="warning">⚠️ {html.escape(w)}</div>' for w in metrics.warnings) + '</div>' if metrics.errors or metrics.warnings else ''}
 
         <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #666; font-size: 12px;">
-            Generated by markdown-tools validate_output.py
+            Generated by doc-to-markdown validate_output.py
         </div>
     </div>
 </body>
@@ -390,7 +433,7 @@ def main():
     parser.add_argument(
         "source",
         type=Path,
-        help="Original document (PDF, DOCX, etc.)"
+        help="Original PDF or DOCX (extractable text required)"
     )
     parser.add_argument(
         "output",
@@ -423,24 +466,21 @@ def main():
 
     # Output results
     if args.json:
-        import json
-        print(json.dumps({
-            'text_retention': metrics.text_retention,
-            'table_retention': metrics.table_retention,
-            'image_retention': metrics.image_retention,
-            'overall_score': metrics.overall_score,
-            'status': metrics.status,
-            'warnings': metrics.warnings,
-            'errors': metrics.errors
-        }, indent=2))
+        print(json.dumps(asdict(metrics), ensure_ascii=False, indent=2))
     else:
         # Console output
         status_emoji = {"pass": "✅", "warn": "⚠️", "fail": "❌"}.get(metrics.status, "❓")
         print(f"\n{status_emoji} Conversion Quality: {metrics.status.upper()}")
-        print(f"   Overall Score: {metrics.overall_score:.0f}/100")
-        print(f"\n   Text Retention:  {metrics.text_retention:.1%}")
-        print(f"   Table Retention: {metrics.table_retention:.1%}")
-        print(f"   Image Retention: {metrics.image_retention:.1%}")
+        score = f'{metrics.overall_score:.0f}/100' if metrics.overall_score is not None else 'not measured'
+        print(f"   Diagnostic score (not accuracy): {score}")
+        print(f"   Text equal: {metrics.text_equal}; similarity: {metrics.text_similarity:.1%}")
+        print(f"   Numeric sequences equal: {metrics.numeric_sequences_equal}")
+        print("   Structure and recipient handoff: not verified")
+        print(f"\n   Text character-count coverage: {metrics.text_retention:.1%}")
+        for label, value in [('Table', metrics.table_retention), ('Image', metrics.image_retention)]:
+            print(f"   {label} count coverage: " + (f'{value:.1%}' if value is not None else 'not measured'))
+        for difference in metrics.differences:
+            print('   Difference: ' + json.dumps(difference, ensure_ascii=False))
 
         if metrics.errors:
             print("\n   Errors:")
@@ -457,7 +497,7 @@ def main():
         report_html = generate_html_report(metrics, args.source, args.output)
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(report_html)
-        print(f"\n📊 HTML report: {args.report}")
+        print(f"HTML report: {args.report}", file=sys.stderr if args.json else sys.stdout)
 
     # Exit with appropriate code
     sys.exit(0 if metrics.status != "fail" else 1)

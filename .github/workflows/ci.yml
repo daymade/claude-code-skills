@@ -249,7 +249,7 @@ jobs:
       - name: Install selected reader runtime
         if: ${{ !cancelled() && (steps.scope.outcome != 'success' || steps.scope.outputs.html_reader != 'false' || steps.scope.outputs.feishu_reader != 'false') }}
         run: |
-          scripts/ci/apt_install_bounded.sh pandoc
+          scripts/ci/apt_install_bounded.sh pandoc poppler-utils
           pandoc --version
 
       - name: HTML reader pilot and batch safety
@@ -257,6 +257,7 @@ jobs:
         run: |
           pandoc --version
           python3 -m unittest discover -s daymade-docs/doc-to-markdown/scripts -p test_reader_pilot_gate.py
+          python3 -m unittest discover -s daymade-docs/doc-to-markdown/tests -v
 
       - name: Feishu reader delivery with real Pandoc
         if: ${{ !cancelled() && (steps.scope.outcome != 'success' || steps.scope.outputs.feishu_reader != 'false') }}
