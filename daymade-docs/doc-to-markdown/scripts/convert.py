@@ -2,21 +2,21 @@
 """
 Multi-tool document to markdown converter with intelligent orchestration.
 
-Supports Quick Mode (fast, single tool) and Heavy Mode (best quality, multi-tool merge).
+Supports Quick Mode (fast, single tool) and Heavy Mode (whole-output candidate selection).
 DOCX files get automatic post-processing to fix pandoc artifacts.
 
 Usage:
-    # Quick Mode (default) - fast, single best tool
-    uv run --with pymupdf4llm --with markitdown scripts/convert.py document.pdf -o output.md
+    # Quick Mode (default) - first available tool
+    uv run --with pymupdf --with pymupdf4llm --with "markitdown[pdf]" scripts/convert.py document.pdf -o output.md
 
-    # Heavy Mode - multi-tool parallel execution with merge
-    uv run --with pymupdf4llm --with markitdown scripts/convert.py document.pdf -o output.md --heavy
+    # Heavy Mode - multi-tool execution with candidate selection
+    uv run --with pymupdf --with pymupdf4llm --with "markitdown[pdf]" scripts/convert.py document.pdf -o output.md --heavy
 
     # DOCX deep mode - python-docx direct parsing (experimental)
     uv run --with python-docx scripts/convert.py document.docx -o output.md --docx-deep
 
     # With image extraction
-    uv run --with pymupdf4llm scripts/convert.py document.pdf -o output.md --assets-dir ./images
+    uv run --with pymupdf --with pymupdf4llm scripts/convert.py document.pdf -o output.md --assets-dir ./images
 
 Dependencies:
     - pymupdf4llm: PDF conversion (LLM-optimized)
@@ -926,7 +926,7 @@ def select_tools(file_path: Path, mode: str) -> list[str]:
 def convert_with_pymupdf4llm(
     file_path: Path, assets_dir: Optional[Path] = None
 ) -> ConversionResult:
-    """Convert using PyMuPDF4LLM (best for PDFs)."""
+    """Convert PDF input using PyMuPDF4LLM."""
     try:
         import pymupdf4llm
 
@@ -939,7 +939,7 @@ def convert_with_pymupdf4llm(
             kwargs["image_path"] = str(assets_dir)
             kwargs["dpi"] = 150
 
-        # Use best table detection strategy
+        # Use the explicit line-based table detection strategy
         kwargs["table_strategy"] = "lines_strict"
 
         md_text = pymupdf4llm.to_markdown(str(file_path), **kwargs)
@@ -1073,7 +1073,7 @@ def convert_single(
 
 
 def merge_results(results: list[ConversionResult]) -> ConversionResult:
-    """Merge results from multiple tools, selecting best segments."""
+    """Select one scored Markdown body and deduplicate successful image metadata."""
     if not results:
         return ConversionResult(markdown="", tool="none", success=False)
 
@@ -1089,7 +1089,7 @@ def merge_results(results: list[ConversionResult]) -> ConversionResult:
         return successful[0]
 
     # Multiple successful results - merge them
-    # Strategy: Compare key metrics and select best
+    # Strategy: Select the highest heuristic score
     best = successful[0]
     best_score = score_markdown(best.markdown)
 
@@ -1157,7 +1157,7 @@ Examples:
     # Quick mode (default)
     python convert.py document.pdf -o output.md
 
-    # Heavy mode (best quality)
+    # Heavy mode (compare whole-output candidates)
     python convert.py document.pdf -o output.md --heavy
 
     # DOCX deep mode (python-docx parsing)
@@ -1174,7 +1174,7 @@ Examples:
     parser.add_argument(
         "--heavy",
         action="store_true",
-        help="Enable Heavy Mode (multi-tool, best quality)",
+        help="Enable Heavy Mode (compare available converter outputs)",
     )
     parser.add_argument(
         "--docx-deep",
@@ -1184,7 +1184,7 @@ Examples:
     parser.add_argument(
         "--no-postprocess",
         action="store_true",
-        help="Disable DOCX post-processing (keep raw pandoc output)",
+        help="Disable automatic DOCX/PDF post-processing",
     )
     parser.add_argument(
         "--assets-dir",
@@ -1287,7 +1287,7 @@ Examples:
     if not tools:
         print("Error: No conversion tools available.", file=sys.stderr)
         print("Install with:", file=sys.stderr)
-        print("  pip install pymupdf4llm", file=sys.stderr)
+        print("  pip install pymupdf pymupdf4llm", file=sys.stderr)
         print("  uv tool install markitdown[pdf]", file=sys.stderr)
         print("  brew install pandoc", file=sys.stderr)
         sys.exit(1)

@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **doc-to-markdown** (`daymade-docs` v1.28.0 → v1.28.1): Align Heavy Mode instructions with whole-output selection, centralize validator interpretation and PDF acceptance, and add the repository instruction route. Correct misleading coverage labels and current PyMuPDF installation examples; remove derived prose totals and unsupported comparison claims without changing conversion, JSON keys or exit codes. Change types: factual SOP repair and lossless deduplication.
 - **codex-1m-context-window-setup** (`daymade-codex` v2.3.0 → v2.3.1): Separate local inspection and threshold-only commands from full expansion prerequisites and execution. Route repository entries to the owning workflow and remove duplicated policy values, manual section summaries and stale source-grounding notes. Change type: bounded operating-documentation correction.
 
 - **local-codex** (`daymade-codex` v2.2.0 → v2.3.0): Distinguish adoption of an already saved login from token recovery and new OAuth authorization. Add the authorized shared-daemon restart and original-session continuation recipe, including stable message reconciliation and separate execution acceptance. Change type: additive recovery recipe.
