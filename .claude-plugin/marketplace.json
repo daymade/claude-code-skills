@@ -176,7 +176,7 @@
       "description": "Claude Code operations suite that bundles cross-project prior-work retrieval across code, docs, Skills, meetings, WeChat archives, and conversation history; provider-separated Claude Code and Codex history readers; identity- and lineage-gated continuation workflows; plugin/skill troubleshooting; CLAUDE.md progressive disclosure optimization; version-synced Lark CLI routing; statusline configuration; exported .txt repair; full claude.ai conversation extraction with tool-call rendering and file download; plugin marketplace development and suite consolidation; writing/testing/debugging Claude Code hooks; multi-provider profile isolation; personal-memory migration into tool-agnostic AGENTS.md reference docs; one-shot local timers that ping Claude right after subscription quota reset to start a fresh 5-hour usage window; working web search installed on an agent whose relayed model backend cannot execute the built-in one; and terminal-output-to-PNG rendering for visual CLI verification under one shared namespace. Install once to get the full Claude Code power-user toolkit.",
       "source": "./daymade-claude-code",
       "strict": false,
-      "version": "4.33.12",
+      "version": "4.33.14",
       "category": "suite",
       "keywords": [
         "suite",
@@ -230,7 +230,7 @@
       "description": "OpenAI Codex operations and design exploration suite bundling model-aware long-context workstation setup, local Codex delegation, generated-image review, static visual-direction selection, and runnable HTML interaction Design Boards under one shared namespace.",
       "source": "./daymade-codex",
       "strict": false,
-      "version": "2.2.0",
+      "version": "2.3.0",
       "category": "suite",
       "keywords": [
         "suite",
@@ -260,7 +260,7 @@
       "description": "Word/PDF/PPTX/HTML→Markdown;MD/Word→PDF;create Word;PDF HTML/translate;Excel/xlsm/macOS;photo/signed scans;Mermaid;DOCX review;post-change docs. Reads one bundled Daymade specialist. New slide decks use deck-creator when installed; generic PDF reading/editing and spreadsheet analysis stay with their own Skills. Retired ppt-creator stays manual-only.",
       "source": "./daymade-docs",
       "strict": false,
-      "version": "1.27.1",
+      "version": "1.28.0",
       "category": "suite",
       "keywords": [
         "suite",
@@ -619,7 +619,7 @@
       "description": "Tests/benchmarks a third-party LLM endpoint (OpenAI- or Anthropic-compatible): availability, fidelity, speed, concurrency, protocol compliance, quality regression. Use before hand-rolling a curl loop, when onboarding a provider, or debugging \"system prompt 不生效\" / a tok/s claim — 测评/压测一个模型或渠道. Not for TTS/voice-clone supplier eval (use the audio skill).",
       "source": "./llm-eval-harness",
       "strict": false,
-      "version": "1.7.1",
+      "version": "1.7.2",
       "category": "developer-tools",
       "keywords": [
         "llm",
@@ -1223,7 +1223,7 @@
       "description": "查询 ChatGPT/Codex 重置公告及多个 Pro 账号的剩余额度、备用 Full reset；复用 Google 登录逐个核实并恢复网页账号，换算北京时间。区分 Tibo 官宣、未官宣的平台静默重置、banked reset 与账户级周期重置。Use when 用户问「什么时候重置」「额度什么时候恢复」「下次全员重置几点」 「banked reset 到了吗」「Tibo 说了什么」「usage limit when reset」，或说「额度突然回到 100%」「好像/肯定又重置了」，或问「几个账号都用完了吗」「哪个还满额」。必须用实时产品状态、独立用户实测与公告交叉核验；禁止因 Tibo Radar 没有新条目就否定已经发生的重置，并须把太平洋时间当场换算为北京时间。",
       "source": "./tibo-reset-codex",
       "strict": false,
-      "version": "2.6.2",
+      "version": "2.7.0",
       "category": "utilities",
       "keywords": [
         "chatgpt",
@@ -1280,7 +1280,7 @@
       "description": "数据可视化的判断层 SSOT——画任何图表、dashboard、看板之前先加载它，不是画完之后。管\"该不该这么画\"：这张图想让读者得出什么结论、用均值还是中位数、能不能聚合、堆叠还是折线、能不能上双轴、配色与颜色数量、同一实体跨图是否同色同位、表格该留几列。介质无关：HTML 报告页、React/Vue dashboard、PPT 原生图表、matplotlib/plotly/ECharts/D3、渲染成 PNG 的图，一律适用。Use when 动手画图之前，或评审既有图表（\"这几张图有什么问题\"、\"图例为什么不一致\"）。Not for 报告页的排版/组件/交互（用 report-with-html:report-with-html）或 PPT 原生图表的实现与渲染陷阱（用 deck-creator:deck-creator）。",
       "source": "./data-visualization-discipline",
       "strict": false,
-      "version": "1.1.7",
+      "version": "1.1.8",
       "category": "documentation",
       "keywords": [
         "数据可视化",
@@ -1338,7 +1338,7 @@
       "description": "Snapshots/restores Ghostty Claude Code/Codex tabs across reboots. Use before Mac updates (保存终端会话/重启前备份终端), after restart to reopen original session IDs (恢复之前的窗口/restore my ghostty tabs), audit survivors, or periodic change-only snapshots (定期增量快照/没变化不记录). Also for unmanaged/legacy Codex account switches (额度耗尽换号/换号后恢复全部 Codex); Minions native_runtime uses Account Manager. Not for --resume, screenshots or tmux.",
       "source": "./ghostty-use",
       "strict": false,
-      "version": "1.9.1",
+      "version": "1.9.3",
       "category": "developer-tools",
       "keywords": [
         "ghostty",

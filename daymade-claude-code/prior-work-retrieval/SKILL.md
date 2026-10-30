@@ -163,6 +163,11 @@ success-evidence requirement.
 
 Open promising candidates at their original path. Check:
 
+For a visual artifact or a request to improve an older visual, follow
+[visual-result reuse](references/visual-result-reuse.md) while inspecting candidates.
+Compare the actual rendered editions as well as their source; preserve effective
+visual decisions without importing superseded facts or inventing user style approval.
+
 - **Match**: does it solve the same business problem, not merely share words?
 - **Authority**: current implementation/SSOT beats a historical proposal;
   raw transcript proves what was said, not that it remains correct.
@@ -409,6 +414,11 @@ path remain possible so the agent can repair the gate without bypassing it.
 - Search results are hypotheses. The receipt records verification and reuse.
 - Do not copy private project data into a public example or Skill fixture.
 - Do not silently fall back from a failed required carrier. Record the gap.
+- Keep formal read-only discovery available before a receipt: the owned Codex
+  inventory in `--source codex --index-only` mode, UUID lookup, exact-session
+  reader and this Skill's no-argument surface fingerprint. The hook validates
+  the source-bound entry and supported arguments; an arbitrary script with the
+  same filename, an unknown mode or an adjacent write does not acquire this exemption.
 - External web research starts after local prior work, unless the user explicitly
   asks for current external facts or the local evidence cannot answer.
 - This Skill is the workflow. Companion hooks may require a fresh receipt before
