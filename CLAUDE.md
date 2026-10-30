@@ -698,9 +698,12 @@ and generated watch paths are owned by `sync-local-skill-sources.py`; derive the
 from its constants/functions and `--print-watch-paths` output instead of copying
 their current members or counts into instructions or references.
 
-For context-window setting changes, keep the executable configuration and the
+For Claude Code context-window setting changes, keep the executable configuration and
 [context request probe](daymade-claude-code/claude-switch-models-setup/references/context-window-config.md)
 aligned. That reference owns the request fields and probe commands.
+
+For Codex context inspection, threshold-only changes or full expansion, follow
+[the Codex context workflow](daymade-codex/codex-1m-context-window-setup/SKILL.md#route-the-request).
 
 In Claude Code, use `/plugin ...` slash commands. In your terminal, use `claude plugin ...`.
 
