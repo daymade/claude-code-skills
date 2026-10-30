@@ -10,7 +10,7 @@ reused source proves identity/reuse of code, not retention of effective visual
 decisions. If a rendered original is unavailable, state the limit and use the
 available source without calling its visual quality verified.
 
-Separate three decisions in the existing adoption reason:
+Separate the decisions in the existing adoption reason:
 
 | Decision | Evidence |
 |---|---|

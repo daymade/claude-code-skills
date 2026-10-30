@@ -60,6 +60,10 @@ For capability extraction or reuse across business callers, follow its
 
 Operational or code-bearing Skill edits complete directly affected document alignment
 before the first candidate freeze; follow skill-creator's Edit workflow.
+When data-visualization delivery-gate text changes, use the
+[repository generator](scripts/sync_delivery_gates.py) and
+[CI validation step](.github/workflows/ci.yml) to refresh its shipped resource;
+do not edit the generated resource independently.
 For project instruction-entry maintenance, enter
 [claude-md-progressive-disclosurer](daymade-claude-code/claude-md-progressive-disclosurer/SKILL.md).
 Its verification reference owns dual-entry reconciliation and native-host readback;
@@ -298,7 +302,8 @@ For timed-out screenshots or blank hidden-window captures, follow its
 For changed contribution views or multi-item reads, use that same journey contract
 for source-derived coverage and partial-result recovery; keep the detailed recipe
 with the Skill.
-Before designing or judging monitoring, availability or certificate matrices, enter
+Before laying out spatial, role or port-constrained relationship diagrams,
+or designing monitoring, availability or certificate matrices, enter
 [data-visualization-discipline](data-visualization-discipline/SKILL.md).
 Observation and risk semantics follow its data-validation route.
 For incomplete observations, unknown counts or confirmed zero, use its
@@ -498,7 +503,7 @@ For local originals, Obsidian delivery or a personal source-catalog handoff, fol
 
 For an explicit prior-work, reuse or history request, follow the
 [Prior Work operating contract](daymade-claude-code/prior-work-retrieval/SKILL.md).
-Requests to repeat a previously successful method enter its
+Requests to repeat a previously successful method or reuse/improve an older rendered artifact enter its
 [candidate verification](daymade-claude-code/prior-work-retrieval/SKILL.md#4-verify-candidates-at-authority).
 
 For CLI/hook manifest selection or continuation in an already-running host, read
