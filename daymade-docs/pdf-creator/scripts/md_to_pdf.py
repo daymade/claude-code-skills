@@ -58,6 +58,20 @@ def _find_chrome() -> str | None:
         shutil.which("chromium"),
         shutil.which("chrome"),
     ]
+    if platform.system() == "Windows":
+        # Common Windows installation paths
+        program_files = os.environ.get("ProgramFiles", "C:\\Program Files")
+        program_files_x86 = os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)")
+        local_appdata = os.environ.get("LOCALAPPDATA", os.path.expanduser("~\\AppData\\Local"))
+        
+        candidates.extend([
+            os.path.join(program_files, "Google", "Chrome", "Application", "chrome.exe"),
+            os.path.join(program_files_x86, "Google", "Chrome", "Application", "chrome.exe"),
+            os.path.join(local_appdata, "Google", "Chrome", "Application", "chrome.exe"),
+            os.path.join(program_files, "Microsoft", "Edge", "Application", "msedge.exe"),
+            os.path.join(program_files_x86, "Microsoft", "Edge", "Application", "msedge.exe"),
+            os.path.join(local_appdata, "Microsoft", "Edge", "Application", "msedge.exe"),
+        ])
     for c in candidates:
         if c and Path(c).exists():
             return str(c)
@@ -579,6 +593,8 @@ def _lint_pdf_typography(pdf_file: str) -> list[dict]:
     line spacing, awkward breaks at safe points) require visual inspection.
     """
     if not shutil.which("pdftotext"):
+        return []
+    if not shutil.which("pdfinfo"):
         return []
 
     findings: list[dict] = []
