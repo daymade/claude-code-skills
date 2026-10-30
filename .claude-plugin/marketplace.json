@@ -335,7 +335,7 @@
       "description": "Apple-platform development and operations suite for macOS window capture, TCC and Keychain dialog diagnosis, Full Disk Access repair, iOS/macOS app development, disk cleanup, and launchd watchdogs.",
       "source": "./daymade-macos",
       "strict": false,
-      "version": "1.26.9",
+      "version": "1.26.10",
       "category": "suite",
       "keywords": [
         "suite",
