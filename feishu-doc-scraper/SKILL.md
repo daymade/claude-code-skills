@@ -30,6 +30,10 @@ snapshot commands, interpretation and coverage checks.
 
 Before filing an archive, declare this split in an artifact manifest and run the bundled storage validator. The complete schema and examples are in **[references/archive-storage-contract.md](references/archive-storage-contract.md)**.
 
+Keep source access instructions with the authorized destination's material entry,
+following the destination handoff; return them with a password-protected source
+link. Generate aggregate statistics on demand under the storage contract.
+
 Select the delivery scope from the user's requested result before loading fallback
 or reader procedures. For original-file downloads, use
 [attachment archives](references/attachment-archives.md): fetch the body first,
