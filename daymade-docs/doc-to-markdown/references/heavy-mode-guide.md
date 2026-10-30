@@ -79,9 +79,10 @@ when that operation is needed, then compare the result with the source.
 
 When an attempted engine fails and another succeeds, Heavy Mode prints
 `HEAVY MODE DEGRADED` on stderr and uses the successful candidates. If only one
-tool is available, it runs alone without that failure warning. If none succeeds,
-conversion fails. Inspect stderr
-and the selected output; a heuristic score cannot establish text or table fidelity.
+tool is available, it runs alone without that failure warning. If all attempted
+engines report failure, conversion fails. Inspect stderr and the actual output
+body: an empty output is unusable even when the process exits successfully.
+A heuristic score cannot establish text or table fidelity.
 
 ## Advanced Usage
 

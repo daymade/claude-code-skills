@@ -36,17 +36,9 @@ uv run --with pytest pytest scripts/test_convert.py -v
 
 ## Tool Selection
 
-| Format | Quick Mode | Heavy Mode |
-|--------|-----------|------------|
-| PDF | pymupdf4llm | pymupdf4llm + markitdown |
-| DOCX | pandoc + post-processing | pandoc + markitdown |
-| PPTX | markitdown | markitdown + pandoc |
-| XLSX | markitdown | markitdown |
-| HTML/HTM | pandoc + source-href retention check | unsupported; use the HTML quick path |
-
-The configured preferences live in [`select_tools`](scripts/convert.py).
-Quick Mode uses the first available engine; it does not retry another engine
-after a conversion failure. For Heavy Mode selection and failure handling, read
+Read [`select_tools`](scripts/convert.py) for format preferences and availability
+filtering. HTML/HTM follows the [saved HTML procedure](references/html-conversion.md).
+For Heavy Mode selection and failure handling, read
 [its procedure](references/heavy-mode-guide.md#selection-behavior).
 
 ## PDF Manuals And Question Banks

@@ -80,7 +80,7 @@ Use the neutral [boundary sample](../assets/pdf-fidelity/expected.md) and its
 [deliberately broken version](../assets/pdf-fidelity/broken.md) against their
 [source PDF](../assets/pdf-fidelity/source.pdf) and
 [HTML layout](../assets/pdf-fidelity/source.html) for a bounded operator replay.
-It includes an unnumbered question, a three-item explanation, a warning and a
+It includes an unnumbered question, an enumeration, a warning and a
 healthy wrapped word. These are synthetic examples, not excerpts from a client.
 
 ## Recipient handoff
