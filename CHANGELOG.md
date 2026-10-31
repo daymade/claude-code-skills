@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **prior-work-retrieval** (`daymade-claude-code` v4.33.19 → v4.33.20): Keep current lease-return instructions out of history retrieval while preserving adjacent recall requests; recognize explicit Chinese requests for conversation-history context. Change type: bounded prompt-classification repair.
 - **github-ops** (v1.14.15 → v1.14.16): Advertise existing self-hosted Runner inventory/capacity in Skill metadata; preserve operations, permissions and monitoring boundaries. Change type: factual discovery correction.
 - **claude-code-hooks** (`daymade-claude-code` v4.33.18 → v4.33.19): Add an owner-bound regression template for shared rule refresh/disable, deadline failure direction and recoverable lifecycle transitions. Preserve host protocols, independent waits and scoped rollback. Change type: bounded regression guidance.
 - **frontend-visual-qa** (v1.21.29 → v1.21.30): Verify nonblocking diagnostics across explicit disclosure, live data refresh and navigation remounts; preserve visible uncertainty, primary work and selected-task recovery. Change type: bounded lifecycle acceptance guidance.
