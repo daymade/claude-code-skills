@@ -522,6 +522,32 @@ For actionable failures, prefer persistent inline placement or a notification
 that remains long enough to act. Check role=alert, focus behavior, localization,
 and whether fields requiring re-entry return to a legible state.
 
+### Game and expressive feedback
+
+For game or expressive feedback, the executing auditor uses the authorized
+project harness to capture and inspect the visible sequence: before the action,
+at impact, through intermediate frames, and at the stable final state. Arm
+recording or sampling before the trigger. Check what action the feedback
+acknowledges and whether its final outcome is clear without debugger context.
+
+When the action saves participation, exercise confirmed, delayed and failed
+saves. Pending or failed saves must not announce success; inspect their visible
+state and the project's safe recovery path. Confirmed participation may receive
+vivid feedback. Claims such as “correct” or a correctness-based streak require
+the product's reliable decision criterion; saving alone does not establish correctness.
+
+Refresh, revisit and safely retry the same completed action; verify its reward
+is not replayed or counted twice. Follow the project's existing recovery
+contract for an uncertain write rather than resubmitting to obtain evidence.
+Repeat the affected journey with reduced motion and confirm that a clear final
+acknowledgment remains when motion is shortened or removed.
+
+Separate observed timing, legibility and outcome truth from subjective impact.
+Pixels, DOM presence, frame counts and reviewer scores do not establish that
+feedback feels satisfying or that a person approved it. Leave human acceptance
+unknown until observed. No bundled checker decides emotional quality; the
+auditor records the inspected sequence and the limits of that judgment.
+
 ## Drawers, Modals, Popovers, And Focus
 
 Decide whether the overlay is blocking before reviewing it.
