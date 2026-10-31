@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **github-ops** (v1.15.0 → v1.15.1): Route API-reference merges to the checked workflow, expand the reviewed-head variable and scope PR mutation examples explicitly. Distinguish commit statuses from Check Runs and align project instruction routes with approval diagnosis, archive preflight and landed-rule verification. Change type: documentation alignment with the existing merge contract.
+- **kimi-use** (v1.8.2 → v1.8.3): Bind desktop recipes to the current tool contract, separate client refusal from user or OS attribution, and require observed retry prerequisites and target-result readback. Scope historical successes and keep local route failures distinct from task-wide unavailability. Change type: bounded desktop evidence and recovery guidance.
 
 - **github-ops** (v1.14.16 → v1.15.0): Keep PR merge mutations on the policy-aware CLI, bind the exact reviewed head, and require a separate target-bound acknowledgement plus verified required CI for authorized bypass. Preserve API reads and unrelated operations. Change type: merge-safety boundary repair.
 - **github-review-pr** (v1.4.6 → v1.4.7): Separate individual reviews from effective approval requirements, inspect exact-landing rule evaluations, and enter the repository's complete archive-publication preflight before publishing exception batches. Change type: bounded diagnostic and release guidance.

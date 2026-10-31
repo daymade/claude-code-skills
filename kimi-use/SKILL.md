@@ -43,7 +43,7 @@ Kimi 桌面客户端（Kimi.app，`com.moonshot.kimichat`）自带一个插件�
 | **A 股券商研报** | 先走**东方财富研报公开 JSON API**（`reportapi.eastmoney.com`，免费免代理、无 GUI 开销；参数与实测见 `references/plugin-capabilities.md`）；Kimi 侧恒生聚源当**第二通道取并集**——两条实测互不包含 |
 | 驱动浏览器里的 kimi.com 网页版 | `kimi-webbridge` skill（Kimi Browser Extension 的 skill，不在本仓；本地 daemon，不走 GUI） |
 | Kimi 客户端生成独立深度研究报告 | 本 skill 的 **Chat 深度研究**分支；不沿用插件探针的模式限制 |
-| **用 kimi-cu 驱动任意 macOS 桌面应用**（Electron / webview / 原生；表单填写、弹窗、前台化、AX 树恢复） | **`references/kimi-cu-desktop-automation.md`**——可靠性分层与操作配方，与 Kimi.app 业务无关、可独立使用 |
+| **用 kimi-cu 驱动任意 macOS 桌面应用**（Electron / webview / 原生；表单填写、弹窗、前台化、AX 树恢复） | **先读 `references/kimi-cu-desktop-automation.md`**——按当前工具合同绑定权限、目标、读回与重试前提，再选配方；与 Kimi.app 业务无关、可独立使用 |
 | **无凭据 / 只有插件形态的数据源 / 一次要横跨多个源** | **本 skill** |
 
 路由表管的是「默认该走哪条」；用户当面指定「就用 Kimi 查」时不挡路——Kimi 是取数通道、专用 CLI 是复核通道，两个角色不冲突。
