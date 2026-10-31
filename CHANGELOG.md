@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-permissions** (`daymade-macos` v1.26.11 → v1.26.12): Resolve existing authorized credential owners and supported native entries before returning Keychain password entry to the person. Preserve exact-context matching, host refusals, grant boundaries and original-operation verification. Change type: bounded recovery-routing correction.
 - **qa-expert** (v1.2.9 → v1.2.10): Compare actual migration consumers with fixed inputs, complete semantic results and explicit attribution limits; separate original-budget acceptance from lower-layer diagnostic reads. Preserve ordinary fixture and read-only authorization boundaries. Change type: bounded migration-acceptance guidance.
 - **debugging-network-issues** (v1.11.6 → v1.11.7): Distinguish database, upstream-header, complete-body and user-facing timing boundaries. Retain safe error identity and separate original deadlines from extended diagnostic reads. Change type: bounded timeout-diagnosis guidance.
 - **macos-cleaner** (`daymade-macos` v1.26.10 → v1.26.11): Discover OrbStack image aliases from existing storage hints, retain unknown runtime adoption, and measure each distinct image on its own volume. Remove fixed-layout assumptions and obsolete cleanup measurements. Change type: bounded factual and operating-guidance correction.
