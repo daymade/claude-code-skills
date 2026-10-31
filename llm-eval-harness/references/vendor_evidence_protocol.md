@@ -43,6 +43,13 @@ broken" — so close those doors first, and SAY you closed them in the report:
 - **Payload identity**: hash the exact request body (SHA-256) and verify
   repeats are byte-identical. This single line kills the "your client mutated
   the payload" deflection.
+- **Response semantics**: the report author checks HTTP status, visible text,
+  thinking and native terminal fields together, including for hand-written SSE
+  probes. HTTP 200 with `refusal` / `content_filter` is a refused request, not
+  evidence of a service fault. Empty `end_turn` leaves the cause unknown; compare
+  endpoint observations without claiming where a marker was lost absent a trace.
+  The availability probe classifies its own responses; it does not enforce this
+  check on a separate manual streaming collector.
 - **Thresholds honored**: if the feature has documented minimums (e.g. a
   cacheable-prefix floor), show your payload exceeds them — pre-empts "your
   prefix is too short".
