@@ -159,7 +159,7 @@ Read the matching section **before** acting; these are existing supported jobs:
 | Numbers, written artifacts, parallel recordings, clip cross-checks or batches | [Numbers, artifacts, and batches](references/native_action_details.md#numbers-artifacts-and-batches), [advanced evidence](references/advanced_correction_evidence.md) |
 | Promote outputs, close sidecars, archive or verify final quality | [Finalization](references/native_action_details.md#finalization), [queue/finalization detail](references/native_queue_finalization.md) |
 | Agent-less API automation, including degraded output handling | [Agent-less API route](references/native_action_details.md#agent-less-api-route), [API setup](references/glm_api_setup.md), [workflow guide](references/workflow_guide.md) |
-| Extract uncertainty, import presets, repair timestamps, split/rebase, diff, harvest, look up or validate setup | [Utility commands](references/native_action_details.md#utility-commands), [CLI parameters](references/script_parameters.md) |
+| Extract uncertainty, import presets, repair timestamps, split/rebase, diff, harvest, look up or validate setup, inspect or change context-rule state | [Utility commands](references/native_action_details.md#utility-commands), [CLI parameters](references/script_parameters.md) |
 | Compare duplicate/overlapping transcripts or parse/count speaker turns | [Transcript comparison/parsing](references/native_transcript_comparison.md) |
 
 Detection and enqueueing are not correction. A final/high-quality claim requires

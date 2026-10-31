@@ -638,9 +638,8 @@ class CorrectionService:
         filter (None) keeps the legacy union behavior and loads every active
         rule — mirroring how corrections load without --domain.
 
-        On a database not yet migrated to v2.4 there IS no domain column, and
-        by construction no rule could have been added with a domain — so every
-        rule is global and the legacy query is the correct one.
+        When context_rules has no domain column, rules cannot carry a domain;
+        treat every active rule as global and use the legacy query.
 
         Args:
             domains: Active domain names, or None for no filter

@@ -725,12 +725,12 @@ Safely package codebases with repomix by automatically detecting and removing ha
 
 > **Install**: `claude plugin install daymade-audio@daymade-skills` (suite-only — invoked as `daymade-audio:transcript-fixer`)
 
-Correct speech-to-text (ASR/STT) errors with a Stage 1 dictionary pre-filter, a required Native AI whole-transcript pass, and an audio-backed human gate for unresolved wording, names, numbers, and entities.
+Correct speech-to-text (ASR/STT) errors with a Stage 1 dictionary pre-filter, a required Native AI whole-transcript pass, and evidence-based review of unresolved wording, names, numbers, and entities.
 
 **When to use:**
 - Correcting meeting notes, lecture recordings, or interview transcripts
 - Fixing Chinese/English homophone errors and technical terminology
-- Reviewing one exact transcript with its original audio instead of searching a global queue
+- Reviewing one exact transcript's unresolved items with available evidence instead of searching a global queue
 - Improving future transcripts without turning one-off fixes into broad dictionary rules
 - Collaborating with teams on shared correction knowledge bases
 
@@ -751,13 +751,14 @@ Correct speech-to-text (ASR/STT) errors with a Stage 1 dictionary pre-filter, a 
 uv run scripts/fix_transcription.py --init
 uv run scripts/fix_transcription.py --add "错误词" "正确词" --domain general
 
-# Run full correction pipeline
-uv run scripts/fix_transcription.py --input meeting.md --stage 3
+# Run Stage 1
+uv run scripts/fix_transcription.py --input meeting.md --stage 1
 
-# Open only this transcript's unresolved items and listen before deciding
+# Next, load transcript-fixer and complete the Native AI whole-transcript pass.
+# Resolve remaining pending items from available evidence; use audio when available.
 uv run scripts/review-dashboard/server.py --file "/absolute/meeting.md"
 
-# Read the human verdicts back; pending_total must be 0 before final delivery
+# Read back the review state; pending_total must be 0 before final delivery
 uv run scripts/fix_transcription.py \
   --list-review --review-file "/absolute/meeting.md" \
   --review-status all --json

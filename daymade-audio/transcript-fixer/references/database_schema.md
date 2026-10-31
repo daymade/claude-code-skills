@@ -2,8 +2,6 @@
 
 **MUST read this before any database operations.**
 
-Database location: `~/.transcript-fixer/corrections.db`
-
 ## Core Tables
 
 ### corrections
@@ -43,14 +41,8 @@ Regex-based context-aware correction rules.
 | added_by | TEXT | Provenance label |
 | domain | TEXT | NULL = global; otherwise the one domain that loads the rule |
 
-Use `--disable-context-rule` / `--enable-context-rule` with an explicit database,
-exact ID, expected domain/pattern and reason for reversible state changes. For
-`--context-rule-domain`, `global` selects SQL NULL, while `domain:<name>` selects
-a literal named domain; `domain:global` therefore targets the string `global`,
-not NULL. Each real transition updates only this row's `is_active` and writes one
-`audit_log` entry in the same transaction; already-target-state calls do not add
-audit rows. This is separate from `--report-false-positive`, which manages
-`corrections`.
+For reversible state changes, use the explicit-database command and readback
+procedure in the [CLI reference](script_parameters.md#fix_transcriptionpy).
 
 ### learned_suggestions
 
@@ -122,7 +114,7 @@ Key-value configuration store.
 | description | TEXT | What this config does |
 | updated_at | TIMESTAMP | Last update |
 
-**Default configs**: the authoritative default set lives in `scripts/core/defaults.py` (`SYSTEM_CONFIG_DEFAULTS`) — don't hand-copy the full set here, it drifts. Current schema version is `2.0`; other common keys include `api_model`, `learning_frequency_threshold`, `learning_confidence_threshold`, and `history_retention_days`. To see live values: `SELECT key, value FROM system_config;`
+**Default configs**: see `scripts/core/defaults.py` (`SYSTEM_CONFIG_DEFAULTS`). To see live values: `SELECT key, value FROM system_config;`
 
 ### audit_log
 
@@ -177,7 +169,7 @@ is the storage shape.
 | kind | TEXT | 'entity', 'homophone', 'wording', 'unknown' (CHECK; drives priority) |
 | evidence | TEXT | Why suspected / what the search ladder found |
 | actions_json | TEXT | JSON action pack (file_edit / dict_add / append_note) |
-| priority | INTEGER | Queue order, higher first (entity 100 > unknown 90 > homophone 30 > wording 10) |
+| priority | INTEGER | Queue order, higher first; kind defaults are defined in [PRIORITY_BY_KIND](../scripts/core/review_queue.py) |
 | status | TEXT | 'pending', 'accepted', 'overridden', 'kept_original', 'skipped' (CHECK) |
 | decided_at | TIMESTAMP | Verdict time |
 | decided_by | TEXT | Reviewer name |

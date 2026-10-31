@@ -775,12 +775,12 @@ python3 scripts/safe_mix.py /path/to/codebase
 
 > **安装**：`claude plugin install daymade-audio@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-audio:transcript-fixer`）
 
-用 Stage 1 字典预处理、必须执行的 Native AI 全文通读，以及带原始音频的人审门，纠正语音转文本（ASR/STT）中的措辞、人名、数字和实体错误。
+用 Stage 1 字典预处理、必须执行的 Native AI 全文通读，并依据现有证据处理待审的措辞、人名、数字和实体，纠正语音转文本（ASR/STT）错误。
 
 **使用场景：**
 - 纠正会议记录、讲座录音、访谈中的转录错误
 - 修复中英文同音、术语和专名错误
-- 只打开当前这份逐字稿的待审项，并直接听对应时间片段
+- 只打开当前这份逐字稿的待审项，依据现有证据逐项处理
 - 让稳定错误复用，同时把一次性误识留在当前文件
 
 **主要功能：**
@@ -792,13 +792,14 @@ python3 scripts/safe_mix.py /path/to/codebase
 
 **示例用法：**
 ```bash
-# 执行完整纠错
-uv run scripts/fix_transcription.py --input meeting.md --stage 3
+# 先运行 Stage 1
+uv run scripts/fix_transcription.py --input meeting.md --stage 1
 
-# 只打开这份逐字稿并听音频裁定
+# 随后加载 transcript-fixer，完成 Native AI 全文通读
+# 依据现有证据处理剩余待审项；有音频时可播放对应片段
 uv run scripts/review-dashboard/server.py --file "/absolute/meeting.md"
 
-# 人审结束后精确读回；pending_total 必须为 0
+# 处理后精确读回；pending_total 必须为 0
 uv run scripts/fix_transcription.py \
   --list-review --review-file "/absolute/meeting.md" \
   --review-status all --json
