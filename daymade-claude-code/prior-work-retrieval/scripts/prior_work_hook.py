@@ -202,9 +202,9 @@ CONVERSATION_CONTEXT_RECALL = re.compile(
     + _CONVERSATION_HISTORY + r"(?:的)?[ \t]*上下文",
 )
 NEGATED_CONTEXT_PREFIX = re.compile(
-    r"(?:不要|不用|无需|不需要|不必|别|勿|不)[ \t]*(?:再[ \t]*)?(?:去[ \t]*)?$"
+    r"(?:禁止|不得|不能|不要|不用|无需|不需要|不必|别|勿|不)[ \t]*(?:再[ \t]*)?(?:去[ \t]*)?$"
 )
-CONTEXT_QUESTION_TAIL = re.compile(r"^[^\n。；;]{0,24}(?:[?？]|吗|呢|是否)")
+CONTEXT_QUESTION_TAIL = re.compile(r"^[^\n，,。；;]{0,24}(?:[?？]|吗|呢|是否)")
 
 
 def _explicit_conversation_context(text: str) -> bool:
