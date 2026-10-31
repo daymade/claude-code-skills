@@ -176,7 +176,7 @@
       "description": "Claude Code operations suite that bundles cross-project prior-work retrieval across code, docs, Skills, meetings, WeChat archives, and conversation history; provider-separated Claude Code and Codex history readers; identity- and lineage-gated continuation workflows; plugin/skill troubleshooting; CLAUDE.md progressive disclosure optimization; version-synced Lark CLI routing; statusline configuration; exported .txt repair; full claude.ai conversation extraction with tool-call rendering and file download; plugin marketplace development and suite consolidation; writing/testing/debugging Claude Code hooks; multi-provider profile isolation; personal-memory migration into tool-agnostic AGENTS.md reference docs; one-shot local timers that ping Claude right after subscription quota reset to start a fresh 5-hour usage window; working web search installed on an agent whose relayed model backend cannot execute the built-in one; and terminal-output-to-PNG rendering for visual CLI verification under one shared namespace. Install once to get the full Claude Code power-user toolkit.",
       "source": "./daymade-claude-code",
       "strict": false,
-      "version": "4.33.17",
+      "version": "4.33.18",
       "category": "suite",
       "keywords": [
         "suite",
@@ -1108,7 +1108,7 @@
       "description": "Audits rendered UI and specific task/object-link handoffs; excludes ordinary source citations alone. Audits already-rendered UI and Markdown/Obsidian image layout — web app, deck/slide, dashboard, design-system, or Electron/native app — via real-browser/native-app journeys and a Playwright sweep. Use after UI implementation to find typography, overflow, responsive, routing, data-viz, browser-output, or native-shell defects, or to compare a render against a reference. Not for greenfield UI design (use ui-designer) or QA-program setup (use qa-expert).",
       "source": "./frontend-visual-qa",
       "strict": false,
-      "version": "1.21.29",
+      "version": "1.21.30",
       "category": "design",
       "keywords": [
         "frontend",

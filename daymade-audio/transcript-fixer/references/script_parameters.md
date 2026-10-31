@@ -74,7 +74,7 @@ uv run scripts/fix_transcription.py --input <file> --stage <1|2|3> [--output <di
   ```
 
   Do not substitute `--list-context-rules` for these explicit-target checks: this listing path ignores `--db`, opens the configured database, and renders both SQL `NULL` and a literal `global` domain as `[global]`.
-- Inspect actual table columns rather than inferring schema support from `system_config.schema_version`: the default value `2.0` does not prove that `context_rules.domain` is absent. When that column is absent, loading keeps the legacy behavior and treats every rule as global; `--add-context-rule` refuses with migration direction, and the state commands refuse incomplete schemas rather than guessing the expected domain.
+- Inspect actual table columns rather than inferring schema support from `system_config.schema_version`: the recorded version does not prove that `context_rules.domain` is absent. When that column is absent, loading keeps the legacy behavior and treats every rule as global; `--add-context-rule` refuses with migration direction, and the state commands refuse incomplete schemas rather than guessing the expected domain.
 
 **Review queue** (persistent store for uncertain corrections; semantics in [review_queue_dashboard.md](review_queue_dashboard.md)):
 

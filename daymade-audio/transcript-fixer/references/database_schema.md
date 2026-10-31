@@ -2,8 +2,6 @@
 
 **MUST read this before any database operations.**
 
-Database location: `~/.transcript-fixer/corrections.db`
-
 ## Core Tables
 
 ### corrections
@@ -171,7 +169,7 @@ is the storage shape.
 | kind | TEXT | 'entity', 'homophone', 'wording', 'unknown' (CHECK; drives priority) |
 | evidence | TEXT | Why suspected / what the search ladder found |
 | actions_json | TEXT | JSON action pack (file_edit / dict_add / append_note) |
-| priority | INTEGER | Queue order, higher first (entity 100 > unknown 90 > homophone 30 > wording 10) |
+| priority | INTEGER | Queue order, higher first; kind defaults are defined in [PRIORITY_BY_KIND](../scripts/core/review_queue.py) |
 | status | TEXT | 'pending', 'accepted', 'overridden', 'kept_original', 'skipped' (CHECK) |
 | decided_at | TIMESTAMP | Verdict time |
 | decided_by | TEXT | Reviewer name |

@@ -1,10 +1,10 @@
 # 纠错词典配置指南（Dictionary Configuration）
 
-> 词典是 **SQLite 数据库**（`~/.transcript-fixer/corrections.db`），通过 `--add` 命令维护——**不是**硬编码在 `fix_transcription.py` 里。早期版本曾用代码内的 `CORRECTIONS_DICT` / `CONTEXT_RULES` 常量，现已全部迁入 db；本指南只描述当前的 db 机制。（旧的「编辑 CORRECTIONS_DICT」流程已废弃，勿再照做。）
+词典保存在 SQLite 数据库中，通过 `--add` 命令维护。
 
 ## 词典存储
 
-- **位置**：`~/.transcript-fixer/corrections.db`（home 相对路径，skill 更新/迁移不丢用户数据；可用 `TRANSCRIPT_FIXER_DB_PATH` 覆盖）
+- [数据库位置与配置优先级](../scripts/utils/config.py)
 - **核心表**：`active_corrections`，列名是 `from_text` / `to_text` / `domain`（不直观——写自定义 SQL 前先读 `database_schema.md`）
 - **查看**：`uv run scripts/fix_transcription.py --list [--domain <d>]`
 
