@@ -487,6 +487,31 @@ reacquire an inspected frame or keep that position unverified. Observe offsets;
 do not assign `scrollLeft` or `currentTime`, or change CSS to stage a result.
 This is a journey-specific auditor check, not an automatic sweep verdict.
 
+### Separate viewport movement from layout movement
+
+For confirmation transitions and moving click targets, compare observations in
+the same coordinate system. Record the pointer's viewport position, target
+identity, bounding rectangle, document scroll offset, relevant scrolling ancestor
+offsets and whether entrance transforms have settled. Compare like states after
+natural settling; do not change CSS to manufacture stability. Inspect intermediate
+frames separately when the transition itself can affect input.
+
+Synthetic coordinate example: an ordinary document-flow control has `rect.y = 620`
+at `scrollY = 180`, then `rect.y = 580` at `scrollY = 220`. Its document position
+remains `800`; these samples alone show scrolling, not a layout collapse. For that
+case, `rect.y + scrollY` helps compare document positions. It is not a universal
+correction for nested scrollers, fixed or sticky elements, or transformed targets;
+identify their scroll owner and positioning behavior before selecting a reference
+frame. A small residual while an entrance transform is still running is likewise
+not enough to diagnose layout movement.
+
+Keep cause and interaction consequence separate: scrolling or animation may still
+replace the hit target under a stationary pointer. Check that risk in viewport
+coordinates using the [confirmation-transition journey](journey-and-page-contracts.md#action-targets-after-confirmation),
+even when stable document geometry rules out a layout defect. Stop diagnosis when
+the comparable observations identify the cause, or report it as unknown if the
+needed frame or scroll evidence is unavailable.
+
 ### Wheel requests are not browser-received wheel events
 
 When judging wheel-driven pan or zoom sensitivity, reuse the fresh geometry and
