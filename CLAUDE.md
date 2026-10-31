@@ -332,6 +332,8 @@ For a visible permission or Keychain dialog, enter
 [macos-permissions' observation and classification route](daymade-macos/macos-permissions/SKILL.md#observe-and-classify-the-reported-problem-first).
 For an authorized desktop view, use
 [capture-screen's full-screen observation route](daymade-macos/capture-screen/SKILL.md#observe-an-unidentified-dialog-or-the-full-desktop).
+For application-specific recurring prompts, follow
+[the credential-backend boundary](daymade-macos/macos-permissions/references/keychain-dialog-recovery.md#distinguish-application-credential-storage-from-permission-repair).
 Keep detailed diagnosis and cancellation procedures with those Skills.
 
 ### Background protected-data access
