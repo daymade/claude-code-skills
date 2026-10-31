@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-permissions** (`daymade-macos` v1.26.10 → v1.26.11): Resolve existing authorized credential owners and supported native entries before returning Keychain password entry to the person. Preserve exact-context matching, host refusals, grant boundaries and original-operation verification. Change type: bounded recovery-routing correction.
+
 - **ghostty-use** (v1.9.6 → v1.9.7): Route repository instructions to time-window selection and history-readiness acceptance. Remove copied helper defaults, profile-environment guidance and reference summaries; scope earlier platform probes separately from native AX observations. Change type: documentation alignment and deduplication.
 
 - **ghostty-use** (v1.9.5 → v1.9.6): Clarify bounded time-window recovery selection, separate backup coverage from activity, and distinguish process presence from readable-history readiness. Correct adapter-specific AX limits while preserving restore selection, foreground ownership and account-switch behavior. Change types: bounded operating guidance and factual correction.
