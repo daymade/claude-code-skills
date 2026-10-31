@@ -41,13 +41,40 @@ uv run scripts/fix_transcription.py --input <file> --stage <1|2|3> [--output <di
 - `--check-corpus` (with `--add`): run the same probe on the FROM term before the rule is written. Requires `--corpus`. Advisory for an ordinary FROM; **mandatory for a real-word-shaped FROM** (common word / ≤2 chars / substring of common words / jieba-decomposable phrase) — the add-time gate refuses those without the probe on the record, and `--force` does not substitute (the missing piece is corpus evidence, not confidence). Sibling write gates (semantics in [dictionary_identity_and_context.md](dictionary_identity_and_context.md)): an OPEN review-queue row touching either text refuses the add, and a person-name-shaped mapping (2-4 char CJK, one edit apart) must converge onto a claimed target — a roster entry / active rule's TO — or carry the authority in `--note`.
 - `--json` works with both: one machine-readable result line on stdout
 
-**Context rules** (regex rules applied before the dictionary at Stage 1; domain-scoped since schema v2.4 — run pending migrations first or `--add-context-rule` fails with the direction):
+**Context rules** (regex rules applied before the dictionary at Stage 1):
 
 - `--add-context-rule PATTERN REPLACEMENT [--domain <project>] [--description TEXT] [--priority N]`: add a context-aware regex rule. PATTERN is a Python regex (validated at write time); omitting `--domain` writes a global rule that applies to every domain. Duplicate patterns and un-migrated databases are hard errors. Use it for corrections that are right only inside a specific recurring phrase — the middle channel between a bare dictionary rule and a prose context trap.
 - `--list-context-rules [--domain <project>] [--all] [--json]`: list rules; `--domain` shows global rules plus that domain's, `--all` includes disabled ones.
 - `--disable-context-rule ID --db PATH --context-rule-domain DOMAIN --context-rule-pattern PATTERN --reason TEXT [--json]`: disable exactly one context rule without deleting it. `--enable-context-rule ID` with the same required arguments restores it. Every call must name an existing database explicitly and supply the expected domain and exact pattern as an identity check; use `--context-rule-domain global` for a SQL-NULL global rule, or `domain:<name>` for a literal named domain (including `domain:global`). The `domain:` prefix is removed once, and its payload must be a non-empty valid domain name under the same validation as unprefixed names. Blank/missing reasons, invalid or unknown IDs, empty or invalid domain payloads, and domain/pattern mismatches fail with exit `2` before any write; incomplete `context_rules`/`audit_log` schemas fail rather than receiving guessed defaults. A real transition updates only that row's `is_active` and inserts one `disable_context_rule`/`enable_context_rule` audit row in the same transaction. JSON returns the exact `rule_id`, `domain`, `pattern`, `is_active`, `changed`, `audit_written`, and `status` (`disabled`, `enabled`, `already_disabled`, or `already_enabled`). Repeating an already-target state returns exit `0` and writes no duplicate audit. These commands manage only `context_rules`: unlike `--report-false-positive`, they never change `corrections`, transcripts, or review queues, and they make no identity decision.
 - Run each state command alone: combining disable/enable with another command fails with exit `2` before dispatch or database initialization. The state preflight requires all columns in the current `context_rules` and `audit_log` table contracts, including rule execution fields and audit timestamps; it never fills missing columns.
-- On a database not yet migrated to v2.4 there is no `domain` column, so by construction every rule is global: loading keeps the legacy behavior and never crashes; only `--add-context-rule` refuses, naming the migration. The state commands also refuse this incomplete schema rather than guessing the expected domain.
+- Before either state command, inspect the exact row in the same explicit database through SQLite's read-only URI mode. `quote(domain)` preserves the distinction between SQL `NULL` and the literal string `'global'`; use the inspected ID, raw domain and exact pattern for the state command. Afterwards, read both state and audit back from that same database:
+
+  ```bash
+  # Before: inspect ID, raw domain, exact pattern and current state.
+  sqlite3 "file:./corrections.db?mode=ro" \
+    "SELECT id, quote(domain) AS raw_domain, pattern, is_active
+     FROM context_rules WHERE id = 123;"
+
+  # Run exactly one state command against the inspected identity.
+  uv run scripts/fix_transcription.py \
+    --disable-context-rule 123 --db ./corrections.db \
+    --context-rule-domain global \
+    --context-rule-pattern '<exact-pattern>' \
+    --reason '<non-empty-reason>'
+
+  # After: read state and the latest audit row from the same database.
+  sqlite3 "file:./corrections.db?mode=ro" \
+    "SELECT id, quote(domain) AS raw_domain, pattern, is_active
+     FROM context_rules WHERE id = 123;"
+  sqlite3 "file:./corrections.db?mode=ro" \
+    "SELECT id, timestamp, action, entity_id, details, success
+     FROM audit_log
+     WHERE entity_type = 'context_rules' AND entity_id = 123
+     ORDER BY id DESC LIMIT 1;"
+  ```
+
+  Do not substitute `--list-context-rules` for these explicit-target checks: this listing path ignores `--db`, opens the configured database, and renders both SQL `NULL` and a literal `global` domain as `[global]`.
+- Inspect actual table columns rather than inferring schema support from `system_config.schema_version`: the default value `2.0` does not prove that `context_rules.domain` is absent. When that column is absent, loading keeps the legacy behavior and treats every rule as global; `--add-context-rule` refuses with migration direction, and the state commands refuse incomplete schemas rather than guessing the expected domain.
 
 **Review queue** (persistent store for uncertain corrections; semantics in [review_queue_dashboard.md](review_queue_dashboard.md)):
 

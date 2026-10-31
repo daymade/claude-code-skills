@@ -455,7 +455,8 @@ For company slots or a short match inside a longer name, follow
 For wording supported by a parallel transcript, follow
 [written wording evidence](daymade-audio/transcript-fixer/references/review_queue_dashboard.md#written-evidence-for-ordinary-wording).
 Use the [CLI reference](daymade-audio/transcript-fixer/references/script_parameters.md#fix_transcriptionpy)
-to select the command; the argument parser owns accepted combinations.
+to select the command; `fix_transcription.py` dispatch and command-combination
+checks own accepted combinations.
 For domain-context location, configuration-directory selection or homophone-veto
 authoring, enter the [Domain Context Guide](daymade-audio/transcript-fixer/references/domain_context_guide.md).
 For remaining pending rows or a received occurrence-specific human verdict on an
