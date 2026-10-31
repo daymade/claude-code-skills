@@ -182,6 +182,41 @@ CURRENT_EXECUTION_CONTINUITY = re.compile(
     r"(?:不|不要|禁止)(?:接管|重放|切换|修改|写入|扩大)))",
     re.IGNORECASE,
 )
+# Returning the current lease is an execution instruction, not an asset lookup.
+# Keep questions, unknown continuations and adjacent recall clauses scannable.
+CURRENT_LEASE_RETURN = re.compile(
+    r"(?:\A|(?<=[\n，,。；;]))[ \t]*"
+    r"(?:(?:本次|当前|该)[ \t]*)?(?:lease|租约|工作目录)[ \t]*"
+    r"(?:由[ \t]*(?:控制端|协调者|负责人)[ \t]*)?"
+    r"(?:按(?:照)?|依照)[ \t]*(?:既有|现有)(?:的)?[ \t]*流程[ \t]*"
+    r"(?:正常[ \t]*)?归还(?=[ \t]*(?:$|[\n，,。；;]))",
+    re.IGNORECASE,
+)
+_CONTEXT_RECALL_VERB = r"(?:获取|找回|检索|查找|回查|回看|恢复)"
+_CONVERSATION_HISTORY = r"(?:对话|会话|聊天)(?:的)?历史(?:记录)?(?:里|中)"
+CONVERSATION_CONTEXT_RECALL = re.compile(
+    _CONTEXT_RECALL_VERB + r"[^\n。；;！？!?]{0,30}上下文"
+    + r"[^\n。；;！？!?]{0,40}" + _CONVERSATION_HISTORY
+    + r"|" + _CONTEXT_RECALL_VERB
+    + r"[ \t]*(?:(?:我们|本项目|之前|以前)(?:的)?[ \t]*)?"
+    + _CONVERSATION_HISTORY + r"(?:的)?[ \t]*上下文",
+)
+NEGATED_CONTEXT_PREFIX = re.compile(
+    r"(?:不要|不用|无需|不需要|不必|别|勿|不)[ \t]*(?:再[ \t]*)?(?:去[ \t]*)?$"
+)
+CONTEXT_QUESTION_TAIL = re.compile(r"^[^\n。；;]{0,24}(?:[?？]|吗|呢|是否)")
+
+
+def _explicit_conversation_context(text: str) -> bool:
+    for match in CONVERSATION_CONTEXT_RECALL.finditer(text):
+        prefix = text[max(0, match.start() - 16):match.start()]
+        if (NEGATED_CONTEXT_PREFIX.search(prefix)
+                and not CONTEXT_QUESTION_TAIL.search(text[match.end():])):
+            continue
+        return True
+    return False
+
+
 HOOK_GUIDANCE_MARKER = "Prior Work Retrieval is required before substantial production"
 USER_OPTOUT = re.compile(
     # 「不需要」 matters: a trapped session's own advised escape phrase
@@ -367,7 +402,9 @@ def _classify_prompt(
     )
     if current_execution:
         scannable = CURRENT_EXECUTION_CONTINUITY.sub(" ", scannable)
-    if PRIOR_WORK_STRONG_SIGNAL.search(scannable):
+        scannable = CURRENT_LEASE_RETURN.sub(" ", scannable)
+    if (PRIOR_WORK_STRONG_SIGNAL.search(scannable)
+            or _explicit_conversation_context(scannable)):
         return "required_prior_signal"
     if PRIOR_WORK_WEAK_SIGNAL.search(scannable) and DISTAL_WORK_NOUN.search(scannable):
         return "none" if receipt_valid else "required_prior_signal"
