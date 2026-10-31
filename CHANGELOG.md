@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **qa-expert** (v1.2.9 → v1.2.10): Compare actual migration consumers with fixed inputs, complete semantic results and explicit attribution limits; separate original-budget acceptance from lower-layer diagnostic reads. Preserve ordinary fixture and read-only authorization boundaries. Change type: bounded migration-acceptance guidance.
+- **debugging-network-issues** (v1.11.6 → v1.11.7): Distinguish database, upstream-header, complete-body and user-facing timing boundaries. Retain safe error identity and separate original deadlines from extended diagnostic reads. Change type: bounded timeout-diagnosis guidance.
+
 - **ghostty-use** (v1.9.6 → v1.9.7): Route repository instructions to time-window selection and history-readiness acceptance. Remove copied helper defaults, profile-environment guidance and reference summaries; scope earlier platform probes separately from native AX observations. Change type: documentation alignment and deduplication.
 
 - **ghostty-use** (v1.9.5 → v1.9.6): Clarify bounded time-window recovery selection, separate backup coverage from activity, and distinguish process presence from readable-history readiness. Correct adapter-specific AX limits while preserving restore selection, foreground ownership and account-switch behavior. Change types: bounded operating guidance and factual correction.

@@ -6,6 +6,7 @@
 - The 3-path pattern
 - Mock upstream pattern
 - Result matrix and interpretation
+- Timing boundaries and timeout identity
 - Failure modes and probe self-verification
 - Intermittent failures: return to the original condition
 - Extended variants (4+ paths, client-side variation)
@@ -86,6 +87,36 @@ The observed constant in the failing path (here: 126s) is usually close to a kno
 | Linux kernel TCP `net.ipv4.tcp_keepalive_time` | 7200s (rarely relevant)       |
 
 **Do not** treat this table as authoritative for your environment. These are starting points to cross-check against your measured constant. Confirm via vendor documentation or direct testing before citing as cause.
+
+## Timing boundaries and timeout identity
+
+Record each measured interval's start, end, observer and applicable deadline.
+Keep these quantities distinct:
+
+| Observation | What it measures |
+| --- | --- |
+| Database execution or wait time | The server-side interval actually reported by the database instrument |
+| Upstream response headers | The client's request start until headers arrive, including the path and upstream work |
+| Complete upstream response | That request's start until its entire body is consumed successfully |
+| User-facing completion | The outer request or interaction, including authentication, permissions and multiple upstream calls |
+
+An upstream HTTP 200 header does not prove complete reception or a successful
+outer request. A deadline can remain active during body consumption. Conversely,
+an outer request can outlast one upstream call's budget while every individual
+call meets it. Do not call header latency SQL execution time or use the outer
+total to infer a particular call's deadline violation.
+
+Capture non-sensitive error code/category, failing stage, response status, timing
+boundary and request correlation when the failure occurs. Distinguish a client
+deadline from an explicit server error, such as PostgreSQL `57014`; the code alone
+does not identify cancellation's cause, so retain the accompanying safe error
+message and server evidence. Do not infer a configured timeout from elapsed time
+or discard all error identity into a hash that later needs reconstruction.
+
+Keep original-budget observations and extended diagnostic reads in separate rows.
+An extended read can establish content or expose a server error; it cannot pass
+the original deadline. Record any unresolved interval as unknown, and do not
+attribute header-to-body delay wholly to transport without server-side evidence.
 
 ## Failure modes and probe self-verification
 
