@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.21.30 → v1.21.31): Inspect expressive feedback from pre-trigger observation through the stable outcome; check save truth, replay prevention and reduced-motion acknowledgment. Keep correctness claims and subjective approval tied to their actual evidence. Change type: bounded lifecycle acceptance guidance.
+
 - **report-with-html** (v1.4.7 → v1.4.8): Add an edition-comparison reading recipe with paired source evidence and full-text inspection; cover reading-position recovery after long expanded text is filtered. Preserve source-verification ownership and existing review scope. Change type: bounded evidence-presentation guidance.
 
 - **asr-transcribe-to-text** (`daymade-audio` v1.54.2 → v1.54.3): Preserve original course videos, picture, audio and playback speed during Feishu uploads; bypass audio extraction and quota-saving preprocessing, retain media selection after transfer errors, and verify the resulting video. Change type: bounded media-selection correction.
