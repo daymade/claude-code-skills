@@ -187,8 +187,15 @@ uv run python -m unittest discover -s tests -v
   指示性记录（token 续期与切号在该字段上不可分）；不为把两轮读数接成同账号历史而切回旧号重查
   （2026-10-30 实测：上轮 660f4c7f 周剩 61% → 本轮 8ed5604f 周剩 99%，99% 是新窗口正常形状，
   不能写成重置到账）。
-- 只有四类证据可放行相应的 reset 结论：用户或产品的直接 reset 事件；明确自然周期形状；banked
-  直接兑现事件；与措辞范围匹配的官方 global 证据。仅仅「回到 100%」不是直接 reset 事件。
+- 只有五类证据可放行相应的 reset 结论：用户或产品的直接 reset 事件；明确自然周期形状；banked
+  直接兑现事件；档位升级触发（见下条）；与措辞范围匹配的官方 global 证据。仅仅「回到 100%」
+  不是直接 reset 事件。
+- **档位升级触发回满（2026-10-31 实测确认的产品行为）**：Pro 档位升级（如 200→500）会立即
+  回满周额度并把窗口起点重算到升级完成时刻，形状=干净 +7d、用量 97%→0%。它同时是归因
+  候选与直接事件：证据形态为同 `account_ref` 窗口变化 + `kind=tier_upgrade` 事件（用户自述
+  升级操作，transcript 语句「升级触发回满/已升级到$500」可解析）；event kind 见下表。归因时
+  它与按钮式重置、切号、自然周期并列候选——单账号 + 干净 +7d 形状本身仍不可分，不要因
+  有了这个候选就把其他候选提前排除。
 - 缺旧基线、缺身份、证据冲突或只有匿名 rollout 时，归因保持 `unknown`；当前余量、Next reset 和
   banked 库存仍按实际读数正常报告，不补零、不猜测原因。
 
@@ -204,7 +211,7 @@ python3 scripts/reset_attribution.py --input /tmp/tibo-attribution.json
 |---|---|
 | `transitions[].before/after` | 各为一个观测；`identity=verified` 必须有 `account_ref` 与带时区的 `checked_at_utc`；匿名观测用 `identity=anonymous`。另有 `window_seconds`、`used_percent`、`reset_at_utc` 和可选 banked/plan 字段；没有前读数时 `before=null` |
 | `transitions[].anonymous_candidates` | 可选；只记录匿名形状，不能补身份 |
-| `events[]` | 可选直接事件：`account_switch`、`account_reset_observed`、`banked_redeem`、`official_global_reset`；附 `account_ref`（global 为 null）、`source`、`source_ref` 和 `checked_at_utc`。有明确发生区间时另给 `interval_start_utc` / `interval_end_utc`；官方范围用 `scope=all_paid` 或 `unknown` |
+| `events[]` | 可选直接事件：`account_switch`、`account_reset_observed`、`banked_redeem`、`tier_upgrade`、`official_global_reset`；附 `account_ref`（global 为 null）、`source`、`source_ref` 和 `checked_at_utc`。有明确发生区间时另给 `interval_start_utc` / `interval_end_utc`；官方范围用 `scope=all_paid` 或 `unknown` |
 | `selected_account_refs` | 问「我们 N 个是否都到账」时显式提供用户选定集合，必须为非空且唯一的账号句柄列表；不能从本轮查询返回的条数反推分母 |
 | `timing_evidence` | 需要「近同时」结论时提供 `max_span_seconds`（有依据的正整数分辨率）与非空 `source_ref`；没有默认分辨率。不能为让判据通过随意加宽时间范围 |
 | `auth_hints.last_refresh_utc` | 可选提示；只追加 `LAST_REFRESH_NON_DETERMINATIVE`，不参与分类 |
@@ -250,6 +257,15 @@ python3 scripts/reset_attribution.py --input /tmp/tibo-attribution.json
 验收是读者能分清「当时看到多少」「哪些号确实重置」「落地前还剩多少」与「原本能多用
 多少」。归因脚本只检查事件证据，不计算这笔损失；这些核算前提由执行者核对，当前没有
 自动核算器保证它们成立。证据不足时停止精确结算，不以继续刷新当前余额代替缺失的历史。
+
+**banked 兑现时机（避免浪费的两条时机判断，2026-10-31 实战）**：banked 兑现回满的是当前
+登录账号的周窗口并把窗口重新起算，兑现本身不产生新容量，只在「当前账号有急用」时才有价值：
+
+- **满格不兑**：当前账号已 100% 时兑换只重算窗口、白白消耗一张卡。
+- **急用先兑，官宣在途不构成等待理由**：额度耗尽需要继续工作时直接兑现；官方已预告新
+  banked 在途时机会成本≈0（新卡到账回补库存），「等新卡」= 停工等待，banked 的价值就在急用。
+  预告 banked 在途 ≠ 周额度全员回满（banked 是库存 +1，不自动消耗）——不要把 banked 预告
+  当成「额度马上恢复」。
 
 ## 消耗归因（机械判据）
 
