@@ -112,6 +112,11 @@ Organization secret/variable operations instead use their explicit `--org`
 scope; personal Codespaces secrets use `--user`. Body/title/field values remain
 unchanged even when they resemble flags or URLs. Public API absolute URLs use
 `api.github.com`; relative API endpoints remain supported.
+For PR merges, use the checked `pr merge` entry with an explicit PR and full
+`--match-head-commit`. It checks the live head and effective approval/merge state.
+Raw REST and GraphQL PR merge writes are rejected: an eligible actor can otherwise
+use bypass privileges without an `--admin` argument. Follow the
+[merge and explicit-bypass contract](references/pr_operations.md#merging-prs).
 Switching account, credential, host or interface invalidates earlier identity
 evidence. Recheck before the next write; do not reuse a prior session's pass.
 
@@ -120,7 +125,8 @@ mutations by passing those arguments after the helper's `--`, with an explicit
 repository or account scope; bare `gh` remains suitable for readback and
 separately authorized authentication/configuration. When a builtin's operand
 shape is rejected, use its supported explicit REST/GraphQL equivalent through
-the same helper; do not bypass the actor check. A failed or timed-out invocation
+the same helper, except PR merge writes, which stay on the guarded `pr merge`
+entry. Do not bypass the actor check. A failed or timed-out invocation
 does not prove the mutation was absent: read the exact target before retrying.
 
 For incident attribution, preserve event ID/time, actor and interface separately

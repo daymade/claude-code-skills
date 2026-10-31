@@ -361,6 +361,56 @@ Capture `HEAD_SHA` from a fresh `gh pr view` immediately before merging. Afterwa
 state again and verify the accepted behavior on the fetched base; a changed squash/rebase commit
 identity is not evidence of loss.
 
+Execute these mutations through `scripts/checked_gh.py` as directed by the Skill
+entry. The helper binds one explicit PR/repository and complete reviewed head,
+checks fresh effective approval and merge state, and then invokes `gh pr merge`.
+It rejects raw REST `PUT .../pulls/NUMBER/merge` and GraphQL `mergePullRequest`
+writes; normal API reads and unrelated mutations remain supported. A rejected
+merge is not permission to change API, retarget the PR or create a refresh commit.
+
+Treat an individual `APPROVED` review as evidence, not proof that GitHub counted
+all required approvals. Diagnose effective `reviewDecision`, dismissal events and
+the live base before repairing a branch. Keep an unexplained rejection unknown.
+
+For a separately authorized bypass, first verify the grant applies to this PR,
+actor, remaining requirements and exact head; a grant for the operator's own PR
+does not cover a collaborator's PR. Verify required CI and other non-bypassed
+gates independently. Use `--admin` only with the helper's explicit target-bound
+acknowledgement, placed before `--`:
+
+```bash
+python3 <github-ops-dir>/scripts/checked_gh.py --expected-login EXPECTED_LOGIN \
+  --ack-merge-bypass "OWNER/REPO#NUMBER@FULL_REVIEWED_SHA" -- \
+  pr merge NUMBER -R OWNER/REPO --squash --admin \
+  --match-head-commit FULL_REVIEWED_SHA
+```
+
+The acknowledgement records intent; it grants no permission or independent-review
+attestation. The helper still checks target/head, open/non-draft state, known
+mergeability and reported required CI. A failed, pending, malformed or unavailable
+required-check response stops bypass. An empty result or explicit no-checks
+message additionally requires positive absence in both active rulesets and legacy
+branch protection; a missing response or a legacy API 404 proves neither. Reconcile
+the check evidence or obtain the ordinary effective approval rather than changing
+API. Auto-merge and cancellation remain explicit `gh`
+operations; do not combine auto-merge with bypass or infer scheduling authority
+from an ordinary merge request.
+
+When reporting protection compliance after a merge, inspect the rule suite for
+the exact landed SHA, in addition to checking merged state and landed content:
+
+```bash
+gh api -X GET 'repos/OWNER/REPO/rulesets/rule-suites?ref=refs%2Fheads%2Fmain&time_period=day&per_page=100'
+gh api 'repos/OWNER/REPO/rulesets/rule-suites/SUITE_ID'
+```
+
+Match `after_sha` to the landing commit and read `result` plus active
+`rule_evaluations`. `bypass` is not `pass`, even when the merge command succeeded
+without `--admin`. Missing, delayed or inaccessible evidence leaves compliance
+unverified; do not retry the mutation to obtain a cleaner receipt. If there is no
+matching suite in the first page, paginate the bounded query; do not interpret an
+empty page as a pass. This readback is an executor step, not an atomic server lock.
+
 ### PR Lifecycle Management
 
 ```bash
