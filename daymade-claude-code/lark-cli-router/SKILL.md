@@ -146,6 +146,14 @@ user/bot and missing-scope branch, and interpret the current CLI's auth status:
 lark-cli --profile "<authorized-profile>" auth status --json
 ```
 
+When completing an agent-initiated device flow, inspect the exit status and the
+granted and missing scopes as well as the success text. If a nonzero exit and
+success text coexist, do not restart the flow or declare success from the text
+alone. Read `auth status`, then perform the narrowest real read in the selected
+business domain with the explicit profile and `--as user`. Keep unrelated
+missing scopes visible as separate limitations; follow the domain guide to
+decide whether the required read actually works.
+
 Do not classify `needs_refresh` as unusable login. When the status says it will
 auto-refresh on the next user API call, an already-authorized ordinary read may
 proceed with explicit `--profile` and `--as user`; let the CLI renew normally.
