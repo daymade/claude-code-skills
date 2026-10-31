@@ -78,6 +78,83 @@ class CurrentExecutionTests(unittest.TestCase):
                 self.assertIsNone(self.read_state())
                 self.assertIsNone(hook.handle_stop(self.stop))
 
+    def test_current_lease_return_does_not_require_historical_retrieval(self):
+        # Synthetic wording preserves the lifecycle clause from a real
+        # read-only Worker observation; private task identities stay outside.
+        prompts = [
+            "只读当前节点的 receipt，交回事实。lease由控制端按既有流程归还。",
+            "只读当前文件，租约由协调者按既有流程正常归还。",
+            "本次工作目录按现有流程归还。",
+            "当前租约由负责人按照既有的流程归还。",
+        ]
+        for prompt in prompts:
+            with self.subTest(prompt=prompt):
+                self.assertEqual(hook.classify_prompt(prompt), "none")
+                self.assertIsNone(hook.handle_user_prompt({**self.event, "prompt": prompt}))
+                self.assertIsNone(self.read_state())
+                self.assertIsNone(hook.handle_stop(self.stop))
+
+    def test_lease_return_excision_preserves_historical_and_question_clauses(self):
+        prompts = [
+            "lease由控制端按既有流程归还。请查我们之前的方案。",
+            "租约按既有流程归还，复用已有脚本。",
+            "请先检索我们之前的配置，当前工作目录按现有流程归还。",
+            "请找回按既有流程归还租约的记录。",
+            "查一下租约按既有流程归还的历史记录。",
+            "租约按既有流程归还吗？",
+            "租约按既有流程归还之前应检索哪些材料？",
+            "请查已有流程，再归还本次目录。",
+        ]
+        for prompt in prompts:
+            with self.subTest(prompt=prompt):
+                self.assertEqual(hook.classify_prompt(prompt), "required_prior_signal")
+                hook.handle_user_prompt({**self.event, "prompt": prompt})
+                self.assertEqual(hook.handle_stop(self.stop)["decision"], "block")
+
+    def test_lifecycle_or_absent_prompt_does_not_release_a_real_obligation(self):
+        hook.handle_user_prompt({**self.event, "prompt": "请检索我们之前的脚本并复用。"})
+        before = self.read_state()
+        for payload in [{"prompt": "当前租约按既有流程归还。"}, {},
+                        {"prompt": None}, {"prompt": ""}, {"prompt": " "}]:
+            with self.subTest(payload=payload):
+                event = {"hook_event_name": "UserPromptSubmit",
+                         "session_id": self.event["session_id"], **payload}
+                self.assertIsNone(hook.handle_user_prompt(event))
+                self.assertEqual(self.read_state(), before)
+                self.assertEqual(hook.handle_stop(self.stop)["decision"], "block")
+
+    def test_explicit_chinese_conversation_context_recall_still_arms(self):
+        prompts = [
+            "获取必要上下文，资料都在我们的对话历史记录里。",
+            "找回会话历史记录里的上下文。lease由控制端按既有流程归还。",
+            "当前租约按既有流程归还，检索聊天历史中的上下文。",
+            "不用检索对话历史记录里的上下文吗？",
+        ]
+        for prompt in prompts:
+            with self.subTest(prompt=prompt):
+                self.assertEqual(hook.classify_prompt(prompt), "required_prior_signal")
+                hook.handle_user_prompt({**self.event, "prompt": prompt})
+                self.assertEqual(hook.handle_stop(self.stop)["decision"], "block")
+
+    def test_negated_context_recall_and_current_file_inspection_do_not_arm(self):
+        prompts = [
+            "不要获取上下文，资料在对话历史记录里。",
+            "不需要再去检索聊天历史记录里的上下文。",
+            "禁止获取对话历史记录里的上下文。",
+            "不得检索聊天历史记录里的上下文。",
+            "不能检索会话历史记录里的上下文。",
+            "不用检索对话历史记录里的上下文，当前文件格式对吗？",
+            "只读当前文件，检查对话历史字段的格式与读取接口。",
+            "请获取当前文件中对话历史字段的值。",
+            "修复当前对话历史读取接口的代码。",
+        ]
+        for prompt in prompts:
+            with self.subTest(prompt=prompt):
+                self.assertEqual(hook.classify_prompt(prompt), "none")
+
+        prompt = "不要检索聊天历史记录里的上下文；请找回会话历史记录里的上下文。"
+        self.assertEqual(hook.classify_prompt(prompt), "required_prior_signal")
+
     def test_local_excision_preserves_real_history_requests(self):
         prompts = [
             "已有脚本可以直接沿用", "直接沿用现有实现，不要重写",
