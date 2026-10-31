@@ -335,7 +335,7 @@
       "description": "Apple-platform development and operations suite for macOS window capture, TCC and Keychain dialog diagnosis, Full Disk Access repair, iOS/macOS app development, disk cleanup, and launchd watchdogs.",
       "source": "./daymade-macos",
       "strict": false,
-      "version": "1.26.11",
+      "version": "1.26.12",
       "category": "suite",
       "keywords": [
         "suite",
@@ -715,7 +715,7 @@
       "description": "QA process setup with AAA test cases, P0-P4 bug tracking, metrics reports, OWASP security testing and third-party handoffs. Use for test planning, approved-batch execution and checkpoint recovery through the bundled master prompt.",
       "source": "./qa-expert",
       "strict": false,
-      "version": "1.2.9",
+      "version": "1.2.10",
       "category": "developer-tools",
       "keywords": [
         "qa",
@@ -835,7 +835,7 @@
       "description": "MUST be used first for tunnel / proxy-path connectivity failures or slow throughput (网络故障 / 连不上 / 代理或隧道下超时). Diagnoses Tailscale, proxy, TUN, DNS and SSH-tunnel problems on macOS and Windows/WSL, e.g. Tailscale ping works but SSH fails, curl works but browser gets 503, Git/Docker fails behind the proxy, or downloads crawl despite a reachable proxy. Not for application-layer bugs (use debugging-network-issues).",
       "source": "./tunnel-doctor",
       "strict": false,
-      "version": "1.17.12",
+      "version": "1.17.13",
       "category": "developer-tools",
       "keywords": [
         "tailscale",
@@ -964,7 +964,7 @@
       "description": "Investigates network, streaming and protocol failures with falsification-first layered experiments, the general fallback for unknown root causes. Use for ECONNRESET / RST_STREAM / SSE stalls, CDN/CGNAT timeouts or certificate errors, throughput collapse where everything returns 200 but transfers crawl, or LAN identity/topology mysteries. Not for known Tailscale/TUN/DNS/proxy-path conflicts (use tunnel-doctor).",
       "source": "./debugging-network-issues",
       "strict": false,
-      "version": "1.11.6",
+      "version": "1.11.7",
       "category": "developer-tools",
       "keywords": [
         "debugging",
@@ -994,7 +994,7 @@
       "description": "Evidence-driven repository setup, repair, handoff, and safe Git workflow for Claude Code or Codex. Detects the actual stack from project instructions and manifests instead of assuming Python, ffmpeg, uv, or .env; preserves local work during sync/conflict handling; diagnoses repeated SessionStart output before editing config; and defaults routine startup behavior to AGENTS.md/CLAUDE.md or a normal Agent request. Lifecycle hooks are an explicit pre-prompt exception with guarded, idempotent Claude Code setup and runtime-specific Codex verification.",
       "source": "./auto-repo-setup",
       "strict": false,
-      "version": "2.1.9",
+      "version": "2.2.0",
       "category": "developer-tools",
       "keywords": [
         "repo-setup",

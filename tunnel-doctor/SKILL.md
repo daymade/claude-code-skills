@@ -150,6 +150,10 @@ When symptoms point at a component (proxy, VPN, route table, DNS), **don't commi
 | All nodes of one proxy provider dead but subscription refresh works | Provider account dashboard (suspended / traffic limit / billing) — before ANY local repair action |
 | An agent CLI complaining "can't connect / keeps reconnecting" (Codex etc.) | The client's own runtime log, bucketed by error shape and by hour — for Codex: `logs` table in the newest `~/.codex/logs_*.sqlite`. Errors clustered in time windows = episodic transport (keep reading here); a single failing `process_uuid` among clean ones = per-process cause (e.g. stale token), not the network at all |
 
+For a Codex app-server that emits neither a handshake nor a useful log, read
+[startup before the local protocol](references/codex-startup-before-handshake.md)
+before repeating the transport probe or changing authentication.
+
 **Why this matters**: A symptom that matches the description of Step 2X does not, by itself, prove component X is the problem. Multiple layers can produce overlapping symptoms (a 60-second hang during `git push` could be proxy node death, fakeip route corruption, or DNS resolver stall — all plausible from the user-visible symptom alone). Reaching for the most specific verification first avoids committing to a wrong layer and chasing it down a dead end.
 
 If the failing operation involves DNS at all, **run the per-nameserver bisection from Step 2I before suspecting proxy or routing**. It rules in/out the largest single class of macOS-on-China-network failures in under 15 seconds.

@@ -205,6 +205,10 @@ adding or changing any hook.
 4. Verify the event matcher and current runtime payload.
 5. State the root cause before proposing a change.
 
+For Codex hooks that are present but untrusted, read
+[native hook trust](references/codex-hook-trust.md) before choosing a repair.
+Keep trust approval separate from registration, command execution and OS permissions.
+
 ### Install only after the hook gate passes
 
 The bundled initializer is Claude Code-specific and installs only a lightweight
