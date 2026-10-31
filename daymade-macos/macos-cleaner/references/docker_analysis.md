@@ -59,29 +59,81 @@ Docker's numbers use different scopes. Do not copy an image's displayed `SIZE` i
 - Container `SIZE` is the writable layer estimate inside the Docker VM. Treat it as an upper bound until the exact container is removed.
 - Local-volume `SIZE` is allocation inside the Docker VM. It is not proof that the host APFS volume will immediately gain the same amount.
 - If shared-layer effects or runtime details prevent a defensible per-object number, write `unknown` or `upper bound: <value>` in the Phase-2 report. An honest unknown satisfies the contract; a false precise number does not.
-- **A summed total needs a second method before it enters a plan.** Adding per-image `UNIQUE SIZE` values is an easy sum to make and an easy one to get wrong — layers can be shared across images the filter excluded, and container references can pin a layer that looks unreferenced in the images table alone. Recompute the total from a second direction (`docker system df -v` aggregate, or the shared-layer graph built from `docker image inspect` over every candidate) and treat any disagreement as a stop. On 2026-09-19 an independently reviewed sweep of a candidate set reported "6 dangling images, all deletable" came back as 6.38 GiB net reclaimable with 2 images still referenced by containers — the first sum was structurally incapable of seeing the second fact. A number that no second method has touched is a claim about your arithmetic, not about the disk.
-- On OrbStack, object deletion can free space inside the VM while host `df` remains unchanged until automatic TRIM settles the sparse image (lagged; 2.2.x has no manual Reclaim control). Report these as two separate postconditions.
+- **A summed total needs a second method before it enters a plan.** Adding per-image `UNIQUE SIZE` values can miss shared layers and container references. Recompute the total from a second direction (`docker system df -v` aggregate, or the shared-layer graph built from `docker image inspect` over every candidate) and treat any disagreement as a stop.
+- On OrbStack, report VM object release and host-volume free space separately; use Step 2B for image discovery and version-specific reclaim behavior.
 
 ## Step 2B: OrbStack-Specific Analysis
 
 OrbStack users have additional considerations.
 
-**data.img.raw is a Sparse File** (OrbStack 2.x real layout, measured 2026-10-23 on 2.2.4 — older notes citing `~/Library/OrbStack/` are wrong; that directory does not exist):
-```bash
-# Logical size (can show 8TB+, meaningless)
-ls -lh "$HOME/Library/Group Containers/HUAQ24HBR6.dev.orbstack/data/data.img.raw"
+For suspected OrbStack log growth, measure `~/.orbstack/log/` separately.
 
-# Actual disk usage (this is what matters)
-du -h "$HOME/Library/Group Containers/HUAQ24HBR6.dev.orbstack/data/data.img.raw"
+**Discover image candidates before measuring.** `data.img` and `data.img.raw` can be regular files or aliases; a filename or configured `data_dir` does not prove which image the running VM uses. Run this read-only recipe on the target Mac with Python 3. It checks exact storage hints, keeps aliases visible, and reports distinct files by device/inode without scanning unrelated directories:
+
+```python
+import json
+import stat
+from pathlib import Path
+
+scan_home = Path.home()
+roots = [scan_home / ".orbstack/data",
+         scan_home / "Library/Group Containers/HUAQ24HBR6.dev.orbstack/data"]
+config = scan_home / ".orbstack/vmconfig.json"
+try:
+    config.lstat()
+except FileNotFoundError:
+    print("config unavailable: vmconfig.json absent")
+else:
+    doc = json.loads(config.read_text())
+    if not isinstance(doc, dict):
+        raise ValueError("vmconfig.json must be an object")
+    if "data_dir" not in doc:
+        print("config unavailable: data_dir absent")
+    else:
+        value = doc["data_dir"]
+        if not isinstance(value, str) or not value.strip() or not Path(value).is_absolute():
+            raise ValueError("data_dir must be a nonblank absolute path string")
+        roots.append(Path(value))
+
+images = {}
+for root in roots:
+    try:
+        root.lstat()
+    except FileNotFoundError:
+        print(f"storage hint unavailable: {root}")
+        continue
+    directory = root.resolve(strict=True)
+    if not directory.is_dir():
+        raise ValueError(f"storage hint is not a directory: {root}")
+    for name in ("data.img", "data.img.raw"):
+        alias = root / name
+        try:
+            alias.lstat()
+        except FileNotFoundError:
+            continue
+        resolved = alias.resolve(strict=True)
+        info = resolved.stat()
+        if not stat.S_ISREG(info.st_mode):
+            raise ValueError(f"image candidate is not a regular file: {alias}")
+        item = images.setdefault((info.st_dev, info.st_ino), {
+            "resolved": str(resolved), "device": info.st_dev, "inode": info.st_ino,
+            "logical_bytes": info.st_size, "allocated_bytes": info.st_blocks * 512,
+            "aliases": [], "runtime_adoption": "unknown"})
+        if str(alias) not in item["aliases"]:
+            item["aliases"].append(str(alias))
+if not images:
+    raise SystemExit("No image candidate found; discovery remains unresolved")
+for item in images.values():
+    print(json.dumps(item))
 ```
 
-The logical vs actual size difference is normal. Only actual usage counts. If the group-container path is absent on a different machine, locate the live image with `find "$HOME/Library/Group Containers" -maxdepth 3 -name 'data.img.raw'` rather than assuming the path.
+The group-container location is a storage hint, not a universal path. Missing optional configuration remains visible; malformed configuration, broken links, permission errors and nonregular candidates stop the recipe rather than imply an empty or healthy store. Inspect another exact location only when target-specific configuration or application evidence identifies it.
 
-**Post-Cleanup: physical release is automatic but lagged (OrbStack 2.2.x)**: deleting Docker objects frees space inside the VM immediately, and the sparse image's physical blocks follow via TRIM on a lag — measured 2026-10-23 on 2.2.4: 12.86 GB of image deletions became −7.7 GiB physical within ~50 minutes with no operator action. There is **no "Reclaim disk space" button** in 2.2.x Settings → Storage (only usage bars and the Danger Zone resets — never touch those). The postcondition is a downward trend in `du -k` on the sparse image plus host `df -k` over minutes, not an instantaneous jump. Do not restart OrbStack to force a reclaim: a restart interrupts the Docker service for every co-resident session and needs its own explicit authorization.
+For each distinct resolved file, run `du -k '<resolved-image>'` and `df -k '<resolved-image>'` to bind its allocation to its host volume. Aliases of the same device/inode count once. Keep files on different volumes separate; external-volume allocation does not explain pressure on the internal Data volume. Sparse logical size is not physical allocation, and allocation is not reclaimable space. Retain unknown adoption until current runtime evidence binds the consumer; preserve conflicting images, do not pick the first match, start the VM, mount an image or delete a disk to resolve discovery.
 
-**OrbStack Logs**: a few MB total at `~/.orbstack/log/`. Not worth cleaning.
+**Post-cleanup: distinguish VM space from host release.** On observed OrbStack 2.2.4, deleting Docker objects freed space inside the VM before sparse-image blocks followed through automatic TRIM. Observe `du -k` on the resolved image and `df -k` on its host volume separately; do not promise an immediate or fixed-size release. The observed 2.2.4 Settings → Storage had no manual Reclaim control; do not substitute a Danger Zone reset or assume another version's controls. Do not restart OrbStack to force reclaim: it interrupts co-resident Docker work and requires separate authorization.
 
-**Verifying which subdirectory drives real VM disk usage**: `du -h data.img.raw` on the macOS side gives an accurate top-level number. To see *which subdirectory inside the VM* is driving it (overlay2 vs volumes vs containers), a temporary container is required. That is not Phase-1 read-only: it creates and removes container state and could pull an image if written loosely. First list the exact command and obtain inspection-only approval. Resolve an already-present immutable full image ID, then use no network, no pull, a read-only root, and a read-only bind mount:
+**Verifying which subdirectory drives real VM disk usage**: use the resolved image's allocation for the host-level observation. To see *which subdirectory inside the VM* is driving it (overlay2 vs volumes vs containers), a temporary container is required. That is not Phase-1 read-only: it creates and removes container state and could pull an image if written loosely. First list the exact command and obtain inspection-only approval. Resolve an already-present immutable full image ID, then use no network, no pull, a read-only root, and a read-only bind mount:
 
 ```bash
 docker image ls --no-trunc
@@ -97,7 +149,7 @@ The final query must be empty. If no suitable image is already present, stop wit
 
 `/var/lib/docker` is inside the Docker Engine's own Linux VM (where `dockerd` runs on OrbStack), so this stays entirely within the VM — no macOS↔VM boundary to cross. It reports the real block device (typically `/dev/vdb1`) and real per-subdirectory sizes; verified to match a `--privileged --pid=host nsenter` approach byte-for-byte in testing, so prefer this unprivileged form. There's no verified reason to reach for `--privileged` for this check.
 
-**BusyBox `du` uses `-d N`, not GNU's `--max-depth=N`** — the alpine image ships BusyBox coreutils, and the GNU-style flag errors with "unrecognized option: max-depth=1". `du -d 1`'s total will typically sum *higher* than `df`'s real "Used" figure (measured: `du` summed 170.6G against `df`'s 152.7G Used, same machine, same moment) because it double-counts `overlay2` layers shared across images. Trust `df`'s Used column for the true total; use `du -d 1` only for relative proportions between subdirectories, never as an absolute number.
+**BusyBox `du` uses `-d N`, not GNU's `--max-depth=N`** — the alpine image ships BusyBox coreutils, and the GNU-style flag errors with "unrecognized option: max-depth=1". `du -d 1` can double-count shared `overlay2` layers. Trust `df`'s Used column for the filesystem total; use `du -d 1` only for relative proportions between subdirectories.
 
 ## Step 2C: Double-Check Verification Protocol
 
@@ -134,7 +186,7 @@ docker ps -a --filter "name=^/<INSPECTION_CONTAINER_NAME>$"
 
 The final query must be empty. Any command failure, missing local image, unexpected write requirement, or residual temporary container stops the investigation. Only after the user confirms the inspected data is not needed may the agent prepare a separate exact deletion plan.
 
-**This rule also applies to anonymous volumes with no name to match against.** Heavy container churn (a service rerun often, an interactive dev loop) accumulates hundreds of anonymous volumes — 64-character hex names, no way to tell what's inside from the name alone. "Not referenced by any current container" is tempting to treat as sufficient evidence they're safe to remove. It isn't: a real inspection of 10 randomly sampled anonymous volumes found 5 of the 10 were live PostgreSQL data directories (`pg_wal`, `global/pg_control`, ~49MB each) — orphaned by containers whose lifecycle had ended, data still intact. "No container references it" and "the data is worthless" are unrelated facts; only content inspection tells you the second one.
+**This rule also applies to anonymous volumes with no name to match against.** A volume's opaque name and missing container references do not establish its value. PostgreSQL data directories (`pg_wal`, `global/pg_control`) can survive their containers. Inspect content under the same authorization gate before proposing deletion.
 
 Inspect every candidate rather than sampling and extrapolating, but keep the scope auditable: enumerate the exact approved volume names in the inspection plan and run one authorized read-only mount command per name. Do not discover a new population inside an execution loop.
 
@@ -176,13 +228,13 @@ Everything above cleans up an existing backlog. When a Docker resource type keep
 During image analysis, if you discover oversized images, suggest multi-stage build optimization:
 
 ```dockerfile
-# Before: 884 MB (full build environment in final image)
+# Full build environment in final image
 FROM node:20
 COPY . .
 RUN npm ci && npm run build
 CMD ["node", "dist/index.js"]
 
-# After: ~150 MB (only runtime in final image)
+# Runtime in final image; measure the resulting image rather than assume a size
 FROM node:20 AS builder
 COPY package*.json ./
 RUN npm ci

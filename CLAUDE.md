@@ -369,6 +369,8 @@ recovery, or capacity checks before necessary backup/copy/extraction, use
 [macos-cleaner](daymade-macos/macos-cleaner/SKILL.md) and its
 [necessary-copy capacity preflight](daymade-macos/macos-cleaner/references/safety_rules.md#necessary-copy-capacity-preflight).
 When changing measurement, run the SOP's targeted regression suite before shipping.
+For OrbStack image discovery and physical-release diagnosis, use its
+[Docker reference](daymade-macos/macos-cleaner/references/docker_analysis.md#step-2b-orbstack-specific-analysis).
 For uv cache diagnosis or retirement, enter
 [macos-cleaner](daymade-macos/macos-cleaner/SKILL.md) and its
 [uv target semantics](daymade-macos/macos-cleaner/references/cleanup_targets.md#uv-cache-retirement).

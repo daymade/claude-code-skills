@@ -6,7 +6,7 @@ Run with:
     uv run python3 -m unittest discover -s tests -v
     uv run python3 tests/test_gate_checker.py
 
-The two calibration classes at the bottom are the load-bearing ones. They run
+The calibration classes at the bottom are the load-bearing ones. They run
 the checker over real historical outputs — a plan that passed an independent
 review, and the report whose failures the gate was written to catch — because a
 checker that only passes its own unit tests proves nothing about whether it
@@ -31,13 +31,10 @@ CHECKER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(CHECKER)
 
 # The corpus lives in the bundle so anyone can re-run the calibration without
-# the replay workspace. It is copied verbatim from the 2026-09-19 outputs except
-# that machine identity and absolute home paths are replaced with placeholders
-# (`~/`, Example Mac — the repo's gitleaks rule flags any /Users/<name>/ form):
-# the shapes the checker parses are unchanged and
-# path basenames still carry the tokens the matching depends on. Because the
-# copies are in the repo, a checker change that breaks them fails here rather than
-# relying on someone's memory of what the corpus used to say.
+# the replay workspace. Inputs retain the historical plan/table shapes with
+# sanitized identities and paths; healthy governing quotations track the current
+# references. The known-bad case remains the original failure control. Parser
+# shapes and path basenames retain the tokens their checks depend on.
 CORPUS = Path(__file__).resolve().parent / 'fixtures' / 'corpus'
 KNOWN_GOOD = CORPUS / 'known-good-arm1.md'
 KNOWN_BAD = CORPUS / 'known-bad-original.md'
@@ -812,8 +809,8 @@ class CalibrationKnownGoodTests(unittest.TestCase):
     Corpus: /tmp/macos-cleaner-workspace/replay-arm1/output.md — the with-skill
     replay of the 2026-09-19 run, written after the Phase 2 entry gate existed.
     It is the known-good sample because an independent review of that gate draft
-    found no blocking defect in this output's classification: 19 classified rows,
-    governing rules quoted from cleanup_targets.md and docker_analysis.md, four
+    found no blocking defect in this output's classification: classified rows,
+    governing rules quoted from cleanup_targets.md and docker_analysis.md,
     PROPOSABLE rows in the action set, every PRESERVE row excluded, no prune
     family command proposed, and the lead command pointing at the largest
     in-action-set release. Its shapes are what forced the parser's tolerances:
