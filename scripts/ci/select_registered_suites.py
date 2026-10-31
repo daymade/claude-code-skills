@@ -13,7 +13,9 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[2]
 REGISTRY = "scripts/ci/test-suites.txt"
 SHA = re.compile(r"[0-9a-f]{40}")
-BOOKKEEPING = {"CHANGELOG.md", "README.md", "README.zh-CN.md", ".claude-plugin/marketplace.json"}
+# Repository instructions retain the always-selected shared contract suites.
+BOOKKEEPING = {"CHANGELOG.md", "README.md", "README.zh-CN.md", "CLAUDE.md", "AGENTS.md",
+               ".claude-plugin/marketplace.json"}
 EXTRAS = {"html_reader": ("daymade-docs/",), "feishu_reader": ("feishu-doc-scraper/",),
           "report": ("report-with-html/", "tests/report-with-html/", "data-visualization-discipline/")}
 
