@@ -245,6 +245,8 @@ For hook creation, consolidation, Skill-entry enforcement, registration or recov
 and follow its Build order and installer-owned recovery contract. Follow that
 Skill's loop and reminder contract; keep current thresholds in the
 owning implementation.
+For shared selection, source refresh, deadlines, status or rollback changes, load
+the Skill's [lifecycle regression template](daymade-claude-code/claude-code-hooks/references/shared-engine-lifecycle.md).
 For hook model-context delivery claims or ordinary-interface notification visibility, use
 [hook_pitfalls.md #66](daymade-claude-code/claude-code-hooks/references/hook_pitfalls.md);
 for current-version/partial-structure SQLite upgrades, use that file's #59.
