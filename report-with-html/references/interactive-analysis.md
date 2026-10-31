@@ -121,6 +121,7 @@ passage distinct text and a source locator so an empty or wrong quote can fail.
 | Expand evidence while filtered | Show the complete passage, source and time/page locator in place, even when the source record is excluded from the list |
 | Inspect the repeat in `C` | Open the prior wording and locator from `B` in place; an ID alone is insufficient and inspection must not silently change list selection |
 | Reset | Restore the declared baseline order, counts and controls; remove stale filter-dependent context without silently discarding durable review work |
+| Filter after reading deep inside a long expanded passage | After the page shrinks, the active condition and matching result or empty-state message remain visible at the declared reading destination; the input keeps focus. Do not count correct hidden rows as a usable result |
 
 Route list-row clicks, previous/next, cross-links and restored selections through
 the same selection policy. Keep evidence inspection separate from list navigation:
@@ -128,6 +129,16 @@ filter only the intended list items, not nested quotation copies in conclusions,
 preparation notes, per-record details or an open evidence panel. Test with an
 expanded quote before and after the filter changes, including keyboard closing
 and return to the invoking location.
+
+For the long-passage case, start with the search toolbar above the viewport,
+scroll well into expanded evidence, and enter a condition leaving one short
+match; repeat with no match. Inspect the actual viewport after layout settles:
+browser scroll clamping can leave the reader at the footer while filtering is
+otherwise correct. Preserve the input focus and the page's declared selection
+policy. Do not force initial load, state restoration or every deep link back to
+search just to make this control-driven case pass. Use the same case against a
+known-bad variant lacking reading-position recovery; it must expose the lost
+condition/result. Add this case to the existing journey, not a separate gate.
 
 The report author runs these cases and the existing acceptance reviewer inspects
 the observations. Record the matched IDs, selected ID and actual expanded wording,

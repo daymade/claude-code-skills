@@ -62,6 +62,9 @@ contract, interaction contracts, and browser verification.
   need to be seen; do not wait until images have already been selected.
 - Long-lived/generated-page maintenance:
   `references/long-lived-report-maintenance.md`
+- Version-comparison reading order, paired evidence and full-text inspection:
+  `references/version-comparison-reading.md`. Load when the page explains what
+  changed between editions; keep source interpretation separate from presentation.
 - Fresh-context review payload:
   `references/independent-review-prompt.md`
 - Warm-paper starter implementation:
