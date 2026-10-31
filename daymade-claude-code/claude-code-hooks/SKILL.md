@@ -1151,6 +1151,11 @@ themselves require separate processes. When combining matchers, preserve their
 original coverage with internal selectors, including non-Bash tools, and keep
 state writers on their original lifecycle events.
 
+Before changing shared rule selection, source refresh, deadline handling, lifecycle
+status or rollback, load the [shared-engine lifecycle regression template](references/shared-engine-lifecycle.md).
+Map its sequences to the existing owner and host before editing; it does not
+replace their installer, state format or approval contract.
+
 Preserve the complete host protocol when combining results: exit 0/1/2, structured
 deny, advisory context and error diagnostics. An allow from one rule must not
 release another rule's denial. Use separate entries when host/event/runtime
