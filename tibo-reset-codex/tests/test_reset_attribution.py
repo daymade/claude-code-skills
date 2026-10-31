@@ -386,6 +386,64 @@ class ResetAttributionTests(unittest.TestCase):
         self.assertEqual(banked["classification"], "banked_redeem")
         self.assertEqual(banked["claim_gate"]["same_account_reset"], "allow")
 
+    def test_tier_upgrade_event_is_a_direct_reset_cause(self):
+        result = attr.evaluate(current_only_bundle([{
+            "kind": "tier_upgrade", "account_ref": "a1b2c3d4",
+            "checked_at_utc": "2026-10-17T13:32:00Z", "source": "user",
+        }]))
+        self.assertEqual(result["classification"], "tier_upgrade")
+        self.assertEqual(result["candidate_causes"], ["tier_upgrade"])
+        self.assertEqual(result["claim_gate"]["same_account_reset"], "allow")
+
+    def test_window_change_without_tier_upgrade_event_stays_unknown(self):
+        bundle = natural_bundle()
+        bundle["transitions"][0]["before"]["reset_at_utc"] = "2026-10-17T12:30:00Z"
+        result = attr.evaluate(bundle)
+        self.assertEqual(result["classification"], "unknown")
+        self.assertNotIn("tier_upgrade", result["candidate_causes"])
+        self.assertIn("NO_DIRECT_RESET_EVENT", result["reason_codes"])
+
+    def test_tier_upgrade_event_with_other_ref_is_not_bound(self):
+        result = attr.evaluate(current_only_bundle([{
+            "kind": "tier_upgrade", "account_ref": "other999",
+            "checked_at_utc": "2026-10-17T13:32:00Z", "source": "user",
+        }]))
+        self.assertEqual(result["classification"], "unknown")
+        self.assertNotIn("tier_upgrade", result["candidate_causes"])
+
+    def test_user_tier_upgrade_statement_is_direct_evidence(self):
+        records = [
+            {"type": "user", "timestamp": "2026-10-31T07:45:00Z",
+             "message": {"role": "user",
+                         "content": "这是升级触发回满，今天没有 reset。"}},
+            {"type": "assistant", "message": {"role": "assistant", "content": [
+                {"type": "tool_use", "name": "Bash", "id": "usage",
+                 "input": {"command": "uv run python scripts/query_usage.py"}}]}},
+            {"type": "user", "message": {"role": "user", "content": [
+                {"type": "tool_result", "tool_use_id": "usage", "content": json.dumps(usage_payload())},
+            ]}},
+        ]
+        result = evaluate_records(records)
+        self.assertEqual(result["classification"], "tier_upgrade")
+        self.assertEqual(result["claim_gate"]["same_account_reset"], "allow")
+
+    def test_tier_upgrade_questions_and_negations_do_not_create_events(self):
+        healthy = [
+            "要不要升级到 $500？",
+            "还没升级到 $500。",
+            "没有升级，只是续订。",
+            "没有升到 $500。",
+            "未升到 $500。",
+            "不打算升级到 $500。",
+            "I did not upgrade to $500.",
+            "I haven't upgraded to $500.",
+        ]
+        for message in healthy:
+            with self.subTest(message=message):
+                self.assertEqual(
+                    [item["kind"] for item in attr.user_events(message, None, "2026-10-31T07:45:00Z")],
+                    [])
+
     def test_official_global_scope_allows_only_matching_global_claim(self):
         result = attr.evaluate(current_only_bundle([{
             "kind": "official_global_reset", "account_ref": None, "scope": "all_paid",
