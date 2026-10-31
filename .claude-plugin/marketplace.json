@@ -515,7 +515,7 @@
       "description": "Operates GitHub via gh CLI and REST/GraphQL — PRs, issues, Actions, self-hosted Runner inventory/capacity, repos, collaborators, org permissions, 2FA — with explicit target, authorization, and independent readback. Use when a write reports success but state didn't change, or choosing gh/REST/GraphQL/UI-only. Not for local Git recovery (use git-safety-net), maintainer PR review (use github-review-pr), or upstream contribution (use github-contributor).",
       "source": "./github-ops",
       "strict": false,
-      "version": "1.14.16",
+      "version": "1.15.0",
       "category": "developer-tools",
       "keywords": [
         "github",
@@ -534,7 +534,7 @@
       "description": "Reviews PRs against the live base with immutable objects and three-way merges. Use for PR review/merge readiness, main changed, closed-PR reconsideration, open-PR sweeps, review-led repair, or explicitly requested independent review of your own contribution. Not for GitHub CRUD (use github-ops), authoring/maintaining your PR (use github-contributor), or merging without fresh review.",
       "source": "./github-review-pr",
       "strict": false,
-      "version": "1.4.6",
+      "version": "1.4.7",
       "category": "developer-tools",
       "keywords": [
         "github",
