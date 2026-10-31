@@ -26,7 +26,8 @@ class MergeGuardTests(unittest.TestCase):
         pr.update(changes)
         return pr
 
-    def runner(self, pr=None, view_rc=0, operation_rc=0, checks=None, rules=None, legacy=False):
+    def runner(self, pr=None, view_rc=0, operation_rc=0, checks=None, rules=None, legacy=False,
+               checks_rc=0, checks_raw=None, checks_stderr=""):
         calls, writes = [], []
         def run(args, **kwargs):
             calls.append((args, kwargs))
@@ -37,7 +38,9 @@ class MergeGuardTests(unittest.TestCase):
             if args[1:3] == ["pr", "view"]:
                 return SimpleNamespace(returncode=view_rc, stdout=json.dumps(self.state() if pr is None else pr))
             if args[1:3] == ["pr", "checks"]:
-                return SimpleNamespace(returncode=0, stdout=json.dumps([{"name": "verify", "bucket": "pass"}] if checks is None else checks))
+                return SimpleNamespace(returncode=checks_rc,
+                                       stdout=json.dumps([{"name": "verify", "bucket": "pass"}] if checks is None else checks) if checks_raw is None else checks_raw,
+                                       stderr=checks_stderr)
             if args[1:3] == ["api", "graphql"]:
                 return SimpleNamespace(returncode=0, stdout=json.dumps({"data": {"repository": {"ref": {"branchProtectionRule": {"requiresStatusChecks": True} if legacy else None}}}}))
             if args[1] == "api" and "/rules/branches/" in args[2]:
@@ -170,6 +173,30 @@ class MergeGuardTests(unittest.TestCase):
                                        ([], True, False), ([{}], False, False)):
             run, calls, writes = self.runner(self.state(reviewDecision="REVIEW_REQUIRED", mergeStateStatus="BLOCKED"),
                                             checks=[], rules=rules, legacy=legacy)
+            if allowed:
+                self.assertEqual(checked.checked_invocation("operator", "github.com", self.command("--admin"),
+                                 run=run, merge_bypass=f"example/project#42@{SHA}"), 0)
+                self.assertEqual(len(writes), 1)
+            else:
+                with self.assertRaises(ValueError):
+                    checked.checked_invocation("operator", "github.com", self.command("--admin"),
+                                               run=run, merge_bypass=f"example/project#42@{SHA}")
+                self.assertEqual(writes, [])
+
+    def test_failed_check_command_with_empty_json_never_reaches_bypass(self):
+        for rc in (1, 7, 8):
+            run, calls, writes = self.runner(self.state(reviewDecision="REVIEW_REQUIRED", mergeStateStatus="BLOCKED"),
+                                            checks=[], checks_rc=rc)
+            with self.assertRaises(ValueError):
+                checked.checked_invocation("operator", "github.com", self.command("--admin"),
+                                           run=run, merge_bypass=f"example/project#42@{SHA}")
+            self.assertEqual(writes, [])
+            self.assertFalse(any("/rules/branches/" in str(args) for args, _ in calls))
+
+    def test_known_no_checks_message_still_requires_both_absence_probes(self):
+        for legacy, allowed in ((False, True), (True, False)):
+            run, calls, writes = self.runner(self.state(reviewDecision="REVIEW_REQUIRED", mergeStateStatus="BLOCKED"),
+                                            checks_rc=1, checks_raw="", checks_stderr="no checks reported on the 'topic' branch", legacy=legacy)
             if allowed:
                 self.assertEqual(checked.checked_invocation("operator", "github.com", self.command("--admin"),
                                  run=run, merge_bypass=f"example/project#42@{SHA}"), 0)

@@ -175,14 +175,18 @@ def _merge_preflight(command, data_indices, host, env, run, acknowledgement):
         checks = run(["gh", "pr", "checks", str(pr["number"]), "-R", repos[0],
                       "--required", "--json", "name,bucket"], env=env,
                      capture_output=True, text=True, timeout=30)
+        no_checks_message = False
         try:
             rows = json.loads(checks.stdout)
         except (ValueError, TypeError):
             if (checks.returncode == 1 and not checks.stdout.strip()
                     and getattr(checks, "stderr", "").startswith("no checks reported on ")):
                 rows = []
+                no_checks_message = True
             else:
                 raise ValueError("required-check evidence is unavailable; no bypass ran") from None
+        if checks.returncode != 0 and not no_checks_message:
+            raise ValueError("required-check command failed; no bypass ran")
         if rows == []:
             if not _no_required_checks(repo, pr["baseRefName"], env, run):
                 raise ValueError("absence of required CI is unverified; no bypass ran")
