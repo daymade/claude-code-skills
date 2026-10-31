@@ -181,16 +181,16 @@ gh pr view 123 --json number,title,state,author,reviews
 
 ```bash
 # Edit PR title/body
-gh pr edit 123 --title "New title" --body "New description"
+gh pr edit 123 -R OWNER/REPO --title "New title" --body "New description"
 
 # Add reviewers
-gh pr edit 123 --add-reviewer username1,username2
+gh pr edit 123 -R OWNER/REPO --add-reviewer username1,username2
 
 # Add labels
-gh pr edit 123 --add-label "bug,priority-high"
+gh pr edit 123 -R OWNER/REPO --add-label "bug,priority-high"
 
 # Remove labels
-gh pr edit 123 --remove-label "wip"
+gh pr edit 123 -R OWNER/REPO --remove-label "wip"
 ```
 
 ### PR body edit-history cleanup
@@ -415,10 +415,10 @@ empty page as a pass. This readback is an executor step, not an atomic server lo
 
 ```bash
 # Close PR without merging
-gh pr close 123
+gh pr close 123 -R OWNER/REPO
 
 # Reopen closed PR
-gh pr reopen 123
+gh pr reopen 123 -R OWNER/REPO
 
 # Checkout PR locally for testing
 gh pr checkout 123
@@ -432,26 +432,26 @@ gh pr checkout 123
 
 ```bash
 # Add comment to PR
-gh pr comment 123 --body "Your comment here"
+gh pr comment 123 -R OWNER/REPO --body "Your comment here"
 
 # Add comment from file
-gh pr comment 123 --body-file comment.txt
+gh pr comment 123 -R OWNER/REPO --body-file comment.txt
 ```
 
 ### Reviewing PRs
 
 ```bash
 # Add review comment
-gh pr review 123 --comment --body "Review comments"
+gh pr review 123 -R OWNER/REPO --comment --body "Review comments"
 
 # Approve PR
-gh pr review 123 --approve
+gh pr review 123 -R OWNER/REPO --approve
 
 # Approve with comment
-gh pr review 123 --approve --body "LGTM! Great work."
+gh pr review 123 -R OWNER/REPO --approve --body "LGTM! Great work."
 
 # Request changes
-gh pr review 123 --request-changes --body "Please fix X"
+gh pr review 123 -R OWNER/REPO --request-changes --body "Please fix X"
 ```
 
 ---
@@ -610,19 +610,19 @@ gh pr checks 123 --json name,state,bucket,workflow
 
 ```bash
 # Add assignees
-gh pr edit 123 --add-assignee username
+gh pr edit 123 -R OWNER/REPO --add-assignee username
 
 # Add to project
-gh pr edit 123 --add-project "Project Name"
+gh pr edit 123 -R OWNER/REPO --add-project "Project Name"
 
 # Set milestone
-gh pr edit 123 --milestone "v2.0"
+gh pr edit 123 -R OWNER/REPO --milestone "v2.0"
 
 # Mark as draft
-gh pr ready 123 --undo
+gh pr ready 123 -R OWNER/REPO --undo
 
 # Mark as ready for review
-gh pr ready 123
+gh pr ready 123 -R OWNER/REPO
 ```
 
 ---
