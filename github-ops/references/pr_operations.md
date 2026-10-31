@@ -349,12 +349,12 @@ not a replacement for this check or a way to satisfy a stricter task contract.
 
 ```bash
 # Merge PR (various strategies)
-gh pr merge 123 -R OWNER/REPO --merge --match-head-commit HEAD_SHA
-gh pr merge 123 -R OWNER/REPO --squash --match-head-commit HEAD_SHA
-gh pr merge 123 -R OWNER/REPO --rebase --match-head-commit HEAD_SHA
+gh pr merge 123 -R OWNER/REPO --merge --match-head-commit "$HEAD_SHA"
+gh pr merge 123 -R OWNER/REPO --squash --match-head-commit "$HEAD_SHA"
+gh pr merge 123 -R OWNER/REPO --rebase --match-head-commit "$HEAD_SHA"
 
 # Request server auto-merge only under its verified configured requirements
-gh pr merge 123 -R OWNER/REPO --auto --squash --match-head-commit HEAD_SHA
+gh pr merge 123 -R OWNER/REPO --auto --squash --match-head-commit "$HEAD_SHA"
 ```
 
 Capture `HEAD_SHA` from a fresh `gh pr view` immediately before merging. Afterward, read the PR
