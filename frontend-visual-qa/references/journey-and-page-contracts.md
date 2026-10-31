@@ -536,9 +536,11 @@ state and the project's safe recovery path. Confirmed participation may receive
 vivid feedback. Claims such as “correct” or a correctness-based streak require
 the product's reliable decision criterion; saving alone does not establish correctness.
 
-Refresh, revisit and safely retry the same completed action; verify its reward
-is not replayed or counted twice. Follow the project's existing recovery
-contract for an uncertain write rather than resubmitting to obtain evidence.
+For rewards the product defines as one-time completion events, refresh, revisit
+and safely retry the same completed action; verify these paths do not grant the
+reward again or count it twice. Distinguish explicitly supported animation
+playback from a new reward. Follow the project's existing recovery contract for
+an uncertain write rather than resubmitting to obtain evidence.
 Repeat the affected journey with reduced motion and confirm that a clear final
 acknowledgment remains when motion is shortened or removed.
 
