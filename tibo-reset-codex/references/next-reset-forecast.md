@@ -87,6 +87,18 @@
 Reset 宣告」，不是「poll 出现」——只盯 poll 会漏掉直接官宣。Day 1-6 形态分布：poll-vote 兑现
 仅 Day 2，直接官宣 Day 6，其余日只 ship；两种兑现形态都要覆盖。
 
+**多日批量预告的变体（2026-10-31 Day 26 实测）**：Day N 帖正文可一次预告多天——「Next two
+days will be resets… banked… do with this what you may 👀」。判读要点：
+
+- **类型看标注**：`resets… banked` = 未来各日发放的是备用卡（banked reset，库存 +1、到账后
+  不自动消耗），不是周额度回满的 global；Runway 会同读为 `reset_scheduled/resetType=banked`。
+- **锚定按太平洋日历日**：预告句无单点时刻 → 不造 ETA；按发帖的太平洋日期推「next two
+  days」= 接下来的日历日（Day27/Day28），换算北京窗口并按「无具体时刻的未来承诺」用
+  `record` 建窗口预测（banked 的到账判据 = 同 `account_ref` banked 计数变化）。
+- **功能日 ≠ reset 日**：挑战期每天发一个 Day N 功能帖；reset 日在帖中明说（Day 21/23
+  「today is a reset」、Day 6 直接宣告）。当天帖只发功能、无 reset 字样 → 当天无 reset，
+  不把每个 Day N 帖都当潜在 reset 信号全文排查（owner 2026-10-31 确认的节奏判读）。
+
 把历史基线和本次判断分开写。追踪站预测只能作同源信号解读，不是独立证据；
 多个站转同一条推文不增加信心。当前状态页正常只代表该页未公告问题，不能抹掉产品实测。
 

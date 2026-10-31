@@ -28,7 +28,7 @@ CLAIM_MULTI_ACCOUNT = "multi_account_reset"
 CLAIM_CROSS_ACCOUNT = "cross_account_observation"
 CLAIM_ALL_ACCOUNTS = "all_accounts"
 CLAIM_SELECTED_ACCOUNTS = "selected_accounts_reset"
-DIRECT_EVENT_KINDS = {"account_reset_observed", "banked_redeem", "official_global_reset"}
+DIRECT_EVENT_KINDS = {"account_reset_observed", "banked_redeem", "official_global_reset", "tier_upgrade"}
 
 
 class AttributionError(ValueError):
@@ -176,7 +176,7 @@ def natural_cycle_observed(transition):
 
 def has_direct_account_reset(transition, events):
     after = transition.get("after")
-    return any(item["kind"] in ("account_reset_observed", "banked_redeem")
+    return any(item["kind"] in ("account_reset_observed", "banked_redeem", "tier_upgrade")
                and target_matches(item, after) and overlaps(item, transition.get("before"), after)
                for item in events)
 
@@ -362,6 +362,8 @@ def evaluate(bundle):
     banked = natural is False and direct_reset and any(
         item["kind"] == "banked_redeem" and target_matches(item, after)
         and overlaps(item, before, after) for item in events)
+    tier_up = any(item["kind"] == "tier_upgrade" and target_matches(item, after)
+                  and overlaps(item, before, after) for item in events)
 
     candidate_causes = []
     if switch:
@@ -369,7 +371,12 @@ def evaluate(bundle):
     if natural:
         candidate_causes.append("natural_cycle")
     if direct_reset:
-        candidate_causes.append("banked_redeem" if banked else "account_reset_observed")
+        if banked:
+            candidate_causes.append("banked_redeem")
+        elif tier_up:
+            candidate_causes.append("tier_upgrade")
+        else:
+            candidate_causes.append("account_reset_observed")
     if official:
         candidate_causes.append("official_global_reset")
 
@@ -409,7 +416,7 @@ def evaluate(bundle):
         reasons.append("LAST_REFRESH_NON_DETERMINATIVE")
     if not reset_observed and not official:
         reasons.append("NO_DIRECT_RESET_EVENT")
-        missing.append("direct account reset, natural-cycle, banked-redemption, or official-scope evidence")
+        missing.append("direct account reset, natural-cycle, banked-redemption, tier-upgrade, or official-scope evidence")
     if switch:
         reasons.append("DIRECT_ACCOUNT_SWITCH_EVIDENCE")
 
@@ -544,6 +551,13 @@ RESET_NEGATION = re.compile(
     re.I,
 )
 
+TIER_NEGATION = re.compile(
+    r"(?:不是|并非|没有|没|尚未|还未|还没)[^。!？?；;，,\n]{0,16}(?:升级|升到)|"
+    r"(?:未被|未)(?:升级|升到)|(?:不打算|不准备|暂不|先不|不|别)升级|"
+    r"(?:not|never|n'?t)[^。!？?；;，,\n]{0,20}upgrade",
+    re.I,
+)
+
 
 def user_events(text, account_ref, timestamp):
     events = []
@@ -584,6 +598,14 @@ def user_events(text, account_ref, timestamp):
             lowered)
         if not not_direct and (banked or banked_reverse) and not banked_negated:
             add("banked_redeem", "user:banked_redeem")
+        tier_negated = bool(TIER_NEGATION.search(statement))
+        tier = re.search(
+            r"(?:升级|升到)[^。!？?；;，,\n]{0,24}(?:触发|回满|重置|\$?\d{2,4}(?:\s*(?:美元|刀|档))?)",
+            lowered) or re.search(
+            r"(?:upgraded?|tier\s*upgrade)[^。!？?；;，,\n]{0,24}(?:to\s*\$?\d{2,4}|triggers?|full\s*reset)",
+            lowered)
+        if not not_direct and tier and not tier_negated:
+            add("tier_upgrade", "user:tier_upgrade")
     return events
 
 
@@ -737,7 +759,7 @@ def evidence_from_transcript(path):
             only_ref = next(iter(verified_refs))
             for item in events:
                 if (item["source"] == "user" and item["account_ref"] is None
-                        and item["kind"] in ("account_reset_observed", "banked_redeem", "account_switch")):
+                        and item["kind"] in ("account_reset_observed", "banked_redeem", "tier_upgrade", "account_switch")):
                     item["account_ref"] = only_ref
     if not observations:
         raise AttributionError("no verified query_usage observation in the selected turn")
