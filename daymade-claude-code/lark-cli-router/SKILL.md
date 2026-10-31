@@ -34,6 +34,12 @@ Use its bounded candidate helper with explicit authorized profiles; do not start
 ingest, gap audit or ASR for a playback-link lookup. Preserve a supplied minute
 token or meeting ID and use the embedded guide's direct lookup instead.
 
+## Preserve document layout
+
+When updating a document with manual formatting, changing table widths, or
+investigating full-width reading, read [document layout](references/document-layout.md)
+before planning a write. Keep command syntax in the selected embedded Doc guide.
+
 ## Workflow
 
 ### 1. Confirm the runtime

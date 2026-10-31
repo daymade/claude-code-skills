@@ -89,6 +89,42 @@ Prove the regression detects the original failure using the frozen faulty code o
 an isolated mutation of the same write/read path. Use synthetic evidence URLs and
 account identifiers; do not copy live secrets into fixtures.
 
+## Interrupted writes and later human changes
+
+Select this case when a resumable writer can update state that people also edit.
+The author exercises the real writer and recovery consumer against an isolated
+state directory and a synthetic target. Adapt version transitions and request
+identities to the target's documented contract; do not assume every API advances
+a revision by exactly one or offers an idempotency key.
+
+A value returning to its baseline does not establish that nothing happened. For
+example, start with a width of 100 at revision 4, apply the writer's change to 180
+at revision 5 but lose its reply, then let a person set 100 at revision 6. Recovery
+must preserve the person's 100 and stop further writes; accepting either the old
+or intended value would incorrectly treat that edit as unfinished work.
+
+Use the owning writer's durable checkpoint to retain the pre-write identity and
+version, intended request and expected complete affected state before the side
+effect. After restart, compare authoritative readback with that checkpoint under
+the API's actual concurrency semantics. A success receipt does not waive this
+check, and checking only the field just written can miss another edited field.
+
+| Control | Required observation through the recovery consumer |
+|---|---|
+| Write succeeds, reply is lost, no later edit | The completed operation is recognized without another mutation. |
+| Lost reply, then a human returns the value to its baseline | Recovery reports a conflict, preserves the human value and performs no further mutation. |
+| A normal reply is followed by an unexpected version or another field changing | Recovery preserves that change and stops before a later write can overwrite it. |
+| Required post-write baseline or revision evidence is missing | Outcome remains unknown/pending; recovery does not invent a default or resend to obtain a receipt. |
+| The exact pre-write checkpoint remains and the API permits a safe conditional/idempotent retry | Recovery follows that documented retry path without a duplicate effect; value equality alone is insufficient. |
+
+Close and reopen the actual persisted checkpoint before the recovery step. Assert
+the final values, recovery decision and mutation count, including zero writes on
+the conflict controls. Reuse the domain repository's existing regression for this
+failure instead of duplicating its publisher in the Skill. Prove the bad recovery
+predicate fails that regression using a frozen faulty implementation or isolated
+mutation. These tests enforce the domain behavior; this recipe alone does not.
+Keep private document identities, URLs and checkpoint files out of shipped examples.
+
 ## Operational route changes
 
 Use this recipe when replacing a provider, changing the normal route or disabling
