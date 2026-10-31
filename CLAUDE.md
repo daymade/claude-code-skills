@@ -70,7 +70,8 @@ Its verification reference owns dual-entry reconciliation and native-host readba
 keep the detailed procedure there.
 For a valid check that emits warnings, follow its
 [warning interpretation](daymade-skill/skill-creator/references/knowledge-skill-grounding.md#interpret-validation-warnings).
-For local/remote ASR selection, speed comparison and speech-content acceptance, enter
+For course/original-video uploads, ASR input preparation, local/remote ASR selection,
+speed comparison and speech-content acceptance, enter
 [asr-transcribe-to-text](daymade-audio/asr-transcribe-to-text/SKILL.md) and its
 [execution SOP](daymade-audio/asr-transcribe-to-text/references/execution_location_and_comparison.md).
 For Scrapling browser-cache diagnosis, follow
