@@ -74,7 +74,7 @@ creates a grant and never widens an existing one.
 
 4. Run recovery and the dependent consumer in the security session required by
    that entry. An unlock in another SSH, login or service session does not
-   establish access for the blocked requester. Distinguish four states and report them separately:
+   establish access for the blocked requester. Distinguish these states and report them separately:
    the keychain is unlocked, the named item is actually readable, the original
    pending request's state, and the final business result. Only the named protected
    operation succeeding in the original requester and context closes the
@@ -93,6 +93,23 @@ creates a grant and never widens an existing one.
    another principal's key or session, and do not control a protected window the
    host refused. One application's recovery does not establish another's cause or
    access; verify each affected original operation.
+
+## Distinguish application credential storage from permission repair
+
+For recurring prompts confined to one application, the executing agent checks that
+application's current credential-storage configuration and supported recovery
+procedure before proposing another grant. A documented alternate backend may be
+used within the task's authorization; it is not a general default or a reason to
+widen Keychain item ACLs. Use the application's own authorization flow, not copied
+tokens. Preserve other applications' configuration and valid grants.
+
+After a backend change, follow the owning application's procedure to restore each
+affected service and verify its actual operation in a fresh intended consumer.
+One service's success does not certify another. Successful file-backed storage
+does not establish that the original Keychain was unlocked, its ACL or TCC was
+repaired, or a changed signer caused the earlier failure. Report the working route
+and any unresolved original cause separately. These checks are operator decisions;
+this Skill does not switch application backends automatically.
 
 ## Cancel the obstructing dialog only within explicit authority
 
