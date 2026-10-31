@@ -123,6 +123,8 @@ Treat “unsupported” as a hypothesis and investigate alternative documented p
   prerequisite is affected.
 - For persisted formats/partial updates, permission-sensitive checks or large
   command output, follow the affected [stateful verification recipe](references/stateful-script-verification.md).
+  For resumable writes to human-edited state, include its
+  [interrupted-write controls](references/stateful-script-verification.md#interrupted-writes-and-later-human-changes).
   A truncated response is not a complete read; use its complete-read recipe.
   For provider/default-route/enable-switch changes, use its **Operational route
   changes** recipe: preserve the original user result and exercise the actual
