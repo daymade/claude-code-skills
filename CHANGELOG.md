@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.21.29 → v1.21.30): Verify nonblocking diagnostics across explicit disclosure, live data refresh and navigation remounts; preserve visible uncertainty, primary work and selected-task recovery. Change type: bounded lifecycle acceptance guidance.
+
 - **lark-cli-router** (`daymade-claude-code` v4.33.17 → v4.33.18): Distinguish nonzero device-flow exits from domain recovery, preserve missing-scope limitations, and require explicit user-domain readback before declaring success. Change type: bounded authentication-recovery guidance.
 - **macos-permissions** (`daymade-macos` v1.26.11 → v1.26.12): Resolve existing authorized credential owners and supported native entries before returning Keychain password entry to the person. Preserve exact-context matching, host refusals, grant boundaries and original-operation verification. Change type: bounded recovery-routing correction.
 - **qa-expert** (v1.2.9 → v1.2.10): Compare actual migration consumers with fixed inputs, complete semantic results and explicit attribution limits; separate original-budget acceptance from lower-layer diagnostic reads. Preserve ordinary fixture and read-only authorization boundaries. Change type: bounded migration-acceptance guidance.
