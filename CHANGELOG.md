@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **asr-transcribe-to-text** (`daymade-audio` v1.54.2 → v1.54.3): Preserve original course videos, picture, audio and playback speed during Feishu uploads; bypass audio extraction and quota-saving preprocessing, retain media selection after transfer errors, and verify the resulting video. Change type: bounded media-selection correction.
+
 - **lark-cli-router** (`daymade-claude-code` v4.33.20 → v4.33.21): Add conditional document-layout guidance separating body content, shared table widths and personal page width; preserve existing geometry, verify the actual reading surface and retain permission boundaries. Change type: bounded preservation guidance.
 - **skill-creator** (`daymade-skill` v1.74.8 → v1.74.9): Add interrupted-write verification controls for lost replies, later human edits and returns to baseline values, with exact-state recovery and no-duplicate-effect observations. Change type: bounded recovery-test guidance.
 
