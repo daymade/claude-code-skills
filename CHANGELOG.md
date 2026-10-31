@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **transcript-fixer** (`daymade-audio` v1.54.1 → v1.54.2): Document explicit-target read-only database inspection and actual-schema preflight before maintenance. Clarify SQL-NULL versus named-domain rules, Stage 1 and native-agent examples, and dispatch ownership; consolidate schema and state guidance. Change type: documentation correction and deduplication; runtime algorithms unchanged.
 
+- **claude-code-hooks** (`daymade-claude-code` v4.33.18 → v4.33.19): Add an owner-bound regression template for shared rule refresh/disable, deadline failure direction and recoverable lifecycle transitions. Preserve host protocols, independent waits and scoped rollback. Change type: bounded regression guidance.
 - **frontend-visual-qa** (v1.21.29 → v1.21.30): Verify nonblocking diagnostics across explicit disclosure, live data refresh and navigation remounts; preserve visible uncertainty, primary work and selected-task recovery. Change type: bounded lifecycle acceptance guidance.
 
 - **lark-cli-router** (`daymade-claude-code` v4.33.17 → v4.33.18): Distinguish nonzero device-flow exits from domain recovery, preserve missing-scope limitations, and require explicit user-domain readback before declaring success. Change type: bounded authentication-recovery guidance.
