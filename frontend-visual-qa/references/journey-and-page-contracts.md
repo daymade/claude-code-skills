@@ -386,6 +386,30 @@ The essential-content boundary follows
 [GOV.UK's details guidance](https://design-system.service.gov.uk/components/details/).
 These sources do not prescribe one detail format or prove this target's correctness.
 
+### Nonblocking diagnostics during refresh and return
+
+When secondary diagnostics share a surface with ordinary work, the auditor
+separately checks the data condition, the user's disclosure choice and the
+component lifecycle through authorized Level A/B interaction. Bind the expected
+initial state, refresh behavior and return policy to the product contract before
+testing; an error count alone does not decide which panel should open.
+
+| Transition | Inspect in the actual render |
+|---|---|
+| Open the ordinary collection while another source is unavailable | Required uncertainty stays visible, the main work remains reachable, and secondary reasons follow the contracted default. |
+| Explicitly expand diagnostics, then receive a real data refresh | The complete reasons remain readable and the disclosure follows the contracted update policy; test both continuing errors and recovery. |
+| Explicitly collapse diagnostics, then receive a new failure | The summary updates without unexpectedly reclaiming the main work area when the contract gives the user control. |
+| Enter a task, then return to the collection | Check the promised object and reading context plus the diagnostic state. Distinguish a retained component from a remount: preserving a choice during refresh does not prove that choice survives navigation. |
+
+Use a blocking failure of the selected task as a healthy boundary control:
+its essential explanation and safe next action must remain visible according to
+the recovery contract. Do not prescribe universal default collapse or persistent
+expansion across remounts. Read the collapsed summary, expanded causes and main
+work after the affected transitions; an `open` flag alone cannot establish their
+usability. Reuse the rejected old evidence for fix closure, keep refresh and
+return verdicts separate, and stop after the affected lifecycle cases are resolved.
+These are auditor checks; the generic layout sweep does not enforce them.
+
 ## Authorization, Mode, And Runtime Truth
 
 Apply these checks only when authorization, modes, providers, or runtime status
