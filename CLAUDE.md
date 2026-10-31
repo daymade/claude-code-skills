@@ -818,8 +818,12 @@ Before diagnosing conflicts or differing local and hosted merge results, use its
 [fresh-base verification](github-ops/references/pr_operations.md#fresh-base-verification).
 When the same verified objects still yield different local and hosted results, use
 [the merge-semantics diagnostic](github-review-pr/SKILL.md#when-local-and-hosted-merge-results-disagree).
-Before a merge or selecting `--auto`, enter its
-[merge preflight](github-ops/references/pr_operations.md#merging-prs).
+When individual approvals disagree with effective merge requirements, use
+[the landing diagnosis](github-review-pr/references/remediation_and_landing.md#merge-with-the-reviewed-head-guard).
+For archive/ingestion repair publication, enter
+[the repair and publication preflight](github-review-pr/references/remediation_and_landing.md#prepare-an-isolated-repair-environment).
+For direct, queued or separately authorized bypass merges and landed-rule readback,
+follow the [checked-merge workflow](github-ops/references/pr_operations.md#merging-prs).
 For hosted-state writes through `gh`, follow its
 [identity, host and target binding](github-ops/SKILL.md#2-bind-identity-host-and-target)
 before using an operation recipe. For historical account or connector attribution,
