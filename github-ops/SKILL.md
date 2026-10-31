@@ -1,7 +1,7 @@
 ---
 name: github-ops
 description: >-
-  Operates GitHub via gh CLI and REST/GraphQL — PRs, issues, Actions, repos, collaborators, org
+  Operates GitHub via gh CLI and REST/GraphQL — PRs, issues, Actions, self-hosted Runner inventory/capacity, repos, collaborators, org
   permissions, 2FA — with explicit target, authorization, and independent readback. Use when a write
   reports success but state didn't change, or choosing gh/REST/GraphQL/UI-only. Not for local Git
   recovery (use git-safety-net), maintainer PR review (use github-review-pr), or upstream
