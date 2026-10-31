@@ -17,15 +17,19 @@ access, and restoring the original application operation require different
 evidence. Do not reset TCC, reset a keychain, change item access controls or
 restart the requesting application merely to remove a window.
 
-When existing authorization and a registered provider cover the operation, first
-use [authorized provider recovery](#recover-through-an-authorized-registered-provider).
-Otherwise, for an operable consent prompt, leave password entry and any required permission
-decision to the person under the current host contract. Never request the
-password in chat. Explain the selected button only when needed: Apple documents
+When standing authorization covers the purpose and a usable credential is already
+available, the executing agent first follows
+[authorized owner recovery](#recover-through-an-authorized-credential-owner).
+An unlocated or unregistered provider is discovery work, not a reason to ask the
+person to enter an already supplied password again. Request only a genuinely
+missing credential, permission decision or host-required human action after
+checking the authorized supported routes; never request a password in chat.
+Keep manual entry available when the person chooses it or the host requires it.
+Explain the selected button only when needed: Apple documents
 one-time access, persistent access and denial as different choices in its
 [Keychain access guide](https://support.apple.com/guide/keychain-access/if-youre-asked-for-access-to-your-keychain-kyca1243/mac).
 Do not choose persistent access as a troubleshooting default. After the person
-acts, inspect the original request's result before retrying it.
+or agent acts, inspect the original request's result before retrying it.
 
 ## Diagnose an inoperable window without granting access
 
@@ -39,28 +43,37 @@ process signals or a screenshot path to bypass a protected-interface refusal.
 Consider process termination only as a separately authorized cancellation of an
 observed obstructing request, where the host permits process management.
 
-## Recover through an authorized registered provider
+<a id="recover-through-an-authorized-registered-provider"></a>
 
-Use this route only when both hold: the task's standing authorization already covers
-using this credential for this purpose, and a registered credential or session
-provider already owns it. This route restores a same-session consumer that is blocked
-on Keychain access; it never creates a grant and never widens an existing one.
+## Recover through an authorized credential owner
 
-1. Locate the registered provider through the task's owning configuration or
-   procedure — the entry that owns this credential. A missing default file means the
-   owner is unresolved, not that no provider exists; resolve the owner before
-   declaring the resource unavailable.
+Use the task's existing supported credential/session provider or native entry when
+standing authorization covers this credential and purpose. Verify that entry's
+inputs and behavior through its current owning configuration and implementation;
+registration alone neither grants authority nor determines whether recovery is
+possible. Do not create another credential store or invent a replacement runner.
+This route restores a same-session consumer blocked on Keychain access; it never
+creates a grant and never widens an existing one.
+
+1. Locate the supported entry through the task's owning configuration, credential
+   source or procedure. A missing default file or provider registration leaves the
+   owner unresolved; continue authorized discovery before declaring a human
+   dependency. Reuse an already supplied usable credential through its owner;
+   do not ask for the same unchanged authorization or password again.
 
 2. Verify the match before invoking: exact machine, account, keychain and security
    context, and that the authorization covers this use of this credential. Any
-   mismatch stops this route and keeps the state unknown.
+   mismatch stops this route and keeps the state unknown. Distinguish a locked
+   keychain from item ACL/user-presence requirements, a changed signer/requester,
+   a different security session and a pending call without a terminal result;
+   knowing the password does not establish item access.
 
-3. Invoke the provider through its normal execution entry only. Do not pass secret
+3. Invoke the matched owner through its supported execution entry only. Do not pass secret
    values through command arguments, logs or general settings files, and do not copy
    the credential into the task record.
 
 4. Run recovery and the dependent consumer in the security session required by
-   that provider. An unlock in another SSH, login or service session does not
+   that entry. An unlock in another SSH, login or service session does not
    establish access for the blocked requester. Distinguish four states and report them separately:
    the keychain is unlocked, the named item is actually readable, the original
    pending request's state, and the final business result. Only the named protected
@@ -73,10 +86,13 @@ on Keychain access; it never creates a grant and never widens an existing one.
    and only then decide whether a single retry is warranted.
 
 6. Keep every human path intact: manual password entry, a new explicit grant and
-   cancellation of the dialog remain supported routes. A missing owner, a match
-   failure or a native permission refusal ends this route: keep the state unknown,
-   do not broaden permissions, do not use another principal's key or session, and do
-   not control a protected window the host refused.
+   cancellation of the dialog remain supported routes. If authorized discovery
+   establishes that no usable supported entry is available, report that exact
+   missing prerequisite. A match failure or native/host permission refusal ends
+   this route: keep the state unknown, do not broaden permissions, do not use
+   another principal's key or session, and do not control a protected window the
+   host refused. One application's recovery does not establish another's cause or
+   access; verify each affected original operation.
 
 ## Cancel the obstructing dialog only within explicit authority
 
