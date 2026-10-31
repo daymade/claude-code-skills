@@ -45,7 +45,7 @@ class SelectionTests(unittest.TestCase):
 
     def test_unknown_ci_and_root_test_inputs_run_all(self):
         expected = len(scope.registry(scope.ROOT))
-        for paths in (None, ["unknown-skill/SKILL.md"], ["scripts/ci/test-suites.txt"], [".github/workflows/ci.yml"], ["tests/test_new.py"], ["requirements.txt"], ["CLAUDE.md"], ["AGENTS.md"]):
+        for paths in (None, ["unknown-skill/SKILL.md"], ["scripts/ci/test-suites.txt"], [".github/workflows/ci.yml"], ["tests/test_new.py"], ["requirements.txt"]):
             with self.subTest(paths=paths):
                 result = scope.select(paths)
                 self.assertTrue(result["full"])
@@ -53,6 +53,29 @@ class SelectionTests(unittest.TestCase):
                 self.assertTrue(result["html_reader"])
                 self.assertTrue(result["feishu_reader"])
                 self.assertTrue(result["report"])
+
+    def test_repository_instructions_keep_shared_contracts_and_real_changed_owner(self):
+        contracts = {"tests", "daymade-claude-code/marketplace-dev/tests"}
+        for path in ("CLAUDE.md", "AGENTS.md"):
+            with self.subTest(path=path):
+                self.assertEqual(self.targets([path]), contracts)
+        # Actual changed_files from Linux job 124495725097: the instruction
+        # update previously promoted this transcript change to all 38 suites.
+        paths = [".claude-plugin/marketplace.json", "CHANGELOG.md", "CLAUDE.md",
+                 "README.md", "README.zh-CN.md", "daymade-audio/transcript-fixer/SKILL.md",
+                 "daymade-audio/transcript-fixer/references/database_schema.md",
+                 "daymade-audio/transcript-fixer/references/dictionary_guide.md",
+                 "daymade-audio/transcript-fixer/references/script_parameters.md",
+                 "daymade-audio/transcript-fixer/scripts/core/correction_service.py"]
+        result = scope.select(paths)
+        self.assertFalse(result["full"])
+        self.assertEqual({target for _, target in result["suites"]},
+                         contracts | {"daymade-audio/transcript-fixer/tests",
+                                      "daymade-audio/asr-transcribe-to-text/tests",
+                                      "daymade-audio/asr-transcribe-to-text/scripts/review-workbench/tests"})
+        self.assertFalse(result["html_reader"])
+        self.assertFalse(result["feishu_reader"])
+        self.assertFalse(result["report"])
 
     def test_extra_jobs_include_source_tests_and_shared_inputs(self):
         for path in ("report-with-html/assets/template.html", "tests/report-with-html/test_regressions.py", "data-visualization-discipline/SKILL.md"):
