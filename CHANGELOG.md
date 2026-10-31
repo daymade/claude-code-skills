@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **qa-expert** (v1.2.9 → v1.2.10): Compare actual migration consumers with fixed inputs, complete semantic results and explicit attribution limits; separate original-budget acceptance from lower-layer diagnostic reads. Preserve ordinary fixture and read-only authorization boundaries. Change type: bounded migration-acceptance guidance.
 - **debugging-network-issues** (v1.11.6 → v1.11.7): Distinguish database, upstream-header, complete-body and user-facing timing boundaries. Retain safe error identity and separate original deadlines from extended diagnostic reads. Change type: bounded timeout-diagnosis guidance.
+- **macos-cleaner** (`daymade-macos` v1.26.10 → v1.26.11): Discover OrbStack image aliases from existing storage hints, retain unknown runtime adoption, and measure each distinct image on its own volume. Remove fixed-layout assumptions and obsolete cleanup measurements. Change type: bounded factual and operating-guidance correction.
 
 - **ghostty-use** (v1.9.6 → v1.9.7): Route repository instructions to time-window selection and history-readiness acceptance. Remove copied helper defaults, profile-environment guidance and reference summaries; scope earlier platform probes separately from native AX observations. Change type: documentation alignment and deduplication.
 
@@ -1948,9 +1949,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `docker_analysis.md` adds the missing second half of its own independent-
   verification rule — that rule covered object eligibility but not the reclaim
   number, so a summed `UNIQUE SIZE` total now needs recomputing from a second
-  direction before it enters a plan. An independent sweep of a "6 dangling
-  images, all deletable" set returned 6.38 GiB net with 2 images still
-  container-referenced.
+  direction before it enters a plan.
 
 - **macos-cleaner** (`daymade-macos` v1.3.0 → v1.3.1): `proving-redundancy-before-deletion.md`
   gains rung 0 — target identity. Before any evidence is collected, `df
