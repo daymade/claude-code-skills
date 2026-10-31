@@ -132,6 +132,8 @@ For discovery-task changes, follow its [task-pivot and return-context cases](app
 
 For permission-sensitive fixtures, use Skill Creator's
 [execution-context verification recipe](daymade-skill/skill-creator/references/stateful-script-verification.md#execution-identity-and-permission-fixtures).
+For resumable writes to human-edited state, use its
+[interrupted-write controls](daymade-skill/skill-creator/references/stateful-script-verification.md#interrupted-writes-and-later-human-changes).
 
 For its audit, release, source-contract or materialization commands from another
 working directory, use the [fixed command entry](daymade-skill/skill-creator/references/fixed-command-entry.md).
@@ -488,6 +490,11 @@ Context-veto CLI regressions live in
 
 To find an existing Feishu recording by date, enter
 [lark-cli-router's recording lookup](daymade-claude-code/lark-cli-router/SKILL.md#find-an-existing-recording-by-date).
+
+### Feishu Document Layout
+
+For updates that preserve manual formatting or change table/page width, enter
+[lark-cli-router's layout workflow](daymade-claude-code/lark-cli-router/SKILL.md#preserve-document-layout).
 
 ### Feishu Document Capture
 
