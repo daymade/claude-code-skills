@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **app-evolver** (v1.1.11 → v1.1.12): Add a synthetic review-slip journey showing reference fidelity boundaries and continuity from judgment through saved work and contribution receipts. Keep visual choices application-specific. Change type: bounded design example.
+- **frontend-visual-qa** (v1.21.31 → v1.21.32): Check confirmation transitions with a stationary pointer and distinguish changed hit targets from decoration. Separate viewport movement, document scrolling and entrance transforms without prescribing a universal displacement threshold. Change type: bounded interaction-acceptance guidance.
 - **macos-permissions** (`daymade-macos` v1.26.12 → v1.26.13): Separate supported application credential-backend recovery from Keychain/TCC repair and require each affected service's fresh-consumer operation. Remove a derived state count. Change type: bounded recovery guidance.
 
 

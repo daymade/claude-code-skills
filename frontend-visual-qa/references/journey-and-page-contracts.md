@@ -522,6 +522,26 @@ For actionable failures, prefer persistent inline placement or a notification
 that remains long enough to act. Check role=alert, focus behavior, localization,
 and whether fields requiring re-entry return to a legible state.
 
+### Action targets after confirmation
+
+When a save or confirmation replaces controls with a receipt, test the transition
+with the pointer left at the original click position. Arm observation before the
+click; inspect the transition and settled result, not just two isolated screens.
+Record which element occupies that viewport point before and after, together with
+the affected controls' geometry. Does collapsing feedback pull a different action
+under the stationary pointer, or move the intended next action away?
+
+Use hit testing and the inspected frames to distinguish a changed click target
+from harmless decoration. A new action under the pointer is an accidental-click
+risk; call an unintended activation observed only if the safe, authorized journey
+actually reproduces it. Do not submit again or trigger a destructive action just
+to prove the risk. Judge required stability from this task's action sequence and
+hit areas, rather than imposing a universal pixel threshold or banning all motion.
+After a repair, repeat the same transition, including the affected reduced-motion
+path, and stop once the intended action remains usable and the observed risk is
+resolved. See [coordinate diagnosis](browser-driving-and-observation-traps.md#separate-viewport-movement-from-layout-movement)
+before attributing displacement to layout.
+
 ### Game and expressive feedback
 
 For game or expressive feedback, the executing auditor uses the authorized
