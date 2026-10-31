@@ -96,11 +96,17 @@ uv run --with aiohttp python scripts/availability_probe.py \
   --models model-a vendor/model-b @models.txt --output /tmp/avail.json
 ```
 
-- Classify failures as `no-channel` (no route for this
-  ID), `upstream-error` (route exists, upstream failing — retry later), `empty-content`
-  (usually a max_tokens artifact on reasoning models, NOT a broken model). The probe
-  keeps `--max-tokens` at 8192 by default precisely so thinking models don't read as
-  dead — do not "optimize" it downward.
+- Read transport, response outcome and native terminal fields separately. The probe
+  reports `response_outcome` as `answered`, `refused`, `empty` or `unknown`;
+  `transport_ok` means HTTP response headers arrived, not that a usable answer did.
+  `refused` preserves explicit refusal/content-filter markers even when text exists;
+  it does not establish model/provider unavailability. An empty `end_turn` remains
+  cause-unknown; thinking characters alone do not prove token-budget exhaustion.
+  `no-channel` means no route for this ID; `upstream-error` means the upstream failed
+  this request. Keep the generous default `--max-tokens` rather than manufacturing
+  empty replies with a tiny budget. Native `stop_reason`, `finish_reason`,
+  `stop_details` and `refusal` are retained when present, including null/empty values.
+  Exit 1 means at least one probe lacks a usable answer; it is not a service diagnosis.
 - **Before writing any "unavailable" list**: verify each failing ID exists in official
   docs. Current-generation model names postdate your training data — WebSearch the
   vendor's / model developer's model page instead of enumerating guesses; suffixes

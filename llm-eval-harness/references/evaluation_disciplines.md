@@ -131,7 +131,12 @@ Four traps, each of which has shipped a false conclusion into a real document:
 - **A generous `max_tokens` is part of the probe, not a tuning detail.** Reasoning models spend
   the budget on thinking BEFORE emitting text; a cap of a few dozen tokens returns HTTP 200 with
   empty content, which reads as "model broken". Probe with thousands (the availability probe
-  defaults to 8192), and treat 200-with-empty-content as a budget artifact until proven otherwise.
+  defaults to 8192). Inspect the native terminal reason before diagnosing an empty
+  response: `refusal` / `content_filter` identify a refused request, not a broken
+  service; `max_tokens` / `length` identify a token limit. Empty `end_turn`, missing
+  reasons, or thinking characters alone leave the cause unknown. The availability
+  probe preserves these fields and separates HTTP transport from response outcome;
+  its nonzero answer-availability result is not a provider-outage verdict.
 - **"My invented ID returned 404" is not evidence of a missing capability.** A 404/400 on an ID
   that never existed tells you nothing about the vendor. Before writing any "unavailable" list,
   confirm each ID against the vendor's or model developer's official docs — current-generation
