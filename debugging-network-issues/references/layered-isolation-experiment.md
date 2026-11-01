@@ -168,8 +168,9 @@ For multi-WAN comparisons, keep the same authenticated host and interface, sourc
 address, client, request and deadline where possible; changing wired to Wi-Fi is
 an additional intervention. Record the actual egress and any available CDN edge
 identifier. A fixed anycast destination IP does not fix the physical edge: a WAN
-change can also change peering and CDN PoP. Attribute only the observed end-to-end
-path difference, not an entire ISP, a hardware fault or a specific internal hop.
+change can also change peering and CDN PoP. From this comparison alone, attribute
+only the observed end-to-end path difference, not an entire ISP, a hardware fault
+or a specific internal hop; stronger attribution needs independent evidence.
 Compare each URL's A/B/A results separately; failures on different URLs do not
 establish recurrence of the same failing request. Preserve unavailable egress or
 edge identity as unknown, especially when a request never obtains a response.
