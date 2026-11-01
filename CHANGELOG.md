@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **prior-work-retrieval** (`daymade-claude-code` v4.33.21 → v4.33.22): Keep explicitly timestamped current execution deadlines out of historical retrieval; preserve mixed artifact requests and existing obligations. Change type: bounded prompt-classification repair.
+
 - **git-safety-net** (v1.24.5 → v1.24.6): Correct interrupted fast-forward and published-copy recovery to use the project's verified guarded synchronization procedure, preserve WIP, and verify HEAD, index and working-tree state. Remove obsolete hand-reversion advice and derived prose counts. Change type: factual SOP correction.
 - **qa-expert** (v1.2.10 → v1.2.11): Exercise retained-session permission grants, revocations, unknown refreshes and late responses across upgrade/identity boundaries; verify runtime authorization with allowed and denied controls. Change type: bounded acceptance guidance.
 - **frontend-visual-qa** (v1.21.34 → v1.21.35): Calibrate transient feedback observation inside native/hybrid delivery builds, separate native evidence from DOM/console coverage and retain healthy and failing controls. Change type: bounded observation guidance.

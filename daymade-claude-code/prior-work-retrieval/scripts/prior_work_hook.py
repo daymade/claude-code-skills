@@ -182,6 +182,21 @@ CURRENT_EXECUTION_CONTINUITY = re.compile(
     r"(?:不|不要|禁止)(?:接管|重放|切换|修改|写入|扩大)))",
     re.IGNORECASE,
 )
+# A timestamped limit for this execution is an execution parameter, not an
+# asset lookup. Keep unknown continuations and coordinated artifacts visible.
+CURRENT_EXECUTION_DEADLINE = re.compile(
+    r"(?:\A|(?<=[\n。；;]))[ \t]*(?:本批|本次|当前)(?:任务|执行)?[ \t]*"
+    r"沿用[ \t]*(?:(?:原始|当前|本次)(?:的)?[ \t]*)?"
+    r"(?:准备(?:至|到)验收)?(?:截止(?:时间)?|deadline)[ \t]*[:：]?[ \t]*"
+    r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
+    r"(?:Z|[+-][0-9]{2}:[0-9]{2})"
+    r"(?=[ \t]*(?:$|[\n。；;]|[，,][ \t]*(?:"
+    r"不是(?:用户)?(?:业务)?deadline(?=[ \t]*(?:$|[\n，,。；;]))|"
+    r"(?:不能|不得|不要|禁止)(?:延长|重设|重置)"
+    r"(?:(?:当前|本次|原始)(?:的)?)?(?:时限|截止(?:时间)?|预算|Goal)?"
+    r"(?=[ \t]*(?:$|[/\n，,。；;])))))",
+    re.IGNORECASE,
+)
 # Returning the current lease is an execution instruction, not an asset lookup.
 # Keep questions, unknown continuations and adjacent recall clauses scannable.
 CURRENT_LEASE_RETURN = re.compile(
@@ -402,6 +417,7 @@ def _classify_prompt(
     )
     if current_execution:
         scannable = CURRENT_EXECUTION_CONTINUITY.sub(" ", scannable)
+        scannable = CURRENT_EXECUTION_DEADLINE.sub(" ", scannable)
         scannable = CURRENT_LEASE_RETURN.sub(" ", scannable)
     if (PRIOR_WORK_STRONG_SIGNAL.search(scannable)
             or _explicit_conversation_context(scannable)):
