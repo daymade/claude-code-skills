@@ -600,7 +600,7 @@ for candidate selection and commands; keep the detailed rules in those owners.
 For local transport selection or accepted/consumed delivery interpretation, enter
 [peer-message](peer-message/SKILL.md). For independent sessions, enter the
 [local coordination workflow](peer-message/references/local-coordination.md#原生跨会话通信)
-before sending. Use its routing guidance for uncovered local targets
+before sending, including complete prepared-envelope size checks and parent-request expiry at send time. Use its routing guidance for uncovered local targets
 or coordination evidence that needs verification, never to bypass denied or Held messages.
 Treat `peer-message/scripts/peer.py` as the fallback CLI executable
 contract, [codex_live.py](peer-message/scripts/codex_live.py) as its Codex live adapter,

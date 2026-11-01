@@ -166,6 +166,12 @@ python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord prepare '<exact-target>' reques
 ```
 
 只有 `prepared` 才将输出的 `body` 原样交给原生工具；记录其 `message_id`。
+发送前按当前宿主工具的实际限制核对完整 `body`，包括协调信封；限制按 UTF-8
+字节计时，用 `len(body.encode("utf-8"))`，不拿原始正文的字符数代替。
+若完整信封超限且已确认 transport 未调用，先对该 prepared id 执行
+`coord commit --message-id '<prepared-id>' --outcome not_sent`，再缩短原始正文，
+沿原准入重新 prepare。不得截改 prepared body、只删信封或改走其他 transport；
+transport 是否调用不明时，沿下文原通道读回，不凭超限推定未发送。
 其他 suppression 状态安静结束。前置检查绑定宿主的发送 session、实际收件人、完整
 body 和 tool-use id；缺失记录、过期、正文改写、已收件/关闭/结果未知、被新状态替代
 或同一 id 用于另一个调用均拒绝。同一宿主调用的 hook 重入不另发消息。
@@ -215,6 +221,12 @@ python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord prepare '<original-sender>' rep
 python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord commit \
   --message-id '<prepared-id>' --outcome accepted
 ```
+
+prepare 后原 request 仍可能过期；reply 自身的 `expires` 为 `null` 不延长原请求。
+原生 guard 还会检查关联请求。若它明确阻断且可证 transport 未调用，将本次 reply
+用 `coord commit --message-id '<prepared-id>' --outcome not_sent` 收口；结果未知则
+先沿原通道读回，不重发、不把旧回复改成 notice 绕过原问题。真正的新事实仍按下方
+新 notice 分支评估，不恢复旧窗口。
 
 `suppressed_closed_reply` 是发送前抑制，不是已回复；对该原请求停止，不重试、不换脚本发送，也不把旧回复改写成新消息绕过抑制。若另有会改变对方下一步的新事实，按 [新 notice 分支](protocol-and-discovery.md) 独立评估，不把它当作原请求的回复。原生 `accepted` 仍只证明 transport 层；原问题处理完后才按上文 `finish`。
 
