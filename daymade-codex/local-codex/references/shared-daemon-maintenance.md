@@ -77,10 +77,5 @@ Do not edit rollout/database records or create replacement Goals. Check Goal
 status separately: a recovered turn does not establish that a previously
 blocked Goal regained automatic continuation.
 
-The observed 0.165-to-official-0.166 replacement restored interrupted
-conversations through the native `daemon_recovery` path and produced new
-messages/tools under their original SIDs. This is a verified build-specific
-result, not a guarantee of uninterrupted shell commands, universal recovery,
-or completion of those sessions' business tasks. Keep exact incident receipts
-and source branches in the operator's private archive; this guide carries
-the reusable procedure.
+Keep exact operation receipts and retained source branches in the operator's
+private archive; this guide carries the reusable procedure.
