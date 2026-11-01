@@ -42,6 +42,18 @@ For each relevant state, verify:
 Do not require every possible state for a local visual-only change. Cover the
 states affected by the implementation or explicitly requested by the user.
 
+For changed asynchronous loading or saving, the executing auditor uses the
+authorized project harness to distinguish success, a delayed response, an explicit
+failure, no response headers, and headers followed by a body that never completes.
+An eventual error does not exercise permanent waiting. Observe the visible exit
+and usable recovery under the product's declared deadline or cancellation contract;
+do not import a universal timeout. Preserve already-readable content where promised.
+For an uncertain write, verify the existing readback/idempotency path before any
+retry; a timeout does not establish that the write failed. Release a held response
+after recovery or navigation and check that it cannot overwrite current work or
+repeat completion feedback. Keep a normal-success control. This is a journey the
+auditor must exercise; the generic visual sweep does not simulate these failures.
+
 For a changed multi-item read or batch result, the executing auditor uses the
 authorized project harness to fail one known item while the enclosing request
 succeeds. Reconcile the expected identities with the visible successes, failures
