@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **git-safety-net** (v1.24.4 → v1.24.5): Route task closeout to the canonical authority contract and replace repeated authority text with direct section links. Remove derived counts and an unsupported duration estimate. Change type: lossless compression and factual documentation alignment.
+- **peer-message** (v1.24.6 → v1.24.7): Align native-send SOP with complete prepared-envelope limits and linked request expiry; preserve exact-body, known-unsent reconciliation and unknown-result readback. Change type: authoritative factual correction.
 
 - **git-safety-net** (v1.24.3 → v1.24.4): Honor existing task-specific and standing cleanup authorization without requiring a separate task or renewed approval. Preserve object-specific scope, fresh safety evidence and retained-work protections. Change type: authorization-boundary correction.
 
