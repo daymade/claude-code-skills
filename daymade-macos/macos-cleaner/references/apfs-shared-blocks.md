@@ -52,7 +52,7 @@ that guard to finish a batch. Pilot first, then follow [batch selection](batch-s
 ### Diagnose candidate-only provenance before swap
 
 If unchanged inputs failed before swap solely on candidate-only `com.apple.provenance`,
-retain failure receipts/originals and strict metadata guards; never strip attributes to pass.
+retain failure receipts/originals and strict metadata guards; never strip protected provenance or weaken guards to pass.
 As operator, compare one bounded, self-owned small sample across execution responsibility chains;
 match the xattr premise under test and keep the interpreter and native-copy flags identical.
 Treat a missing matching sample, unavailable context or host denial as a stop, not a workaround.
