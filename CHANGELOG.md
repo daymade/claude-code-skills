@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **debugging-network-issues** (v1.11.7 → v1.11.8): Compare production, probe and control proxy contexts before interpreting container experiments; retain native retries and distinguish anycast path changes from ISP or hardware attribution. Change type: bounded evidence-selection guidance.
+
 - **prior-work-retrieval** (`daymade-claude-code` v4.33.21 → v4.33.22): Keep explicitly timestamped current execution deadlines out of historical retrieval; preserve mixed artifact requests and existing obligations. Change type: bounded prompt-classification repair.
 
 - **git-safety-net** (v1.24.5 → v1.24.6): Correct interrupted fast-forward and published-copy recovery to use the project's verified guarded synchronization procedure, preserve WIP, and verify HEAD, index and working-tree state. Remove obsolete hand-reversion advice and derived prose counts. Change type: factual SOP correction.
