@@ -498,8 +498,8 @@ frames separately when the transition itself can affect input.
 
 Synthetic coordinate example: an ordinary document-flow control has `rect.y = 620`
 at `scrollY = 180`, then `rect.y = 580` at `scrollY = 220`. Its document position
-remains `800`; these samples alone show scrolling, not a layout collapse. For that
-case, `rect.y + scrollY` helps compare document positions. It is not a universal
+can be compared using `rect.y + scrollY`; compute it from these samples rather
+than treating the viewport delta as evidence of a layout collapse. It is not a universal
 correction for nested scrollers, fixed or sticky elements, or transformed targets;
 identify their scroll owner and positioning behavior before selecting a reference
 frame. A small residual while an entrance transform is still running is likewise

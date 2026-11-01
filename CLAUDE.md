@@ -129,6 +129,8 @@ For next-increment selection after that reconciliation or a completed repair bat
 [increment-selection contract](app-evolver/references/evidence-and-fit.md#make-the-disposition-operational).
 When feedback questions navigation, information hierarchy or interface coherence, use its
 [structure comparison](app-evolver/references/evidence-and-fit.md#reconsider-interface-structure).
+For a distinctive redesign around reference-bound source content, use its
+[whole-task design example](app-evolver/references/evidence-and-fit.md#example-carry-a-review-slip-through-the-whole-task).
 For discovery-task changes, follow its [task-pivot and return-context cases](app-evolver/references/implementation-and-acceptance.md#task-pivots-and-return-context).
 
 For permission-sensitive fixtures, use Skill Creator's
@@ -291,6 +293,8 @@ For build reuse across source refs or a target redeployed during acceptance, loa
 [delivery verification procedure](frontend-visual-qa/references/delivery-verification.md).
 For nested zoomable workspaces, use its
 [journey and state matrix](frontend-visual-qa/references/journey-and-page-contracts.md#journey-and-state-matrix).
+For save or confirmation controls replaced by a result, follow its
+[action-target transition check](frontend-visual-qa/references/journey-and-page-contracts.md#action-targets-after-confirmation).
 For repeated journey positions or measured wheel sensitivity, use its
 [route contract](frontend-visual-qa/references/journey-and-page-contracts.md#route-and-addressability)
 and [received-input recipe](frontend-visual-qa/references/browser-driving-and-observation-traps.md#wheel-requests-are-not-browser-received-wheel-events).
