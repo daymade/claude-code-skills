@@ -142,6 +142,7 @@ For resumable writes to human-edited state, use its
 
 For its audit, release, source-contract or materialization commands from another
 working directory, use the [fixed command entry](daymade-skill/skill-creator/references/fixed-command-entry.md).
+For security scans, use its [absolute owner-script recipe](daymade-skill/skill-creator/references/publishing-and-packaging.md#step-6-security-review).
 
 Before a command that may exceed the response budget, enter Skill Creator's
 [large-output capture recipe](daymade-skill/skill-creator/references/stateful-script-verification.md#large-command-output).

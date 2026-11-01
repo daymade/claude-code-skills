@@ -160,10 +160,12 @@ Example: `service-usage-patterns`, not `project-session-notes-<date>`.
 1. Copy the candidate markdown into a new file under `references/`.
 2. Add the required YAML frontmatter from `references/reference_template.md`.
 3. Replace any remaining private names, project names, or instance nicknames with placeholders.
-4. Run the three validation gates:
+4. Run the validation gates in order:
    ```bash
    uv run --frozen python -m scripts.quick_validate <skill-dir>
-   uv run --frozen python -m scripts.security_scan <skill-dir>
+   ```
+   Scan the same target Skill using [Security Review](../../references/publishing-and-packaging.md#step-6-security-review), then check its references:
+   ```bash
    uv run --frozen python -m scripts.check_references --skill <skill-dir> --enrich <skill-dir>/.enrich/<timestamp>
    ```
 5. Only after all gates pass, commit the new reference file.
