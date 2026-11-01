@@ -715,7 +715,7 @@
       "description": "QA process setup with AAA test cases, P0-P4 bug tracking, metrics reports, OWASP security testing and third-party handoffs. Use for test planning, approved-batch execution and checkpoint recovery through the bundled master prompt.",
       "source": "./qa-expert",
       "strict": false,
-      "version": "1.2.10",
+      "version": "1.2.11",
       "category": "developer-tools",
       "keywords": [
         "qa",
@@ -1108,7 +1108,7 @@
       "description": "Audits rendered UI and specific task/object-link handoffs; excludes ordinary source citations alone. Audits already-rendered UI and Markdown/Obsidian image layout — web app, deck/slide, dashboard, design-system, or Electron/native app — via real-browser/native-app journeys and a Playwright sweep. Use after UI implementation to find typography, overflow, responsive, routing, data-viz, browser-output, or native-shell defects, or to compare a render against a reference. Not for greenfield UI design (use ui-designer) or QA-program setup (use qa-expert).",
       "source": "./frontend-visual-qa",
       "strict": false,
-      "version": "1.21.34",
+      "version": "1.21.35",
       "category": "design",
       "keywords": [
         "frontend",
