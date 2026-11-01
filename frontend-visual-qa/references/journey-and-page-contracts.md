@@ -509,7 +509,9 @@ short animation never appeared. Arm observation before the trigger:
       return "observer armed";
     }
 
-Trigger the action repeatedly, then read window.__visualQaTransient.
+Trigger the authorized action once, then read `window.__visualQaTransient`.
+Repeat only when the product's recovery contract and a safe test state permit it;
+use the specific confirmation or game-feedback recipe below for save operations.
 
 Distinguish the observed outcomes:
 
