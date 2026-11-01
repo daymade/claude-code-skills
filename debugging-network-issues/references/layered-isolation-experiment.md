@@ -118,6 +118,11 @@ An extended read can establish content or expose a server error; it cannot pass
 the original deadline. Record any unresolved interval as unknown, and do not
 attribute header-to-body delay wholly to transport without server-side evidence.
 
+After a repair, observe the original caller's natural operation as well as the
+synthetic probe. Retain intermediate states, retries and the eventual result;
+successful final responses do not erase earlier timeouts. Report alert delivery
+and request recovery separately: fewer notifications do not establish recovery.
+
 ## Failure modes and probe self-verification
 
 The experiment is only as valid as its isolation. Common ways to poison the result:
@@ -127,6 +132,17 @@ The experiment is only as valid as its isolation. Common ways to poison the resu
 If the client has a system-level HTTP proxy (Shadowrocket, corporate proxy, VPN client), `curl` will silently route through it even when `--resolve` is set. Path B (intended to bypass CDN) gets routed through the same proxy and the isolation fails.
 
 **Mitigation**: use `env -i curl` to strip the environment before running the probe, and explicitly unset `http_proxy / https_proxy / HTTP_PROXY / HTTPS_PROXY / ALL_PROXY / NO_PROXY`. Verify the path with `curl -v` and check the `* Trying IP:port` line matches the expected target.
+
+Before interpreting a container experiment, compare the production process,
+temporary probe and positive control separately: client/library version, effective
+proxy environment and client-level overrides, namespace and actual destination.
+An empty proxy value is not a configured proxy; a key's presence alone is not
+contamination. A fresh container can inherit a different proxy from the production
+container. Exercise the positive control through the same client and proxy policy
+as the failing probe. A direct host curl cannot validate a proxied container
+client. Restore the intended production policy in the probe before drawing
+conclusions; do not modify healthy production settings to accommodate a poisoned
+probe. If the contexts cannot be matched, label that comparison unverified.
 
 Real example from this case study: run 1 Path B appeared to fail at 126s, which would have falsely implicated the origin. It turned out the client's Shadowrocket was proxying localhost-targeted requests back through Cloudflare. `env -i curl --resolve ...` reproduced the clean 220s that correctly exonerated the origin.
 
@@ -147,6 +163,17 @@ When A fails and a changed condition B succeeds, return once to the original A w
 - **Original A cannot be restored safely or the budget expires:** stop the experiment and retain the causal uncertainty. Do not keep retrying until a preferred answer appears.
 
 For example, a request failing with a plugin, succeeding without it, then succeeding with it again does not establish that the plugin caused the failure. Preserve the feature while investigating any remaining symptom. A successful transfer can still satisfy its file-integrity acceptance criterion even when the earlier timeout's cause remains unknown.
+
+For multi-WAN comparisons, keep the same authenticated host and interface, source
+address, client, request and deadline where possible; changing wired to Wi-Fi is
+an additional intervention. Record the actual egress and any available CDN edge
+identifier. A fixed anycast destination IP does not fix the physical edge: a WAN
+change can also change peering and CDN PoP. From this comparison alone, attribute
+only the observed end-to-end path difference, not an entire ISP, a hardware fault
+or a specific internal hop; stronger attribution needs independent evidence.
+Compare each URL's A/B/A results separately; failures on different URLs do not
+establish recurrence of the same failing request. Preserve unavailable egress or
+edge identity as unknown, especially when a request never obtains a response.
 
 ## Extended variants
 
