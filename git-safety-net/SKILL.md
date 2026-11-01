@@ -34,6 +34,16 @@ Then enforce these boundaries:
    A collaborator-owned worktree, branch, or PR discovered later stays report-only until the user
    names it as a change target. If the user says to leave it alone, record that exclusion and do
    not inspect its working-tree contents, back it up, merge it, unlock/remove it, or mutate its refs.
+- **Resolve authority from the current request and applicable standing user instructions.**
+   Authority for any action under this Skill is the current request read together with the standing
+   user instructions that apply to this task (for example, a standing instruction that a task ends
+   with checks, commit, publication, readback, and retiring that task's own temporary
+   branches/worktrees). Later user restrictions still control. Splitting the work into phases alone
+   does not revoke authority the task already carries: when the task already includes retiring its exact temporary resources, complete Mode E
+   within that same task — a new task or fresh confirmation solely for entering retirement is a
+   re-ask, not a gate. Mode E's evidence, preservation, and readback gates still apply in full.
+   A merge alone still does not authorize extra targets, and targets the task's authority does not
+   name stay report-only until separately authorized.
 - **Preserve the smallest set threatened by the next authorized destructive action.** If the
    current phase is only commit/push/verify and no deletion, reset, gc, history rewrite, or
    worktree removal is authorized, do not create an all-refs bundle or pin every dangler.
@@ -392,8 +402,9 @@ The load-bearing few:
   can write this checkout counts as a writer even when its paths are disjoint. Before Git mutation,
   the project's existing coordination must prove it quiescent and transfer exclusive ownership;
   without that mechanism, stay read-only and report the gap. Do not stop, reconfigure, or invent a
-  lease for automation under this generic Skill. Retire refs or checkouts only through separately
-  authorized Mode E evidence. (§ Known automated writers are not session-owned WIP.)
+  lease for automation under this generic Skill. Retire refs or checkouts only through Mode E
+  evidence, with authority resolved per the authority definition in the Outcome contract above.
+  (§ Known automated writers are not session-owned WIP.)
 - **Confirm the current branch before committing** (`git branch --show-current`) — a fix committed
   onto the wrong feature branch is invisible to its real PR and easy to lose on cleanup.
   (§ Confirm the branch before every commit — including why removal from the wrong branch waits
@@ -418,7 +429,8 @@ The load-bearing few:
   follow the incident-only relocation procedure in § Recover stranded work after a parallel session
   switched the shared tree: prove your files match
   across bases, commit only explicit paths, and restore the prior branch before handing ownership
-  back. Branch deletion remains a separately authorized Mode E action.
+  back. Branch deletion remains a Mode E action, with authority resolved per the authority
+  definition in the Outcome contract above; a merge or handoff does not itself authorize it.
 - **The inverse case: another session's *commit* lands on your branch, and every check you already
   run stays green.** In a shared checkout, a commit a sibling session makes while `HEAD` sits on
   your branch becomes a parent of yours and ships inside your PR. `git branch --show-current` names
@@ -526,7 +538,9 @@ The load-bearing few:
 
 The opposite worry from Mode A: not "I lost something" but "these leftovers are piling up —
 which can I destroy?" Deleting is trivial; **proving each item is superseded is the work**.
-Start from the Outcome contract. For an exhaustive audit or unknown target, run checkout discovery;
+Start from the Outcome contract, including its authority definition: when the task's authority
+already covers the exact targets, Mode E runs inside that task instead of a separate retirement
+task. For an exhaustive audit or unknown target, run checkout discovery;
 for one named worktree/branch, stay in its owning repository. Run `git_loss_audit.sh` only when all
 worktrees/refs/tags/reflogs/stashes/danglers it enumerates are inside evidence scope; treat inspect-only
 objects as report-only, keep explicitly excluded collaborator resources out of both the retirement
@@ -618,7 +632,8 @@ and final branch-count gates that a single-branch retirement does not need.
   relative path, and verify it against a recorded pre-removal content hash.
   Record the exact HEAD, prove it contained/superseded against a freshly fetched base, apply the
   preservation decision above, retain its exact ref manifest or required verified bundle, and obtain
-  current-session deletion authority. As the final pre-remove gate, re-run the empty status and
+  deletion authority per the authority definition in the Outcome contract above. As the final
+  pre-remove gate, re-run the empty status and
   the complete ignored inventory. Require exact equality with the frozen
   pre-removal manifest for every ignored path, entry type, file hash, and symlink target, and
   re-verify each preserved source and backup copy; any difference aborts. Removal must be the next
@@ -628,8 +643,8 @@ and final branch-count gates that a single-branch retirement does not need.
   locked, occupied, or incompletely backed-up state still stops removal. Afterwards prove the path and
   registration are gone while the recorded HEAD still resolves through the kept branch/base or the
   verified bundle and every copied ignored item still matches its recorded hash. Never remove the
-  primary/current checkout; retire its branch only as a separate,
-  separately authorized action. Follow
+  primary/current checkout; retire its branch only as a separate action under the authority
+  definition in the Outcome contract above. Follow
   **[references/merge_verification.md](references/merge_verification.md)** § Worktree retirement.
 - Local branches: prefer `git branch -d` (refuses unmerged); use `-D` only for items Step 1
   proved superseded, backed up, and the user authorized deleting. **A squash-merge is the usual
