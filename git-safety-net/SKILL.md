@@ -381,8 +381,8 @@ The load-bearing few:
   branch inside the same checkout does not isolate the shared working files, current branch, or
   index. Writer ownership comes from the repository's task/coordination contract, not a guessed
   file list. If ownership is unclear or another writer is active, do not mutate the checkout.
-  (§ Shared checkout and concurrent sessions: one writer — also governs the two "parallel session"
-  bullets below, and now also covers finding an unidentified writer by process evidence rather
+  (§ Shared checkout and concurrent sessions: one writer — also governs the "parallel session"
+  bullets below and covers finding an unidentified writer by process evidence rather
   than a guessed name.)
 - **Commit before switching and push WIP early.** Prefer a remote-backed commit over stash
   juggling, but preserve a higher-authority narrow stash exception; never use an unscoped stash
@@ -465,7 +465,7 @@ The load-bearing few:
   commit, your own earlier commits included, and exits 0. Then re-run the detection above: the
   rebase's exit code does not tell you whether it took something of yours with it. Retiring either
   ref afterwards requires Mode C/E deletion-grade evidence, not a guess. Full procedure,
-  and why the two obvious "did their work survive?" probes return the wrong answer, in **A foreign
+  and why the "did their work survive?" probes return the wrong answer, in **A foreign
   commit adopted onto your branch** in
   [references/prevention_practices.md](references/prevention_practices.md). Real incident: a
   sibling session committed while `HEAD` sat on a freshly created branch; the PR carried that
@@ -538,9 +538,8 @@ The load-bearing few:
 
 The opposite worry from Mode A: not "I lost something" but "these leftovers are piling up —
 which can I destroy?" Deleting is trivial; **proving each item is superseded is the work**.
-Start from the Outcome contract, including its authority definition: when the task's authority
-already covers the exact targets, Mode E runs inside that task instead of a separate retirement
-task. For an exhaustive audit or unknown target, run checkout discovery;
+Start from the [Outcome contract](#outcome-contract--keep-the-safety-net-subordinate-to-the-users-job), including its authority definition.
+For an exhaustive audit or unknown target, run checkout discovery;
 for one named worktree/branch, stay in its owning repository. Run `git_loss_audit.sh` only when all
 worktrees/refs/tags/reflogs/stashes/danglers it enumerates are inside evidence scope; treat inspect-only
 objects as report-only, keep explicitly excluded collaborator resources out of both the retirement
