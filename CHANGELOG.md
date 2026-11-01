@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **tibo-reset-codex** (v2.8.0 → v2.8.1): Add live-session rules for overdue-event convergence before same-type re-digging, numbered delivery posts as confirmation-plus-remaining-count signals, third-party event-list gaps never serving as negative evidence, and event-level settlement rebinding to any pre-window baseline account. Change type: bounded monitoring judgment additions.
+
 - **frontend-visual-qa** (v1.21.32 → v1.21.33): Align transient observation with safe action/recovery boundaries, remove the coordinate example's persisted arithmetic result, and route repository instructions to confirmation checks and the existing whole-task design example. Change type: bounded SOP alignment.
 
 - **app-evolver** (v1.1.11 → v1.1.12): Add a synthetic review-slip journey showing reference fidelity boundaries and continuity from judgment through saved work and contribution receipts. Keep visual choices application-specific. Change type: bounded design example.
