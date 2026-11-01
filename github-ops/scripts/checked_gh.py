@@ -180,7 +180,8 @@ def _merge_preflight(command, data_indices, host, env, run, acknowledgement):
             rows = json.loads(checks.stdout)
         except (ValueError, TypeError):
             if (checks.returncode == 1 and not checks.stdout.strip()
-                    and getattr(checks, "stderr", "").startswith("no checks reported on ")):
+                    and getattr(checks, "stderr", "").startswith(("no checks reported on ",
+                                                               "no required checks reported on "))):
                 rows = []
                 no_checks_message = True
             else:

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **github-ops** (v1.15.1 → v1.15.2): Recognize gh's empty required-check response while preserving independent ruleset and legacy protection checks. Change type: deterministic implementation repair.
+
 - **skill-creator** (`daymade-skill` v1.74.9 → v1.74.10): Bind security-scan recipes and help to the loaded creator's absolute script and locked project so unrelated working directories cannot redirect module discovery. Preserve scan behavior and marker validation. Change type: authoritative invocation correction.
 
 - **git-safety-net** (v1.24.4 → v1.24.5): Route task closeout to the canonical authority contract and replace repeated authority text with direct section links. Remove derived counts and an unsupported duration estimate. Change type: lossless compression and factual documentation alignment.
