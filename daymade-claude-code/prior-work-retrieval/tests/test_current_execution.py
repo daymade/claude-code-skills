@@ -94,6 +94,67 @@ class CurrentExecutionTests(unittest.TestCase):
                 self.assertIsNone(self.read_state())
                 self.assertIsNone(hook.handle_stop(self.stop))
 
+    def test_current_timestamped_deadline_does_not_arm(self):
+        prompts = [
+            "本批沿用原始准备至验收截止2028-02-03T04:05:06Z，不是用户业务deadline。",
+            "本次沿用当前截止时间2028-02-03T04:05:06+08:00。",
+            "当前任务沿用本次的 deadline: 2028-02-03T04:05:06Z。",
+            "本次执行沿用原始截止2028-02-03T04:05:06Z；不得延长。",
+            "本次沿用截止时间2028-02-03T04:05:06Z",
+            "只执行当前批次。\n本批沿用原始准备到验收截止2028-02-03T04:05:06Z，禁止重设预算。",
+        ]
+        self.assertEqual(len(prompts), 6)
+        for prompt in prompts:
+            with self.subTest(prompt=prompt):
+                self.assertEqual(hook.classify_prompt(prompt), "none")
+                self.assertIsNone(hook.handle_user_prompt({**self.event, "prompt": prompt}))
+                self.assertIsNone(self.read_state())
+                self.assertIsNone(hook.handle_stop(self.stop))
+
+    def test_deadline_excision_preserves_historical_or_unknown_objects(self):
+        deadline = "本批沿用原始准备至验收截止2028-02-03T04:05:06Z"
+        prompts = [
+            deadline + "和之前的脚本。",
+            deadline + "、历史方案。",
+            deadline + "，历史方案。",
+            deadline + "里的历史脚本。",
+            deadline + "，请查我们之前的配置。",
+            deadline + "。请检索我们之前的方案。",
+            "请回查" + deadline + "的记录。",
+            "以前的脚本" + deadline + "。",
+            "沿用以前的截止时间2028-02-03T04:05:06Z。",
+            "本次沿用原始截止时间的历史方案。",
+            "本次沿用原始截止时间2028-02-03T04:05:06Z是什么来着？",
+            deadline + "，不得修改历史方案。",
+            deadline + "，不能忽略历史方案。",
+            deadline + "，不是当前边界而是历史方案。",
+        ]
+        self.assertEqual(len(prompts), 14)
+        for prompt in prompts:
+            with self.subTest(prompt=prompt):
+                self.assertEqual(hook.classify_prompt(prompt), "required_prior_signal")
+
+    def test_current_deadline_does_not_release_existing_history_obligation(self):
+        hook.handle_user_prompt({**self.event, "prompt": "请检索我们之前的脚本并复用。"})
+        before = self.read_state()
+        deadline = "本批沿用原始准备至验收截止2028-02-03T04:05:06Z。"
+        self.assertIsNone(hook.handle_user_prompt({**self.event, "prompt": deadline}))
+        self.assertEqual(self.read_state(), before)
+        self.assertEqual(hook.handle_stop(self.stop)["decision"], "block")
+
+    def test_exact_deadline_reclassification_keeps_original_obligation_record(self):
+        deadline = "本批沿用原始准备至验收截止2028-02-03T04:05:06Z。"
+        before = self.mark_old(deadline)
+        result = self.run_reclassification(before["requirement_id"], {**self.event, "prompt": deadline})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        after = self.read_state()
+        for key, value in before.items():
+            self.assertEqual(after[key], value, key)
+        self.assertIs(after["active_for_prompt"], False)
+        self.assertEqual(after["scope_reclassification"]["reason"], "current_execution_continuity")
+        self.assertFalse((self.root / "state" / "receipts").exists())
+        self.assertIsNone(hook.handle_stop(self.stop))
+
     def test_lease_return_excision_preserves_historical_and_question_clauses(self):
         prompts = [
             "lease由控制端按既有流程归还。请查我们之前的方案。",
