@@ -132,6 +132,8 @@ When feedback questions navigation, information hierarchy or interface coherence
 For a distinctive redesign around reference-bound source content, use its
 [whole-task design example](app-evolver/references/evidence-and-fit.md#example-carry-a-review-slip-through-the-whole-task).
 For discovery-task changes, follow its [task-pivot and return-context cases](app-evolver/references/implementation-and-acceptance.md#task-pivots-and-return-context).
+For work becoming eligible after prerequisites arrive, use its
+[lifecycle acceptance](app-evolver/references/implementation-and-acceptance.md#protect-the-lifecycle).
 
 For permission-sensitive fixtures, use Skill Creator's
 [execution-context verification recipe](daymade-skill/skill-creator/references/stateful-script-verification.md#execution-identity-and-permission-fixtures).
@@ -291,7 +293,7 @@ Before measuring loading speed, read its
 [cache and timing comparison](frontend-visual-qa/references/browser-driving-and-observation-traps.md#separate-freshness-checks-from-performance-comparisons).
 For build reuse across source refs or a target redeployed during acceptance, load its
 [delivery verification procedure](frontend-visual-qa/references/delivery-verification.md).
-For nested zoomable workspaces, use its
+For changed asynchronous loading or saving, or nested zoomable workspaces, use its
 [journey and state matrix](frontend-visual-qa/references/journey-and-page-contracts.md#journey-and-state-matrix).
 For save or confirmation controls replaced by a result, follow its
 [action-target transition check](frontend-visual-qa/references/journey-and-page-contracts.md#action-targets-after-confirmation).
