@@ -56,14 +56,14 @@ Resolve a missing sanitization-scope decision through
 
 ### Step 6: Security Review
 
-Before packaging or distributing a skill, run the security scanner to detect hardcoded secrets and personal information:
+Before packaging or distributing a skill, resolve the loaded creator's absolute source directory and the target Skill's absolute directory. Run the security scanner from any working directory using that owner's locked project and script:
 
 ```bash
 # Required before packaging
-uv run --frozen python -m scripts.security_scan <path/to/skill-folder>
+uv run --project "<skill-creator-path>" --frozen python "<skill-creator-path>/scripts/security_scan.py" "<absolute-skill-dir>"
 
 # Verbose mode includes additional checks for paths, emails, and code patterns
-uv run --frozen python -m scripts.security_scan <path/to/skill-folder> --verbose
+uv run --project "<skill-creator-path>" --frozen python "<skill-creator-path>/scripts/security_scan.py" "<absolute-skill-dir>" --verbose
 ```
 
 **Detection coverage:**
@@ -82,6 +82,10 @@ brew install gitleaks
 
 # Linux/Windows - see script output for installation instructions
 ```
+
+`--project` selects the locked environment; it does not change the caller's working
+directory or make `scripts.security_scan` importable there. Keep both owner paths
+and the target absolute, including their shell quoting.
 
 Read the [security scanner](../scripts/security_scan.py) for executable exit
 semantics; resolve findings and scan/runtime failures before distribution.
