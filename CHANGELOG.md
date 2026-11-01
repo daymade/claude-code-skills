@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **local-codex** (`daymade-codex` v2.3.1 → v2.4.0): Preserve authorized shared-daemon maintenance, durable replacement receipts and original-session continuation checks; distinguish official updates, pinned packages and Goal recovery. Change type: bounded lifecycle capability.
 - **github-ops** (v1.15.1 → v1.15.2): Recognize gh's empty required-check response while preserving independent ruleset and legacy protection checks. Change type: deterministic implementation repair.
 
 - **skill-creator** (`daymade-skill` v1.74.9 → v1.74.10): Bind security-scan recipes and help to the loaded creator's absolute script and locked project so unrelated working directories cannot redirect module discovery. Preserve scan behavior and marker validation. Change type: authoritative invocation correction.
