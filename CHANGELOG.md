@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **git-safety-net** (v1.24.4 → v1.24.5): Route task closeout to the canonical authority contract and replace repeated authority text with direct section links. Remove derived counts and an unsupported duration estimate. Change type: lossless compression and factual documentation alignment.
+
 - **git-safety-net** (v1.24.3 → v1.24.4): Honor existing task-specific and standing cleanup authorization without requiring a separate task or renewed approval. Preserve object-specific scope, fresh safety evidence and retained-work protections. Change type: authorization-boundary correction.
 
 - **tibo-reset-codex** (v2.8.0 → v2.8.1): Add live-session rules for overdue-event convergence before same-type re-digging, numbered delivery posts as confirmation-plus-remaining-count signals, third-party event-list gaps never serving as negative evidence, and event-level settlement rebinding to any pre-window baseline account. Change type: bounded monitoring judgment additions.

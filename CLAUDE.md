@@ -800,8 +800,9 @@ scope through `git-safety-net`. For branch publication and PR creation, follow
 before the first push. Keep its policy preflight, pinned source and remote readback
 in that owner rather than maintaining another push example here.
 
-For recovery or repository convergence under concurrent work, enter
-[git-safety-net](git-safety-net/SKILL.md).
+For task closeout, enter
+[git-safety-net's Outcome contract](git-safety-net/SKILL.md#outcome-contract--keep-the-safety-net-subordinate-to-the-users-job).
+Use this entry for recovery or repository convergence under concurrent work.
 For local snapshot failures involving an index lock or commit-hook refusal, use its
 [snapshot recovery procedure](git-safety-net/references/recovery_playbook.md#blocked-local-snapshots).
 For Tibo's application retry and acceptance, follow

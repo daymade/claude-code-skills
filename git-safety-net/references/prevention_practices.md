@@ -126,8 +126,8 @@ Completion requires all of these, never an OR between them:
 The claim is intentionally scoped. A checkout can remain dirty because an authorized automation
 writer or another named owner left unrelated paths. That does not make the session incomplete, but
 it forbids claiming the **whole repository** is clean or sweeping the residuals into this commit.
-Resolve retirement authority through the SKILL Outcome contract, then apply Mode E's fresh
-evidence gates. A separate safety procedure does not require a new task or new confirmation.
+Resolve retirement authority through the [SKILL Outcome contract](../SKILL.md#outcome-contract--keep-the-safety-net-subordinate-to-the-users-job), then apply
+[Mode E's evidence gates](../SKILL.md#mode-e--retire-worktrees-stashes-and-branches-safely).
 
 ## Known automated writers are not session-owned WIP
 
@@ -535,8 +535,8 @@ content, 13 commits' entire content, and 47 branch names. A confirmation step wo
 is archived elsewhere or explicitly abandoned" has no falsifiable criterion and degrades into the
 executor's judgement — `cat-file` readability was nearly mistaken for "merged".
 
-**Prevention (pure-additive, ~10 minutes, fully reversible):** enumerate every head the artifacts
-carry, then run the three-check matrix per head and anchor every unreachable one:
+**Prevention (pure-additive, fully reversible):** enumerate every head the artifacts
+carry, then run the checks below per head and anchor every unreachable one:
 
 ```bash
 git cat-file -e <sha>                          # object exists in the store
@@ -710,7 +710,7 @@ banned even when the math looks lossless):
   never "clean up" their index for them.
 
 2026-10-07 case: an infra shared checkout showed 7+11 staged `D` entries; reconciliation
-found them name-for-name identical to the 7+11 files a just-merged PR had *added*, and
+found them name-for-name identical to the files a just-merged PR had *added*, and
 every path read back new content from `HEAD` — pure phantom, zero loss. The checkout
 belonged to another session, so the disposal was: don't touch, continue in an isolated
 worktree, damage no one's WIP.
