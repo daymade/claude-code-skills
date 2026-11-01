@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **git-safety-net** (v1.24.5 → v1.24.6): Correct interrupted fast-forward and published-copy recovery to use the project's verified guarded synchronization procedure, preserve WIP, and verify HEAD, index and working-tree state. Remove obsolete hand-reversion advice and derived prose counts. Change type: factual SOP correction.
+- **qa-expert** (v1.2.10 → v1.2.11): Exercise retained-session permission grants, revocations, unknown refreshes and late responses across upgrade/identity boundaries; verify runtime authorization with allowed and denied controls. Change type: bounded acceptance guidance.
+- **frontend-visual-qa** (v1.21.34 → v1.21.35): Calibrate transient feedback observation inside native/hybrid delivery builds, separate native evidence from DOM/console coverage and retain healthy and failing controls. Change type: bounded observation guidance.
+
 - **local-codex** (`daymade-codex` v2.3.1 → v2.4.0): Preserve authorized shared-daemon maintenance, durable replacement receipts and original-session continuation checks; distinguish official updates, pinned packages and Goal recovery. Change type: bounded lifecycle capability.
 - **github-ops** (v1.15.1 → v1.15.2): Recognize gh's empty required-check response while preserving independent ruleset and legacy protection checks. Change type: deterministic implementation repair.
 
