@@ -751,10 +751,16 @@ The executor uses the repository's existing synchronization and ownership contra
    working tree together. Run its preview, then its authorized apply. This Skill does
    not ship a universal synchronization command: `git_align_checkout.sh` only
    materializes files; it neither advances HEAD nor updates the real index.
-4. If that entry refuses a conflict, preserve its zero-write result and the original
-   staged/disk versions; reconcile the owned deltas through the project's recovery
-   owner before retrying. Do not delete incoming or already-published content to make
-   the checkout look clean, or replace the owner with raw ref/index writes. If no
+4. Treat a refusal as zero-write only when the owner verifies that preflight stopped
+   before any writes. Preserve the original staged/disk versions and reconcile owned
+   deltas through that owner before retrying. Once apply starts, a materialization,
+   ref compare-and-swap, index repair or readback failure can leave partial changes.
+   Keep the existing transaction journal, materialization records and recovery copies;
+   inspect their recorded state against current HEAD, real index and disk. Follow that
+   owner's recovery/retry contract for the same transaction. Do not assume nothing
+   changed, retry an ordinary fast-forward, recreate the transaction or bypass its
+   journal. Do not delete incoming or already-published content to make the checkout
+   look clean, or replace the owner with raw ref/index writes. If no
    verified entry is available, preserve and coordinate the original checkout, continue
    necessary authorized delivery in an isolated workspace, and report local alignment
    as unfinished. Do not assume a private helper is installed.
