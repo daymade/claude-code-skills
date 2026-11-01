@@ -158,6 +158,11 @@ rather than a second parameter or output-field table.
 
 ## Session Management
 
+Before an authorized shared-daemon restart or package replacement, read
+[shared daemon maintenance](references/shared-daemon-maintenance.md). Preserve
+affected work, retain an independent operation receipt, and verify continuation
+under the original session IDs; a new daemon is not proof that tasks resumed.
+
 For multi-step tasks, Codex supports session resume:
 ```bash
 # First step
