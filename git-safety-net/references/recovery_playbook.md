@@ -150,7 +150,8 @@ those HEADs explicitly, so do not run it when another linked path is excluded.
 
 Before removal, require empty tracked/untracked status **and a separate ignored-file inventory**,
 exact HEAD capture, content containment proof against a fresh base, a verified targeted bundle of
-the worktree's branch or collision-checked recovery ref, and current-session deletion authority.
+the worktree's branch or collision-checked recovery ref, and deletion authority per the authority
+definition in the SKILL Outcome contract.
 Only then try normal `git worktree remove`, followed by path/registration/ref postcondition
 checks. Its clean-submodule exception in the complete gate below permits one force flag only after
 a specific submodule refusal and independent module preservation; it does not permit removal of

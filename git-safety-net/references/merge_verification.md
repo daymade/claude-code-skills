@@ -63,7 +63,8 @@ base's parallel work is the point. It is the wrong form for "what does the base 
 For each branch, the script returns one of these outcomes:
 
 - **MERGED (ancestor)** — in the base's history. Content containment is proven; deletion still
-  requires the separately authorized Mode E target, current ref equality, and preservation gate.
+  requires an authorized Mode E target — authority per the authority definition in the SKILL
+  Outcome contract — plus current ref equality and the preservation gate.
 - **MERGED (content contained)** — a trial merge into the base changes nothing; the "commits
   ahead" count is a squash/rebase artifact. This proves content containment, not deletion authority.
 - **UNMERGED / NEEDS REVIEW** — a trial merge *would* change the base, so the branch carries
@@ -735,9 +736,10 @@ Use this READ-DO sequence for one explicitly authorized clone:
    bundle's refs into a recovery repository, replay each `<name> <target>` line with
    `git symbolic-ref <name> <target>`, then read every target back. A bundle-only restore that turns
    `refs/remotes/origin/HEAD` or another symbolic alias into a direct ref is not complete.
-3. **Obtain current-session retirement authority.** A prior cleanup request or a different clone's
-   approval does not transfer. Prefer a recoverable OS Trash/quarantine move; permanent deletion
-   is a distinct consequence and requires an explicit decision plus the verified bundle.
+3. **Verify retirement authority under the SKILL Outcome contract.** Do not extend a narrower
+   cleanup request or another clone's approval to this target or consequence. Prefer a recoverable
+   OS Trash/quarantine move; permanent deletion is a distinct consequence and requires an explicit
+   decision plus the verified bundle.
 4. **Freeze the quarantine target, then run process occupancy as a separate probe.** Resolve one
    absolute, unique quarantine/OS Trash destination, prove it does not exist, and select a
    no-clobber move form now. Do not target the clone's parent unless a separate inventory proves
@@ -888,7 +890,8 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
    if it still depends on the source. Unresolved alternates, partial/promisor or extension object
    stores, shared module stores, unsupported file types, or incomplete recovery evidence stop
    retirement; do not deinitialize a module or delete its Git directory to evade this gate.
-7. **Obtain current-session deletion authority, then try normal removal:** run
+7. **Obtain deletion authority per the authority definition in the SKILL Outcome contract, then
+   try normal removal:** run
    the tracked/untracked status check again. Then re-run the exact ignored-inventory command from
    step 3, expand directories the same way, and rebuild the ignored manifest. Its path set, entry
    types, regular-file hashes, and symlink targets must exactly equal the frozen step 3 manifest;

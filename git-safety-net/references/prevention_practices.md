@@ -120,12 +120,14 @@ Completion requires all of these, never an OR between them:
 1. every session-owned tracked and untracked byte is present in the handed-off commit;
 2. the exact commit is present on the intended remote, proven by independent readback;
 3. every residual path in the checkout is enumerated and attributed;
-4. no branch, stash, worktree, or remote ref is deleted as an implicit completion step.
+4. complete any retirement already required by the task's authority through Mode E, or report its
+   exact blocker; leave unrelated and excluded resources untouched.
 
 The claim is intentionally scoped. A checkout can remain dirty because an authorized automation
 writer or another named owner left unrelated paths. That does not make the session incomplete, but
 it forbids claiming the **whole repository** is clean or sweeping the residuals into this commit.
-Retirement is a separate Mode E task with new authority and fresh evidence.
+Resolve retirement authority through the SKILL Outcome contract, then apply Mode E's fresh
+evidence gates. A separate safety procedure does not require a new task or new confirmation.
 
 ## Known automated writers are not session-owned WIP
 
@@ -241,8 +243,8 @@ git branch --show-current      # is this where this change belongs?
 ```
 
 If you commit to the wrong branch anyway, it's recoverable: `git log` the SHA, then create a
-preserving ref with `git branch correct-branch <sha>`. Leave removal from the wrong branch to
-separately authorized Mode E retirement; confirming up front is free.
+preserving ref with `git branch correct-branch <sha>`. Leave removal from the wrong branch to Mode
+E retirement under the authority definition in the SKILL Outcome contract; confirming up front is free.
 
 ## Confirm the branch before every checkout/switch on a shared tree
 
@@ -309,7 +311,8 @@ branch's tip and the base, which is exactly the condition under which `checkout 
 uncommitted edits with no conflict (if it reports a difference, stop and resolve it deliberately
 rather than forcing the switch). Step 4 is correctness, not just courtesy: the parallel session
 expects to find its own branch checked out with its work intact, exactly as it left it.
-Branch deletion is not part of this recovery; it requires separately authorized Mode E evidence.
+Branch deletion is not part of this recovery; it runs through Mode E's evidence gates, with
+authority resolved per the authority definition in the SKILL Outcome contract.
 After Step 3, return to **Exact-SHA handoff and scoped completion** above: record the commit as
 `topic_sha`, push and read back that exact object, use `git merge "$topic_sha"` for a direct merge,
 and require the hosted expected-head-SHA gate (or immediately preceding hosted head readback) for a
