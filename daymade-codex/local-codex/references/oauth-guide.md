@@ -219,6 +219,11 @@ it does not require a model turn. Use the following model-request check only whe
 authorized and necessary to establish execution access, or replace its no-op with
 the first bounded useful action from the original task and inspect that result.
 
+Keep the ordinary entry's already-adopted sandbox and permission settings. Express
+this probe's no-tools/no-edits intent in its prompt; do not silently add a different
+test mode. A separately requested sandbox variant keeps its own verdict and cannot
+substitute for acceptance through the user's normal entry.
+
 For a build supporting `--no-daemon`, bind the check to an independent process as
 below. Confirm that option in the selected ordinary entry's `--help`; if unavailable,
 resolve its process/auth isolation before using the result as target-store evidence.
@@ -228,9 +233,14 @@ resolve its process/auth isolation before using the result as target-store evide
 # Use the resolved normal CLI entry and its required network context.
 CODEX_HOME="${AUTH_CHECK_HOME:?Set the verified attempt or target root}" \
   codex --no-daemon -c 'cli_auth_credentials_store="file"' \
-  exec --skip-git-repo-check --ephemeral --sandbox read-only --json \
+  exec --skip-git-repo-check --ephemeral --json \
   'Reply only OK. Do not use tools.'
 ```
+
+Require a successful completed turn with the requested nonempty final response;
+exit 0 with an empty turn or zero-output-token receipt is not response proof.
+Retain matched turn usage when exposed; missing usage is an evidence limit, not
+an authentication rejection.
 
 Bind an authorized refresh owner before this probe; it is a real request and can use allowance or Credit under that account's policy. For a non-file store, retain the owner's supported store binding rather than applying this file-store example. Use a bounded task-owned process and inspect its actual terminal result. Do not retry a known authentication rejection until credentials change. Success proves access at that time, not full remaining quota or adoption by already-running sessions. See [OpenAI authentication documentation](https://developers.openai.com/codex/auth/) for supported login/cache mechanisms.
 
