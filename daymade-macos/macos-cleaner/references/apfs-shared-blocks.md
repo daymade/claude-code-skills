@@ -44,7 +44,13 @@ snapshot verification only. Actual clone metadata compatibility and physical rel
 remain `unverified`; neither command creates a clone or tests metadata overlay.
 
 Ordinary pairs use exact-pair occupancy checks. Do not apply a global Git-LFS veto
-to unrelated ordinary files. For LFS use `kind: "lfs"`, `repo`, `pointer_ref` and
+to unrelated ordinary files. Do not infer Git tracking from `git check-attr filter`:
+globs also match untracked files. Check exact paths in the intended immutable tree
+and current index. Registry-listed ordinary media absent from both use ordinary
+exact-resource checks. Never reclassify real LFS pointers/cache objects or `.git`
+content as ordinary to bypass guards.
+
+For LFS use `kind: "lfs"`, `repo`, `pointer_ref` and
 `work_relative`; bind the immutable Git pointer, full object hash and cooldown.
 The LFS branch additionally requires the global LFS-activity guard. Never weaken
 that guard to finish a batch. Pilot first, then follow [batch selection](batch-selection.md).
