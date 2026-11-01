@@ -343,8 +343,9 @@ without replacing unrelated hooks:
     longer mints a fresh requirement that strands the completed receipt. An
     explicit new prior-work ask still does.
   - **Current execution continuity.** Instructions such as `沿用当前 child`,
-    continuing the current session, working directory or read-only scope do not
-    request historical retrieval. Exclude only a complete list of execution
+    continuing the current session, working directory, read-only scope or an
+    explicitly timestamped current execution deadline do not request historical
+    retrieval. Exclude only a complete list of execution
     objects; keep `沿用` when the same list also names a historical asset.
     Historical reuse requests elsewhere in the prompt still count.
 
