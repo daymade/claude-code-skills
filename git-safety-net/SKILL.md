@@ -388,6 +388,8 @@ The load-bearing few:
   juggling, but preserve a higher-authority narrow stash exception; never use an unscoped stash
   to make a dirty checkout look ready.
   (§ Parallel / multi-branch work; § Push work-in-progress branches early.)
+- **Failed fast-forward or partially synchronized checkout:** follow
+  [Guarded checkout recovery](references/prevention_practices.md#guarded-checkout-recovery).
 - **Worktrees are explicitly authorized, named exceptions — not the standing default.** They
   isolate working files, `HEAD`, and index but still share refs, stashes, object storage, config,
   and hooks, and do not copy ignored dependencies. When approved, a linked worktree is safer than
