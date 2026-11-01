@@ -194,9 +194,15 @@ class MergeGuardTests(unittest.TestCase):
             self.assertFalse(any("/rules/branches/" in str(args) for args, _ in calls))
 
     def test_known_no_checks_message_still_requires_both_absence_probes(self):
-        for legacy, allowed in ((False, True), (True, False)):
+        cases = ((message, rules, legacy, allowed)
+                 for message in ("no checks reported on the 'topic' branch\n",
+                                 "no required checks reported on the 'topic' branch\n")
+                 for rules, legacy, allowed in (([], False, True),
+                                                ([{"type": "required_status_checks"}], False, False),
+                                                ([], True, False), ([{}], False, False)))
+        for message, rules, legacy, allowed in cases:
             run, calls, writes = self.runner(self.state(reviewDecision="REVIEW_REQUIRED", mergeStateStatus="BLOCKED"),
-                                            checks_rc=1, checks_raw="", checks_stderr="no checks reported on the 'topic' branch", legacy=legacy)
+                                            checks_rc=1, checks_raw="", checks_stderr=message, rules=rules, legacy=legacy)
             if allowed:
                 self.assertEqual(checked.checked_invocation("operator", "github.com", self.command("--admin"),
                                  run=run, merge_bypass=f"example/project#42@{SHA}"), 0)
@@ -206,6 +212,40 @@ class MergeGuardTests(unittest.TestCase):
                     checked.checked_invocation("operator", "github.com", self.command("--admin"),
                                                run=run, merge_bypass=f"example/project#42@{SHA}")
                 self.assertEqual(writes, [])
+            self.assertEqual(sum("/rules/branches/" in str(args) for args, _ in calls), 1)
+            self.assertEqual(sum(args[1:3] == ["api", "graphql"] for args, _ in calls), 1)
+
+    def test_no_required_checks_text_does_not_hide_failed_or_malformed_evidence(self):
+        message = "no required checks reported on the 'topic' branch\n"
+        cases = ((0, "", message), (2, "", message), (1, "[]", message),
+                 (1, "unparseable", message), (1, "", "authentication failed\n"),
+                 (1, "", "warning: " + message), (1, "", ""))
+        for rc, stdout, stderr in cases:
+            with self.subTest(rc=rc, stdout=stdout, stderr=stderr):
+                run, calls, writes = self.runner(checks_rc=rc, checks_raw=stdout, checks_stderr=stderr)
+                with self.assertRaises(ValueError):
+                    checked.checked_invocation("operator", "github.com", self.command("--admin"),
+                                               run=run, merge_bypass=f"example/project#42@{SHA}")
+                self.assertEqual(writes, [])
+                self.assertFalse(any("/rules/branches/" in str(args) for args, _ in calls))
+
+    def test_no_required_checks_text_still_rejects_unknown_protection_data(self):
+        message = "no required checks reported on the 'topic' branch\n"
+        for source in ("active", "legacy"):
+            for rc, stdout in ((1, ""), (0, ""), (0, "null"), (0, "{}")):
+                with self.subTest(source=source, rc=rc, stdout=stdout):
+                    underlying, calls, writes = self.runner(checks_rc=1, checks_raw="", checks_stderr=message)
+                    def run(args, **kwargs):
+                        result = underlying(args, **kwargs)
+                        matches = (source == "active" and args[1] == "api" and "/rules/branches/" in args[2]
+                                   or source == "legacy" and args[1:3] == ["api", "graphql"])
+                        return SimpleNamespace(returncode=rc, stdout=stdout) if matches else result
+                    with self.assertRaises(ValueError):
+                        checked.checked_invocation("operator", "github.com", self.command("--admin"),
+                                                   run=run, merge_bypass=f"example/project#42@{SHA}")
+                    self.assertEqual(writes, [])
+                    self.assertEqual(sum("/rules/branches/" in str(args) for args, _ in calls), 1)
+                    self.assertEqual(sum(args[1:3] == ["api", "graphql"] for args, _ in calls), 1)
 
     def test_auto_modes_remain_explicit_and_do_not_become_bypass(self):
         run, _, writes = self.runner(self.state(reviewDecision="REVIEW_REQUIRED", mergeStateStatus="BLOCKED"))

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **git-safety-net** (v1.24.5 → v1.24.6): Correct interrupted fast-forward and published-copy recovery to use the project's verified guarded synchronization procedure, preserve WIP, and verify HEAD, index and working-tree state. Remove obsolete hand-reversion advice and derived prose counts. Change type: factual SOP correction.
+- **github-ops** (v1.15.1 → v1.15.2): Recognize gh's empty required-check response while preserving independent ruleset and legacy protection checks. Change type: deterministic implementation repair.
 
 - **skill-creator** (`daymade-skill` v1.74.9 → v1.74.10): Bind security-scan recipes and help to the loaded creator's absolute script and locked project so unrelated working directories cannot redirect module discovery. Preserve scan behavior and marker validation. Change type: authoritative invocation correction.
 
