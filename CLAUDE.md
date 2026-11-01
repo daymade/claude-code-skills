@@ -804,6 +804,8 @@ in that owner rather than maintaining another push example here.
 For task closeout, enter
 [git-safety-net's Outcome contract](git-safety-net/SKILL.md#outcome-contract--keep-the-safety-net-subordinate-to-the-users-job).
 Use this entry for recovery or repository convergence under concurrent work.
+For a failed fast-forward or a partly synchronized checkout, use its
+[guarded checkout recovery procedure](git-safety-net/references/prevention_practices.md#guarded-checkout-recovery).
 For local snapshot failures involving an index lock or commit-hook refusal, use its
 [snapshot recovery procedure](git-safety-net/references/recovery_playbook.md#blocked-local-snapshots).
 For Tibo's application retry and acceptance, follow

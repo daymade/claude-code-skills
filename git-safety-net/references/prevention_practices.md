@@ -64,7 +64,7 @@ write call to the process that actually owns the session, then reach that owner 
 session-addressing mechanism the current host provides — never guess an address from a directory,
 branch, or task label. A fast writer that opens, writes, and closes per line can leave no open
 handle even while the file keeps growing; watch size or `mtime` still advancing before concluding
-no one is writing. But the two probes share no empty shape, so read them apart. `lsof` exits 1
+no one is writing. But the probes share no empty shape, so read them apart. `lsof` exits 1
 with empty stdout both when nothing holds the file and when the path is wrong — only stderr
 separates them, and a `status error on <path>: No such file or directory` means the path itself is
 wrong (fix the path first; a nonexistent path has no size or `mtime` to watch and was never a
@@ -72,7 +72,7 @@ writer check at all). `fuser`'s shape is the opposite trap: it exits 0 whether o
 exit code cannot answer the writer question the way `lsof`'s exit 1 does. It also splits its
 answer across streams differently by platform — on macOS the PID goes to stdout while the `path: `
 echo goes to stderr, whereas Linux prints `path: <pids>` together on stdout — so "the output is
-empty" is not a portable criterion and the two probes must not share one. Decide a writer by
+empty" is not a portable criterion and the probes must not share one. Decide a writer by
 whether a PID is present: on macOS that is a non-empty `$(fuser <path>)` (stdout carries the PID,
 and nothing when no one holds it); on Linux it is a PID after the colon. Never read the `path: `
 echo as a writer — under a `2>&1` capture it lands on stdout and reads as output when there is
@@ -664,8 +664,8 @@ Leaving the drift in place hands the next bare commit a loaded gun.
 ### Phantom `D` triage: prove it by reconciliation, then dispose by ownership
 
 When the staged set shows a batch of `D` entries you don't recognize, don't conclude from "I
-don't remember deleting these" — prove or disprove the phantom with two reconciliation
-evidences:
+don't remember deleting these" — prove or disprove the phantom with the reconciliation
+checks below:
 
 ```bash
 git diff --cached --name-status | awk '$1=="D"{print $2}' | sort > /tmp/staged-d.txt
@@ -698,11 +698,8 @@ banned even when the math looks lossless):
   existing immutable-entry/owner path; do not force it away. Re-run the full "Worktree retirement"
   flow in merge_verification.md after status is empty: normal removal first, and only its
   clean-submodule exception may justify a single force flag.
-- **Your own primary checkout:** no immediate action is required as long as you never run a
-  bare commit over it — the drift harms nothing else by sitting there. `git restore --staged
-  -- .` only re-syncs the index; the working tree still lags HEAD and there is no
-  guard-compliant in-place command to advance it, so the honest options are: leave it (stage
-  explicit paths forever), or rebuild the checkout.
+- **Your own primary checkout:** follow the
+  [guarded checkout recovery procedure](#guarded-checkout-recovery).
 - **Someone else's checkout / WIP: do not touch it.** The phantom itself loses no data; the
   only danger is the next bare commit landing on it (the loaded gun above). Hand the
   reconciliation evidence to the owner and coordinate per the global contract's
@@ -717,56 +714,61 @@ worktree, damage no one's WIP.
 
 ### `git pull --ff-only` is not atomic: the half-applied fast-forward, and the already-published working-tree copy
 
-Two sibling drift shapes that both present as "`git status` shows `M` on a file you
-didn't edit this session":
+These drift shapes can present as "`git status` shows `M` on a file you didn't edit this
+session":
 
-1. **Half-applied ff.** A fast-forward updates the working tree first and moves the ref
-   last; a failure between the two (lock contention with a parallel session, a packed-refs
-   race) leaves the working tree at the new content with HEAD still at the old one.
+1. **Half-applied ff.** A failed fast-forward can leave incoming content in the working
+   tree while HEAD still points at the old commit.
    Signature — checkable *after* the fact, without having seen the pull's output:
    `git rev-parse HEAD` still points at the old commit while the already-fetched
    `git rev-parse origin/main` has the new one, and `git diff HEAD -- <file>` shows the
-   *incoming* changes as uncommitted modifications. Recovery: for **every** file listed
-   by `git status --porcelain` as `M` (an ff usually brings in several), align it back to
-   HEAD by hand — delete the incoming section with an editor, which is the compliant form
-   under `git-worktree-guard` (it hard-bans the discard-family commands
-   `git checkout --`/`git restore --worktree` that would do this in one step); once
-   `git status` is clean, re-run the ff and git writes the new content back itself.
-   The reason the failure was invisible in the first place: the pull was run as
-   `git pull ... 2>&1 | tail -1`, and "Updating A..B" is the *first* line of the output —
-   the error and ref-update lines never printed. State-changing git commands are never
-   truncated (the `instrument-calibration-guard` hook; if you *did* see the "Updating
-   A..B" line, it is supporting evidence, not the signature — the signature above works
-   without it).
+   *incoming* changes as uncommitted modifications. Capture the complete command result
+   and exit status; an "Updating A..B" line alone does not prove the ref advanced.
 2. **Already-published copy.** You edited a file in a shared checkout, committed it
    elsewhere (worktree / patch), and the PR merged. The checkout still holds your
    pre-merge revision as an uncommitted modification. A later `git pull --ff-only` —
-   yours or the owner's — refuses with "Your local changes would be overwritten" because
-   git compares **paths against HEAD/index**, not content: even a copy byte-identical to
-   the merge target is still path-dirty relative to the old HEAD, and the ff refuses
-   anyway (measured). So the unblock is NOT "make the copy match the merge" — it is
-   "make the file match **HEAD**":
-   - *You want to ff now:* align the file back to the current HEAD (hand-edit the section
-     out, same compliant form as shape 1), run the ff — HEAD advances and git writes the
-     merged content back. Editing it to the merged revision first is wasted motion: the
-     ff refuses on the path-dirty check either way.
-   - *The owner will ff later, not you:* bring the copy to the merged revision (apply the
-     same fix patch, or edit it to match) purely so *their* ff sees no local diff on this
-     path. If the copy is *older* than the merge (review fixes landed in the PR after you
-     made it), "it will go clean on merge" is false — the delta stays as an uncommitted
-     reversion. Verify the copy really matches the merge with
-     `git show origin/main:<path> | cmp - <path>` (empty output = byte-identical).
+   yours or the owner's — can refuse with "Your local changes would be overwritten".
+   Compare the copy with the exact published commit and fresh target: it may match landed
+   content, lag behind review fixes, or contain unique work. Matching a published blob
+   classifies the bytes; it does not by itself prove that a native fast-forward will
+   accept the checkout or that its index is synchronized.
 
-2026-10-07 case: both fired within one delivery round — an infra CLAUDE.md pre-review-fix
-copy in the main checkout (caught by a peer's blob check; editing it to the merged
-revision did NOT unblock the ff — path-dirty either way — so it was hand-aligned back to
-HEAD, the ff advanced, and git wrote the merged content back), a pkm review file misread
-as untracked from a stale HEAD snapshot and `rm`'d — it was tracked, another session had
-already advanced HEAD past the commit that added it (restored with
-`git show HEAD:<path> > <path>`; the rule "every read that enters a judgment uses an
-immutable ref" — the global contract's 共享工作树以不可变 ref 为基线 section — applies
-to *deletion* decisions too), and a skills-pro ff that updated the working tree but not
-the ref (recovered by hand-removing the incoming section and re-running the ff).
+#### Guarded checkout recovery
+
+The executor uses the repository's existing synchronization and ownership contract:
+
+1. Freeze the current branch, full HEAD (`OLD`), freshly verified remote target (`TIP`),
+   and the affected index and working-tree state. Resolve path membership and content
+   from these immutable commits; a stale status snapshot cannot classify a deletion.
+   Coordinate any active writer before changing this checkout.
+2. Preserve unique staged, working-tree, untracked and ignored content before alignment.
+   Compare each affected path's real index entry and disk state with `OLD`, `TIP` and
+   retained landed versions. An unfamiliar staged entry, unexplained delta or branch
+   drift stops the in-place write path until ownership and preservation are resolved.
+3. Locate the project's verified guarded synchronization entry and read its actual
+   preview/apply and recovery contract. It must check the affected path set before
+   writes, preserve unrelated WIP, and reconcile the intended branch, real index and
+   working tree together. Run its preview, then its authorized apply. This Skill does
+   not ship a universal synchronization command: `git_align_checkout.sh` only
+   materializes files; it neither advances HEAD nor updates the real index.
+4. Treat a refusal as zero-write only when the owner verifies that preflight stopped
+   before any writes. Preserve the original staged/disk versions and reconcile owned
+   deltas through that owner before retrying. Once apply starts, a materialization,
+   ref compare-and-swap, index repair or readback failure can leave partial changes.
+   Keep the existing transaction journal, materialization records and recovery copies;
+   inspect their recorded state against current HEAD, real index and disk. Follow that
+   owner's recovery/retry contract for the same transaction. Do not assume nothing
+   changed, retry an ordinary fast-forward, recreate the transaction or bypass its
+   journal. Do not delete incoming or already-published content to make the checkout
+   look clean, or replace the owner with raw ref/index writes. If no
+   verified entry is available, preserve and coordinate the original checkout, continue
+   necessary authorized delivery in an isolated workspace, and report local alignment
+   as unfinished. Do not assume a private helper is installed.
+5. Independently read the resulting full HEAD, affected index entries and disk content,
+   and verify unrelated WIP survived. HEAD already equal to `TIP`, or a synchronizer's
+   successful no-op, proves no more than that observed condition; it does not establish
+   index/working-tree synchronization. Claim task-scoped closure only when the required
+   layers match the intended result, with any retained valid WIP explicitly attributed.
 
 ## Set a wider reflog safety window once
 
