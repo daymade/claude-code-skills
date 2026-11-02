@@ -189,7 +189,8 @@ enter `setup-notifications-via-wecom`; its receipt contract owns accepted/reject
 handling, while the worker owns event identity and delivery state.
 
 For Terraform publication, linked releases, shared-route replacement, approval, first mutation,
-expired plans, environment isolation or initialization-cache changes, enter
+expired plans, saved-plan input-type mismatches, frozen approval-input verification,
+environment isolation or initialization-cache changes, enter
 [`terraform-skill`](terraform-skill/SKILL.md).
 
 For Deep Research or Kimi financial-research changes, enter the owning
