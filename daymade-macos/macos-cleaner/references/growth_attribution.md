@@ -174,8 +174,9 @@ checkpoint; the calculator does not collect or authenticate evidence. Its
 A growing directory without an owner is an unfinished row. For each top row:
 
 - The numeric suffix on a macOS `fs_usage` process label is a thread ID, not
-  necessarily a PID. Map it contemporaneously through native `proc_pidinfo`
-  `PROC_PIDLISTTHREADS`, then bind the parent process's argv and start identity.
+  necessarily a PID. For each candidate PID, query the observed 64-bit TID through
+  native `proc_pidinfo` `PROC_PIDTHREADID64INFO`, then bind that process's argv
+  and start identity. `PROC_PIDLISTTHREADS` returns user-thread handles, not these TIDs.
   Missing mappings stay unknown; do not query a same-numbered PID as attribution.
   Writes to `/dev/null` and overwrites do not themselves prove allocated growth.
   Naming a writer does not make its protected records cleanup candidates.

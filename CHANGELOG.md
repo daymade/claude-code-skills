@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-cleaner** (`daymade-macos` v1.26.15 → v1.26.16): Match observed 64-bit thread IDs with the native per-PID query instead of thread handles; retain process identity binding and unknown-attribution safeguards. Change type: factual SOP correction.
+
 - **local-codex** (`daymade-codex` v2.4.2 → v2.4.3): Align refresh-ownership guidance and recovery-entry wording with the existing consumer contract; remove repeated policy-migration guidance. Change type: bounded documentation consistency repair.
 
 - **local-codex** (`daymade-codex` v2.4.1 → v2.4.2): Choose recovery against the requested workflow and supported saved-login/source reuse; distinguish deployed independent policy from user choice while retaining refresh ownership, transfer and unknown-request safeguards. Change type: bounded recovery-route correction.
