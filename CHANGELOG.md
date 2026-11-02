@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **terraform-skill** (v1.5.11 → v1.5.12): Verify numeric frozen inputs in the saved plan's variable representation, distinguish it from evaluated outputs, and reproduce typed var-file forwarding with a provider-free Terraform control. Change type: bounded pre-deploy verification guidance.
+
 - **local-codex** (`daymade-codex` v2.4.0 → v2.4.1): Verify account access through the ordinary entry's adopted permission settings; keep separately requested sandbox variants scoped and require a nonempty completed response rather than an empty successful process. Change type: bounded verification correction.
 
 - **macos-cleaner** (`daymade-macos` v1.26.14 → v1.26.15): Keep verified generated browser clones rebuildable from the current installation instead of creating backups from nominal size. Distinguish LFS attribute matches from exact immutable-tree/index tracking while preserving real pointer, cache and protected-path guards. Change type: bounded classification correction.
