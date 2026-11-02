@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **local-codex** (`daymade-codex` v2.4.1 → v2.4.2): Choose recovery against the requested workflow and supported saved-login/source reuse; distinguish deployed independent policy from user choice while retaining refresh ownership, transfer and unknown-request safeguards. Change type: bounded recovery-route correction.
+
 - **terraform-skill** (v1.5.11 → v1.5.12): Verify numeric frozen inputs in the saved plan's variable representation, distinguish it from evaluated outputs, and reproduce typed var-file forwarding with a provider-free Terraform control. Change type: bounded pre-deploy verification guidance.
 
 - **local-codex** (`daymade-codex` v2.4.0 → v2.4.1): Verify account access through the ordinary entry's adopted permission settings; keep separately requested sandbox variants scoped and require a nonempty completed response rather than an empty successful process. Change type: bounded verification correction.
