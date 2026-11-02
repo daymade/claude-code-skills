@@ -660,7 +660,7 @@ enter [cookie-copy](cookie-copy/SKILL.md). For its quota-query caller, follow
 
 For an existing Codex session failing after login changes, start at
 [Local Codex existing-owner recovery](daymade-codex/local-codex/references/oauth-guide.md#existing-native-owner-recovery).
-For a remote Codex sign-in prompt or independent-grant recovery, start at
+For a remote Codex sign-in prompt or choosing existing-login reuse versus new authorization, start at
 [Local Codex authentication recovery](daymade-codex/local-codex/references/oauth-guide.md#remote-account-switch-and-expired-login-recovery).
 Keep quota checks on the separate route below.
 
