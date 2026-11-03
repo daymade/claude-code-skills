@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-creator** (`daymade-skill` v1.74.10 → v1.74.11): Reserve task storage outside the monitored root before preparing inputs, reconcile external allocations before growing retries, and distinguish local runner success from the combined task-budget judgment. Change type: bounded budget-accounting guidance.
+
 - **macos-cleaner** (`daymade-macos` v1.26.15 → v1.26.16): Match observed 64-bit thread IDs with the native per-PID query instead of thread handles; retain process identity binding and unknown-attribution safeguards. Change type: factual SOP correction.
 
 - **local-codex** (`daymade-codex` v2.4.2 → v2.4.3): Align refresh-ownership guidance and recovery-entry wording with the existing consumer contract; remove repeated policy-migration guidance. Change type: bounded documentation consistency repair.
