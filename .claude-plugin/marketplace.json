@@ -467,7 +467,7 @@
       "description": "Extracts Feishu/Lark Docs, Wiki, Sheets, and Minutes (妙记) transcripts into faithful local Markdown via the lark-cli API — no LLM paraphrasing, browser-DOM fallback when lark-cli can't reach content. Use whenever the source is a Feishu/Lark URL and fidelity matters — 导出飞书文档/合集/妙记转写, 把飞书 wiki 转 markdown, or archiving a collection — even if the user just says \"save this\". Also covers owner-exported .docx → Markdown.",
       "source": "./feishu-doc-scraper",
       "strict": false,
-      "version": "1.10.5",
+      "version": "1.11.0",
       "category": "productivity",
       "keywords": [
         "feishu",
@@ -942,7 +942,7 @@
       "description": "Fetch existing YouTube transcripts/subtitles or archive spoken video content as text, and download YouTube videos/audio or HLS streams (m3u8) with yt-dlp and ffmpeg. Use for transcript/subtitle retrieval, text-first video archiving, video/audio downloads, protected streams with authentication headers, and download failures including nsig, 403 or browser-cookie issues.",
       "source": "./youtube-downloader",
       "strict": false,
-      "version": "1.3.0",
+      "version": "1.4.0",
       "category": "utilities",
       "keywords": [
         "youtube",

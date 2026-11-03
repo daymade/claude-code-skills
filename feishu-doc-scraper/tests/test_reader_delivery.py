@@ -72,6 +72,23 @@ class ReaderDeliveryTests(unittest.TestCase):
         copied = gate.inspect(moved, moved/'manifest.json', ['note.md'])
         self.assertEqual(copied['artifact_fingerprint'], report['artifact_fingerprint'])
 
+    def test_nas_cache_is_checked_and_remains_movable(self):
+        payload = json.loads(self.manifest.read_text())
+        video = next(row for row in payload["files"] if row.get("cache_path", "").endswith(".mp4"))
+        video.update(storage="nas", locator={"system":"nas", "device":"synthetic-nas-001",
+                     "account":"archive-user", "path":"Downloads/course name.mp4",
+                     "source_url":"https://www.youtube.com/watch?v=BaW_jenozKc"})
+        self.manifest.write_text(json.dumps(payload))
+        report = self.inspect()
+        self.assertIn("media/course name.mp4", report["artifact"]["notes"]["note.md"]["videos"])
+        moved = self.base / "moved-nas"; shutil.copytree(self.root, moved)
+        self.assertEqual(gate.inspect(moved, moved/"manifest.json", ["note.md"])["artifact_fingerprint"], report["artifact_fingerprint"])
+        cache = self.root / "media/course name.mp4"
+        cache.write_bytes(b"x" * video["bytes"])
+        with self.assertRaisesRegex(ValueError, "differs from manifest"): self.inspect()
+        cache.unlink()
+        with self.assertRaises(ValueError): self.inspect()
+
     def test_original_absolute_links_rejected_even_when_file_exists(self):
         asset = self.root/'media/image.png'
         for text in [f'![]({asset})', f'<p><a href="{asset}">video</a></p>',

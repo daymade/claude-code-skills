@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **youtube-downloader** (v1.3.0 → v1.4.0): Hand failed local file requests to an existing authorized downloader when available, preserving source, quality and destination before requesting new cookie/provider setup. Change type: bounded optional workflow branch.
+- **feishu-doc-scraper** (v1.10.5 → v1.11.0): Support verified NAS-retained external media with device/account/path locators, source URLs, integrity evidence and movable local cache references. Preserve legacy platform/Git/OSS records and reject malformed NAS identities. Change type: additive storage contract.
+
 - **read-codex-history** (`daymade-claude-code` v4.33.22 → v4.34.0): Add an optional consumed-prefix SHA-256 callback after complete streaming validation; preserve exact raw bytes, identity checks and failure propagation while leaving default callers unchanged. Change type: backward-compatible API capability.
 
 - **skill-creator** (`daymade-skill` v1.74.11 → v1.75.0): Bind an explicitly selected capacity reserve across input export, retries and budgeted callers; retain safe cleanup when configuration is unavailable. Persist mixed-filesystem free-space observations without attributing unrelated growth to the task. Change type: bounded optional runtime capability.
