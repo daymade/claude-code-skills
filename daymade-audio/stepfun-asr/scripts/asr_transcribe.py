@@ -3,6 +3,7 @@
 stepaudio-3-asr-max transcription — single file, SSE endpoint.
 
 Endpoint: POST https://api.stepfun.com/v1/audio/asr/sse (NOT /v1/audio/transcriptions)
+Step Plan: supply its /step_plan/v1/audio/asr/sse endpoint with stepaudio-2.5-asr.
 
 Why a dedicated script: naive implementations try to reuse the step-asr-era endpoint
 (/v1/audio/transcriptions with multipart), get back `model stepaudio-3-asr-max not supported`,
@@ -74,13 +75,13 @@ EXT_TO_FORMAT = {
 }
 
 
-def load_api_key() -> str:
-    """Env first, then ${CLAUDE_PLUGIN_DATA}/config.json. Fail fast."""
-    k = os.environ.get("STEPFUN_API_KEY", "").strip()
+def load_api_key(env_name: str = "STEPFUN_API_KEY") -> str:
+    """Read the selected env; only the default key may use plugin config. Fail fast."""
+    k = os.environ.get(env_name, "").strip()
     if k:
         return k
     plugin_data = os.environ.get("CLAUDE_PLUGIN_DATA", "").strip()
-    if plugin_data:
+    if plugin_data and env_name == "STEPFUN_API_KEY":
         cfg = Path(plugin_data) / "config.json"
         if cfg.exists():
             try:
@@ -91,7 +92,10 @@ def load_api_key() -> str:
                 pass
     print(
         "ERROR: no API key found.\n"
-        "  Set $STEPFUN_API_KEY, or create ${CLAUDE_PLUGIN_DATA}/config.json with {\"api_key\": \"...\"}",
+        f"  Set ${env_name}" + (
+            ', or create ${CLAUDE_PLUGIN_DATA}/config.json with {"api_key": "..."}'
+            if env_name == "STEPFUN_API_KEY" else " (no fallback to another credential)"
+        ),
         file=sys.stderr,
     )
     sys.exit(2)
@@ -124,6 +128,7 @@ def transcribe(
     fmt_extra: dict[str, Any] | None = None,
     model: str = MODEL,
     timeout: int = 1200,
+    endpoint: str = ASR_URL,
 ) -> dict[str, Any]:
     """
     Returns {ok, text?, usage?, elapsed, deltas_count, segments?,
@@ -155,7 +160,7 @@ def transcribe(
         }
     ).encode()
     req = urllib.request.Request(
-        ASR_URL,
+        endpoint,
         data=body,
         method="POST",
         headers={
@@ -232,6 +237,11 @@ def main() -> int:
     ap.add_argument("--model", default=MODEL,
                     help=f"ASR model on /v1/audio/asr/sse. Default: {MODEL}. "
                          "Older: stepaudio-2.5-asr, stepaudio-2-asr-pro")
+    ap.add_argument("--endpoint", default=ASR_URL,
+                    help="Exact SSE endpoint; use the registered Step Plan endpoint for subscription calls")
+    ap.add_argument("--key-env", default="STEPFUN_API_KEY",
+                    choices=("STEPFUN_API_KEY", "STEPFUN_PLAN_TOKEN"),
+                    help="Explicit credential environment; Plan never falls back to the paid credential")
     ap.add_argument("--hotwords", help="Comma-separated hotwords. Measured 2026-09-18 as having no "
                                        "effect on output; wired up anyway because it costs nothing.")
     ap.add_argument("--codec", help="pcm only: raw|opus")
@@ -245,7 +255,7 @@ def main() -> int:
         print(f"ERROR: audio file not found: {args.audio}", file=sys.stderr)
         return 2
 
-    api_key = load_api_key()
+    api_key = load_api_key(args.key_env)
     fmt = detect_format(args.audio, args.format)
     result = transcribe(
         api_key=api_key,
@@ -257,6 +267,7 @@ def main() -> int:
         fmt_extra={k: v for k, v in (("codec", args.codec), ("rate", args.rate),
                                      ("bits", args.bits), ("channel", args.channel)) if v is not None},
         model=args.model,
+        endpoint=args.endpoint,
     )
 
     if result.get("unhandled_response_fields"):

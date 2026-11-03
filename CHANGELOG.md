@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **stepfun-asr** (`daymade-audio` v1.54.3 → v1.54.4): Add explicit subscription endpoint and credential selection for Step Plan ASR, preserve wallet defaults, and replace outdated text-only subscription guidance. Change type: bounded endpoint support and authoritative factual correction.
+
 - **macos-cleaner** (`daymade-macos` v1.26.15 → v1.26.16): Match observed 64-bit thread IDs with the native per-PID query instead of thread handles; retain process identity binding and unknown-attribution safeguards. Change type: factual SOP correction.
 
 - **local-codex** (`daymade-codex` v2.4.2 → v2.4.3): Align refresh-ownership guidance and recovery-entry wording with the existing consumer contract; remove repeated policy-migration guidance. Change type: bounded documentation consistency repair.
