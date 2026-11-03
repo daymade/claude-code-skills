@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **read-codex-history** (`daymade-claude-code` v4.33.22 → v4.34.0): Add an optional consumed-prefix SHA-256 callback after complete streaming validation; preserve exact raw bytes, identity checks and failure propagation while leaving default callers unchanged. Change type: backward-compatible API capability.
+
 - **skill-creator** (`daymade-skill` v1.74.11 → v1.75.0): Bind an explicitly selected capacity reserve across input export, retries and budgeted callers; retain safe cleanup when configuration is unavailable. Persist mixed-filesystem free-space observations without attributing unrelated growth to the task. Change type: bounded optional runtime capability.
 
 - **stepfun-asr** (`daymade-audio` v1.54.3 → v1.54.4): Add explicit subscription endpoint and credential selection for Step Plan ASR, preserve wallet defaults, and replace outdated text-only subscription guidance. Change type: bounded endpoint support and authoritative factual correction.
