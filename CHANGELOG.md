@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **skill-creator** (`daymade-skill` v1.74.11 → v1.75.0): Bind an explicitly selected capacity reserve across input export, retries and budgeted callers; retain safe cleanup when configuration is unavailable. Persist mixed-filesystem free-space observations without attributing unrelated growth to the task. Change type: bounded optional runtime capability.
 
+- **stepfun-asr** (`daymade-audio` v1.54.3 → v1.54.4): Add explicit subscription endpoint and credential selection for Step Plan ASR, preserve wallet defaults, and replace outdated text-only subscription guidance. Change type: bounded endpoint support and authoritative factual correction.
 - **skill-creator** (`daymade-skill` v1.74.10 → v1.74.11): Reserve task storage outside the monitored root before preparing inputs, reconcile external allocations before growing retries, and distinguish local runner success from the combined task-budget judgment. Change type: bounded budget-accounting guidance.
 
 - **macos-cleaner** (`daymade-macos` v1.26.15 → v1.26.16): Match observed 64-bit thread IDs with the native per-PID query instead of thread handles; retain process identity binding and unknown-attribution safeguards. Change type: factual SOP correction.
