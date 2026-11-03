@@ -142,6 +142,49 @@ uv run scripts/fix_transcription.py --resolve-review 12 --decision accepted \
   --review-entity-type system --authority-record entity-reference.json --json
 ```
 
+#### A place name heard again in the same recording
+
+For an explicitly replayed municipal discussion whose selected place slot is
+followed by `，市长`, a verified replay may supply the written authority even
+without an adjacent `市` suffix. The executing agent must first verify the same
+utterance and recording; similar stories or several recognizers voting for a
+name do not establish that relationship. This route does not accept person names.
+
+Keep `kind=entity_reference` and `entity_type=place`. Add a `replay` object:
+
+```json
+{
+  "source_type": "same_recording_replay",
+  "source_sha256": "<SHA256 of the exact UTF-8 source file bytes>",
+  "occurrence_offset": 18,
+  "cue_offset": 125,
+  "quote_offset": 148,
+  "target_offset": 6,
+  "cue": "我再放一遍。",
+  "anchors": ["，市长是主管", "他只在乎什么是正确的事"]
+}
+```
+
+Compute offsets from the actual source, never copy the illustrative numbers.
+All offsets count Unicode characters in text read with universal newlines:
+`occurrence_offset` selects the complete queued context in `source_path`,
+`cue_offset` selects the replay cue in that same source, `quote_offset` selects
+the complete top-level `quote` there, and `target_offset` selects `target` inside
+that quote. The cue must lie between the complete first context and the replay.
+Supported cues are `我再放一遍。`, `再放一遍。`, `我们再听一遍。`, and
+`我再播放一遍。`. Both selected slots must be followed by `，市长` or `,市长`
+and discuss `城市` afterwards. Supply exactly two distinct anchors of at least
+six characters, unique and nonoverlapping after each slot, in the same order;
+the first starts within eight characters and each starts within 200 characters.
+
+The CLI validates the source bytes, exact passages, order, target and anchors,
+then uses the existing verdict/ledger transaction. It does not infer replay
+identity, hear audio, or override a known person's roster spelling. Missing,
+empty, conflicting or changed evidence refuses without changing the transcript,
+queue or audit. Resolve only this occurrence; a place verdict is not a reusable
+bare dictionary mapping. Existing adjacent-cue and company-reference records
+keep their prior interface.
+
 ### Written evidence for ordinary wording
 
 `kind=wording` does not bypass the person-name guard: short CJK phrases can have
