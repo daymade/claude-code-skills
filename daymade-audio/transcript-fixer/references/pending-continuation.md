@@ -15,6 +15,10 @@ for clock mapping, two-window evidence and the bounded re-cut rule.
 Inspect target-neighbour coverage before comparing recognizer readings.
 An absent target in an off-target window is no evidence for or against a spelling.
 Leave conflicting names pending; recognizer agreement never establishes identity.
+For wrong-window, misleading component and evidence-interface cases, use the
+[audio-evidence replays](evidence-replay-cases.md). A verified city-name replay
+uses [its source-bound queue record](review_queue_dashboard.md#a-place-name-heard-again-in-the-same-recording);
+it does not authorize generic name classification or a bypass after refusal.
 
 ## An explicit human verdict has arrived
 
