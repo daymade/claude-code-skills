@@ -161,7 +161,7 @@ Keep `kind=entity_reference` and `entity_type=place`. Add a `replay` object:
   "quote_offset": 148,
   "target_offset": 6,
   "cue": "我再放一遍。",
-  "anchors": ["，市长是主管", "他只在乎什么是正确的事"]
+  "anchors": ["，市长介绍情况", "这座城市需要新的道路"]
 }
 ```
 

@@ -18,14 +18,14 @@ text with `ok:true` is likewise no wording evidence.
 ## A familiar component is the wrong answer
 
 An assembly discussion elsewhere mentions rails. At the disputed occurrence,
-two verified windows say “把刀具交给他”，and a second recognizer agrees; a
+two verified windows say “先把刀具收好”，and a second recognizer agrees; a
 third recognizer returns another reading. The pending suggestion is “导轨”.
 
 Expected action: preserve the disagreement and judge the selected occurrence.
 Do not turn the familiar component elsewhere into proof here, or claim unanimous
 recognition. A supported correction belongs in this occurrence's verdict and
 ledger, not a bare “刀具→导轨” rule. Recognizer votes also cannot turn a spoken
-“小邢总” into the roster's differently spelled “晓星总”; identity authority is
+“小洛总” into the roster's differently spelled “晓落总”; identity authority is
 still required. If an existing dictionary entry would undo the adjudicated
 wording, inspect and correct that entry through its owner before another pass.
 

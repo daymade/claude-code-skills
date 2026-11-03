@@ -11,27 +11,27 @@ from .test_occurrence_contract import isolated, cli
 
 ORIGINAL = "个满雨"
 TARGET = "青屿城"
-CONTEXT = ("我当年就搞了个满雨，市长是主管转副市长。你有什么好的建议吗？"
-           "他只在乎什么是正确的事。我们这个城市怎么发展？")
-REPEAT = ("我当年去搞青屿城，市长是主管的副市长。你有什么好的建议吗？"
-          "他只在乎什么是正确的事。我们这个城市如何发展？")
+CONTEXT = ("我曾考察个满雨，市长介绍情况。他让团队记录问题。"
+           "这座城市需要新的道路。我们先讨论城市交通。")
+REPEAT = ("我曾考察青屿城，市长介绍情况。他请团队整理问题。"
+          "这座城市需要新的道路。我们再讨论城市交通。")
 CUE = "我再放一遍。"
 
 
 def setup_case(queue, tmp_path):
     file = tmp_path / "meeting.md"
-    file.write_text('---\nasr_note: 已核旧条目\n---\n短片 00:05:50.710\n' + CONTEXT + '\n')
+    file.write_text('---\nasr_note: 已核旧条目\n---\n短片 00:01:10.200\n' + CONTEXT + '\n')
     item_id = queue.enqueue([{"file": str(file), "line": 5, "original": ORIGINAL,
         "suggested": TARGET, "context": CONTEXT, "context_offset": CONTEXT.index(ORIGINAL),
         "kind": "entity", "entity_type": "place"}])["added"][0]
     source = tmp_path / "one recording.txt"
-    text = '短片 00:05:50.710\n' + CONTEXT + '\n主持人 00:06:25.690\n' + CUE + '\n短片 00:07:33.670\n' + REPEAT
+    text = '短片 00:01:10.200\n' + CONTEXT + '\n主持人 00:02:40.300\n' + CUE + '\n短片 00:03:20.400\n' + REPEAT
     source.write_text(text)
     replay = {"source_type": "same_recording_replay",
         "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
         "occurrence_offset": text.index(CONTEXT), "cue_offset": text.index(CUE),
         "quote_offset": text.index(REPEAT), "target_offset": REPEAT.index(TARGET),
-        "cue": CUE, "anchors": ["，市长是主管", "他只在乎什么是正确的事"]}
+        "cue": CUE, "anchors": ["，市长介绍情况", "这座城市需要新的道路"]}
     record = {"kind": "entity_reference", "entity_type": "place", "item_id": item_id,
         "target": TARGET, "source_path": str(source), "source_ref": "synthetic:recording:turns-1-3",
         "quote": REPEAT, "replay": replay}
@@ -98,10 +98,10 @@ def test_required_replay_fields_refuse_without_any_verdict_write(isolated, tmp_p
     {"occurrence_offset": True}, {"occurrence_offset": -1}, {"occurrence_offset": 0},
     {"cue_offset": False}, {"cue_offset": 0}, {"quote_offset": 0}, {"target_offset": True},
     {"target_offset": 0}, {"cue": "我不再放一遍。"}, {"anchors": []},
-    {"anchors": ["市长", "城市"]}, {"anchors": [None, "他只在乎什么是正确的事"]},
-    {"anchors": ["，市长是主管", "，市长是主管"]},
-    {"anchors": ["他只在乎什么是正确的事", "，市长是主管"]},
-    {"anchors": ["，市长是主管", "另一个城市的发展规划"]},
+    {"anchors": ["市长", "城市"]}, {"anchors": [None, "这座城市需要新的道路"]},
+    {"anchors": ["，市长介绍情况", "，市长介绍情况"]},
+    {"anchors": ["这座城市需要新的道路", "，市长介绍情况"]},
+    {"anchors": ["，市长介绍情况", "另一个城市的发展规划"]},
 ])
 def test_wrong_replay_binding_refuses_without_write(isolated, tmp_path, monkeypatch, capsys, patch):
     file, item_id, authority, record, _ = setup_case(isolated, tmp_path)
@@ -183,11 +183,11 @@ def test_text_coordinates_alone_do_not_prove_a_municipal_replay(isolated, tmp_pa
     elif change == "no_mayor":
         repeat = repeat.replace("市长", "经理")
     elif change == "person_intro":
-        context = context.replace("就搞了" + ORIGINAL, "我叫" + ORIGINAL)
+        context = context.replace("曾考察" + ORIGINAL, "我叫" + ORIGINAL)
     elif change == "far_anchor":
-        repeat = repeat.replace("他只在乎", "其他无关内容。" * 40 + "他只在乎")
+        repeat = repeat.replace("这座城市", "其他无关内容。" * 40 + "这座城市")
     else:
-        repeat += "他只在乎什么是正确的事。"
+        repeat += "这座城市需要新的道路。"
     monkeypatch.setitem(globals(), "CONTEXT", context)
     monkeypatch.setitem(globals(), "REPEAT", repeat)
     file, item_id, authority, _, _ = setup_case(isolated, tmp_path)

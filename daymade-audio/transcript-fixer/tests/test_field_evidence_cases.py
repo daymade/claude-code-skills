@@ -11,7 +11,7 @@ spec.loader.exec_module(checker)
 
 def reading(tight, medium):
     return {"original": "导骨", "suggested": "导轨", "tight": tight, "medium": medium,
-            "tight_exit": 0, "medium_exit": 0, "anchors": ["把", "交给他"]}
+            "tight_exit": 0, "medium_exit": 0, "anchors": ["把", "收好"]}
 
 
 def test_successful_but_off_target_windows_supply_no_wording_evidence():
@@ -19,16 +19,16 @@ def test_successful_but_off_target_windows_supply_no_wording_evidence():
 
 
 def test_empty_success_response_does_not_support_a_verdict():
-    result = reading("", "把导轨交给他。")
+    result = reading("", "把导轨收好。")
     result['ok'] = True
     assert checker.evidence_status(result) == "needs_reanchor"
 
 
 def test_two_windows_with_another_word_do_not_validate_the_stored_suggestion():
-    result = reading("把刀具交给他。", "先把刀具交给他，再看方案。")
+    result = reading("把刀具收好。", "请把刀具收好，然后核对清单。")
     assert checker.evidence_status(result) == "unsettled_reading"
     assert not checker.both_windows_support_suggestion(result)
 
 
 def test_disagreement_remains_visible_despite_matching_neighbours():
-    assert checker.evidence_status(reading("把导轨交给他。", "把刀具交给他。")) == "recognizer_disagreement"
+    assert checker.evidence_status(reading("把导轨收好。", "把刀具收好。")) == "recognizer_disagreement"
