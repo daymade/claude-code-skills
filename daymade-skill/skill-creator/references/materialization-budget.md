@@ -51,6 +51,31 @@ external LFS cache.
 Git object reads disable lazy promisor fetches and remote protocols, so a missing
 partial-clone object fails instead of silently downloading into a shared cache.
 
+## Reserve storage outside the monitored root
+
+Before preparation, the caller records the whole-task allowance and any external
+storage reservation in the existing task plan. Include task-created worktrees,
+dependency caches, container images and writable layers that cannot live under
+the monitored root. Set `max_total_bytes` to the whole-task allowance minus that
+reservation; reject a nonpositive remainder before calling `prepare`. The free-space
+reserve remains a separate requirement, not extra spending allowance.
+
+At admission and before a retry that can grow external storage, read the current
+local charged bytes and conservatively account for external task allocations.
+Keep observed sizes, estimates and unknowns separate; do not count the same shared
+image layer twice or claim that logical image sizes measure physical disk release.
+For example, a 1 GiB task with 384 MiB reserved externally permits at most 640 MiB
+in `max_total_bytes`; 600 MiB charged locally plus 450 MiB externally exceeds the
+task allowance even when `run` exits 0. Stop new allocation if external usage
+exceeds its reservation, the combined charge exceeds the allowance, or the required
+external measurement is unknown. Preserve the evidence and original allowance;
+do not reset the root or enlarge its limit to hide an overage.
+
+Report the runner's local result and the caller's combined-budget judgment
+separately, naming the external coverage and unresolved estimates. The caller
+performs this reconciliation; `materialize.py` does not discover external Docker
+or cache usage, enforce this reservation, or stop those external services.
+
 ## Runnable small example
 
 Use `--summary` on `prepare`, `run`, `finish` or `recover` for smaller tool-visible
