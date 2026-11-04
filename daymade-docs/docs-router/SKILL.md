@@ -1,7 +1,7 @@
 ---
 name: docs-router
 description: >-
-  Word/PDF/PPTX/HTML→Markdown;MD/Word→PDF;create Word;PDF HTML/translate;Excel/xlsm/macOS;photo/signed scans;Mermaid;DOCX review;post-change docs.
+  Word/PDF/PPTX/HTML→MD;MD/Word→PDF;new Word;PDF HTML/translate;Excel/xlsm/Mac;photo/signed scan;Mermaid;DOCX review;doc cleanup
   Reads one bundled Daymade specialist. New slide decks use
   deck-creator when installed; generic PDF reading/editing and spreadsheet
   analysis stay with their own Skills. Retired ppt-creator stays manual-only.

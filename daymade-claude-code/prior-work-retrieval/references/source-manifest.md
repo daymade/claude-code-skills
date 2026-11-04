@@ -70,6 +70,14 @@ receipt records `terms_passed: false`). The executable is invoked directly, neve
 through a shell. Supported
 result formats are named in the script; an unknown format fails validation.
 
+For a lexical command adapter, prefer `{terms}` when it accepts implementation
+keywords; retain `{query}` when the adapter requires the original request or
+semantic input. Check the adapter's documented token/AND semantics rather than
+feeding it a long outcome sentence by default. Treat `command_timeout` as an
+unresolved source failure: inspect the query shape and source health before
+raising `timeout_seconds`. Do not infer that every timeout has the same cause or
+copy timings measured on another index.
+
 A command adapter's payload may carry `last_indexed_at` and `complete_frontier`.
 They surface on the receipt as readable freshness fields (`freshness`:
 `fresh`/`stale`/`unknown` plus `freshness_reason`) — visibility, never a gate:
