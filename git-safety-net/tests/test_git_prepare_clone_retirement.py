@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -85,7 +86,7 @@ class PrepareCloneRetirementTests(unittest.TestCase):
             check=False,
         )
 
-    def prepare(self) -> subprocess.CompletedProcess[str]:
+    def prepare(self, *extra: str) -> subprocess.CompletedProcess[str]:
         return self.run_script(
             "--clone",
             str(self.clone),
@@ -93,10 +94,11 @@ class PrepareCloneRetirementTests(unittest.TestCase):
             str(self.survivor),
             "--out",
             str(self.backup),
+            *extra,
         )
 
     def test_shared_clone_produces_complete_ref_bound_backup(self) -> None:
-        completed = self.prepare()
+        completed = self.prepare("--full-backup")
 
         self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
         self.assertIn("BORROWED_OBJECTS yes", completed.stdout)
@@ -132,7 +134,7 @@ class PrepareCloneRetirementTests(unittest.TestCase):
             "refs/aliases/current",
             "refs/heads/main",
         )
-        prepared = self.prepare()
+        prepared = self.prepare("--full-backup")
         self.assertEqual(prepared.returncode, 0, prepared.stdout + prepared.stderr)
         symrefs = (self.backup / "symrefs.manifest").read_text(encoding="utf-8")
         self.assertIn("HEAD refs/heads/main", symrefs)
@@ -707,6 +709,223 @@ class PrepareCloneRetirementTests(unittest.TestCase):
 
         self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
         self.assertIn("LINKED_WORKTREES_PRESENT", completed.stderr)
+        self.assertFalse(self.backup.exists())
+
+    def test_equivalent_survivor_needs_no_new_payload(self) -> None:
+        equivalent = self.root / "equivalent clone"
+        shutil.copytree(self.survivor, equivalent)
+        completed = self.run_script(
+            "--clone", str(equivalent), "--survivor", str(self.survivor),
+            "--out", str(self.backup),
+        )
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        self.assertFalse((self.backup / "all-refs.bundle").exists())
+        self.assertFalse((self.backup / "repo-metadata.tar").exists())
+        self.assertIn("PRESERVATION survivor", completed.stdout)
+        self.assertIn("PAYLOAD none", completed.stdout)
+        self.assertIn("objects=3", completed.stdout)
+        verified = self.run_script("--verify-current", str(self.backup))
+        self.assertEqual(verified.returncode, 0, verified.stdout + verified.stderr)
+        self.assertIn("READY_TO_RETIRE", verified.stdout)
+
+    def test_shared_clone_reuses_survivor_and_preserves_only_metadata(self) -> None:
+        completed = self.prepare()
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        self.assertIn("PRESERVATION survivor", completed.stdout)
+        self.assertFalse((self.backup / "all-refs.bundle").exists())
+        self.assertTrue((self.backup / "repo-metadata.tar").is_file())
+        entries = subprocess.run(
+            ["tar", "-tf", str(self.backup / "repo-metadata.tar")],
+            text=True, capture_output=True, check=True,
+        ).stdout.splitlines()
+        self.assertIn("config", entries)
+        self.assertFalse(any(entry.startswith("objects/") and
+                             entry != "objects/info/alternates" for entry in entries))
+
+    def test_default_refuses_clone_only_ref_until_minimally_preserved(self) -> None:
+        tree = self.git("-C", str(self.clone), "mktree", input_text="").stdout.strip()
+        unique = self.git(
+            "-C", str(self.clone), "-c", "user.name=Fixture", "-c",
+            "user.email=fixture@example.invalid", "commit-tree", tree, "-p", self.second,
+            input_text="unique referenced fixture\n",
+        ).stdout.strip()
+        self.git("-C", str(self.clone), "update-ref", "refs/heads/unique", unique)
+        completed = self.prepare()
+        self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+        self.assertIn("SURVIVOR_INCOMPLETE", completed.stderr)
+        self.assertFalse(self.backup.exists())
+        self.git("-C", str(self.survivor), "fetch", "-q", str(self.clone),
+                 "refs/heads/unique:refs/retained/unique")
+        repeated = self.prepare()
+        self.assertEqual(repeated.returncode, 0, repeated.stdout + repeated.stderr)
+        self.assertFalse((self.backup / "all-refs.bundle").exists())
+
+    def test_survivor_loose_object_is_not_durable_preservation(self) -> None:
+        hidden = self.git(
+            "-C", str(self.survivor), "hash-object", "-w", "--stdin",
+            input_text="unreachable in both copies\n",
+        ).stdout.strip()
+        completed = self.prepare()
+        self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+        self.assertIn("SURVIVOR_INCOMPLETE", completed.stderr)
+        self.assertIn(hidden, completed.stderr)
+        self.assertFalse(self.backup.exists())
+
+    def test_survivor_backed_recovery_after_clone_move(self) -> None:
+        prepared = self.prepare()
+        self.assertEqual(prepared.returncode, 0, prepared.stdout + prepared.stderr)
+        self.assertFalse((self.backup / "all-refs.bundle").exists())
+        final = self.run_script("--verify-current", str(self.backup))
+        self.assertEqual(final.returncode, 0, final.stdout + final.stderr)
+        retired = self.root / "retired clone"
+        self.clone.rename(retired)
+        self.assertFalse(self.clone.exists())
+        restored = self.root / "restored from survivor"
+        self.git("init", "-q", "-b", "recovery-unborn", str(restored))
+        refs = (self.backup / "refs.manifest").read_text().splitlines()
+        self.assertEqual(len(refs), 4)
+        for line in refs:
+            oid, ref = line.split(" ", 1)
+            self.git("-C", str(restored), "fetch", "-q", "--no-tags",
+                     str(self.survivor), f"{oid}:{ref}")
+        for line in (self.backup / "symrefs.manifest").read_text().splitlines():
+            name, target = line.split(" ", 1)
+            self.git("-C", str(restored), "symbolic-ref", name, target)
+        subprocess.run(
+            ["tar", "-xf", str(self.backup / "repo-metadata.tar"),
+             "-C", str(restored / ".git")], check=True, capture_output=True,
+        )
+        self.assertEqual(
+            self.git("-C", str(restored), "rev-parse", "HEAD").stdout.strip(),
+            (self.backup / "head.oid").read_text().strip(),
+        )
+        restored_refs = self.git(
+            "-C", str(restored), "for-each-ref", "--format=%(objectname) %(refname)"
+        ).stdout.splitlines()
+        self.assertEqual(sorted(restored_refs), sorted(refs))
+        self.assertEqual((restored / ".git/config").read_bytes(),
+                         (retired / ".git/config").read_bytes())
+        self.git("-C", str(restored), "fsck", "--full", "--no-progress")
+
+    def test_refuses_survivor_that_borrows_objects_from_retiring_clone(self) -> None:
+        borrower = self.root / "borrower"
+        self.git("clone", "-q", "--shared", str(self.clone), str(borrower))
+        completed = self.run_script(
+            "--clone", str(self.clone), "--survivor", str(borrower),
+            "--out", str(self.backup),
+        )
+        self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+        self.assertIn("SURVIVOR_OBJECT_DEPENDENCY", completed.stderr)
+        self.assertFalse(self.backup.exists())
+
+    def test_linked_survivor_uses_retained_common_directory_outside_clone(self) -> None:
+        kept_linked = self.root / "kept linked checkout"
+        self.git("-C", str(self.survivor), "worktree", "add", "-q", "-b",
+                 "kept-linked", str(kept_linked))
+        completed = self.run_script(
+            "--clone", str(self.clone), "--survivor", str(kept_linked),
+            "--out", str(self.backup),
+        )
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        self.assertFalse((self.backup / "all-refs.bundle").exists())
+        self.assertEqual((self.backup / "survivor-common.path").read_text().strip(),
+                         str((self.survivor / ".git").resolve()))
+
+    def test_rechecks_survivor_refs_and_metadata(self) -> None:
+        prepared = self.prepare()
+        self.assertEqual(prepared.returncode, 0, prepared.stdout + prepared.stderr)
+        self.git("-C", str(self.survivor), "update-ref", "refs/heads/late", self.initial)
+        changed = self.run_script("--verify-current", str(self.backup))
+        self.assertEqual(changed.returncode, 1, changed.stdout + changed.stderr)
+        self.assertIn("SURVIVOR_REFSET_CHANGED", changed.stderr)
+
+    def test_rechecks_survivor_metadata_even_without_new_payload(self) -> None:
+        equivalent = self.root / "equal clone"
+        shutil.copytree(self.survivor, equivalent)
+        prepared = self.run_script(
+            "--clone", str(equivalent), "--survivor", str(self.survivor),
+            "--out", str(self.backup),
+        )
+        self.assertEqual(prepared.returncode, 0, prepared.stdout + prepared.stderr)
+        self.git("-C", str(self.survivor), "config", "retirement.changed", "true")
+        changed = self.run_script("--verify-current", str(self.backup))
+        self.assertEqual(changed.returncode, 1, changed.stdout + changed.stderr)
+        self.assertIn("SURVIVOR_METADATA_CHANGED", changed.stderr)
+
+    def test_rechecks_survivor_object_dependency(self) -> None:
+        prepared = self.prepare()
+        self.assertEqual(prepared.returncode, 0, prepared.stdout + prepared.stderr)
+        alternate = self.survivor / ".git/objects/info/alternates"
+        alternate.parent.mkdir(exist_ok=True)
+        alternate.write_text(str(self.clone / ".git/objects") + "\n")
+        changed = self.run_script("--verify-current", str(self.backup))
+        self.assertEqual(changed.returncode, 1, changed.stdout + changed.stderr)
+        self.assertIn("SURVIVOR_OBJECT_DEPENDENCY", changed.stderr)
+
+    def test_missing_and_empty_mode_evidence_fail_closed(self) -> None:
+        prepared = self.prepare()
+        self.assertEqual(prepared.returncode, 0, prepared.stdout + prepared.stderr)
+        mode = self.backup / "preservation.mode"
+        mode.write_text("")
+        empty = self.run_script("--verify-current", str(self.backup))
+        self.assertEqual(empty.returncode, 2, empty.stdout + empty.stderr)
+        self.assertIn("unknown preservation mode", empty.stderr)
+        mode.unlink()
+        missing = self.run_script("--verify-current", str(self.backup))
+        self.assertEqual(missing.returncode, 2, missing.stdout + missing.stderr)
+        self.assertIn("backup is incomplete", missing.stderr)
+
+    def test_existing_git_lock_stops_default_preparation(self) -> None:
+        (self.clone / ".git/index.lock").write_bytes(b"occupied fixture")
+        completed = self.prepare()
+        self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+        self.assertIn("UNHANDLED_REPOSITORY_METADATA", completed.stderr)
+        self.assertFalse(self.backup.exists())
+
+    def test_metadata_archive_cannot_be_omitted_by_clearing_its_manifest(self) -> None:
+        prepared = self.prepare()
+        self.assertEqual(prepared.returncode, 0, prepared.stdout + prepared.stderr)
+        (self.backup / "repo-metadata.tar").unlink()
+        (self.backup / "metadata-roots.manifest").write_text("")
+        current = self.run_script("--verify-current", str(self.backup))
+        self.assertEqual(current.returncode, 1, current.stdout + current.stderr)
+        self.assertIn("METADATA_SCOPE_CHANGED", current.stderr)
+
+    def test_source_backed_entry_with_spaces_exposes_meaningful_help(self) -> None:
+        entry = self.root / "installed entry with spaces.sh"
+        entry.symlink_to(SCRIPT)
+        completed = subprocess.run([str(entry), "--help"], text=True,
+                                   capture_output=True, check=False)
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        self.assertIn("By default, require every clone object", completed.stdout)
+        self.assertIn("--full-backup", completed.stdout)
+
+    def test_hidden_index_flag_does_not_prove_clean_bytes(self) -> None:
+        tracked = self.clone / "tracked.txt"
+        tracked.write_text("original\n", encoding="utf-8")
+        self.git("-C", str(self.clone), "add", "tracked.txt")
+        self.git("-C", str(self.clone), "-c", "user.name=Fixture", "-c",
+                 "user.email=fixture@example.invalid", "commit", "-q", "-m", "fixture")
+        self.git("-C", str(self.clone), "update-index", "--skip-worktree", "tracked.txt")
+        tracked.write_text("only copy hidden by index flag\n", encoding="utf-8")
+        completed = self.prepare()
+        self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+        self.assertIn("HIDDEN_INDEX_STATE", completed.stderr)
+        self.assertFalse(self.backup.exists())
+
+    def test_unknown_repository_metadata_stays_unsafe(self) -> None:
+        state = self.clone / ".git" / "unknown-operation-state"
+        state.write_text("unfinished work\n", encoding="utf-8")
+        completed = self.prepare()
+        self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+        self.assertIn("UNHANDLED_REPOSITORY_METADATA", completed.stderr)
+        self.assertFalse(self.backup.exists())
+
+    def test_unknown_file_inside_object_store_stays_unsafe(self) -> None:
+        (self.clone / ".git/objects/unique.note").write_text("unique metadata\n")
+        completed = self.prepare()
+        self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+        self.assertIn("UNHANDLED_REPOSITORY_METADATA", completed.stderr)
         self.assertFalse(self.backup.exists())
 
 

@@ -704,6 +704,251 @@ class MaterializeTests(unittest.TestCase):
         self.assertEqual(outside.read_text(), "original\n")
         self.assertIn("arms/with/selected/input.txt", result["cleanup"]["retained"])
 
+    def output_manifest(self, path="artifacts/preview", **changes):
+        return {"path": path, "kind": "rebuildable", "consumer": "preview-reader",
+                "rebuild_from": "fixture source ref and deterministic preview command", **changes}
+
+    def register(self, path="artifacts/preview", **changes):
+        return m.register_output(self.root, "fixture-session", self.output_manifest(path, **changes))
+
+    def retire(self, consumer="preview-reader", **changes):
+        return m.retire(self.root, "fixture-session", consumer, consumed=True, **changes)
+
+    def test_cli_registered_preview_and_transport_retire_after_finish_keep_evidence_and_budget(self):
+        self.prepare()
+        result, code = self.run_python(
+            "from pathlib import Path; p=Path('../../artifacts/preview'); p.mkdir();"
+            "(p/'page.html').write_text('rebuildable preview');"
+            "Path('../../artifacts/upload.tar').write_bytes(b'transport'); print('build verified')")
+        self.assertEqual(code, 0)
+        original = self.read()
+        for path, kind in (("artifacts/preview", "rebuildable"), ("artifacts/upload.tar", "transport")):
+            manifest = self.base / "output.json"
+            manifest.write_text(json.dumps(self.output_manifest(path, kind=kind)))
+            result = self.cli("register-output", "--root", str(self.root), "--owner", "fixture-session",
+                              "--manifest", str(manifest), "--summary")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(json.loads(result.stdout)["output_count"], (1, 2))
+        unknown = self.root / "artifacts/unknown.txt"
+        unknown.write_text("unique unclassified evidence")
+        m.finish(self.root, "fixture-session")
+        self.assertTrue((self.root / "artifacts/preview/page.html").exists())
+        self.assertEqual(len(self.read()["outputs"]), 2)
+        charged = self.read()["charged_bytes"]
+        result = self.cli("retire", "--root", str(self.root), "--owner", "fixture-session",
+                          "--consumer", "preview-reader", "--consumed", "--summary")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        summary = json.loads(result.stdout)
+        self.assertEqual(summary["state"], "finished")
+        self.assertEqual(summary["output_retirement"], {"scope": "registered_outputs", "complete": True,
+                         "removed_count": 2, "retained_count": 0, "missing_count": 0,
+                         "directories_removed_count": 1})
+        self.assertFalse((self.root / "artifacts/preview").exists())
+        self.assertFalse((self.root / "artifacts/upload.tar").exists())
+        self.assertEqual(unknown.read_text(), "unique unclassified evidence")
+        self.assertEqual((self.root / "artifacts/run-0001/stdout.log").read_text(), "build verified\n")
+        record = self.read()
+        self.assertEqual(record["charged_bytes"], charged)
+        self.assertGreaterEqual(charged, original["charged_bytes"])
+        self.assertEqual(record["max_total_bytes"], original["max_total_bytes"])
+        self.assertEqual(record["runs"], original["runs"])
+        repeated = self.retire()["output_retirement"]
+        self.assertTrue(repeated["complete"])
+        self.assertEqual(repeated["removed"], [])
+        self.assertEqual(len(repeated["missing"]), 2)
+
+    def test_unique_evidence_and_unknown_outputs_never_retired(self):
+        self.prepare()
+        for kind in ("evidence", "unique"):
+            path = f"artifacts/{kind}.txt"
+            (self.root / path).write_text(kind)
+            self.register(path, kind=kind)
+        unknown = self.root / "artifacts/unknown.txt"
+        unknown.write_text("unknown")
+        result = self.retire()["output_retirement"]
+        self.assertTrue(result["complete"])
+        self.assertEqual(len(result["retained"]), 2)
+        self.assertEqual(result["removed"], [])
+        self.assertTrue(unknown.exists())
+        for kind in ("evidence", "unique"):
+            self.assertEqual((self.root / f"artifacts/{kind}.txt").read_text(), kind)
+
+    def test_registered_output_changes_links_and_replacements_are_preserved(self):
+        self.prepare()
+        names = ("content", "mode", "replacement", "hardlink", "symlink", "restored")
+        for name in names:
+            path = f"artifacts/{name}.txt"
+            (self.root / path).write_text("payload")
+            self.register(path)
+        (self.root / "artifacts/content.txt").write_text("later work")
+        (self.root / "artifacts/mode.txt").chmod(0o600)
+        replaced = self.root / "artifacts/replacement.txt"
+        replacement = self.root / "artifacts/new.txt"
+        replacement.write_text("payload")
+        replacement.replace(replaced)
+        os.link(self.root / "artifacts/hardlink.txt", self.base / "outside-link")
+        symlink = self.root / "artifacts/symlink.txt"
+        symlink.unlink()
+        outside = self.base / "outside"
+        outside.write_text("payload")
+        symlink.symlink_to(outside)
+        restored = self.root / "artifacts/restored.txt"
+        restored.write_text("changed")
+        restored.write_text("payload")
+        result = self.retire()["output_retirement"]
+        self.assertFalse(result["complete"])
+        self.assertEqual(len(result["retained"]), len(names))
+        self.assertEqual(result["removed"], [])
+        for name in names:
+            self.assertTrue((self.root / f"artifacts/{name}.txt").exists())
+        self.assertTrue(symlink.is_symlink())
+        self.assertEqual(outside.read_text(), "payload")
+
+    def test_output_directory_symlink_escape_and_later_unknown_file_preserved(self):
+        self.prepare()
+        for name in ("escape", "unknown"):
+            path = self.root / f"artifacts/{name}"
+            path.mkdir()
+            (path / "payload.txt").write_text("payload")
+            self.register(f"artifacts/{name}")
+        original = self.root / "artifacts/escape"
+        moved = self.base / "original"
+        original.rename(moved)
+        outside = self.base / "outside"
+        outside.mkdir()
+        (outside / "payload.txt").write_text("payload")
+        original.symlink_to(outside, target_is_directory=True)
+        unknown = self.root / "artifacts/unknown/later.txt"
+        unknown.write_text("later unique work")
+        result = self.retire()["output_retirement"]
+        self.assertFalse(result["complete"])
+        self.assertEqual(result["removed"], ["artifacts/unknown/payload.txt"])
+        self.assertTrue(original.is_symlink())
+        self.assertEqual((outside / "payload.txt").read_text(), "payload")
+        self.assertEqual((moved / "payload.txt").read_text(), "payload")
+        self.assertEqual(unknown.read_text(), "later unique work")
+
+    def test_registration_rejects_symlinks_hardlinks_special_and_input_or_log_overlap(self):
+        self.prepare()
+        ordinary = self.root / "artifacts/original.txt"
+        ordinary.write_text("payload")
+        (self.root / "artifacts/symlink").symlink_to(ordinary)
+        os.link(ordinary, self.root / "artifacts/hardlink")
+        os.mkfifo(self.root / "artifacts/pipe")
+        for path in ("artifacts/symlink", "artifacts/hardlink", "artifacts/pipe",
+                     "arms/with/selected", "arms/with/selected/input.txt",
+                     "artifacts/run-0001/stdout.log", "artifacts", "arms/with", "../outside",
+                     "/tmp/output", "artifacts/.git/output"):
+            with self.subTest(path=path), self.assertRaises(m.MaterializationError):
+                self.register(path)
+        self.assertNotIn("outputs", self.read())
+        self.assertEqual(ordinary.read_text(), "payload")
+
+    def test_output_manifest_missing_empty_and_null_are_separate_rejections(self):
+        self.prepare()
+        (self.root / "artifacts/preview").write_text("payload")
+        baseline = (self.root / m.STATE).read_bytes()
+        for key in ("path", "kind", "consumer", "rebuild_from"):
+            for value in ("missing", "", None):
+                data = self.output_manifest()
+                if value == "missing":
+                    del data[key]
+                else:
+                    data[key] = value
+                with self.subTest(key=key, value=value), self.assertRaises(m.MaterializationError):
+                    m.register_output(self.root, "fixture-session", data)
+                self.assertEqual((self.root / m.STATE).read_bytes(), baseline)
+        for value in (None, "", 0, -1, True):
+            with self.subTest(consumer_pid=value), self.assertRaises(m.MaterializationError):
+                self.register(consumer_pid=value)
+        for value in ({}, [], None, ""):
+            with self.subTest(manifest=value), self.assertRaises(m.MaterializationError):
+                m.register_output(self.root, "fixture-session", value)
+
+    def test_retirement_owner_lock_active_child_and_active_consumer_refuse_without_killing(self):
+        self.prepare()
+        path = self.root / "artifacts/preview"
+        path.write_text("payload")
+        self.register(consumer_pid=os.getpid())
+        baseline = (self.root / m.STATE).read_bytes()
+        with self.assertRaises(m.MaterializationError):
+            self.retire()
+        with self.assertRaises(m.MaterializationError):
+            m.retire(self.root, "wrong", "preview-reader", consumed=True)
+        with m.lock_root(self.root, "fixture-session"):
+            with self.assertRaises(m.MaterializationError):
+                self.retire()
+        self.assertEqual((self.root / m.STATE).read_bytes(), baseline)
+        record = self.read()
+        record["outputs"][0].pop("consumer_pid")
+        record["child_pgid"] = os.getpgrp()
+        m.save(self.root, record)
+        with mock.patch.object(m, "stop_group", side_effect=AssertionError("must never kill")):
+            with self.assertRaises(m.MaterializationError):
+                self.retire()
+            with self.assertRaises(m.MaterializationError):
+                self.register("artifacts/new")
+        self.assertEqual(path.read_text(), "payload")
+
+    def test_retire_requires_completion_and_exact_known_consumer(self):
+        self.prepare()
+        (self.root / "artifacts/preview").write_text("payload")
+        self.register()
+        for consumer, consumed in (("preview-reader", False), ("preview-reader", None),
+                                   ("", True), (None, True), ("another-reader", True)):
+            with self.subTest(consumer=consumer, consumed=consumed), self.assertRaises(m.MaterializationError):
+                m.retire(self.root, "fixture-session", consumer, consumed=consumed)
+        result = self.cli("retire", "--root", str(self.root), "--owner", "fixture-session",
+                          "--consumer", "preview-reader")
+        self.assertEqual(result.returncode, 2)
+        self.assertTrue((self.root / "artifacts/preview").exists())
+
+    def test_registration_on_finished_root_and_retirement_survive_capacity_failure(self):
+        config = self.base / "capacity.json"
+        config.write_text(json.dumps({"minimum_free_bytes": 1}))
+        self.prepare(capacity_config=str(config))
+        m.finish(self.root, "fixture-session")
+        config.unlink()
+        path = self.root / "artifacts/preview"
+        path.write_text("payload")
+        with mock.patch.object(m, "free_bytes", side_effect=AssertionError("cleanup must not read capacity")):
+            self.register()
+            charged = self.read()["charged_bytes"]
+            result = self.retire()
+        self.assertEqual(result["state"], "finished")
+        self.assertEqual(result["charged_bytes"], charged)
+        self.assertFalse(path.exists())
+
+    def test_registration_overlap_and_corrupt_persisted_inventory_fail_closed(self):
+        self.prepare()
+        path = self.root / "artifacts/preview"
+        path.mkdir()
+        (path / "payload.txt").write_text("payload")
+        self.register()
+        for registered in ("artifacts/preview", "artifacts/preview/payload.txt"):
+            with self.subTest(path=registered), self.assertRaises(m.MaterializationError):
+                self.register(registered)
+        good = self.read()
+        for outputs in (None, "", {}, [None], [{}]):
+            record = {**good, "outputs": outputs}
+            m.save(self.root, record)
+            with self.subTest(outputs=outputs), self.assertRaises(m.MaterializationError):
+                self.retire()
+        for key, value in (("files", None), ("files", []), ("ancestors", None)):
+            record = json.loads(json.dumps(good))
+            record["outputs"][0][key] = value
+            # Empty files are valid only for an actual directory inventory;
+            # unsafe/missing evidence cannot authorize any file deletion.
+            m.save(self.root, record)
+            if value == []:
+                result = self.retire()["output_retirement"]
+                self.assertFalse(result["complete"])
+            else:
+                with self.subTest(key=key, value=value), self.assertRaises(m.MaterializationError):
+                    self.retire()
+            self.assertEqual((path / "payload.txt").read_text(), "payload")
+        m.save(self.root, good)
+
     def test_finish_interruption_retains_unknown_work_and_records_cleanup(self):
         self.prepare()
         unknown = self.root / "artifacts" / "proof.txt"
