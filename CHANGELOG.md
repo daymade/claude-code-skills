@@ -7,13 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **docs-router** (`daymade-docs` v1.28.1 → v1.29.1): Keep all document jobs, including documentation cleanup, inside the first 130 description characters and bytes; retain the full existing routing table and manual-command boundary. Change type: recovered discovery-prefix correction.
+- **docs-router** (`daymade-docs` v1.29.0 → v1.29.1): Keep all document jobs, including documentation cleanup, inside the first 130 description characters and bytes; retain the full existing routing table and manual-command boundary. Change type: recovered discovery-prefix correction.
 
 - **ghostty-use** (v1.9.7 → v1.9.8): Require the saved cwd when recognizing a restored process; persist send attempts before terminal input and reconcile uncertain or legacy attempts without sending them twice. Change type: duplicate-restoration bug fix.
 
 - **report-with-html** (v1.4.8 → v1.5.0): Add an explicit-file, frozen-snapshot loopback preview helper and its initial-delivery recipe, with HTTP boundary checks and rendered-browser acceptance kept separate. Change type: recovered local preview capability.
 
-- **prior-work-retrieval** (`daymade-claude-code` v4.35.0 → v4.36.0): Explain lexical `{terms}` selection without assuming every timeout has a query-shape cause or carrying timings across indexes. Change type: bounded adapter guidance correction.
+- **prior-work-retrieval** (`daymade-claude-code` v4.35.1 → v4.36.0): Explain lexical `{terms}` selection without assuming every timeout has a query-shape cause or carrying timings across indexes. Change type: bounded adapter guidance correction.
+- **CI**: Accept Ubuntu EC2 regional mirror aliases during bounded hosted-runner APT setup; retain official HTTPS rewriting, path validation and refusal checks.
+
+- **docs-router**, **photo-to-scanned-pdf** (`daymade-docs` v1.28.1 → v1.29.0): Route printable identity-document photos through recipient-specific side, spread, scale and copy-form checks; reuse suitable photos and preserve missing-source and physical-acceptance boundaries. Change type: additive document preparation branch.
+- **lark-cli-router** (`daymade-claude-code` v4.35.0 → v4.35.1): Bind linked resources to the authorized source account before the first read and retain explicit-profile access and permission boundaries. Change type: bounded account-routing repair.
+- **feishu-doc-scraper** (v1.12.0 → v1.12.1): Use the current Minutes transcript export route and per-item output readback instead of the retired metadata-only limitation. Change type: factual operating-guide correction.
 - **git-safety-net** (v1.24.6 → v1.25.0): Use verified survivor-backed clone retirement without a redundant full-history payload; retain explicit self-contained backups and refuse unresolved unique state. Change type: compatible retirement workflow branch.
 - **skill-creator** (`daymade-skill` v1.75.1 → v1.76.0): Register generated outputs by consumer and retire unchanged rebuildable or transport payloads after consumption; preserve evidence, unique work, changed files and active consumers. Change type: compatible output lifecycle capability.
 - **macos-watchdog** (`daymade-macos` v1.28.0 → v1.28.1): Choose observation-failure notification timing from the business observation gap, separately from disruptive repair patience; retain incident deduplication, uncertain-send reconciliation and scheduler-coverage limits. Change type: bounded alert-timing clarification.

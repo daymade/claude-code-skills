@@ -174,7 +174,18 @@ equate a zero-reference result with completeness before checking raw capture tag
 
 ## Path C — Feishu Minutes (妙记) transcript
 
-`lark-cli minutes` only returns metadata and can download audio/video — it **cannot** export the text transcript. The transcript comes from a native endpoint called through `lark-cli api`, and needs an extra scope granted via a device-flow login. Native AI transcription is far better than downloading the media and re-running ASR — never do the latter. Endpoint, scope name, the device-flow timeout trap, and per-minute (not per-tenant) permission behavior: **[references/feishu-minutes-transcript.md](references/feishu-minutes-transcript.md)**.
+Read the current `lark-cli-router` and its version-matched `lark-meeting` guide;
+`minutes +detail --transcript` exports the native text transcript, including
+speaker labels and timestamps. Bind the source's already-authorized profile
+before the first read and retain its explicit `--profile` and `--as` throughout.
+Read each requested minute's result and returned transcript path; batch process
+success alone does not prove every transcript was exported. Do not start a new
+login/scope grant merely because the active organization cannot read the source.
+Follow the domain's actual permission result without browser/raw-API workarounds.
+Keep the native transcript rather than downloading media to re-run ASR.
+Export paths, raw-endpoint format variants and scope-error handling are in
+**[references/feishu-minutes-transcript.md](references/feishu-minutes-transcript.md)**;
+use the installed guide when its command contract differs from historical examples.
 
 ## Path D — browser DOM fallback (last resort)
 
