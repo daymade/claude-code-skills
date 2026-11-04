@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **lark-cli-router** (`daymade-claude-code` v4.34.0 → v4.34.1): Distinguish CLI profiles from browser identities during document-layout acceptance. Use an explicitly offered, already-authorized identity through the browser owner, then verify the actual identity and rendered document; retain access-refusal boundaries. Change type: bounded verification-route correction.
+
 - **youtube-downloader** (v1.3.0 → v1.4.0): Hand failed local file requests to an existing authorized downloader when available, preserving source, quality and destination before requesting new cookie/provider setup. Change type: bounded optional workflow branch.
 - **feishu-doc-scraper** (v1.10.5 → v1.11.0): Support verified NAS-retained external media with device/account/path locators, source URLs, integrity evidence and movable local cache references. Preserve legacy platform/Git/OSS records and reject malformed NAS identities. Change type: additive storage contract.
 - **transcript-fixer** (`daymade-audio` v1.54.4 → v1.55.0): Accept source-bound same-recording municipal replay evidence through the existing verdict/ledger transaction; retain person-name protection and refusal without writes. Add target-coverage and conflicting-component replay cases. Change type: bounded evidence capability and regression examples.

@@ -54,6 +54,17 @@ executing agent; the router itself does not enforce layout preservation.
   wrapping or clipping; computed widths are a starting point, not a universal
   optimum. Browser inspection supplements the API workflow and does not bypass
   a target/profile permission denial.
+- The executing agent checks CLI and browser identities separately: a successful
+  CLI-profile read does not establish the browser's active account or organization.
+  If the document's own access page explicitly offers another already signed-in
+  identity that can access it, first verify that it belongs to the requesting user
+  and is already authorized for this target. Follow the loaded browser Skill's
+  identity-switch and shared-session coordination procedure, then read back the
+  actual browser identity, original document URL and affected rendered content.
+  If that identity is unavailable, ownership or authorization is unclear, or
+  access remains refused, stop that route and retain the specific unmet check;
+  do not seek new grants or route around the refusal. This is an operator check;
+  the CLI does not enforce browser identity or visual acceptance.
 - When changing a publisher, use an authorized disposable copy for a body change
   plus a new table. Check preservation of existing widths, allocation for the new
   table, and a no-write repeat with unchanged inputs. Cover interrupted writes
