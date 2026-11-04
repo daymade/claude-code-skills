@@ -181,6 +181,7 @@ The references it recognizes (the full rich-media inventory): `<mention-doc toke
 | URL `/base/` / `bitable` obj_type | installed `lark-base` guide (table-list / records); if that guide is unavailable, record token + resolved type in the worklist as unextracted |
 | `/minutes/` URL | feishu-minutes-transcript.md (native transcript API) |
 | `meeting.tencent.com/crm/` | Tencent Meeting tooling (outside this skill — its native transcript API; never download+re-ASR) |
+| `external-video-bilibili` / `external-video-youtube` / `external-video-direct` | [External video discovery and handoff](external-video-resources.md): retain source URL, part/playlist identity and explicit acquisition state; use the installed platform/storage owner within the user's scope, not `docs +fetch` |
 | `<lark-table>` | render inline to a Markdown table (pandas `read_html` handles colspan/rowspan); it is content, not a link |
 | `<image token>` | register the token; lark-cli cannot download it (see permission-and-failure-boundaries.md) |
 | `<whiteboard token>` | NOT recursed — export a preview image (`lark-cli whiteboard +export --whiteboard-token <token> --output-type preview --output <path>.jpg --overwrite`) and Read it; keep the JPEG as a cache by default, with the whiteboard token as the stable source locator; see SKILL.md Path A step 4 and `archive-storage-contract.md` |
@@ -190,6 +191,11 @@ The references it recognizes (the full rich-media inventory): `<mention-doc toke
 **Recursion loop:** fetch root → extract refs → for each new ref, dispatch and fetch → run the extractor on each newly fetched body → repeat until no new tokens appear **within the authorized capture scope** (beyond-scope references stay recorded locators; see the scope paragraph above). A child doc can itself embed another reference (e.g. a summary doc that embeds a third Minutes link); the loop must re-scan every newly fetched file, not only the root.
 
 **Leaf / completion gate** — account for every extracted reference: resolve in-scope references to fetched leaves or exported and read whiteboards; retain beyond-scope locators as not-captured and ACL-denied routes as unavailable. An actual `131006` permission denial stops that route and does not authorize alternate-transport retries. A `3380002 Unsupported document type` error from `docs +fetch` is dispatch evidence — re-select the handler by the resolved `obj_type`; it does not mean the source is unreadable. Report unavailable in-scope content as a remaining gap, not as a completed capture.
+
+External Bilibili/YouTube/direct-media URLs are also emitted by the extractor.
+Reconcile their worklist independently using the external-video state table;
+the residual Feishu-tag grep below does not inspect external-link acquisition.
+Body or transcript completion does not prove the requested video files were saved.
 
 ```bash
 grep -rlE '<(source|file|lark-table|lark-tr|sheet token=|mention-doc|cite doc-id=|whiteboard token=|view type=)' . \

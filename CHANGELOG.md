@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **feishu-doc-scraper** (v1.11.0 → v1.12.0): Discover external Bilibili, YouTube and direct-media resources while preserving video/part/playlist identity; separate link discovery, text capture and verified media retention, and hand acquisition to the selected installed owner. Change type: additive resource-discovery capability.
+
 - **read-codex-history** (`daymade-claude-code` v4.34.1 → v4.34.2): Track consumed raw-byte positions during JSONL streaming instead of repeatedly querying the file position; retain the final physical-position check, exact prefix certificates and existing rejection boundaries. Change type: bounded implementation optimization.
 
 - **transcript-fixer** (`daymade-audio` v1.55.0 → v1.56.0): Add an optional persisted background workspace for default correction artifacts, keyed by canonical path. Preserve explicit output locations, legacy defaults and verdict-based report closure. Keep unresolved evidence off the reader's annotation checklist without claiming final correction quality. Change type: compatible output configuration and workflow correction.
