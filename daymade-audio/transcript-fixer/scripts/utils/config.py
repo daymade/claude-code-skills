@@ -23,6 +23,7 @@ Use cases:
 from __future__ import annotations
 
 import json
+import hashlib
 import logging
 import os
 from dataclasses import dataclass, field
@@ -117,6 +118,8 @@ class PathConfig:
     # When set, its `### Person` + `- **ASR 变体**: ...` entries are merged into
     # Stage 1 at runtime as in-memory corrections (never written to the DB).
     people_roster_path: Optional[Path] = None
+    # Opt-in default location for intermediate outputs; explicit CLI paths win.
+    intermediate_root: Optional[Path] = None
 
     def __post_init__(self):
         """Validate and create directories"""
@@ -124,6 +127,13 @@ class PathConfig:
         self.data_dir = Path(self.data_dir)
         self.log_dir = Path(self.log_dir)
         self.cache_dir = Path(self.cache_dir)
+        if self.intermediate_root is not None:
+            if not isinstance(self.intermediate_root, (str, Path)) or not str(self.intermediate_root).strip():
+                raise ValueError("paths.intermediate_root must be null or a nonempty absolute path")
+            self.intermediate_root = Path(self.intermediate_root).expanduser()
+            if not self.intermediate_root.is_absolute():
+                raise ValueError("paths.intermediate_root must be an absolute path")
+            self.intermediate_root = self.intermediate_root.resolve()
 
         # Create all directories and restrict to owner only
         for dir_path in [self.config_dir, self.data_dir, self.log_dir, self.cache_dir]:
@@ -353,6 +363,7 @@ class Config:
             cache_dir=Path(paths_data.get("cache_dir", str(config_dir / "cache"))),
             people_roster_path=Path(paths_data["people_roster_path"]).expanduser()
                 if paths_data.get("people_roster_path") else None,
+            intermediate_root=paths_data.get("intermediate_root"),
         )
 
         # Parse resource limits
@@ -412,6 +423,7 @@ class Config:
                 "log_dir": str(self.paths.log_dir),
                 "cache_dir": str(self.paths.cache_dir),
                 "people_roster_path": str(self.paths.people_roster_path) if self.paths.people_roster_path else None,
+                "intermediate_root": str(self.paths.intermediate_root) if self.paths.intermediate_root else None,
             },
             "resources": {
                 "max_text_length": self.resources.max_text_length,
@@ -597,6 +609,15 @@ def set_config(config: Config) -> None:
     logger.info(f"Configuration set: {config.environment.value}")
 
 
+def intermediate_directory(input_path: Path) -> Optional[Path]:
+    """Return the configured per-input workspace, or preserve legacy defaults."""
+    root = getattr(get_config().paths, "intermediate_root", None)
+    if root is None:
+        return None
+    identity = str(input_path.expanduser().resolve()).encode("utf-8")
+    return root / hashlib.sha256(identity).hexdigest()
+
+
 def reset_config() -> None:
     """Reset global configuration (mainly for testing)"""
     global _config
@@ -623,7 +644,8 @@ CONFIG_FILE_TEMPLATE: Final[str] = """{
     "data_dir": "~/.transcript-fixer/data",
     "log_dir": "~/.transcript-fixer/logs",
     "cache_dir": "~/.transcript-fixer/cache",
-    "people_roster_path": null
+    "people_roster_path": null,
+    "intermediate_root": null
   },
   "resources": {
     "max_text_length": 1000000,
