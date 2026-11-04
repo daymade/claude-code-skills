@@ -16,8 +16,8 @@ reopen them or stop independent items.
 **Queue CLI** (all support `--json`):
 
 ```bash
-# Enqueue uncertain items (native_ai_full_workflow.md step 7; '-' reads stdin)
-uv run scripts/fix_transcription.py --enqueue-review items.json
+# Enqueue uncertain items; '-' reads stdin. Replace the synthetic domain with this file's verified domain.
+uv run scripts/fix_transcription.py --enqueue-review items.json --domain myproject
 # Inspect
 uv run scripts/fix_transcription.py --list-review            # pending, priority-sorted
 uv run scripts/fix_transcription.py --list-review --review-file /absolute/canonical.md --review-status all --json
@@ -28,6 +28,9 @@ uv run scripts/fix_transcription.py --resolve-review 12 --decision overridden --
 uv run scripts/fix_transcription.py --resolve-review 12 --decision kept_original   # transcript was right
 uv run scripts/fix_transcription.py --resolve-review 12 --decision reopen          # undo (reverts applied edits)
 ```
+
+Before appending to a project-bound file or repairing domain metadata, follow
+[domain admission and repair](queue_domain_repair.md).
 
 Each item carries: the original text (left untouched in the file), a pre-filled
 suggestion, `kind` (`entity`/`unknown` lead the queue because a wrong identity
