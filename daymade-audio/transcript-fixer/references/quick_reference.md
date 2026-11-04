@@ -178,12 +178,15 @@ uv run scripts/fix_transcription.py --resolve-review 12 --decision overridden --
 uv run scripts/fix_transcription.py --resolve-review 12 --decision kept_original   # transcript was right
 uv run scripts/fix_transcription.py --resolve-review 12 --decision reopen          # undo
 
-# Enqueue from a JSON file or stdin
-uv run scripts/fix_transcription.py --enqueue-review items.json --json
+# Enqueue from a JSON file or stdin; replace the synthetic domain with this file's verified domain
+uv run scripts/fix_transcription.py --enqueue-review items.json --domain myproject --json
 ```
+
+For project-bound appends or a domain-only metadata repair, follow
+[domain admission and repair](queue_domain_repair.md).
 
 ## See Also
 
-- `references/file_formats.md` - Complete database schema documentation
+- [Database schema](database_schema.md)
 - `references/script_parameters.md` - CLI command reference
 - `SKILL.md` - Main user documentation

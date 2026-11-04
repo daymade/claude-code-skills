@@ -13,16 +13,16 @@ The saved login does not authorize a new host, key, transfer or paid recognizer.
 
 ```bash
 python3 scripts/source_clip.py prepare \
-  --path /abs/source/original.mp4 --sha256 <expected-full-sha256> \
-  --ssh-host <authorized-alias> \
-  --expected-hostname <verified-hostname> --expected-user <verified-user> \
+  --path /abs/source/original.mp4 --sha256 '<expected-full-sha256>' \
+  --ssh-host '<authorized-alias>' \
+  --expected-hostname '<verified-hostname>' --expected-user '<verified-user>' \
   --output /abs/runtime/source.json
 ```
 
 For a local source omit the SSH arguments. Python 3, ffmpeg and ffprobe must
 already work on the source host. A noninteractive SSH PATH can differ from the
-interactive shell; when required, add `--ffmpeg <verified-absolute-path>` and
-`--ffprobe <verified-absolute-path>` from that host. Missing tools fail visibly;
+interactive shell; when required, add `--ffmpeg '<verified-absolute-path>'` and
+`--ffprobe '<verified-absolute-path>'` from that host. Missing tools fail visibly;
 the adapter does not install or change the environment.
 
 Preparation streams the whole source once to verify the expected hash, probes
@@ -48,8 +48,8 @@ uv run scripts/verify_queue_audio.py \
 
 Keep the existing [timestamp, anchor and engine contract](script_parameters.md#verify_queue_audiopy).
 Overrides use source-media seconds. Derive `--speed` only from independent
-transcript-to-source timing evidence; the adapter's output itself runs at speed 1
-and does not infer that mapping. Do not repair a timing mismatch by choosing a
+transcript-to-source timing evidence; the adapter does not rescale the source
+clock or infer that mapping. Do not repair a timing mismatch by choosing a
 plausible nearby utterance.
 
 For a separately inspected window:
@@ -62,7 +62,7 @@ python3 scripts/source_clip.py fetch \
 
 Windows are finite source-clock intervals within the prepared duration and the
 bound in `MAX_WINDOW` in `source_clip.py`. Remote extraction happens on that
-source; only mono 16 kHz PCM WAV bytes return. The transport checks complete size,
+source; only normalized PCM WAV bytes return. The transport checks complete size,
 SHA-256 and duration; `<clip>.source.json` records source hash, window, speed and
 clip hash. A missing/truncated transfer cannot become evidence.
 Source/spec output collisions refuse. An existing clip path can be reused only
