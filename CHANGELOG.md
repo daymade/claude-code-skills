@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **ghostty-use** (v1.9.7 → v1.9.8): Require the saved cwd when recognizing a restored process; persist send attempts before terminal input and reconcile uncertain or legacy attempts without sending them twice. Change type: duplicate-restoration bug fix.
+
+- **report-with-html** (v1.4.8 → v1.5.0): Add an explicit-file, frozen-snapshot loopback preview helper and its initial-delivery recipe, with HTTP boundary checks and rendered-browser acceptance kept separate. Change type: recovered local preview capability.
+
+- **prior-work-retrieval** (`daymade-claude-code` v4.35.0 → v4.36.0): Explain lexical `{terms}` selection without assuming every timeout has a query-shape cause or carrying timings across indexes. Change type: bounded adapter guidance correction.
+
 - **macos-permissions** (`daymade-macos` v1.26.16 → v1.28.0): Add Local Network diagnosis for app-specific LAN failures. Compare requester and launch context, inspect the actual permission, and verify the original operation after authorized repair; preserve unknown causes, existing privacy protections and all TCC/Keychain paths. Change type: additive diagnostic branch.
 - **skill-creator** (`daymade-skill` v1.75.0 → v1.75.1): Bound programmatic retries to one owner/budget adapter, derive unfinished steps from persisted receipts, propagate runner exit status, and preserve evidence and reserve during storage recovery. Change type: bounded retry-lifecycle clarification.
 - **feishu-doc-scraper** (v1.11.0 → v1.12.0): Discover external Bilibili, YouTube and direct-media resources while preserving video/part/playlist identity; separate link discovery, text capture and verified media retention, and hand acquisition to the selected installed owner. Change type: additive resource-discovery capability.
