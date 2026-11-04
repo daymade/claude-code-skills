@@ -130,7 +130,7 @@ class DocsRouterContractTest(unittest.TestCase):
             "pdf-to-html": "PDF into a self-contained",
             "mermaid-tools": "Mermaid as PNG",
             "excel-automation": "investment-bank `.xlsm` model",
-            "photo-to-scanned-pdf": "photos of paper pages",
+            "photo-to-scanned-pdf": "paper photos into a scanned PDF",
             "read-docx-review": "tracked changes",
             "docs-cleaner": "authorized code, script, config",
         }
@@ -139,6 +139,7 @@ class DocsRouterContractTest(unittest.TestCase):
             self.assertIn(phrase, rows[name], name)
         self.assertIn("translating it while keeping figures and charts", rows["pdf-to-html"])
         self.assertIn("unsigned digital document", rows["photo-to-scanned-pdf"])
+        self.assertIn("printable ID/passport copies", rows["photo-to-scanned-pdf"])
         self.assertIn("control Excel on macOS", rows["excel-automation"])
 
 
