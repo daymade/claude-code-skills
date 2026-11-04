@@ -521,6 +521,12 @@ To find an existing Feishu recording by date, enter
 For updates that preserve manual formatting or change table/page width, enter
 [lark-cli-router's layout workflow](daymade-claude-code/lark-cli-router/SKILL.md#preserve-document-layout).
 
+### Feishu External Collaboration
+
+For external customer groups paired with Wiki pages, enter
+[lark-cli-router's external collaboration workflow](daymade-claude-code/lark-cli-router/SKILL.md#external-customer-collaboration).
+It owns group reuse/creation, descendant-scoped grants and their verification.
+
 ### Feishu Document Capture
 
 Before the first linked-resource read, follow
