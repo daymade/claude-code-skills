@@ -2,12 +2,12 @@
 
 ## 先固定账号范围
 
-把用户确认的账号清单作为查询范围。区分三个集合：用户拥有的订阅账号、浏览器当前保存的
+把用户确认的账号清单作为查询范围。区分用户拥有的订阅账号、浏览器当前保存的
 ChatGPT 登录态、本机已经登录的 Google 账号。它们的数量可以不同。Google 选择页里的
 其他邮箱不自动属于本次授权范围，也不能直接计为 Pro 账号。
 
-用户确认有四个账号，就查询四行；不要因浏览器只保存两个而把分母改成二。只读到两个时继续
-寻找另外两个的合法入口。只有实际遇到密码、验证码、账号拒绝访问或工具不可用等具体阻塞，
+未覆盖的账号继续寻找合法入口，不以浏览器保存条目反改查询范围。
+只有实际遇到密码、验证码、账号拒绝访问或工具不可用等具体阻塞，
 才报告对应账号未核实。遵守当前宿主的登录、验证码和凭据确认规则。
 
 用户说没有使用某个账号管理器时，停止从那个工具推断当前账号状态。其历史记录至多提供
@@ -15,8 +15,9 @@ ChatGPT 登录态、本机已经登录的 Google 账号。它们的数量可以�
 
 **入口裁定（不因「这次形态不太一样」重开）**：2026-09-08 用户已裁定这批账号**不用
 CC Switch 管理**——即使 `~/.cc-switch/cc-switch.db` 存在且记有 codex providers，也只把
-它当上面的邮箱线索来源，不作查询通道。本机凭据文件（`~/.codex/auth.json`）只覆盖当前
-CLI 登录的那一个账号；多账号查询按下一节选通道，不为查询重开已明确不用某管理器的决定。
+它当上面的邮箱线索来源，不作查询通道。本机凭据文件只覆盖它实际绑定的 CLI 账号；默认位置
+和显式选择按[实时查询入口](#实时-api只读一个明确账号)核对。多账号查询按下一节选通道，
+不为查询重开已明确不用某管理器的决定。
 
 ## 选择当前查询通道
 
@@ -90,13 +91,24 @@ GitHub 写入主体检查由 `github-ops` 执行；本 SOP 不以 `gh` 身份替
 uv run python scripts/query_usage.py --help
 uv run python scripts/query_usage.py
 uv run python scripts/query_usage.py --auth-file /path/to/authorized/auth.json --expected-email account@example.com
+# 一次查询同时保存去邮箱原读数并追加 finding；目录用绝对路径，输出父目录已存在、output-dir 尚不存在
+uv run python scripts/query_usage.py --auth-file /path/to/authorized/auth.json \
+  --output-dir /path/to/private/new-usage-read --finding-state-dir /path/to/private/tibo-state
 ```
+
+带 `--output-dir` 时，脚本以 0700 新建目录、以 0600 独占创建 `usage.json`，保存白名单内的
+规范化读数、原查询时刻和 `account_ref`；隐私边界沿[findings 隐私契约](forecast-feedback.md#findings原始读数层)。终端只返回路径、
+账号句柄和可选 finding 回执。已存在的输出路径在请求前拒绝，不覆盖旧文件。finding 失败时退出 1，
+已保存的 `usage_file` 仍可读回，不能把落盘成功当作记账成功；先核查 journal 再用既有 `finding`
+入口补记该文件，不重复查数冒充同一次查询。`partial` 读数仍会保存并退出 2，未知字段不补值。
+不带新参数时保留原 stdout 接口。此路径只发原有 GET，不 refresh、登录、切号或兑换。
+追加成功后按回执 `finding.journal` 定位[同一数据目录的回看流程](forecast-feedback.md#每次调用先回看)；
+快照回执异常时进入[显式恢复流程](forecast-feedback.md#快照诊断与显式恢复)。
 
 显式参数示例需替换为用户明确授权的文件和邮箱；有符合帮助要求的 Python 时可省略 `uv run`。
 Windows 未实测。请求、认证文件默认位置、参数和退出行为的可执行 SSOT 是
 [query_usage.py](../scripts/query_usage.py)。不从对话历史寻找凭据，也不从别的账号借 token。
-脚本使用的端点是客户端内部接口，2026-09-08 实测，
-不是稳定的公共 API 契约；接口失效时转官网 Usage 页，不猜新端点。
+脚本使用的端点是客户端内部接口，不是稳定的公共 API 契约；接口失效时转官网 Usage 页，不猜新端点。
 
 | 字段 | 读法 |
 |---|---|
@@ -107,18 +119,26 @@ Windows 未实测。请求、认证文件默认位置、参数和退出行为的
 | `rate_limit_reset_credits.applicable_available_count` | 此刻可适用的数量；不替代保存总数 |
 | `credits.balance` / `has_credits` | 购买的额外 credits；不能据此判断备用重置 |
 
+**分母变化：百分比变多不等于 reset。**
+
+剩余比例按 `(限额 − 已用绝对量) / 限额` 理解；具体结果从本轮原始读数现算。
+在同一账号、同一窗口、已用绝对量不变的前提下，限额增加本身就会使剩余比例上升。
+这种变化仅与增容相容，不能证明该账号已实际采用新限额，更不能证明 reset；仍需核对实际
+限额、身份、观测时刻和窗口连续性。只有百分比、身份不明或观察时刻不明时，原因保持 unknown，
+继续按下文机械归因判据核验，不将产品增容公告当作该账号的采用回执。
+
 实测同一响应可以同时出现 `available_count: 2`、`applicable_available_count: 0`、
-`credits.balance: "0"`。这仍然是存着两次备用重置。不要把“现在不能适用”或“购买余额为零”
+`credits.balance: "0"`。不要把“现在不能适用”或“购买余额为零”
 改写成“没有备用重置”。API 计数未提供类型和逐笔到期明细时，不把它擅自命名为 Full reset；
 到官网逐条读 `Full reset` 与到期时间。
 
 **`applicable_available_count` 的语义 2026-10-11 双向读数一致：备用重置只在周窗口耗尽后才能兑现。**
-窗口有余量时 `=0`，窗口耗尽（`used_percent=100`）后 `=available_count`。单账号单周期三读数：
+窗口有余量时 `=0`，窗口耗尽（`used_percent=100`）后 `=available_count`。同一账号与周期的观测：
 98% 余量时 0 → 耗尽后 2（=库存）→ global 回满后回 0。判断「备用现在能不能用」直接看这个字段；
 官网兑现按钮与该字段的联动为字段语义推断，按钮行为未实测。
 
 **`credits.balance` 在窗口见底前后持续下降，与「耗尽后 credits 接管用量」一致**（2026-10-11 实测：
-单周期三读数 47424→46676→46615（共降约 808），扣减跨越 98%→100% 耗尽边界与落地时刻，
+同一周期读数 47424→46676→46615，扣减跨越 98%→100% 耗尽边界与落地时刻，
 精确归段未核实；未观察到回满后的第二次扣减）。用户问「额度用完还能不能干活」，先查这个
 字段——它就是兜底，撞墙报错里的 "purchase more credits" 指的也是它。
 
@@ -162,8 +182,20 @@ uv run python -m unittest discover -s tests -v
 
 - 同一 `account_ref` 的前后读数出现用量下降且 `reset_at` 改变，只能证明**两个观测点之间窗口发生变化**。
   端点身份相同不能排除中间 A→B→A；`last_refresh` 接近、远离或缺失都不改变这个判据。
-- 只有四类证据可放行相应的 reset 结论：用户或产品的直接 reset 事件；明确自然周期形状；banked
-  直接兑现事件；与措辞范围匹配的官方 global 证据。仅仅「回到 100%」不是直接 reset 事件。
+- **跨轮身份对比**：本轮 `query_usage` 的 `account_ref` 与上轮交接里的身份不同时，只报告
+  「观测到账号切换；时刻与原因未核实」，`auth.json` 的 `last_refresh` 只作切换时刻上界的
+  指示性记录（token 续期与切号在该字段上不可分）；不为把两轮读数接成同账号历史而切回旧号重查
+  （2026-10-30 实测：上轮 660f4c7f 周剩 61% → 本轮 8ed5604f 周剩 99%，99% 是新窗口正常形状，
+  不能写成重置到账）。
+- 只有五类证据可放行相应的 reset 结论：用户或产品的直接 reset 事件；明确自然周期形状；banked
+  直接兑现事件；档位升级触发（见下条）；与措辞范围匹配的官方 global 证据。仅仅「回到 100%」
+  不是直接 reset 事件。
+- **档位升级触发回满（2026-10-31 实测确认的产品行为）**：Pro 档位升级（如 200→500）会立即
+  回满周额度并把窗口起点重算到升级完成时刻，形状=干净 +7d、用量 97%→0%。它同时是归因
+  候选与直接事件：证据形态为同 `account_ref` 窗口变化 + `kind=tier_upgrade` 事件（用户自述
+  升级操作，transcript 语句「升级触发回满/已升级到$500」可解析）；event kind 见下表。归因时
+  它与按钮式重置、切号、自然周期并列候选——单账号 + 干净 +7d 形状本身仍不可分，不要因
+  有了这个候选就把其他候选提前排除。
 - 缺旧基线、缺身份、证据冲突或只有匿名 rollout 时，归因保持 `unknown`；当前余量、Next reset 和
   banked 库存仍按实际读数正常报告，不补零、不猜测原因。
 
@@ -179,7 +211,7 @@ python3 scripts/reset_attribution.py --input /tmp/tibo-attribution.json
 |---|---|
 | `transitions[].before/after` | 各为一个观测；`identity=verified` 必须有 `account_ref` 与带时区的 `checked_at_utc`；匿名观测用 `identity=anonymous`。另有 `window_seconds`、`used_percent`、`reset_at_utc` 和可选 banked/plan 字段；没有前读数时 `before=null` |
 | `transitions[].anonymous_candidates` | 可选；只记录匿名形状，不能补身份 |
-| `events[]` | 可选直接事件：`account_switch`、`account_reset_observed`、`banked_redeem`、`official_global_reset`；附 `account_ref`（global 为 null）、`source`、`source_ref` 和 `checked_at_utc`。有明确发生区间时另给 `interval_start_utc` / `interval_end_utc`；官方范围用 `scope=all_paid` 或 `unknown` |
+| `events[]` | 可选直接事件：`account_switch`、`account_reset_observed`、`banked_redeem`、`tier_upgrade`、`official_global_reset`；附 `account_ref`（global 为 null）、`source`、`source_ref` 和 `checked_at_utc`。有明确发生区间时另给 `interval_start_utc` / `interval_end_utc`；官方范围用 `scope=all_paid` 或 `unknown` |
 | `selected_account_refs` | 问「我们 N 个是否都到账」时显式提供用户选定集合，必须为非空且唯一的账号句柄列表；不能从本轮查询返回的条数反推分母 |
 | `timing_evidence` | 需要「近同时」结论时提供 `max_span_seconds`（有依据的正整数分辨率）与非空 `source_ref`；没有默认分辨率。不能为让判据通过随意加宽时间范围 |
 | `auth_hints.last_refresh_utc` | 可选提示；只追加 `LAST_REFRESH_NON_DETERMINATIVE`，不参与分类 |
@@ -226,6 +258,15 @@ python3 scripts/reset_attribution.py --input /tmp/tibo-attribution.json
 多少」。归因脚本只检查事件证据，不计算这笔损失；这些核算前提由执行者核对，当前没有
 自动核算器保证它们成立。证据不足时停止精确结算，不以继续刷新当前余额代替缺失的历史。
 
+**banked 兑现时机（避免浪费的两条时机判断，2026-10-31 实战）**：banked 兑现回满的是当前
+登录账号的周窗口并把窗口重新起算，兑现本身不产生新容量，只在「当前账号有急用」时才有价值：
+
+- **满格不兑**：当前账号已 100% 时兑换只重算窗口、白白消耗一张卡。
+- **急用先兑，官宣在途不构成等待理由**：额度耗尽需要继续工作时直接兑现；官方已预告新
+  banked 在途时机会成本≈0（新卡到账回补库存），「等新卡」= 停工等待，banked 的价值就在急用。
+  预告 banked 在途 ≠ 周额度全员回满（banked 是库存 +1，不自动消耗）——不要把 banked 预告
+  当成「额度马上恢复」。
+
 ## 消耗归因（机械判据）
 
 把额度消耗归到某个进程/会话之前，必须附下面三项探针中至少一项的实测读数；**「进程存活」
@@ -268,7 +309,10 @@ resume 出来的进程 argv 不带会话 ID，argv 比对会把多个会话错�
 处理，不是可重试的 unknown。**（2026-10-20 实测：10-17 在账号 660f4c7f 取基线后用户切至 8ed5604f，
 Day13 global 的 660f4c7f 到账核查即关闭；切回账号重登是官网 SOP 的常规查询手段，但监测轮不为此
 调度切回。）监测轮发现官宣在途时趁账号未切尽早取同账号基线；复查条件只写当前登录账号的到账，
-不给已切走的账号虚设 followup 任务。
+不给已切走的账号虚设 followup 任务。**账号级核查与事件级证据分开**：切号关闭的是账号级
+核查；预测的事件级结算可用任何「窗口开启前已取基线」的观测账号——窗口内该账号计数变化
+同样是 observed_interval 证据，不为此调度切回（2026-11-01 实测：c8fa7b56 在 2/2 窗口开启前
+切走，判据换绑到新当前账号 8ed5604f 的窗口前基线）。
 按[预测反馈的关闭入口](forecast-feedback.md#关闭或恢复账号追查)记录 `status=closed`、
 依据与原始 finding，读回待查队列；到账是否明确仍保持原值。用户明确要求恢复核查时再写
 `status=open`，不靠手写交接文字代替队列状态。

@@ -16,8 +16,8 @@ reopen them or stop independent items.
 **Queue CLI** (all support `--json`):
 
 ```bash
-# Enqueue uncertain items (native_ai_full_workflow.md step 7; '-' reads stdin)
-uv run scripts/fix_transcription.py --enqueue-review items.json
+# Enqueue uncertain items; '-' reads stdin. Replace the synthetic domain with this file's verified domain.
+uv run scripts/fix_transcription.py --enqueue-review items.json --domain myproject
 # Inspect
 uv run scripts/fix_transcription.py --list-review            # pending, priority-sorted
 uv run scripts/fix_transcription.py --list-review --review-file /absolute/canonical.md --review-status all --json
@@ -28,6 +28,9 @@ uv run scripts/fix_transcription.py --resolve-review 12 --decision overridden --
 uv run scripts/fix_transcription.py --resolve-review 12 --decision kept_original   # transcript was right
 uv run scripts/fix_transcription.py --resolve-review 12 --decision reopen          # undo (reverts applied edits)
 ```
+
+Before appending to a project-bound file or repairing domain metadata, follow
+[domain admission and repair](queue_domain_repair.md).
 
 Each item carries: the original text (left untouched in the file), a pre-filled
 suggestion, `kind` (`entity`/`unknown` lead the queue because a wrong identity
@@ -141,6 +144,49 @@ For `organization`, the CLI also supports a source-bound company short name:
 uv run scripts/fix_transcription.py --resolve-review 12 --decision accepted \
   --review-entity-type system --authority-record entity-reference.json --json
 ```
+
+#### A place name heard again in the same recording
+
+For an explicitly replayed municipal discussion whose selected place slot is
+followed by `，市长`, a verified replay may supply the written authority even
+without an adjacent `市` suffix. The executing agent must first verify the same
+utterance and recording; similar stories or several recognizers voting for a
+name do not establish that relationship. This route does not accept person names.
+
+Keep `kind=entity_reference` and `entity_type=place`. Add a `replay` object:
+
+```json
+{
+  "source_type": "same_recording_replay",
+  "source_sha256": "<SHA256 of the exact UTF-8 source file bytes>",
+  "occurrence_offset": 18,
+  "cue_offset": 125,
+  "quote_offset": 148,
+  "target_offset": 6,
+  "cue": "我再放一遍。",
+  "anchors": ["，市长介绍情况", "这座城市需要新的道路"]
+}
+```
+
+Compute offsets from the actual source, never copy the illustrative numbers.
+All offsets count Unicode characters in text read with universal newlines:
+`occurrence_offset` selects the complete queued context in `source_path`,
+`cue_offset` selects the replay cue in that same source, `quote_offset` selects
+the complete top-level `quote` there, and `target_offset` selects `target` inside
+that quote. The cue must lie between the complete first context and the replay.
+Supported cues are `我再放一遍。`, `再放一遍。`, `我们再听一遍。`, and
+`我再播放一遍。`. Both selected slots must be followed by `，市长` or `,市长`
+and discuss `城市` afterwards. Supply exactly two distinct anchors of at least
+six characters, unique and nonoverlapping after each slot, in the same order;
+the first starts within eight characters and each starts within 200 characters.
+
+The CLI validates the source bytes, exact passages, order, target and anchors,
+then uses the existing verdict/ledger transaction. It does not infer replay
+identity, hear audio, or override a known person's roster spelling. Missing,
+empty, conflicting or changed evidence refuses without changing the transcript,
+queue or audit. Resolve only this occurrence; a place verdict is not a reusable
+bare dictionary mapping. Existing adjacent-cue and company-reference records
+keep their prior interface.
 
 ### Written evidence for ordinary wording
 

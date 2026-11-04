@@ -10,10 +10,12 @@ error handling, and business logic enforcement.
 
 from __future__ import annotations
 
+import json
 import re
 import os
 import sys
 import logging
+import sqlite3
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 from dataclasses import dataclass
@@ -636,9 +638,8 @@ class CorrectionService:
         filter (None) keeps the legacy union behavior and loads every active
         rule — mirroring how corrections load without --domain.
 
-        On a database not yet migrated to v2.4 there IS no domain column, and
-        by construction no rule could have been added with a domain — so every
-        rule is global and the legacy query is the correct one.
+        When context_rules has no domain column, rules cannot carry a domain;
+        treat every active rule as global and use the legacy query.
 
         Args:
             domains: Active domain names, or None for no filter
@@ -820,6 +821,222 @@ class CorrectionService:
                 }
                 for row in cursor.fetchall()
             ]
+
+    def _validate_context_rule_state_input(
+        self,
+        rule_id: int,
+        domain: Optional[str],
+        pattern: str,
+        reason: str,
+    ) -> None:
+        """Validate every required context-rule state input before any write."""
+        if isinstance(rule_id, bool) or not isinstance(rule_id, int) or rule_id <= 0:
+            raise ValidationError("context rule ID must be a positive integer")
+        if domain is not None:
+            if not isinstance(domain, str) or not domain.strip():
+                raise ValidationError(
+                    "expected context rule domain must be a domain name or None for global"
+                )
+            self.validate_domain_name(domain)
+        if not isinstance(pattern, str) or not pattern.strip():
+            raise ValidationError("expected context rule pattern must not be empty")
+        if not isinstance(reason, str) or not reason.strip():
+            raise ValidationError("context rule state reason must not be empty")
+
+    @staticmethod
+    def _context_rule_domain_label(domain: Optional[str]) -> str:
+        return "global (NULL)" if domain is None else repr(domain)
+
+    @classmethod
+    def _read_context_rule_for_state(
+        cls,
+        conn: sqlite3.Connection,
+        rule_id: int,
+        domain: Optional[str],
+        pattern: str,
+    ) -> Dict:
+        """Read and identity-check one rule, refusing incomplete schemas."""
+        required_columns = {
+            "context_rules": {
+                "id", "pattern", "replacement", "description", "priority",
+                "is_active", "added_at", "added_by", "domain",
+            },
+            "audit_log": {
+                "id", "timestamp", "action", "entity_type", "entity_id", "user", "details",
+                "success", "error_message",
+            },
+        }
+        for table, required in required_columns.items():
+            columns = {
+                row[1] for row in conn.execute(f"PRAGMA table_info({table})")
+            }
+            missing = sorted(required - columns)
+            if missing:
+                raise ValidationError(
+                    f"context rule state schema is incomplete: {table} lacks "
+                    f"required column(s) {', '.join(missing)}; migrate explicitly "
+                    "instead of guessing a default; no changes applied"
+                )
+
+        row = conn.execute(
+            "SELECT id, pattern, domain, is_active FROM context_rules WHERE id = ?",
+            (rule_id,),
+        ).fetchone()
+        if row is None:
+            raise ValidationError(
+                f"context rule ID {rule_id} does not exist; no changes applied"
+            )
+        actual_domain = row[2]
+        if actual_domain != domain:
+            raise ValidationError(
+                f"context rule ID {rule_id} domain mismatch: expected "
+                f"{cls._context_rule_domain_label(domain)}, actual "
+                f"{cls._context_rule_domain_label(actual_domain)}; no changes applied"
+            )
+        if row[1] != pattern:
+            raise ValidationError(
+                f"context rule ID {rule_id} pattern mismatch: expected "
+                f"{pattern!r}, actual {row[1]!r}; no changes applied"
+            )
+        return {
+            "rule_id": row[0],
+            "pattern": row[1],
+            "domain": actual_domain,
+            "is_active": bool(row[3]),
+        }
+
+    def preflight_context_rule_state(
+        self,
+        rule_id: int,
+        domain: Optional[str],
+        pattern: str,
+        reason: str,
+    ) -> Dict:
+        """Validate an existing DB read-only before the CLI opens its writer.
+
+        CorrectionRepository normally ensures and migrates schema on construction.
+        This read-only check lets the state CLI reject bad input or an incomplete
+        schema before connection setup or repository initialization can write.
+        """
+        self._validate_context_rule_state_input(rule_id, domain, pattern, reason)
+        db_path = Path(self.db_path)
+        if not db_path.is_file():
+            raise ValidationError(
+                f"explicit database does not exist or is not a file: {db_path}; "
+                "no changes applied"
+            )
+        conn = None
+        try:
+            conn = sqlite3.connect(
+                f"{db_path.resolve().as_uri()}?mode=ro",
+                uri=True,
+            )
+            return self._read_context_rule_for_state(
+                conn, rule_id, domain, pattern
+            )
+        except sqlite3.Error as exc:
+            raise ValidationError(
+                f"cannot validate context rule state database read-only: {exc}; "
+                "no changes applied"
+            ) from exc
+        finally:
+            if conn is not None:
+                conn.close()
+
+    def _set_context_rule_state(
+        self,
+        rule_id: int,
+        domain: Optional[str],
+        pattern: str,
+        reason: str,
+        active: bool,
+        changed_by: Optional[str],
+    ) -> Dict:
+        """Change one exact rule and its audit row in one transaction."""
+        self._validate_context_rule_state_input(rule_id, domain, pattern, reason)
+        if changed_by is None:
+            changed_by = os.getenv("USER") or os.getenv("USERNAME") or "unknown"
+        target_state = "enabled" if active else "disabled"
+        action = "enable_context_rule" if active else "disable_context_rule"
+
+        with self.repository._transaction() as conn:
+            current = self._read_context_rule_for_state(
+                conn, rule_id, domain, pattern
+            )
+            if current["is_active"] == active:
+                return {
+                    "status": f"already_{target_state}",
+                    "rule_id": current["rule_id"],
+                    "domain": current["domain"],
+                    "pattern": current["pattern"],
+                    "is_active": current["is_active"],
+                    "changed": False,
+                    "audit_written": False,
+                }
+
+            cursor = conn.execute(
+                "UPDATE context_rules SET is_active = ? WHERE id = ?",
+                (1 if active else 0, rule_id),
+            )
+            if cursor.rowcount != 1:
+                raise DatabaseError(
+                    f"context rule ID {rule_id} state update affected "
+                    f"{cursor.rowcount} rows; transaction rolled back"
+                )
+            details = json.dumps(
+                {
+                    "reason": reason,
+                    "domain": current["domain"],
+                    "pattern": current["pattern"],
+                    "previous_is_active": current["is_active"],
+                    "is_active": active,
+                },
+                ensure_ascii=False,
+            )
+            self.repository._audit_log(
+                conn,
+                action=action,
+                entity_type="context_rules",
+                entity_id=rule_id,
+                user=changed_by,
+                details=details,
+            )
+
+        return {
+            "status": target_state,
+            "rule_id": rule_id,
+            "domain": current["domain"],
+            "pattern": current["pattern"],
+            "is_active": active,
+            "changed": True,
+            "audit_written": True,
+        }
+
+    def disable_context_rule(
+        self,
+        rule_id: int,
+        domain: Optional[str],
+        pattern: str,
+        reason: str,
+        changed_by: Optional[str] = None,
+    ) -> Dict:
+        """Disable one exact context rule without deleting it or other state."""
+        return self._set_context_rule_state(
+            rule_id, domain, pattern, reason, False, changed_by
+        )
+
+    def enable_context_rule(
+        self,
+        rule_id: int,
+        domain: Optional[str],
+        pattern: str,
+        reason: str,
+        changed_by: Optional[str] = None,
+    ) -> Dict:
+        """Re-enable one exact context rule with an independent audit row."""
+        return self._set_context_rule_state(
+            rule_id, domain, pattern, reason, True, changed_by
+        )
 
     def save_history(self, filename: str, domain: str, original_length: int,
                     stage1_changes: int, stage2_changes: int, model: str,

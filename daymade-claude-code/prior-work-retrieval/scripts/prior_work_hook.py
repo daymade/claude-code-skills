@@ -182,6 +182,56 @@ CURRENT_EXECUTION_CONTINUITY = re.compile(
     r"(?:不|不要|禁止)(?:接管|重放|切换|修改|写入|扩大)))",
     re.IGNORECASE,
 )
+# A timestamped limit for this execution is an execution parameter, not an
+# asset lookup. Keep unknown continuations and coordinated artifacts visible.
+CURRENT_EXECUTION_DEADLINE = re.compile(
+    r"(?:\A|(?<=[\n。；;]))[ \t]*(?:本批|本次|当前)(?:任务|执行)?[ \t]*"
+    r"沿用[ \t]*(?:(?:原始|当前|本次)(?:的)?[ \t]*)?"
+    r"(?:准备(?:至|到)验收)?(?:截止(?:时间)?|deadline)[ \t]*[:：]?[ \t]*"
+    r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
+    r"(?:Z|[+-][0-9]{2}:[0-9]{2})"
+    r"(?=[ \t]*(?:$|[\n。；;]|[，,][ \t]*(?:"
+    r"不是(?:用户)?(?:业务)?deadline(?=[ \t]*(?:$|[\n，,。；;]))|"
+    r"(?:不能|不得|不要|禁止)(?:延长|重设|重置)"
+    r"(?:(?:当前|本次|原始)(?:的)?)?(?:时限|截止(?:时间)?|预算|Goal)?"
+    r"(?=[ \t]*(?:$|[/\n，,。；;])))))",
+    re.IGNORECASE,
+)
+# Returning the current lease is an execution instruction, not an asset lookup.
+# Keep questions, unknown continuations and adjacent recall clauses scannable.
+CURRENT_LEASE_RETURN = re.compile(
+    r"(?:\A|(?<=[\n，,。；;]))[ \t]*"
+    r"(?:(?:本次|当前|该)[ \t]*)?(?:lease|租约|工作目录)[ \t]*"
+    r"(?:由[ \t]*(?:控制端|协调者|负责人)[ \t]*)?"
+    r"(?:按(?:照)?|依照)[ \t]*(?:既有|现有)(?:的)?[ \t]*流程[ \t]*"
+    r"(?:正常[ \t]*)?归还(?=[ \t]*(?:$|[\n，,。；;]))",
+    re.IGNORECASE,
+)
+_CONTEXT_RECALL_VERB = r"(?:获取|找回|检索|查找|回查|回看|恢复)"
+_CONVERSATION_HISTORY = r"(?:对话|会话|聊天)(?:的)?历史(?:记录)?(?:里|中)"
+CONVERSATION_CONTEXT_RECALL = re.compile(
+    _CONTEXT_RECALL_VERB + r"[^\n。；;！？!?]{0,30}上下文"
+    + r"[^\n。；;！？!?]{0,40}" + _CONVERSATION_HISTORY
+    + r"|" + _CONTEXT_RECALL_VERB
+    + r"[ \t]*(?:(?:我们|本项目|之前|以前)(?:的)?[ \t]*)?"
+    + _CONVERSATION_HISTORY + r"(?:的)?[ \t]*上下文",
+)
+NEGATED_CONTEXT_PREFIX = re.compile(
+    r"(?:禁止|不得|不能|不要|不用|无需|不需要|不必|别|勿|不)[ \t]*(?:再[ \t]*)?(?:去[ \t]*)?$"
+)
+CONTEXT_QUESTION_TAIL = re.compile(r"^[^\n，,。；;]{0,24}(?:[?？]|吗|呢|是否)")
+
+
+def _explicit_conversation_context(text: str) -> bool:
+    for match in CONVERSATION_CONTEXT_RECALL.finditer(text):
+        prefix = text[max(0, match.start() - 16):match.start()]
+        if (NEGATED_CONTEXT_PREFIX.search(prefix)
+                and not CONTEXT_QUESTION_TAIL.search(text[match.end():])):
+            continue
+        return True
+    return False
+
+
 HOOK_GUIDANCE_MARKER = "Prior Work Retrieval is required before substantial production"
 USER_OPTOUT = re.compile(
     # 「不需要」 matters: a trapped session's own advised escape phrase
@@ -253,9 +303,83 @@ RETRIEVAL_GLOBAL_VALUE_OPTIONS = {
     "prior_work.py": {"--manifest"},
     "history_index.py": {"--db", "--simple-root"},
 }
+
+
+def _formal_read_only_reader(script: str, arguments: list[str]) -> bool:
+    """Recognize owned read-only entries without trusting an arbitrary basename."""
+    scripts = Path(__file__).resolve().parent
+    history = scripts.parent.parent / "read-codex-history" / "scripts"
+    entries = {
+        history / "list_local_history.py": (
+            {"--index-only", "--recursive", "--all-projects", "--include-archived",
+             "--include-subagents", "--include-automated"},
+            {"--source", "--cwd", "--codex-home", "--from-date", "--to-date",
+             "--limit", "--max-title-chars", "--format", "--language"},
+        ),
+        history / "find_codex_session.py": (set(), {"--codex-home", "--format"}),
+        history / "read_codex_session.py": (
+            {"--full", "--tools"},
+            {"--session", "-s", "--project", "-p", "--record", "--contains", "--format"},
+        ),
+        scripts / "surface_version.py": (set(), set()),
+    }
+    try:
+        path = Path(script).expanduser().resolve(strict=True)
+    except (OSError, RuntimeError, ValueError):
+        return False
+    if path not in entries:
+        return False
+    switches, values = entries[path]
+    parsed: dict[str, list[str]] = {}
+    positional: list[str] = []
+    index = 0
+    while index < len(arguments):
+        token = arguments[index]
+        option, separator, value = token.partition("=")
+        if option in switches and not separator:
+            value = "true"
+        elif option in values:
+            if not separator:
+                index += 1
+                if index >= len(arguments):
+                    return False
+                value = arguments[index]
+            if not value.strip() or value.startswith("-"):
+                return False
+        elif token.startswith("-"):
+            return False
+        else:
+            positional.append(token)
+            index += 1
+            continue
+        option = {"-s": "--session", "-p": "--project"}.get(option, option)
+        if option in parsed and option != "--record":
+            return False
+        parsed.setdefault(option, []).append(value)
+        index += 1
+    if "--format" in parsed and parsed["--format"][0] not in {"json", "markdown"}:
+        return False
+    if path.name == "surface_version.py":
+        return not arguments
+    if path.name == "list_local_history.py":
+        return (not positional and "--index-only" in parsed
+                and parsed.get("--source") == ["codex"])
+    identity = positional if path.name == "find_codex_session.py" else parsed.get("--session", [])
+    if len(identity) != 1 or (path.name == "read_codex_session.py" and positional):
+        return False
+    value = identity[0].lower()
+    shape = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    minimum = 8 if path.name == "find_codex_session.py" else len(shape)
+    return minimum <= len(value) <= len(shape) and all(
+        character == "-" if expected == "-" else character in "0123456789abcdef"
+        for character, expected in zip(value, shape)
+    )
+
+
 DIRECT_EXEC_WRITE_SIGNAL = re.compile(r"\b(?:tools\.)?apply_patch\s*\(")
 EXEC_COMMAND_LITERAL = re.compile(
-    r"\b(?:cmd|command)\s*:\s*([\"'`])(?P<body>.*?)(?<!\\)\1",
+    r"(?<![\w$])(?:cmd|command|\"cmd\"|\"command\"|'cmd'|'command')"
+    r"\s*:\s*([\"'`])(?P<body>.*?)(?<!\\)\1",
     re.DOTALL,
 )
 FILE_REDIRECTION = re.compile(
@@ -293,7 +417,10 @@ def _classify_prompt(
     )
     if current_execution:
         scannable = CURRENT_EXECUTION_CONTINUITY.sub(" ", scannable)
-    if PRIOR_WORK_STRONG_SIGNAL.search(scannable):
+        scannable = CURRENT_EXECUTION_DEADLINE.sub(" ", scannable)
+        scannable = CURRENT_LEASE_RETURN.sub(" ", scannable)
+    if (PRIOR_WORK_STRONG_SIGNAL.search(scannable)
+            or _explicit_conversation_context(scannable)):
         return "required_prior_signal"
     if PRIOR_WORK_WEAK_SIGNAL.search(scannable) and DISTAL_WORK_NOUN.search(scannable):
         return "none" if receipt_valid else "required_prior_signal"
@@ -397,9 +524,63 @@ def _tool_payload_text(event: dict[str, Any]) -> str:
 
 def _shell_fragments(event: dict[str, Any]) -> list[str]:
     payload = _tool_payload_text(event)
-    if _tool_name(event).endswith("functions.exec"):
-        return [match.group("body") for match in EXEC_COMMAND_LITERAL.finditer(payload)]
+    if _base_tool_name(event) == "exec":
+        fragments = []
+        for match in EXEC_COMMAND_LITERAL.finditer(payload):
+            body = _decode_exec_literal(match.group(1), match.group("body"))
+            if body is None:
+                # Do not grant a retrieval exemption to an unknown literal.
+                return [payload]
+            fragments.append(body)
+        return fragments
     return [payload]
+
+
+def _decode_exec_literal(quote: str, body: str) -> str | None:
+    """Decode static JavaScript string escapes without executing the cell."""
+    if quote == "`" and "${" in body:
+        return None
+    simple = {"n": "\n", "r": "\r", "t": "\t", "b": "\b", "f": "\f", "v": "\v"}
+    output: list[str] = []
+    index = 0
+    while index < len(body):
+        char = body[index]
+        index += 1
+        if char != "\\":
+            output.append(char)
+            continue
+        if index == len(body):
+            return None
+        escaped = body[index]
+        index += 1
+        if escaped in "\r\n":
+            if escaped == "\r" and body[index:index+1] == "\n":
+                index += 1
+            continue
+        if escaped in ("x", "u"):
+            if escaped == "u" and body[index:index+1] == "{":
+                end = body.find("}", index+1)
+                if end < 0:
+                    return None
+                digits = body[index+1:end]
+                index = end+1
+            else:
+                width = 2 if escaped == "x" else 4
+                digits = body[index:index+width]
+                if len(digits) != width:
+                    return None
+                index += width
+            if not re.fullmatch(r"[0-9a-fA-F]+", digits):
+                return None
+            try:
+                output.append(chr(int(digits, 16)))
+            except ValueError:
+                return None
+        elif escaped.isdigit():
+            return None  # Legacy octal/NUL spellings are outside this exemption.
+        else:
+            output.append(simple.get(escaped, escaped))
+    return "".join(output)
 
 
 def _shell_segments(fragment: str) -> list[str]:
@@ -539,6 +720,8 @@ def _segment_is_retrieval_route(segment: str) -> bool:
 
     if index >= len(words):
         return False
+    if _formal_read_only_reader(words[index], words[index + 1:]):
+        return True
     script = Path(words[index]).name
     subcommands = RETRIEVAL_ROUTES.get(script)
     if script not in RETRIEVAL_ROUTES:
@@ -670,6 +853,12 @@ def substantial_tool_use(event: dict[str, Any]) -> tuple[bool, str]:
         payload = _tool_payload_text(event)
         if DIRECT_EXEC_WRITE_SIGNAL.search(payload):
             return True, f"{base}:write_signal"
+        if base == "exec":
+            # Literal retrieval arguments are data. Keep the rest of the cell
+            # visible: one literal read must not hide a computed write beside it.
+            residual = EXEC_COMMAND_LITERAL.sub(" ", payload)
+            if SHELL_WRITE_SIGNAL.search(residual):
+                return True, f"{base}:write_signal"
         fragments = _shell_fragments(event)
         # functions.exec can carry either JavaScript orchestration or a plain
         # command string. With no cmd/command literal, treat the payload itself

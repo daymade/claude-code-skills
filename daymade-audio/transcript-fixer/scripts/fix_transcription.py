@@ -48,6 +48,8 @@ from cli import (
     cmd_add_correction,
     cmd_add_context_rule,
     cmd_list_context_rules,
+    cmd_disable_context_rule,
+    cmd_enable_context_rule,
     cmd_audit,
     cmd_list_corrections,
     cmd_export_corrections,
@@ -82,6 +84,33 @@ def main() -> None:
     """Main entry point - parse arguments and dispatch to commands"""
     parser = create_argument_parser()
     args = parser.parse_args()
+    state_commands = [
+        name for name in ("disable_context_rule", "enable_context_rule")
+        if getattr(args, name, None) is not None
+    ]
+    if state_commands:
+        # Check before every dispatch path, including the early queue return.
+        # Otherwise an earlier command can ignore the explicit state DB.
+        other_commands = (
+            "init", "health", "metrics", "config_action", "migration_action",
+            "audit_retention_action", "validate", "add_correction", "add_context_rule",
+            "list_context_rules", "audit_dictionary", "list_corrections",
+            "export_path", "import_path", "review_learned", "approve",
+            "report_false_positive", "load_presets", "extract_uncertain",
+            "enqueue_review", "list_review", "show_review", "reanchor_review",
+            "attach_authority", "resolve_review", "consolidate_review",
+            "scan_traps", "probe_term", "close_sidecars", "lookup_term", "input",
+        )
+        conflicts = [
+            name for name in other_commands
+            if getattr(args, name, None) is not None
+            and getattr(args, name) is not False
+        ]
+        if len(state_commands) != 1 or conflicts:
+            parser.error(
+                "--disable-context-rule/--enable-context-rule must be the only "
+                "command; no changes applied"
+            )
     if args.review_entity_type is not None and (args.resolve_review is None or args.review_decision not in ("accepted", "overridden")):
         parser.error("--review-entity-type requires --resolve-review with accepted/overridden")
     if args.review_candidate_index is not None and (args.resolve_review is None or args.review_decision not in ("accepted", "overridden")):
@@ -98,7 +127,8 @@ def main() -> None:
         other_commands = (
             "init", "health", "metrics", "config_action", "migration_action",
             "audit_retention_action", "validate", "add_correction", "add_context_rule",
-            "list_context_rules", "audit_dictionary", "list_corrections", "export_path",
+            "list_context_rules", "disable_context_rule", "enable_context_rule",
+            "audit_dictionary", "list_corrections", "export_path",
             "import_path", "review_learned", "approve", "report_false_positive",
             "load_presets", "extract_uncertain", "enqueue_review", "list_review",
             "reanchor_review", "scan_traps", "probe_term", "close_sidecars", "lookup_term",
@@ -180,6 +210,10 @@ def main() -> None:
         cmd_add_context_rule(args)
     elif getattr(args, 'list_context_rules', False):
         cmd_list_context_rules(args)
+    elif getattr(args, 'disable_context_rule', None) is not None:
+        cmd_disable_context_rule(args)
+    elif getattr(args, 'enable_context_rule', None) is not None:
+        cmd_enable_context_rule(args)
     elif getattr(args, 'audit_dictionary', False):
         cmd_audit(args)
     elif args.list_corrections:

@@ -3,27 +3,6 @@
 Each practice below maps to a specific way work actually gets lost. They are cheap habits, not
 ceremony; adopt the ones whose failure mode you're exposed to.
 
-## Contents
-- Choose topology from current authority
-- Shared checkout and concurrent sessions: one writer
-- Exact-SHA handoff and scoped completion
-- Known automated writers are not session-owned WIP
-- Parallel / multi-branch work: commit before switching; exceptions follow current authority
-- Push work-in-progress branches early
-- Confirm the branch before every commit
-- Confirm the branch before every checkout/switch on a shared tree
-- Recover stranded work after a parallel session switched the shared tree
-- A foreign commit adopted onto your branch (the inverse case)
-- Distinguish live WIP, a stale copy, and a published projection by diff direction
-- Audit before rebase / branch-delete
-- Anchor dangling heads before deleting bundle files
-- Audit every authorized worktree before retirement
-- Snapshot before any history rewrite
-- Version / lockfile collisions between parallel branches
-- A whole-file gate cannot tell "my bump is too low" from "my branch is behind"
-- Commit-scope hygiene (don't sweep unrelated staged work)
-- Set a wider reflog safety window once
-
 ## Choose topology from current authority
 
 Before recommending branches, worktrees, or a second checkout, read the current user and project
@@ -85,7 +64,7 @@ write call to the process that actually owns the session, then reach that owner 
 session-addressing mechanism the current host provides — never guess an address from a directory,
 branch, or task label. A fast writer that opens, writes, and closes per line can leave no open
 handle even while the file keeps growing; watch size or `mtime` still advancing before concluding
-no one is writing. But the two probes share no empty shape, so read them apart. `lsof` exits 1
+no one is writing. But the probes share no empty shape, so read them apart. `lsof` exits 1
 with empty stdout both when nothing holds the file and when the path is wrong — only stderr
 separates them, and a `status error on <path>: No such file or directory` means the path itself is
 wrong (fix the path first; a nonexistent path has no size or `mtime` to watch and was never a
@@ -93,7 +72,7 @@ writer check at all). `fuser`'s shape is the opposite trap: it exits 0 whether o
 exit code cannot answer the writer question the way `lsof`'s exit 1 does. It also splits its
 answer across streams differently by platform — on macOS the PID goes to stdout while the `path: `
 echo goes to stderr, whereas Linux prints `path: <pids>` together on stdout — so "the output is
-empty" is not a portable criterion and the two probes must not share one. Decide a writer by
+empty" is not a portable criterion and the probes must not share one. Decide a writer by
 whether a PID is present: on macOS that is a non-empty `$(fuser <path>)` (stdout carries the PID,
 and nothing when no one holds it); on Linux it is a PID after the colon. Never read the `path: `
 echo as a writer — under a `2>&1` capture it lands on stdout and reads as output when there is
@@ -141,12 +120,14 @@ Completion requires all of these, never an OR between them:
 1. every session-owned tracked and untracked byte is present in the handed-off commit;
 2. the exact commit is present on the intended remote, proven by independent readback;
 3. every residual path in the checkout is enumerated and attributed;
-4. no branch, stash, worktree, or remote ref is deleted as an implicit completion step.
+4. complete any retirement already required by the task's authority through Mode E, or report its
+   exact blocker; leave unrelated and excluded resources untouched.
 
 The claim is intentionally scoped. A checkout can remain dirty because an authorized automation
 writer or another named owner left unrelated paths. That does not make the session incomplete, but
 it forbids claiming the **whole repository** is clean or sweeping the residuals into this commit.
-Retirement is a separate Mode E task with new authority and fresh evidence.
+Resolve retirement authority through the [SKILL Outcome contract](../SKILL.md#outcome-contract--keep-the-safety-net-subordinate-to-the-users-job), then apply
+[Mode E's evidence gates](../SKILL.md#mode-e--retire-worktrees-stashes-and-branches-safely).
 
 ## Known automated writers are not session-owned WIP
 
@@ -262,8 +243,8 @@ git branch --show-current      # is this where this change belongs?
 ```
 
 If you commit to the wrong branch anyway, it's recoverable: `git log` the SHA, then create a
-preserving ref with `git branch correct-branch <sha>`. Leave removal from the wrong branch to
-separately authorized Mode E retirement; confirming up front is free.
+preserving ref with `git branch correct-branch <sha>`. Leave removal from the wrong branch to Mode
+E retirement under the authority definition in the SKILL Outcome contract; confirming up front is free.
 
 ## Confirm the branch before every checkout/switch on a shared tree
 
@@ -330,7 +311,8 @@ branch's tip and the base, which is exactly the condition under which `checkout 
 uncommitted edits with no conflict (if it reports a difference, stop and resolve it deliberately
 rather than forcing the switch). Step 4 is correctness, not just courtesy: the parallel session
 expects to find its own branch checked out with its work intact, exactly as it left it.
-Branch deletion is not part of this recovery; it requires separately authorized Mode E evidence.
+Branch deletion is not part of this recovery; it runs through Mode E's evidence gates, with
+authority resolved per the authority definition in the SKILL Outcome contract.
 After Step 3, return to **Exact-SHA handoff and scoped completion** above: record the commit as
 `topic_sha`, push and read back that exact object, use `git merge "$topic_sha"` for a direct merge,
 and require the hosted expected-head-SHA gate (or immediately preceding hosted head readback) for a
@@ -553,8 +535,8 @@ content, 13 commits' entire content, and 47 branch names. A confirmation step wo
 is archived elsewhere or explicitly abandoned" has no falsifiable criterion and degrades into the
 executor's judgement — `cat-file` readability was nearly mistaken for "merged".
 
-**Prevention (pure-additive, ~10 minutes, fully reversible):** enumerate every head the artifacts
-carry, then run the three-check matrix per head and anchor every unreachable one:
+**Prevention (pure-additive, fully reversible):** enumerate every head the artifacts
+carry, then run the checks below per head and anchor every unreachable one:
 
 ```bash
 git cat-file -e <sha>                          # object exists in the store
@@ -577,30 +559,10 @@ command and expected output.
 **Failure mode:** checking `git status` in the primary checkout and assuming a linked worktree is
 also clean. The linked checkout may hold untracked files or a detached commit that no branch names.
 
-**Prevention:** run `git_loss_audit.sh` only when every surface it enumerates is in evidence scope.
-Then inspect each selected authorized path with both `git -C <worktree-path> status --porcelain=v1
---untracked-files=all` and the corresponding `--ignored` inventory. Otherwise skip the full script
-and inspect only the exact authorized retirement path. The first status must be empty; every ignored
-item must be proven reproducible
-or copied out with its relative path and verified against a recorded content hash because Git
-bundles cannot reach it. Record the exact HEAD in a full 40-hex ref-to-SHA manifest, prove containment against a freshly
-fetched maintained base, and apply [Preservation before
-retirement](merge_verification.md#preservation-before-retirement). Skip the redundant history bundle
-only when that exact tip remains reachable through freshly verified, independently retained remote
-main and no unique tracked, untracked, ignored or submodule state is threatened by removal.
-Otherwise create and verify the required targeted bundle from the worktree's branch or
-collision-checked recovery ref before current-session authorization and normal removal.
-Afterwards verify the path/registration disappeared and the recorded HEAD still resolves through
-the retained carrier or required bundle, then recheck every copied ignored item against its
-pre-removal hash. Immediately before removal, repeat the worktree status and source-hash checks,
-require the current tip to equal the frozen full SHA, independently recheck the retained carrier,
-and make removal the next operation; otherwise a writer can change ignored bytes after the early
-backup check. The § Worktree retirement procedure in
-[merge_verification.md](merge_verification.md) also covers recursive module preservation and
-occupancy, with one narrow single-`--force` branch after normal removal refuses a clean submodule
-worktree specifically because of its modules. Dirty, unknown, locked, occupied or incompletely
-preserved state still stops removal. Never reduce the worktree count with `rm -rf`; the safe
-target is one maintained primary checkout, not zero checkouts.
+**Prevention:** for the selected authorized linked path, follow
+[Worktree retirement](merge_verification.md#worktree-retirement--prove-the-checkout-is-disposable-before-removal).
+Select recovery material through that procedure's
+[Preservation before retirement](merge_verification.md#preservation-before-retirement).
 
 ## Snapshot before any history rewrite
 
@@ -702,8 +664,8 @@ Leaving the drift in place hands the next bare commit a loaded gun.
 ### Phantom `D` triage: prove it by reconciliation, then dispose by ownership
 
 When the staged set shows a batch of `D` entries you don't recognize, don't conclude from "I
-don't remember deleting these" — prove or disprove the phantom with two reconciliation
-evidences:
+don't remember deleting these" — prove or disprove the phantom with the reconciliation
+checks below:
 
 ```bash
 git diff --cached --name-status | awk '$1=="D"{print $2}' | sort > /tmp/staged-d.txt
@@ -736,11 +698,8 @@ banned even when the math looks lossless):
   existing immutable-entry/owner path; do not force it away. Re-run the full "Worktree retirement"
   flow in merge_verification.md after status is empty: normal removal first, and only its
   clean-submodule exception may justify a single force flag.
-- **Your own primary checkout:** no immediate action is required as long as you never run a
-  bare commit over it — the drift harms nothing else by sitting there. `git restore --staged
-  -- .` only re-syncs the index; the working tree still lags HEAD and there is no
-  guard-compliant in-place command to advance it, so the honest options are: leave it (stage
-  explicit paths forever), or rebuild the checkout.
+- **Your own primary checkout:** follow the
+  [guarded checkout recovery procedure](#guarded-checkout-recovery).
 - **Someone else's checkout / WIP: do not touch it.** The phantom itself loses no data; the
   only danger is the next bare commit landing on it (the loaded gun above). Hand the
   reconciliation evidence to the owner and coordinate per the global contract's
@@ -748,63 +707,68 @@ banned even when the math looks lossless):
   never "clean up" their index for them.
 
 2026-10-07 case: an infra shared checkout showed 7+11 staged `D` entries; reconciliation
-found them name-for-name identical to the 7+11 files a just-merged PR had *added*, and
+found them name-for-name identical to the files a just-merged PR had *added*, and
 every path read back new content from `HEAD` — pure phantom, zero loss. The checkout
 belonged to another session, so the disposal was: don't touch, continue in an isolated
 worktree, damage no one's WIP.
 
 ### `git pull --ff-only` is not atomic: the half-applied fast-forward, and the already-published working-tree copy
 
-Two sibling drift shapes that both present as "`git status` shows `M` on a file you
-didn't edit this session":
+These drift shapes can present as "`git status` shows `M` on a file you didn't edit this
+session":
 
-1. **Half-applied ff.** A fast-forward updates the working tree first and moves the ref
-   last; a failure between the two (lock contention with a parallel session, a packed-refs
-   race) leaves the working tree at the new content with HEAD still at the old one.
+1. **Half-applied ff.** A failed fast-forward can leave incoming content in the working
+   tree while HEAD still points at the old commit.
    Signature — checkable *after* the fact, without having seen the pull's output:
    `git rev-parse HEAD` still points at the old commit while the already-fetched
    `git rev-parse origin/main` has the new one, and `git diff HEAD -- <file>` shows the
-   *incoming* changes as uncommitted modifications. Recovery: for **every** file listed
-   by `git status --porcelain` as `M` (an ff usually brings in several), align it back to
-   HEAD by hand — delete the incoming section with an editor, which is the compliant form
-   under `git-worktree-guard` (it hard-bans the discard-family commands
-   `git checkout --`/`git restore --worktree` that would do this in one step); once
-   `git status` is clean, re-run the ff and git writes the new content back itself.
-   The reason the failure was invisible in the first place: the pull was run as
-   `git pull ... 2>&1 | tail -1`, and "Updating A..B" is the *first* line of the output —
-   the error and ref-update lines never printed. State-changing git commands are never
-   truncated (the `instrument-calibration-guard` hook; if you *did* see the "Updating
-   A..B" line, it is supporting evidence, not the signature — the signature above works
-   without it).
+   *incoming* changes as uncommitted modifications. Capture the complete command result
+   and exit status; an "Updating A..B" line alone does not prove the ref advanced.
 2. **Already-published copy.** You edited a file in a shared checkout, committed it
    elsewhere (worktree / patch), and the PR merged. The checkout still holds your
    pre-merge revision as an uncommitted modification. A later `git pull --ff-only` —
-   yours or the owner's — refuses with "Your local changes would be overwritten" because
-   git compares **paths against HEAD/index**, not content: even a copy byte-identical to
-   the merge target is still path-dirty relative to the old HEAD, and the ff refuses
-   anyway (measured). So the unblock is NOT "make the copy match the merge" — it is
-   "make the file match **HEAD**":
-   - *You want to ff now:* align the file back to the current HEAD (hand-edit the section
-     out, same compliant form as shape 1), run the ff — HEAD advances and git writes the
-     merged content back. Editing it to the merged revision first is wasted motion: the
-     ff refuses on the path-dirty check either way.
-   - *The owner will ff later, not you:* bring the copy to the merged revision (apply the
-     same fix patch, or edit it to match) purely so *their* ff sees no local diff on this
-     path. If the copy is *older* than the merge (review fixes landed in the PR after you
-     made it), "it will go clean on merge" is false — the delta stays as an uncommitted
-     reversion. Verify the copy really matches the merge with
-     `git show origin/main:<path> | cmp - <path>` (empty output = byte-identical).
+   yours or the owner's — can refuse with "Your local changes would be overwritten".
+   Compare the copy with the exact published commit and fresh target: it may match landed
+   content, lag behind review fixes, or contain unique work. Matching a published blob
+   classifies the bytes; it does not by itself prove that a native fast-forward will
+   accept the checkout or that its index is synchronized.
 
-2026-10-07 case: both fired within one delivery round — an infra CLAUDE.md pre-review-fix
-copy in the main checkout (caught by a peer's blob check; editing it to the merged
-revision did NOT unblock the ff — path-dirty either way — so it was hand-aligned back to
-HEAD, the ff advanced, and git wrote the merged content back), a pkm review file misread
-as untracked from a stale HEAD snapshot and `rm`'d — it was tracked, another session had
-already advanced HEAD past the commit that added it (restored with
-`git show HEAD:<path> > <path>`; the rule "every read that enters a judgment uses an
-immutable ref" — the global contract's 共享工作树以不可变 ref 为基线 section — applies
-to *deletion* decisions too), and a skills-pro ff that updated the working tree but not
-the ref (recovered by hand-removing the incoming section and re-running the ff).
+#### Guarded checkout recovery
+
+The executor uses the repository's existing synchronization and ownership contract:
+
+1. Freeze the current branch, full HEAD (`OLD`), freshly verified remote target (`TIP`),
+   and the affected index and working-tree state. Resolve path membership and content
+   from these immutable commits; a stale status snapshot cannot classify a deletion.
+   Coordinate any active writer before changing this checkout.
+2. Preserve unique staged, working-tree, untracked and ignored content before alignment.
+   Compare each affected path's real index entry and disk state with `OLD`, `TIP` and
+   retained landed versions. An unfamiliar staged entry, unexplained delta or branch
+   drift stops the in-place write path until ownership and preservation are resolved.
+3. Locate the project's verified guarded synchronization entry and read its actual
+   preview/apply and recovery contract. It must check the affected path set before
+   writes, preserve unrelated WIP, and reconcile the intended branch, real index and
+   working tree together. Run its preview, then its authorized apply. This Skill does
+   not ship a universal synchronization command: `git_align_checkout.sh` only
+   materializes files; it neither advances HEAD nor updates the real index.
+4. Treat a refusal as zero-write only when the owner verifies that preflight stopped
+   before any writes. Preserve the original staged/disk versions and reconcile owned
+   deltas through that owner before retrying. Once apply starts, a materialization,
+   ref compare-and-swap, index repair or readback failure can leave partial changes.
+   Keep the existing transaction journal, materialization records and recovery copies;
+   inspect their recorded state against current HEAD, real index and disk. Follow that
+   owner's recovery/retry contract for the same transaction. Do not assume nothing
+   changed, retry an ordinary fast-forward, recreate the transaction or bypass its
+   journal. Do not delete incoming or already-published content to make the checkout
+   look clean, or replace the owner with raw ref/index writes. If no
+   verified entry is available, preserve and coordinate the original checkout, continue
+   necessary authorized delivery in an isolated workspace, and report local alignment
+   as unfinished. Do not assume a private helper is installed.
+5. Independently read the resulting full HEAD, affected index entries and disk content,
+   and verify unrelated WIP survived. HEAD already equal to `TIP`, or a synchronizer's
+   successful no-op, proves no more than that observed condition; it does not establish
+   index/working-tree synchronization. Claim task-scoped closure only when the required
+   layers match the intended result, with any retained valid WIP explicitly attributed.
 
 ## Set a wider reflog safety window once
 

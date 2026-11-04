@@ -308,6 +308,11 @@ fits the topic.
 
 ### Batch pending adjudication — queue-level clip cross-check
 
+When the original stays on an already authorized remote machine, use the
+[source clip adapter](source_clips.md) with the same two-window command below.
+It binds the full source hash, source-host identity and clock, avoiding a whole
+original transfer. Existing local-file and URL inputs remain available.
+
 The single-token rung above scales to a backlog. A finished native pass often
 leaves a queue of pendings whose local ladder is already exhausted (entities,
 garbled terms, numbers). Check available audio before handing the entire queue
@@ -510,7 +515,7 @@ When fixing multiple files (e.g., 5 transcripts from one day):
 5. **Verify all diffs.** Keep reviewed working files and their correction sidecars for the independent pass and verdict reconciliation below. If archived now, label them as drafts; use the [Native finalization workflow](native_ai_full_workflow.md) after reconciliation before claiming final quality.
 6. **Run the trap-scan** ([native_ai_full_workflow.md](native_ai_full_workflow.md) step 6) across the whole batch once — the domain's documented homophone traps, mechanically, after your read-through, to catch what the read missed
    For the Full-tier independent pass, use [Native review packets and recovery](native_review_packets.md) to account for all expected files and segments before claiming batch coverage; missing results are not Fast-tier exclusions.
-7. **Reconcile your uncertains against the user in ONE pass, then route each verdict** — a batch produces a shortlist of unverifiable candidates (a garbled name, a version number your training data contradicts, a name variant you cannot canonicalize). Present the whole shortlist at once (not item-by-item as you go): the user can hear the audio / know the person. Fix every confirmed occurrence immediately, then use the destination matrix in `SKILL.md`: only recurring deterministic garbles go to `--add`; important people go to the roster; contextual traps go to the domain context; rare sentence-local errors stay file-only. A human verdict proves the occurrence, not the replacement's reusability. Only after every item represented by a retained `*_changes.md` / `*_needs_review.md` report has an explicit disposition may that report be removed. `--close-sidecars --input <file>` decides that mechanically and removes the reports on `closed` (script_parameters.md). A version-number claim your training data contradicts is NOT an error until the user says so — "the current date is 2026, v4 exists" outranks a stale recollection of when v3 shipped; present, don't pre-judge.
+7. **Resolve uncertainties with available evidence; retain the rest in the background queue.** The agent checks existing source evidence first. If the user cannot or does not want to annotate, preserve the original wording and pending evidence, continue ordinary draft archival, and do not send a mandatory shortlist. Ask only when a consequential task decision requires information held by the user. Apply confirmed occurrences immediately, then use the destination matrix in `SKILL.md`: only recurring deterministic garbles go to `--add`; important people go to the roster; contextual traps go to the domain context; rare sentence-local errors stay file-only. A human verdict proves the occurrence, not the replacement's reusability. Only after every item represented by a retained `*_changes.md` / `*_needs_review.md` report has an explicit disposition may that report be removed. `--close-sidecars --input <file>` decides that mechanically and removes the reports on `closed` (script_parameters.md); moving reports outside the library does not close their items. A version claim that contradicts stale model knowledge is not itself an error; verify current evidence before proposing a correction. No automatic tool decides when a user-only business decision is necessary; the agent applies that boundary.
 
 ### Parallel via Dynamic Workflow (large batches)
 

@@ -133,6 +133,16 @@ instructions. Stage files by explicit path, run the prescribed checks, inspect t
 full staged diff, and perform semantic secret/PII review before committing to a public
 repository.
 
+For an archive/ingestion repair, enter the repository's complete publication
+preflight after preparing the candidate and before publishing exception changes
+or pushing the PR. Collect findings from every installed layer: commit/range,
+path, diff-content and whole-tree checks can report different matches. A standalone
+tree audit is not the full push preflight. Keep early exception drafts provisional
+until that preflight is complete; use the guard owner's candidate-preparation and
+exception procedure without bypassing hooks. Keep detailed scanner commands and
+fingerprint semantics in that owner, not in this Skill. Reuse checks only while
+their candidate/base/guard inputs and relevant unresolved questions are unchanged.
+
 Do not force-push. Immediately before pushing, compare the remote branch OID with the
 expected old head SHA. Push the explicit local commit to the explicit head ref and let
 a non-fast-forward rejection stop the operation. Never bypass hooks or signing policy.
@@ -336,6 +346,24 @@ never describe the direct merge as atomically bound to the reviewed base.
 
 ### Merge with the reviewed-head guard
 
+When approval or merge status appears contradictory, inspect these separately
+before changing a branch:
+
+| Evidence | What it establishes |
+|---|---|
+| Exact head and independently read live base | Which immutable objects the verdict covers |
+| Individual review state and `commit_id` | What that reviewer submitted against that commit |
+| Dismissal event and message | Whether and why a submitted review was dismissed |
+| Effective `reviewDecision` and required checks | Whether GitHub currently considers the requirements met |
+| CLI/service rejection and rule evaluation | Which operation or rule actually refused the transition |
+
+An `APPROVED` review can coexist with `REVIEW_REQUIRED`; do not report it as a
+second dismissal or infer a cache defect. Resolve the specific missing condition,
+or retain it as unknown. Change the branch only for a verified integration defect
+or an already-authorized update. Never use another API to turn a blocked merge
+into an implicit maintainer bypass. The executable gate and explicit-bypass
+boundary belong to [GitHub Operations](https://github.com/daymade/claude-code-skills/blob/main/github-ops/references/pr_operations.md#merging-prs).
+
 For a direct non-queue landing, use the user-authorized, repository-allowed strategy
 and protect the head with `--match-head-commit`:
 
@@ -392,6 +420,9 @@ After GitHub reports success:
    mapping instead of inferring credit from the PR page or commit message.
 5. Verify required post-merge checks or run the prescribed smoke tests when the task
    requires them.
+   When claiming protection compliance, also follow GitHub Operations' exact-landed-SHA
+   rule-suite readback. Merged state and tree equality do not establish that the
+   review/CI rules passed; report `bypass` or missing evidence explicitly.
 6. Verify whether the head branch still exists. If deletion was not authorized and no
    disclosed automatic-deletion setting applied, treat an absent branch as an
    unexpected postcondition rather than silently reporting success.

@@ -367,6 +367,57 @@ class StreamingValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(reader.LineageResolutionError, "ordinal/byte boundary mismatch"):
             reader.resolve_inherited_lineage(data, resolver, read_rollout=reader.validate_codex_rollout)
 
+    def test_prefix_complete_proves_raw_blank_crlf_utf8_bytes_and_frozen_append(self):
+        import hashlib
+        rows=[meta(history_mode="paginated",session_id=ROOT),message("甲🧪")]
+        path=self.paginated(rows)
+        raw=b" \r\n"+b"\r\n".join(json.dumps(row,ensure_ascii=False).encode() for row in rows)+b"\r\n\n"
+        path.write_bytes(raw);events=[]
+        result=reader.validate_codex_rollout(path,ROOT,end_byte_offset=len(raw),on_prefix_complete=events.append)
+        self.assertEqual(result["total_lines"],2);self.assertEqual(len(events),1)
+        st=path.stat();expected={"version":1,"path":str(path.resolve()),"end_byte_offset":len(raw),
+            "bytes":len(raw),"sha256":hashlib.sha256(raw).hexdigest(),"file_identity":[st.st_dev,st.st_ino,st.st_uid]}
+        self.assertEqual(events,[expected])
+        path.write_bytes(raw+b"{malformed later suffix")
+        events=[];reader.validate_codex_rollout(path,ROOT,end_byte_offset=len(raw),on_prefix_complete=events.append)
+        self.assertEqual(events,[expected])
+        self.assertEqual(reader.PREFIX_COMPLETE_VERSION,1)
+
+    def test_prefix_complete_is_absent_on_early_close_short_partial_and_consumer_error(self):
+        rows=[meta(history_mode="paginated"),message()];path=self.paginated(rows);raw=path.read_bytes();events=[]
+        stream=reader._iter_rollout_records(path,len(raw),on_prefix_complete=events.append)
+        next(stream);stream.close();self.assertEqual(events,[])
+        stream=reader._iter_rollout_records(path,len(raw),on_prefix_complete=events.append)
+        next(stream);path.write_bytes(raw[:1])
+        with self.assertRaises(reader.LineageResolutionError):list(stream)
+        self.assertEqual(events,[])
+        for tail in [b"{partial",b"{bad}\n",b"\xff\n",b"[]\n"]:
+            path.write_bytes(raw+tail)
+            with self.subTest(tail=tail),self.assertRaises(reader.LineageResolutionError):
+                self.validate(path,on_prefix_complete=events.append)
+            self.assertEqual(events,[])
+        path.write_bytes(raw)
+        with patch.object(reader,"_consume_rollout_metadata",side_effect=ValueError("consumer failed")):
+            with self.assertRaisesRegex(ValueError,"consumer failed"):self.validate(path,on_prefix_complete=events.append)
+        self.assertEqual(events,[])
+        with self.assertRaisesRegex(ValueError,"callback failed"):
+            self.validate(path,on_prefix_complete=lambda _:(_ for _ in ()).throw(ValueError("callback failed")))
+
+    def test_prefix_complete_waits_for_semantic_identity_and_rejects_replaced_path(self):
+        events=[]
+        for rows in [[meta(OTHER),message()],[meta(),{"type":"world_state","payload":None}]]:
+            path=self.write(rows)
+            with self.assertRaises(reader.LineageResolutionError):self.validate(path,on_prefix_complete=events.append)
+            self.assertEqual(events,[])
+        path=self.paginated([meta(history_mode="paginated"),message()]);raw=path.read_bytes()
+        stream=reader._iter_rollout_records(path,len(raw),on_prefix_complete=events.append);next(stream)
+        replacement=path.with_suffix('.replacement');replacement.write_bytes(raw);replacement.replace(path)
+        with self.assertRaisesRegex(reader.LineageResolutionError,"changed during"):list(stream)
+        self.assertEqual(events,[])
+        for callback in [False,0,"",[]]:
+            with self.subTest(callback=callback),self.assertRaises(TypeError):self.validate(path,on_prefix_complete=callback)
+        self.assertEqual(self.validate(path,on_prefix_complete=None)["total_lines"],2)
+
 
 if __name__ == "__main__":
     unittest.main()

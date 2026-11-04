@@ -4,9 +4,16 @@ Use this contract after faithful extraction and before filing the result into a 
 
 ## Artifact properties
 
+Keep aggregate counts and byte totals in on-demand command output, not in the
+durable manifest. Derive them from artifact records and attachment state when
+needed. `archive_attachments.py` removes its legacy requested/verified attachment
+counts on resume; it preserves independently maintained reader/retention state,
+owner annotations, failures and unresolved references. Per-file identity and
+integrity metadata remain part of the retrieval contract.
+
 For each artifact record:
 
-1. `storage` states the durable source of record: `git`, `source`, or `oss`.
+1. `storage` states the durable source of record: `git`, `source`, `oss`, or `nas`.
 2. `locator` says how to retrieve that durable object.
 3. `cache_path` is optional and never changes the source of record. Source authority
    and local reader delivery are separate: an external original can remain retrievable
@@ -72,13 +79,56 @@ Independent object-storage copy:
 }
 ```
 
+## NAS-retained external media
+
+Use `storage: nas` only after the owning NAS workflow has retained and read back
+an authorized original. The executing agent records the stable device identity,
+account and normalized path **relative to that account's document root**. Keep the
+original source-page URL; an app's task ID, container name, temporary preview URL
+or controller mount is not the durable locator. Runtime credentials and connection
+addresses stay with the NAS owner. This format is provider-neutral; use the
+installed NAS owner's transfer and identity procedure, such as `lazycat-use` when
+available, rather than reconstructing its authentication here.
+
+```json
+{
+  "role": "external_video_original",
+  "storage": "nas",
+  "locator": {
+    "system": "nas",
+    "device": "nas-device-id-example",
+    "account": "archive-user",
+    "path": "Downloads/course-video.webm",
+    "source_url": "https://www.youtube.com/watch?v=BaW_jenozKc"
+  },
+  "cache_path": "media/course-video.webm",
+  "bytes": 123456,
+  "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "mime": "video/webm"
+}
+```
+
+The example's identities and integrity values are synthetic. NAS rows and NAS
+replicas require positive byte counts, a full SHA-256 and MIME; replicas share
+the primary row's integrity evidence. The storage validator checks their shape,
+not remote existence. The NAS owner verifies retained bytes; the reader gate
+verifies any linked local cache using the same manifest row. Use relative local
+video embeds and filename links for portable reading, preserving the original
+source URL. Rehydrate a missing cache through the NAS owner, compare complete
+bytes/hash, then run the reader gate; a clone alone contains structured records.
+
+Existing Git/Feishu/WeChat/OSS manifests retain their schema and behavior. A reader
+released before NAS support rejects `nas` as unsupported; update the reader before
+adopting NAS rows. Do not relabel a NAS object as a Feishu token to pass an old gate.
+
 ## Decision rule
 
 - Use `source` when Feishu or Lark still exposes the original through a stable document/file/whiteboard/minutes locator. A temporary CDN URL or local path is not stable; store the source token and parent source instead. Locator fields are provider-specific allowlists, so an unrelated local `path` cannot hide beside otherwise valid fields.
 - Use `oss` when independent retention is a real requirement or the original platform locator is not a reliable future retrieval path. Uploading changes external state, so it must be authorized and independently read back.
+- Use `nas` for an authorized independently retained object with the device/account/path and source URL above. Keep its optional local cache non-authoritative.
 - Use `git` for the structured layer that makes the archive searchable, diffable, and maintainable. Git is not a generic blob store here, and Git LFS does not change that boundary.
 
-If an artifact is both on Feishu and OSS, choose the intended authority as `storage` and record the other under `replicas`. Each replica is exactly `{storage, locator}`; its locator is validated by the same provider allowlist as the primary. Do not add `path`, `cache_path`, or a second authority field inside a replica.
+If an artifact has platform, OSS or NAS copies, choose the intended authority as `storage` and record the other under `replicas`. Each replica is exactly `{storage, locator}`; its locator is validated by the same provider allowlist as the primary. Do not add `path`, `cache_path`, or a second authority field inside a replica.
 
 ```json
 {
@@ -111,7 +161,7 @@ The validator fails when:
 - a Git artifact's role, suffix, and declared MIME do not describe the same structured format;
 - a structured Git path hides an unapproved intermediate extension;
 - an external artifact has no stable locator;
-- a locator does not satisfy its source-system contract (Feishu URL + token, WeChat chat + message ID, or OSS URI);
+- a locator does not satisfy its source-system contract (Feishu URL + token, WeChat chat + message ID, OSS URI, or NAS device/account/relative path plus source URL);
 - a primary entry or replica carries fields outside its storage-specific allowlist;
 - a Git artifact has no `path`;
 - an external artifact uses `path` instead of `cache_path`, which would make a working copy look authoritative;

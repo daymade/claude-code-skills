@@ -130,7 +130,12 @@ class CorrectionRepository:
     - Audit logging
     """
 
-    def __init__(self, db_path: Path, max_connections: int = 5):
+    def __init__(
+        self,
+        db_path: Path,
+        max_connections: int = 5,
+        initialize_schema: bool = True,
+    ):
         """
         Initialize repository with database path.
 
@@ -140,6 +145,9 @@ class CorrectionRepository:
         Args:
             db_path: Path to SQLite database file
             max_connections: Maximum connections in pool (default: 5)
+            initialize_schema: Ensure/migrate the schema on construction.
+                State-management commands may disable this so an invalid
+                database cannot be modified before validation.
 
         Raises:
             ValueError: If max_connections < 1
@@ -155,8 +163,8 @@ class CorrectionRepository:
             max_connections=max_connections
         )
 
-        # Ensure database schema exists
-        self._ensure_database_exists()
+        if initialize_schema:
+            self._ensure_database_exists()
 
         logger.info(f"Repository initialized with {max_connections} max connections")
 

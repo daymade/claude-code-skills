@@ -26,9 +26,14 @@ snapshot commands, interpretation and coverage checks.
 
 - Git: faithful Markdown plus structured CSV/JSON/HTML, source locators, revision/permission state, byte counts, MIME types, and hashes.
 - Platform original: Feishu remains the source of record for raw binary attachments when the stable document/file token is still retrievable. A local download is an optional cache and may be absent on a fresh clone.
+- NAS retention: when the selected archive already uses an authorized NAS backend, follow the [NAS storage contract](references/archive-storage-contract.md#nas-retained-external-media), including original source identity and full retained-file integrity.
 - OSS/object storage: only when the archive needs an independent durable copy or the platform source is not a reliable long-term retrieval path. Uploading is a separate authorized operation, not a fallback the extractor chooses by itself.
 
 Before filing an archive, declare this split in an artifact manifest and run the bundled storage validator. The complete schema and examples are in **[references/archive-storage-contract.md](references/archive-storage-contract.md)**.
+
+Keep source access instructions with the authorized destination's material entry,
+following the destination handoff; return them with a password-protected source
+link. Generate aggregate statistics on demand under the storage contract.
 
 Select the delivery scope from the user's requested result before loading fallback
 or reader procedures. For original-file downloads, use
@@ -36,6 +41,13 @@ or reader procedures. For original-file downloads, use
 enumerate its actual resource types, then load only those handlers. Record body,
 attachments, independent retention and reader acceptance separately. An attachment
 batch alone never establishes completion of the document's reference graph.
+
+For Bilibili, YouTube or direct-media links in the body, load
+[external video discovery and handoff](references/external-video-resources.md).
+Enumerate them on every captured body and retain a resource worklist; discovery,
+text capture and media acquisition have separate completion states. Delegate
+authorized acquisition to the installed platform/storage owner with the user's
+selected part or playlist range.
 
 For failed media exports, original-preview retrieval, or an Obsidian reading handoff, load
 [original media and reader handoff](references/original-media-and-reader.md).
@@ -124,7 +136,7 @@ Because the loss is real and type-dependent, **extraction (step 4) and the resid
 
 `--format markdown` is **not** a valid value (lark-cli warns and falls back to json). Keep stdout and stderr separate — a harmless `[deprecated]` line goes to stderr, and piping `2>/dev/null` *and* `jq` together produced a false `Exit code 5` in practice. The body must reach disk via `jq`/`pandoc`, never retyped or summarized by the model — paraphrasing silently corrupts source text, the single most important fidelity rule. (pandoc only re-renders HTML structure to Markdown; it does not rewrite prose — the tag-stripping above is a structural loss, not a prose-fidelity one, which is why source.html must stay on disk and stay authoritative for rich-media references.)
 
-**4. If it's a collection/hub, follow the reference graph (BFS) within the user's authorized capture scope.** The hub body contains `<mention-doc>` (real raw tag: `<cite doc-id="…">`), `<sheet>`, `<image>` (real raw tag: `<img src="…">`) tags, `<whiteboard token="…">` blocks, and cross-tenant / Minutes / Tencent-Meeting URLs. Extract every reference, dispatch by type, fetch, and **repeat on each newly fetched doc until no new references remain** (leaf nodes) — **except `whiteboard`, which is never fetched or recursed**: it's inline visual content, not a link to another document (see the dedicated instruction below). The caller applies the user's selected roots, depth and resource set: a reference beyond that scope stays a recorded locator (URL/token + title), marked not-captured in the worklist, and does not become a required fetch. A full-collection request still uses BFS until all in-scope branches reach leaves. Use the bundled extractor so nothing is silently missed (a missed reference = a missing document, the #1 hub-scraping failure):
+**4. If it's a collection/hub, follow the reference graph (BFS) within the user's authorized capture scope.** The hub body contains `<mention-doc>` (real raw tag: `<cite doc-id="…">`), `<sheet>`, `<image>` (real raw tag: `<img src="…">`) tags, `<whiteboard token="…">` blocks, cross-tenant / Minutes / Tencent-Meeting URLs and external video links. Extract every reference, dispatch by type, fetch, and **repeat on each newly fetched doc until no new references remain** (leaf nodes) — **except `whiteboard`, which is never fetched or recursed**: it's inline visual content, not a link to another document (see the dedicated instruction below). External videos enter the resource worklist and owner handoff, not Feishu recursion. The caller applies the user's selected roots, depth and resource set: a reference beyond that scope stays a recorded locator (URL/token + title), marked not-captured in the worklist, and does not become a required fetch. A full-collection request still uses BFS until all in-scope branches reach leaves. Use the bundled extractor so nothing is silently missed (a missed reference = a missing document, the #1 hub-scraping failure):
 
 ```bash
 python3 scripts/feishu_extract_refs.py "<sanitized-title>.html"   # → JSON list of {type, ref, title, dispatch}
@@ -189,9 +201,10 @@ Stop only when all that apply are true:
 
 - Every fetched body reached disk via `jq`/script, not retyped by the model.
 - Apply the discussion acceptance rules in [comments and feedback](references/comments-and-feedback.md).
-- **Every fetched document — a lone doc as much as a collection**: every hit from the residual rich-media-tag check (Path A step 5, run recursively over the whole working directory) maps to a handled artifact — every `mention-doc`/`cite doc-id=`/`sheet`/cross-tenant reference was **followed** to a fetched leaf file **or explicitly recorded as outside the user's authorized capture scope** (roots/depth/resource set; a beyond-scope reference stays a locator in the worklist, marked not-captured), and every `whiteboard` reference was **exported and read** (not followed — a whiteboard is inline visual content, never a link to recurse into). Raw binaries then map to a stable platform/OSS locator plus optional verified local cache; structured/searchable derivatives map to versioned files. This is not a collections-only check: a standalone document can contain an unresolved `whiteboard` with zero other documents involved. Each document's own `.html` legitimately keeps showing its tags forever (it's an immutable raw capture, never rewritten — as long as each document got its own filename per step 3) — don't chase the grep itself to a literal zero.
+- **Every fetched document — a lone doc as much as a collection**: every hit from the residual rich-media-tag check (Path A step 5, run recursively over the whole working directory) maps to a handled artifact — every `mention-doc`/`cite doc-id=`/`sheet`/cross-tenant reference was **followed** to a fetched leaf file **or explicitly recorded as outside the user's authorized capture scope** (roots/depth/resource set; a beyond-scope reference stays a locator in the worklist, marked not-captured), and every `whiteboard` reference was **exported and read** (not followed — a whiteboard is inline visual content, never a link to recurse into). Raw binaries then map to a stable platform/NAS/OSS locator plus optional verified local cache; structured/searchable derivatives map to versioned files. This is not a collections-only check: a standalone document can contain an unresolved `whiteboard` with zero other documents involved. Each document's own `.html` legitimately keeps showing its tags forever (it's an immutable raw capture, never rewritten — as long as each document got its own filename per step 3) — don't chase the grep itself to a literal zero.
 - The artifact manifest passes `python3 scripts/check_archive_storage.py <manifest>`: no raw binary is declared as Git storage, every external artifact has a stable locator, and every local cache is clearly marked as non-authoritative.
 - Original-file requests also meet [attachment archive acceptance](references/attachment-archives.md#acceptance): reconcile all requested originals and any separate retention requirement. Keep actual-reader status unverified until the reader gate passes.
+- External video links meet the [resource-state and completion rules](references/external-video-resources.md#resource-states-and-completion): reconcile in-scope media separately from body/transcript capture, retain part/playlist identity, and explicitly report link-only, inaccessible and outside-scope items.
 - Local reader-facing delivery follows the [completion gate](references/original-media-and-reader.md#delivery-completion-gate). A conversion or storage check is not reader acceptance. User-excluded checks remain excluded and unverified; do not expand the task or fabricate a receipt to force a ready state.
 - `LC_ALL=C grep -rl $'\xef\xbf\xbd' .` is empty.
 - docx path: rendered to an image and visually compared to the source; heading hierarchy and highlights match (see docx reference's checklist).
@@ -214,13 +227,13 @@ Verified dead-ends — retrying them only wastes the session. Full table with fa
 - [scripts/fetch_comments.py](scripts/fetch_comments.py) — executable comment-capture interface.
 - [scripts/archive_attachments.py](scripts/archive_attachments.py) — download captured source-card originals, verify bytes and Office/ZIP structure, and generate a storage manifest; follow [attachment archives](references/attachment-archives.md) for scope and recovery.
 - [scripts/render_api_capture.py](scripts/render_api_capture.py) — render the saved API body using its captured title and manifest-local attachments; conversion does not establish reader acceptance.
-- `scripts/feishu_extract_refs.py` — deterministic reference-token extractor; the recursion engine's core. Run it once per fetched document, on that document's own `<sanitized-title>.html` (prefer over `.md` — step 3), to enumerate `<mention-doc>`/`<sheet>`/`<image>`/`<whiteboard>`/cross-tenant/Minutes/Tencent-Meeting references as JSON.
+- `scripts/feishu_extract_refs.py` — deterministic reference-token extractor; the recursion engine's core. Run it once per fetched document, on that document's own `<sanitized-title>.html` (prefer over `.md` — step 3), to enumerate `<mention-doc>`/`<sheet>`/`<image>`/`<whiteboard>`/cross-tenant/Minutes/Tencent-Meeting references and external Bilibili/YouTube/direct-media locators as JSON.
 - `scripts/restore_docx_headings.py` — for Path B: reads true font sizes via python-docx, maps them to heading levels, restores `w:shd` highlights to Obsidian `==…==`, without retyping body text.
 - `scripts/feishu_dom_capture.js` — Path D: injectable end-to-end browser DOM capture.
 - `scripts/download_feishu_images.py` — Path D: SSR image extraction when browser automation is unavailable.
 - `scripts/build_feishu_markdown.py` — Path D: render a capture manifest into Markdown.
 - `scripts/check_heading_coverage.py` — coverage verification (both paths).
-- `scripts/check_archive_storage.py` — fail-closed validator for the source/Git/OSS storage split; blocks raw binaries declared as Git artifacts.
+- `scripts/check_archive_storage.py` — fail-closed validator for the source/Git/NAS/OSS storage split; blocks raw binaries declared as Git artifacts.
 - `references/lark-cli-api-extraction.md` — Path A full reference (commands, recursion, sheets, cross-tenant).
 - `references/feishu-minutes-transcript.md` — Path C native transcript API + scope auth.
 - `references/permission-and-failure-boundaries.md` — error codes + the full Do-NOT-attempt table.

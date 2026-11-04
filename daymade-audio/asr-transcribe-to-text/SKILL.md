@@ -18,10 +18,18 @@ diarization turns; speaker attribution happens after continuous-context ASR.
 
 ## Route before ASR: the transcript is the result, not the run
 
+**Preserve course videos before choosing an ASR route.** When uploading a course
+video, or when the user requires the picture or original media, upload the
+original video file with its picture, audio and original speed. Skip Step 2 and
+the preprocessing section unless the user explicitly requests conversion.
+An existing transcript can satisfy the text request but does not satisfy an
+outstanding video upload. Slow transfers or upload failures do not authorize
+extracting audio, transcoding or speeding up the video.
+
 Before starting transcription, check the owning project's transcript catalog,
 external source index, and declared prior-work carriers for an existing
 canonical transcript using source ID, date, title, and entity terms. A verified
-human-reviewed/current transcript ends the task unless the user explicitly
+human-reviewed/current transcript ends transcription unless the user explicitly
 asked for a new independent comparison. Raw audio existing is not a reason to
 regenerate text that already exists.
 
@@ -178,6 +186,8 @@ For third-party public podcasts or copyrighted media, save the transcript as a l
 
 ## Step 2: Extract Audio (if input is video)
 
+Apply this step to text-only ASR; skip it for the original-video upload route above.
+
 For video files (mp4, mov, mkv, avi, webm), extract as 16kHz mono WAV:
 
 ```bash
@@ -192,6 +202,8 @@ ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:no
 **Cleanup**: After transcription succeeds, delete extracted WAV files to save disk space.
 
 ## Preprocess: Merge Segments & Shrink Metered Uploads (optional)
+
+Skip this section for original-video uploads; retain the selected original file.
 
 Run this BEFORE transcription when either applies:
 
@@ -249,7 +261,8 @@ Wrote upload.m4a
 
 ## Option: Upload to Feishu Minutes for transcription
 
-After preprocessing, use this path when the user wants **Feishu Minutes**, or
+Use this path with the selected original video or preprocessed audio when the
+user wants **Feishu Minutes**, or
 when an ordinary meeting/DJI recording has no canonical transcript and cloud
 processing is allowed. It is the normal meeting-audio route, not a fallback
 that requires a failed local run first.
@@ -289,22 +302,26 @@ An explicit downstream outcome in the same request or project context wins.
 
 **Step-by-step**:
 
-1. **Use the already-preprocessed audio** from the section above when possible.
-   Feishu accepts `.m4a`, `.mp3`, `.wav`, `.aac` in an MP4/MOV wrapper; the
-   preprocessor's "Metered upload" row is already shaped for this. Keep the file
+1. **Select the media required by the outcome**: use the original video for a
+   course or other original-video upload; use already-preprocessed audio for the
+   ordinary meeting-audio route. Feishu supports MP4/MOV videos and audio formats
+   including `.m4a`, `.mp3`, `.wav` and `.aac`; the preprocessor's "Metered upload"
+   row applies to the meeting-audio route. Keep the file
    under 6 GB and under 6 hours — those are Feishu upload hard limits.
 
 2. **Upload to Drive as the user**:
    ```bash
    LARK_CLI_NO_PROXY=1 lark-cli drive +upload \
-     --file '<preprocessed-media-path>' \
+     --file '<selected-media-path>' \
      --name '<basename>' \
      --as user \
      --format json
    ```
    From the result, record `file_token`. If the command errors with a path
-   validation or multipart failure, do not retry blindly — switch format or size
-   strategy and try once more, then report the exact failure.
+   validation or multipart failure, do not retry blindly. For preprocessed audio,
+   switch format or size strategy and try once more, then report the exact failure.
+   For original video, diagnose the path or transfer failure and preserve the
+   selected media; do not change the video to audio to make it upload.
 
 3. **Create the minute from that Drive file**:
    ```bash
@@ -316,6 +333,10 @@ An explicit downstream outcome in the same request or project context wins.
    From the result, record `minute_token` and `minute_url`.
 
 4. **Branch on the previously fixed terminal outcome**:
+
+   For an original-video upload, independently read back the cloud file name and
+   size, then verify the ready Minute contains a video track and the original
+   duration. An audio-only Minute or a queued upload does not satisfy this outcome.
 
    - Upload-only: return `minute_url` and stop.
    - Transcript-only: use the current `lark-minutes` detail command with its

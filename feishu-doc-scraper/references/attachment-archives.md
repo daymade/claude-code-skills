@@ -18,6 +18,9 @@ does not authorize changing source content, permissions or cloud storage.
    figure. Attribute order and quote style are not identity. Handle referenced
    documents, sheets, images, whiteboards and Minutes through their existing
    routes; the attachment helper does not recursively fetch them.
+   Route external Bilibili/YouTube/direct-media links through
+   [external video discovery and handoff](external-video-resources.md); a source-card
+   attachment batch does not acquire those videos or authorize their whole series.
 4. Run the bundled helper against a new output directory:
 
 ```bash
@@ -58,7 +61,8 @@ No destination file is overwritten.
 After addressing a transient failure, reuse the same arguments with `--resume`.
 The capture bytes, source URL and explicit profile must match the saved binding.
 Keep downstream manifest entries, OSS locators, replicas and reader-note records
-when resuming. The helper updates only its attachment counts and state snapshots;
+when resuming. The helper updates its failure/reference worklist and state snapshots,
+and removes legacy requested/verified attachment counts from the manifest;
 it does not reclassify existing originals' durable storage.
 Previously verified originals are reused only after size, structure and hash
 readback. Changed or unrecorded existing files are preserved and reported, not

@@ -110,7 +110,7 @@ authorized structural result separately; a missing reader receipt remains pendin
 Native embedding follows [Obsidian's embed contract](https://obsidian.md/help/embeds).
 Keep local asset references relative to the Markdown directory so moving the
 delivered folder as a unit preserves them. A hidden global cache is not the
-reader-facing attachment directory. Keep source/Git/OSS authority and binary
+reader-facing attachment directory. Keep source/Git/NAS/OSS authority and binary
 ignore/LFS policy with the archive storage owner; do not change it merely to
 make the note display. Download, conversion, actual-reader and search checks
 remain separate observations.

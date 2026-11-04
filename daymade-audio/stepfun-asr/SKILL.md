@@ -18,7 +18,7 @@ Transcribe audio with StepFun's `stepaudio-3-asr-max` (StepAudio 3, released 202
 
 1. **Wrong endpoint, wrong error**. `stepaudio-3-asr-max` does **not** live on `/v1/audio/transcriptions` (that endpoint serves the older `step-asr` family). It lives on `/v1/audio/asr/sse` — SSE streaming, JSON body, base64 audio. Sending it to the wrong endpoint returns `{"error":{"message":"model stepaudio-3-asr-max not supported"}}`, which is **identical in structure** to a genuinely nonexistent model name. People waste hours filing whitelist tickets.
 
-2. **Plan key vs Normal key, silent failure**. StepFun's "Plan" subscription keys (cheap, text-only) cannot call audio endpoints, but the failure manifests as a 4xx with no auth-shaped error message. If your account has a Plan subscription, you need a separate "Normal" key from the same console.
+2. **Subscription endpoint vs wallet endpoint**. Step Plan supports `stepaudio-2.5-asr` at `https://api.stepfun.com/step_plan/v1/audio/asr/sse`; the wallet endpoint serves `stepaudio-3-asr-max`. Choose the endpoint and supported model together. Do not infer that Plan is text-only or that changing only a key changes the billing account.
 
 3. **SSE error events are real**. Censorship can fire on the ASR side too (rarely). Don't assume only `transcript.text.delta` and `transcript.text.done` events arrive — handle `type: error` events in the stream or you'll silently drop them.
 
@@ -29,17 +29,38 @@ API key resolves in this order (fail-fast, no defaults):
 1. `$STEPFUN_API_KEY` environment variable
 2. `${CLAUDE_PLUGIN_DATA}/config.json` with `{"api_key": "..."}` (cross-session persistence)
 
+For an authorized active Pro/Plan subscription, use the Plan route first. Select the
+wallet route when the Plan attempt fails, the required capability or recognition
+quality is unavailable there, or the task requires higher concurrency. Record the
+reason and actual route; this script never retries against the wallet automatically.
+Read current support at [Step Plan audio integration](https://platform.stepfun.com/docs/zh/step-plan/integrations/audio-api).
+
+Run a Plan call with the dedicated environment variable:
+
+```bash
+python3 scripts/asr_transcribe.py audio.wav --key-env STEPFUN_PLAN_TOKEN \
+  --endpoint https://api.stepfun.com/step_plan/v1/audio/asr/sse \
+  --model stepaudio-2.5-asr --json
+```
+
+An explicitly selected `STEPFUN_PLAN_TOKEN` never falls back to the wallet key or
+plugin configuration. Existing calls without these options keep their wallet
+endpoint and `stepaudio-3-asr-max` default. Billing follows the selected endpoint.
+
 First-time setup:
 
 ```bash
 mkdir -p "${CLAUDE_PLUGIN_DATA}" && cat > "${CLAUDE_PLUGIN_DATA}/config.json" <<EOF
-{"api_key": "<paste Normal key here>"}
+{"api_key": "<paste Step API Key here>"}
 EOF
 ```
 
-If the user has not set a key, ask them to paste it — do not guess or use a placeholder. Get keys at https://platform.stepfun.com/ → API Keys. **Use a Normal key, not a Plan key.**
+Reuse an existing authorized Step API Key or its configured environment first.
+If none is available, ask for configuration; do not guess or use a placeholder.
+Get keys at https://platform.stepfun.com/ → API Keys. Use the subscription endpoint
+for Plan Credit and the wallet endpoint for pay-as-you-go billing.
 
-## Quick start — single file
+## Quick start — wallet route without an active Plan
 
 ```bash
 python3 scripts/asr_transcribe.py /path/to/audio.mp3
@@ -89,7 +110,7 @@ The script handles base64 encoding, the nested `{audio: {data, input: {transcrip
 | `--model stepaudio-2-asr-pro` returns `internal error` | That model is not usable on `/v1/audio/asr/sse` (measured 2026-09-18); use the default or `stepaudio-2.5-asr` |
 | Highly repetitive content (same phrase 5+ times, > 90s) | Cross-validate with `step-asr-1.1` — see repetition hallucination in `references/known_issues.md` (2.5-era issue, unverified on v3) |
 | Hit `model stepaudio-3-asr-max not supported` | Wrong endpoint. Switch from `/v1/audio/transcriptions` to `/v1/audio/asr/sse` |
-| Hit silent 4xx auth failure | Verify your key is "Normal" not "Plan" — Plan keys cannot call audio endpoints |
+| Plan call fails | Check the actual subscription, Step API Key, `/step_plan/v1/audio/asr/sse` endpoint and supported `stepaudio-2.5-asr` model before choosing a wallet fallback |
 | Need to write raw HTTP (no Python) | Read `references/api_reference.md` for exact JSON body and SSE event shapes |
 
 ## Speaker labels — `scripts/asr_file.py`
@@ -157,7 +178,7 @@ v3 spot measurements (verified 2026-09-16): 10s clip → 1.1s, 53s real-world cl
 | Error response | Actual cause | Fix |
 |---|---|---|
 | `"model stepaudio-3-asr-max not supported"` on `/v1/audio/transcriptions` | Wrong endpoint | Switch to `/v1/audio/asr/sse` (script does this) |
-| Silent 4xx with no auth message | Using a "Plan" key on audio endpoint | Get a "Normal" key from the StepFun console |
+| Plan audio request fails | Endpoint/model mismatch, credential or subscription failure | Check the actual response and current Plan audio documentation; do not conclude that subscriptions cannot do ASR |
 | ASR returns 3-4× expected character count | Repetition hallucination on highly-repetitive audio | Cross-validate with `step-asr-1.1`; see `references/known_issues.md` |
 | `data: {"type":"error","message":"content blocked..."}` mid-stream | Censorship fired on user-uploaded content | Handle SSE `error` event explicitly; don't assume only `delta`/`done` arrive |
 
@@ -173,11 +194,18 @@ More edge cases in `references/known_issues.md`.
 ## When to read references
 
 - `references/api_reference.md` — exact JSON request body, all fields, all SSE event types, response examples. Read when writing raw HTTP calls instead of using the bundled script.
-- `references/known_issues.md` — repetition hallucination details, the wrong-endpoint diagnostic trail, Plan-vs-Normal key gotcha, ASR-side censorship handling, pricing opacity. Read when debugging anomalous output or evaluating whether to migrate from `step-asr-1.1`.
+- `references/known_issues.md` — repetition hallucination details, endpoint and subscription gotchas, ASR-side censorship handling, pricing opacity. Read when debugging anomalous output or evaluating whether to migrate from `step-asr-1.1`.
 
-## Pricing (verified 2026-09-16, volatile)
+## Pricing (verified 2026-11-03, volatile)
 
-`stepaudio-3-asr-max`: 2.8 元/小时 (official model page, 2026-09-16). The older `stepaudio-2.5-asr` remains served on the same endpoint as a fallback. Re-verify at https://platform.stepfun.com/docs/zh/guides/pricing/details before quoting to stakeholders.
+The official pricing page lists the StepAudio3 series as free through
+2026-11-08 23:59:59 Beijing time; `stepaudio-3-asr-max` becomes
+7.50 元/音频小时 from 2026-11-09 00:00. Do not use that future rate as a
+current charge or assume the promotion continues after its stated end.
+Step Plan ASR uses `stepaudio-2.5-asr` and consumes subscription Credit. Verify
+current prices and actual account usage before quoting costs; a Studio points
+display does not by itself establish which funding account was charged.
+Source: https://platform.stepfun.com/docs/zh/guides/pricing/details.
 
 ## Next Step
 

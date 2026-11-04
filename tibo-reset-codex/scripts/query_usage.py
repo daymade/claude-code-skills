@@ -8,11 +8,13 @@ sent only to the fixed official usage endpoint. No refresh or redemption occurs.
 import argparse
 import base64
 import hashlib
+import importlib.util
 import json
 import math
 import os
 from pathlib import Path
 import sys
+import re
 import time
 from datetime import datetime, timezone
 import urllib.error
@@ -173,19 +175,86 @@ def query(path, expected_email=None):
     raise UsageError("usage_unavailable")
 
 
+def private_reading(result):
+    """Allowlist non-sensitive normalized readings; never serialize the response wholesale."""
+    reading = {key: result[key] for key in (
+        "status", "checked_at_utc", "source", "account_ref", "windows",
+        "banked_resets_available", "banked_resets_applicable_now", "notes")}
+    plan = result.get("plan_type")
+    reading["plan_type"] = plan if plan in (
+        "free", "plus", "pro", "team", "business", "enterprise", "edu") else None
+    balance = result.get("purchased_credits_balance")
+    reading["purchased_credits_balance"] = balance if (
+        (type(balance) in (int, float) and math.isfinite(balance) and balance >= 0)
+        or (isinstance(balance, str) and re.fullmatch(r"\d+(?:\.\d+)?", balance))) else None
+    return reading
+
+
+def validate_output_dir(path):
+    if not path.is_absolute() or not path.parent.is_dir():
+        raise UsageError("output_invalid: use an absolute new directory with an existing parent")
+    if path.exists() or path.is_symlink():
+        raise UsageError("output_exists: refusing to overwrite an existing path")
+
+
+def save_usage(result, output_dir, finding_state_dir=None, *, git_snapshot=True):
+    """Persist this exact query once, optionally appending via the existing finding owner."""
+    validate_output_dir(output_dir)
+    reading = private_reading(result)
+    output_dir.mkdir(mode=0o700)
+    path = output_dir / "usage.json"
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as stream:
+        stream.write(json.dumps(reading, ensure_ascii=False, allow_nan=False, indent=2) + "\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+    receipt = {"status": result["status"], "checked_at_utc": reading["checked_at_utc"],
+               "account_ref": reading["account_ref"], "usage_file": str(path), "saved": True}
+    if finding_state_dir is not None:
+        spec = importlib.util.spec_from_file_location("tibo_forecast_log", Path(__file__).with_name("forecast_log.py"))
+        log = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(log)
+        target = finding_state_dir / "findings.jsonl"
+        row = log.append_finding(target, {"invocation": "account",
+            "query": "Read the explicitly selected Codex account's current usage and banked resets",
+            "endpoints": [USAGE_URL], "readings": {"query_usage": reading}})
+        snap = log.snapshot(finding_state_dir, target.name, "finding", enabled=git_snapshot)
+        receipt["finding"] = log.append_receipt(row, target, snap)
+    return receipt
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--auth-file", type=Path,
                         default=Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex") / "auth.json",
                         help="Explicit ChatGPT auth file; defaults to CODEX_HOME/auth.json or ~/.codex/auth.json")
     parser.add_argument("--expected-email", help="Refuse to report a different account")
+    parser.add_argument("--output-dir", type=Path,
+                        help="Save email-free usage.json in this absolute NEW private directory; stdout becomes a receipt")
+    parser.add_argument("--finding-state-dir", type=Path,
+                        help="Also append this same reading to the explicit local finding journal; requires --output-dir")
+    parser.add_argument("--no-git", action="store_true", help="Skip the optional finding journal's git snapshot")
     args = parser.parse_args()
     try:
+        if args.finding_state_dir is not None and args.output_dir is None:
+            raise UsageError("output_required: --finding-state-dir requires --output-dir")
+        if args.finding_state_dir is not None and not args.finding_state_dir.is_absolute():
+            raise UsageError("state_invalid: --finding-state-dir must be absolute")
+        if args.output_dir is not None:
+            validate_output_dir(args.output_dir)
         result = query(args.auth_file.expanduser(), args.expected_email)
-    except UsageError as error:
-        print(json.dumps({"status": "error", "error": str(error)}, ensure_ascii=False))
+        output = save_usage(result, args.output_dir, args.finding_state_dir,
+                            git_snapshot=not args.no_git) if args.output_dir is not None else result
+    except (UsageError, OSError, ValueError, KeyError, TypeError) as error:
+        # OS exception text can contain private paths; keep the failure public and
+        # preserve a successfully written usage file for independent recovery.
+        message = str(error) if isinstance(error, UsageError) else "persistence_failed: " + type(error).__name__
+        failure = {"status": "error", "error": message}
+        if args.output_dir is not None and (args.output_dir / "usage.json").is_file():
+            failure["usage_file"] = str(args.output_dir / "usage.json")
+        print(json.dumps(failure, ensure_ascii=False))
         return 1
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    print(json.dumps(output, ensure_ascii=False, indent=2))
     return 0 if result["status"] == "ok" else 2
 
 

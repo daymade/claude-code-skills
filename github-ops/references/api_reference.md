@@ -118,7 +118,7 @@ gh api repos/{owner}/{repo}/pulls/123 \
   -f body="Updated description"
 
 # Convert to draft (not a PATCH /pulls input)
-gh pr ready 123 --undo
+gh pr ready 123 -R OWNER/REPO --undo
 
 # Change base branch
 gh api repos/{owner}/{repo}/pulls/123 \
@@ -128,18 +128,8 @@ gh api repos/{owner}/{repo}/pulls/123 \
 
 ### Merge Pull Request
 
-**Endpoint:** `PUT /repos/{owner}/{repo}/pulls/{pull_number}/merge`
-
-```bash
-# Merge with commit message
-gh api repos/{owner}/{repo}/pulls/123/merge \
-  -X PUT \
-  -f commit_title="Merge PR #123" \
-  -f commit_message="Additional merge message" \
-  -f merge_method="squash"
-
-# Merge methods: merge, squash, rebase
-```
+Use the [checked-merge workflow](pr_operations.md#merging-prs) for merge
+mutations, strategy selection, explicit bypass and landed-rule verification.
 
 ### List PR Comments
 
@@ -375,7 +365,7 @@ gh api repos/{owner}/{repo}/commits/abc123 --jq '.files[].filename'
 # Get combined status for commit
 gh api repos/{owner}/{repo}/commits/abc123/status
 
-# Check if all checks passed
+# Read combined commit-status state; Check Runs are separate
 gh api repos/{owner}/{repo}/commits/abc123/status --jq '.state'
 ```
 

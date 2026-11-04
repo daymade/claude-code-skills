@@ -120,7 +120,7 @@ Because there is no declared byte offset to trust, the extractor **derives and v
 Use this callable from [the native reader](../scripts/read_codex_session.py):
 
 ```python
-validate_codex_rollout(path, expected_session_id, *, end_byte_offset, resolve_session=None)
+validate_codex_rollout(path, expected_session_id, *, end_byte_offset, resolve_session=None, on_prefix_complete=None)
 ```
 
 Import the script with its bundled `_core` available, using Python 3.10 or newer.
@@ -137,6 +137,15 @@ streaming budget while retaining the native record-size, JSONL, ordinal and
 identity checks. Read current bounds and the returned summary definition in the
 reader's `MAX_ROLLOUT_BYTES`, `MAX_RECORD_BYTES` and `_summarize_codex_rollout`;
 do not change global constants to make an export pass.
+
+`PREFIX_COMPLETE_VERSION == 1` advertises an optional `on_prefix_complete` callback.
+After successful validation it receives the selected prefix's exact consumed-byte
+SHA-256, byte count/cutoff, resolved path and `[device, inode, uid]` file identity.
+Blank lines, CRLF and UTF-8 are hashed as read; later bytes beyond the cutoff are
+excluded. Errors, partial lines, early close and failed semantic validation do not
+publish a certificate. Callback errors propagate. This proves consumed bytes,
+not future path contents or separately resolved ancestor prefixes; callers retain
+their own initial capture, source selection and final freshness checks.
 
 Consume the returned `meta` and `session_meta_ids`; never construct a replacement
 metadata object or an identity list from the requested ID. Imported metadata is

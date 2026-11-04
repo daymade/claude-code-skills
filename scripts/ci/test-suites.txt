@@ -1,4 +1,7 @@
-# Test suites CI runs, declared explicitly — one per line: <runner> <path>
+# Test suites CI runs: <runner> <path> [additional-input-prefixes]
+# Selection includes the suite's top-level namespace. Optional comma-separated
+# prefixes add cross-namespace consumers; * keeps repository-wide contracts running.
+# Unknown inputs and unavailable diffs run the complete registry.
 #
 # WHY A REGISTRY AND NOT AUTO-DISCOVERY:
 #   Globbing for `tests/` and running whatever turns up is the "put the file there and it
@@ -49,18 +52,18 @@
 #   it quotes real machine/path specifics; this comment is the public-facing summary).
 
 python-unittest  git-safety-net/tests
-python-unittest  tests
+python-unittest  tests *
 python-unittest  deep-research/tests
 python-unittest  auto-repo-setup/tests
 python-unittest  llm-wiki-setup/tests
 python-unittest  daymade-claude-code/read-codex-history/tests
 python-unittest  daymade-claude-code/read-claude-code-history/tests
 python-unittest  daymade-claude-code/prior-work-retrieval/tests
-python-unittest  daymade-claude-code/marketplace-dev/tests
-python-unittest  daymade-claude-code/claude-switch-models-setup/tests
+python-unittest  daymade-claude-code/marketplace-dev/tests *
+python-unittest  daymade-claude-code/claude-switch-models-setup/tests daymade-skill/
 python-unittest  daymade-claude-code/claude-migrate-memory-to-doc/tests
 python-unittest  daymade-claude-code/agent-web-search-setup/tests
-python-unittest  daymade-skill/skill-governance/tests
+python-unittest  daymade-skill/skill-governance/tests daymade-claude-code/
 python-unittest  daymade-codex/codex-1m-context-window-setup/tests
 python-unittest  daymade-codex/interaction-design-board/tests
 python-unittest  daymade-macos/macos-cleaner/tests
@@ -70,11 +73,12 @@ python-unittest  daymade-audio/asr-transcribe-to-text/scripts/review-workbench/t
 node-test        daymade-audio/asr-transcribe-to-text/scripts/review-workbench/tests
 python-unittest  daymade-audio/transcript-fixer/tests
 python-unittest  feishu-doc-scraper/tests
+python-unittest  ima-copilot/tests
 python-unittest  peer-message/tests
 node-test        peer-message/tests
 python-unittest  setup-notifications-via-wecom/tests
-python-unittest  tibo-reset-codex/tests
-node-test        tibo-reset-codex/tests
+python-unittest  tibo-reset-codex/tests cookie-copy/
+node-test        tibo-reset-codex/tests cookie-copy/
 python-unittest  cookie-copy/tests
 node-test        cookie-copy/tests
 python-unittest  tunnel-doctor/tests

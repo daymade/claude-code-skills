@@ -86,8 +86,9 @@ fixtures, load [migration and fixture acceptance](references/migration-fixture-a
 For file-backed state, snapshot dependency checks, recovery or CLI argument,
 wrapper, compatibility-alias, output or read-cost changes, load
 [file persistence and CLI acceptance](references/file-persistence-cli-acceptance.md).
-For admission decisions, account/resource bindings or recovery that can authorize
-an effect, load [admission and recovery acceptance](references/admission-recovery-acceptance.md)
+For admission decisions, account/resource bindings, retained sessions or cached
+permissions across upgrades, and recovery that can authorize an effect,
+load [admission and recovery acceptance](references/admission-recovery-acceptance.md)
 before choosing fault timing or side-effect assertions.
 For responses, normalization or suggested edits that race with user changes,
 load [asynchronous editing and conflict acceptance](references/async-edit-conflict-acceptance.md)

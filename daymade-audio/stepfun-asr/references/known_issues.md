@@ -64,11 +64,15 @@ Don't assume "permission denied" on the first error.
 
 **Practical implication:** If your workload is many short (<10s) clips, the speedup over `step-asr-1.1` is modest — 2× not 5×. If your workload is long audio (>2 min), the difference is dramatic and you should migrate.
 
-## "Plan key" vs "Normal key" — silent auth failure
+## Step Plan needs its supported endpoint/model pair
 
-StepFun sells a cheap "Plan" subscription for text models (step_plan endpoint). **Plan keys cannot call audio endpoints.** This silently manifests as 4xx errors that don't mention auth at all.
+Step Plan supports ASR: `stepaudio-2.5-asr` through HTTP SSE at
+`https://api.stepfun.com/step_plan/v1/audio/asr/sse`. The wallet model
+`stepaudio-3-asr-max` is not the Plan ASR model. Inspect endpoint, model,
+credential, subscription status and the real error before diagnosing an auth failure.
 
-If you hit auth-shaped failures and your account has a Plan subscription, verify you're using a Normal key (different value, obtained separately in the StepFun console under the same "API Keys" page).
+Use the caller's authorized subscription first and keep any wallet fallback explicit.
+Current authority: [Step Plan audio integration](https://platform.stepfun.com/docs/zh/step-plan/integrations/audio-api).
 
 ## Censorship can fire on the ASR side too
 
@@ -84,7 +88,10 @@ The bundled `scripts/asr_transcribe.py` handles this correctly — see `_consume
 
 ## Pricing opacity
 
-Verified 2026-09-17 on the official pages: `stepaudio-3-asr-max` is 2.8 元/小时 ([model page](https://stepfun.mintlify.app/zh/guides/models/stepaudio-3-asr)); `stepaudio-2.5-asr` is 0.15 元/小时 (~18.7× cheaper). Prices move — re-verify at https://platform.stepfun.com/docs/zh/guides/pricing/details before quoting to a stakeholder.
+Read the current prices at https://platform.stepfun.com/docs/zh/guides/pricing/details.
+Plan requests consume subscription Credit; wallet requests use the separate pay-as-you-go
+account. Verify the account's completed billing response instead of treating loading
+defaults or a Studio points display as proof of a zero balance or subscription usage.
 
 **Usage metering caveat (2026-09-17 measured, both generations):** the SSE `usage` object always reports `audio_tokens: 0` — billing is by audio duration and never appears on the token meter. Don't build cost observability on `usage`; track audio duration yourself.
 

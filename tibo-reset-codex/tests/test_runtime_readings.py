@@ -124,6 +124,9 @@ class CompactRuntimeTests(unittest.TestCase):
         def run(argv, **kwargs):
             if "commit" in argv:
                 raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+            # Exercise the intended commit timeout, not host scheduling jitter in
+            # real status/add (which can leave an unrelated index.lock behind).
+            kwargs["timeout"] = 10
             return real_run(argv, **kwargs)
         with mock.patch.object(log.subprocess, "run", run), contextlib.redirect_stderr(io.StringIO()):
             first = log.snapshot(self.state, "findings.jsonl", "finding", timeout=0.01)

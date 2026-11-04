@@ -58,7 +58,8 @@ Save test cases to `evals/evals.json`. Don't write assertions yet — just the p
 }
 ```
 
-See `references/eval_pipeline_schemas.md` for the full schema (including the `assertions` field, which you'll add later).
+See [the eval schema](eval_pipeline_schemas.md#evalsjson) for case definitions and
+`expectations`; keep run-level `assertions` in the metadata described below.
 
 ## Full paired evaluation pipeline (separately authorized only)
 
@@ -72,7 +73,13 @@ Before making isolated input copies, follow
 [materialization-budget.md](materialization-budget.md); export only the
 declared paths from the frozen ref and run all arms under their shared budget.
 
-For each approved test case, run one with-skill sample and its baseline under the same prompt and side-effect budget. These two arms intentionally share one failure axis but require isolated contexts; they are necessary experimental units, not extra reviewer roles. State the total arms and capped concurrency before launch. Run serially by default, and never exceed the authorized unit count.
+For each approved test case, run one with-skill sample and its baseline under the same prompt and side-effect budget. These arms intentionally share one failure axis but require isolated contexts; they are necessary experimental units, not extra reviewer roles. State the total arms and capped concurrency before launch. Run serially by default, and never exceed the authorized unit count.
+
+Before launching an executor, complete the schema owner's
+[source-case input preparation](eval_pipeline_schemas.md#source-case-input-preparation).
+Apply that contract to each selected source edition and retain the actual input
+mapping. Use the prepared paths in the template below; do not forward the source
+`files` list unchanged when its corpus requires filtering or generated artifacts.
 
 **With-skill run:**
 
@@ -80,7 +87,7 @@ For each approved test case, run one with-skill sample and its baseline under th
 Execute this task:
 - Skill path: <path-to-skill>
 - Task: <eval prompt>
-- Input files: <eval files if any, or "none">
+- Input files: <actual prepared consumer paths, resolved source paths, or "none">
 - Save outputs to: <workspace>/iteration-<N>/eval-<ID>/with_skill/outputs/
 - Outputs to save: <what the user cares about — e.g., "the .docx file", "the final CSV">
 ```
@@ -102,11 +109,13 @@ Write an `eval_metadata.json` for each test case (assertions can be empty for no
 
 ### Step 2: While runs are in progress, draft assertions
 
-Don't just wait for the runs to finish — you can use this time productively. Draft quantitative assertions for each test case and explain them to the user. If assertions already exist in `evals/evals.json`, review them and explain what they check.
+Don't just wait for the runs to finish — you can use this time productively. Draft quantitative assertions for each test case and explain them to the user. Review existing `expectations` in `evals/evals.json` before creating run-level assertions.
 
 Good assertions are objectively verifiable and have descriptive names — they should read clearly in the benchmark viewer so someone glancing at the results immediately understands what each one checks. **Write assertions against the intent, not a literal tool path** — "voice content survives into the answer", not "calls the sanctioned reader script". A run that reaches the intent through a different sanctioned route (e.g. reading an archive that already has the transcripts inlined) passes, and grading it as a literal-path failure manufactures a false negative you'll then "fix" in the wrong place. Subjective skills (writing style, design quality) are better evaluated qualitatively — don't force assertions onto things that need human judgment; their real verification paths (historical-task replay, production-as-eval with a write-back habit, render + human review) are listed under question 4 of "Capture Intent".
 
-Update the `eval_metadata.json` files and `evals/evals.json` with the assertions once drafted. Also explain to the user what they'll see in the viewer — both the qualitative outputs and the quantitative benchmark.
+Write run-level `assertions` to `eval_metadata.json`; maintain reusable case checks
+as `expectations` in `evals/evals.json`. Also explain to the user what they'll see
+in the viewer — both the qualitative outputs and the quantitative benchmark.
 
 ### Step 3: As runs complete, capture timing data
 

@@ -38,6 +38,52 @@ class ArchiveStorageContractTests(unittest.TestCase):
         }
         self.assertEqual(MODULE.validate_manifest(payload), [])
 
+    def nas_row(self):
+        return {"storage": "nas", "role": "external_video_original",
+                "locator": {"system": "nas", "device": "synthetic-nas-001",
+                            "account": "archive-user", "path": "Downloads/course name.webm",
+                            "source_url": "https://www.youtube.com/watch?v=BaW_jenozKc"},
+                "cache_path": "media/course name.webm", "bytes": 123,
+                "sha256": "a" * 64, "mime": "video/webm"}
+
+    def test_nas_primary_and_replica_retain_identity_and_integrity(self):
+        row = self.nas_row()
+        self.assertEqual(MODULE.validate_manifest({"files": [row]}), [])
+        # Same object under different source URL aliases must still deduplicate.
+        alias = {**row, "locator": {**row["locator"], "source_url": "https://youtu.be/BaW_jenozKc"}}
+        self.assertTrue(any("duplicate durable" in e for e in MODULE.validate_manifest({"files": [row, alias]})))
+        git_row = {"storage": "git", "role": "document_snapshot", "path": "source.txt",
+                   "mime": "text/plain", "bytes": 123, "sha256": "a" * 64,
+                   "replicas": [{"storage": "nas", "locator": row["locator"]}]}
+        self.assertEqual(MODULE.validate_manifest({"files": [git_row]}), [])
+        git_row.pop("sha256")
+        self.assertTrue(any("SHA-256" in e for e in MODULE.validate_manifest({"files": [git_row]})))
+
+    def test_nas_missing_empty_null_unsafe_and_extra_locator_fields(self):
+        for key in ("system", "device", "account", "path", "source_url"):
+            for value in (None, "", " ", 12):
+                row = self.nas_row(); row["locator"][key] = value
+                with self.subTest(key=key, value=value):
+                    self.assertTrue(MODULE.validate_manifest({"files": [row]}))
+            row = self.nas_row(); del row["locator"][key]
+            self.assertTrue(MODULE.validate_manifest({"files": [row]}))
+        for value in ("/Downloads/clip.webm", "../clip.webm", "Downloads/../clip.webm",
+                      "Downloads//clip.webm", "Downloads/./clip.webm", "Downloads/", "Downloads\\clip.webm", "a\x00b"):
+            row = self.nas_row(); row["locator"]["path"] = value
+            self.assertTrue(MODULE.validate_manifest({"files": [row]}), value)
+        for value in ("file:///private/clip.webm", "https://user:password@example.org/video",
+                      "https://example.org/video#fragment", "https://[bad/video"):
+            row = self.nas_row(); row["locator"]["source_url"] = value
+            self.assertTrue(MODULE.validate_manifest({"files": [row]}), value)
+        row = self.nas_row(); row["locator"]["cookie"] = "synthetic-value"
+        self.assertTrue(any("unsupported fields" in e for e in MODULE.validate_manifest({"files": [row]})))
+        for key in ("bytes", "sha256", "mime"):
+            for value in (None, "", 0, False):
+                row = self.nas_row(); row[key] = value
+                self.assertTrue(MODULE.validate_manifest({"files": [row]}))
+            row = self.nas_row(); del row[key]
+            self.assertTrue(MODULE.validate_manifest({"files": [row]}))
+
     def test_raw_binary_in_git_is_rejected(self) -> None:
         errors = MODULE.validate_manifest(
             {

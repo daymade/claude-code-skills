@@ -412,11 +412,55 @@ def latest_monitor_handoff(path):
     with path.open(encoding="utf-8") as stream:
         fcntl.flock(stream, fcntl.LOCK_SH)
         rows = read_rows(stream, kinds=("finding",))
+    return monitor_handoff(rows)
+
+
+def monitor_handoff(rows):
+    """Select the effective handoff from already locked rows."""
     latest = next((row for row in reversed(rows) if row.get("invocation") == "monitor"), None)
     if latest is None:
         return None
     invalidated = {target for row in rows for target in row.get("invalidates", [])}
     return None if latest["id"] in invalidated else latest
+
+
+def correct_handoff(path, data, now=None):
+    """Replace exactly one complete note while carrying all other state forward.
+
+    The expected full id is a compare-and-swap guard, not a semantic completeness
+    detector. An identical retry succeeds only while its result is still current.
+    """
+    if not isinstance(data, dict):
+        raise ValueError("input must be a JSON object")
+    if set(data) != {"expected_handoff_id", "old_note", "new_note", "reason"}:
+        raise ValueError("requires only expected_handoff_id, old_note, new_note and reason")
+    for key in data:
+        required_text(data, key)
+    if data["old_note"] == data["new_note"]:
+        raise ValueError("old_note and new_note must differ")
+    now = now or datetime.now(timezone.utc)
+    with locked_journal(path, kinds=("finding",)) as (stream, rows):
+        current = monitor_handoff(rows)
+        if current and current.get("handoff_correction") == data:
+            return current
+        if current is None or current["id"] != data["expected_handoff_id"]:
+            raise ValueError("handoff_changed: reread the current handoff before correcting")
+        notes = current.get("notes")
+        if (not isinstance(notes, list) or not notes or any(
+                not isinstance(note, str) or not note.strip() for note in notes)):
+            raise ValueError("current handoff needs nonempty notes; original retained")
+        if notes.count(data["old_note"]) != 1:
+            raise ValueError("old_note must match exactly one complete current note")
+        body = {key: value for key, value in current.items()
+                if key not in ("id", "recorded_at", "handoff_correction")}
+        body["notes"] = [data["new_note"] if note == data["old_note"] else note for note in notes]
+        body["invalidates"] = list(dict.fromkeys([*current.get("invalidates", []), current["id"]]))
+        row = {**body, "id": str(uuid.uuid4()), "recorded_at": now.isoformat(),
+               "handoff_correction": dict(data)}
+        stream.write(json.dumps(row, ensure_ascii=False, allow_nan=False) + "\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+        return row
 
 
 def append_record(path, command, data, now=None):
@@ -719,6 +763,94 @@ def compact_summary(summary):
     return projected
 
 
+def show_record(state, record_id):
+    """Read one exact/unique-prefix record across the supported journals."""
+    required_text({"id": record_id}, "id")
+    matches = []
+    for filename in JOURNALS:
+        path = state / filename
+        if not path.exists():
+            continue
+        with path.open(encoding="utf-8") as stream:
+            fcntl.flock(stream, fcntl.LOCK_SH)
+            rows = read_rows(stream, kinds=("forecast", "review", "finding", "withdrawal", "account_followup"))
+        matches.extend(row for row in rows if row["id"].startswith(record_id))
+    exact = [row for row in matches if row["id"] == record_id]
+    matches = exact or matches
+    if len(matches) != 1:
+        raise ValueError("id must match exactly one record; use its full id")
+    return matches[0]
+
+
+def activity_view(summary, handoff, *, cursor=0, limit=10, max_bytes=16000, expect_view=None):
+    """Page decision fields and complete handoff notes under a real byte budget.
+
+    Original records are never shortened. Every collection has a count and all
+    activity entries are reachable by cursor; long individual entries fail
+    explicitly so the caller can read their original with show --id.
+    """
+    if type(cursor) is not int or cursor < 0 or not 1 <= limit <= 100 or max_bytes < 2048:
+        raise ValueError("cursor >= 0, limit 1..100 and max-output-bytes >= 2048 required")
+    keys = ("id", "forecast_id", "kind", "entry_type", "confidence", "recorded_at",
+            "window_start", "window_end", "eta_at", "alternative_eta_at", "urgency",
+            "hours_overdue", "hours_until_close", "latest_outcome", "window_elapsed",
+            "event_status", "account_status", "account_ref", "account_checked_at",
+            "event_review_id", "account_review_id", "score_review_id", "score_outcome",
+            "followup_id", "withdrawal_id", "review_id", "review_outcome", "revision_trigger",
+            "account_observations")
+    entries, totals = [], {}
+    for collection in ("due_for_followup", "pending", "confirmed_unscored", "account_followup",
+                       "withdrawal_conflicts", "closed_account_followups", "recent_resolved", "recent_withdrawn"):
+        values = summary.get(collection, [])
+        totals[collection] = len(values)
+        for item in values:
+            entry = {"collection": collection, **{key: item[key] for key in keys if key in item}}
+            # Feedback is deliberately located, not silently cut to an excerpt.
+            for field in ("latest_review", "latest_withdrawal"):
+                if isinstance(item.get(field), dict):
+                    entry[field + "_id"] = item[field]["id"]
+                    if collection in ("recent_resolved", "recent_withdrawn") and "lesson" in item[field]:
+                        entry[field + "_lesson"] = item[field]["lesson"]
+            entries.append(entry)
+    notes = handoff.get("notes", []) if handoff else []
+    totals["handoff_notes"] = len(notes)
+    entries.extend({"collection": "handoff_notes", "id": handoff["id"],
+                    "note_index": index, "note": note} for index, note in enumerate(notes))
+    identity = {"entries": entries, "cycle_counts": summary["cycle_counts"],
+                "handoff_id": handoff["id"] if handoff else None}
+    view_id = hashlib.sha256(json.dumps(identity, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    if expect_view is not None and expect_view != view_id:
+        raise ValueError("activity_changed: restart at cursor 0; do not stitch different views")
+    if cursor > len(entries):
+        raise ValueError("cursor exceeds activity entry count")
+    result = {"view_id": view_id, "checked_at": summary["checked_at"], "cursor": cursor,
+              "total_entries": len(entries), "totals": totals, "entries": [], "next_cursor": None,
+              "forecast_count": summary["forecast_count"], "announcement_count": summary["announcement_count"],
+              "cycle_counts": summary["cycle_counts"], "snapshot": summary.get("snapshot"),
+              "handoff_id": handoff["id"] if handoff else None,
+              "originals": {"state_dir": str(Path(summary["journal"]).parent.resolve()),
+                            "command": "show --id <full-record-id>",
+                            "handoff": "handoff (complete readings and notes)"},
+              "read_policy": "Read every next_cursor page with --expect-view before declaring the activity read complete. "
+                             "Recent feedback lessons are complete; read review/withdrawal originals for their reasons and source readings on demand."}
+    def size():
+        return len((json.dumps(result, ensure_ascii=False, indent=2) + "\n").encode())
+    if size() > max_bytes:
+        raise ValueError("activity metadata exceeds max-output-bytes; increase the explicit budget")
+    for entry in entries[cursor:cursor + limit]:
+        result["entries"].append(entry)
+        result["next_cursor"] = cursor + len(result["entries"]) if cursor + len(result["entries"]) < len(entries) else None
+        if size() > max_bytes:
+            result["entries"].pop()
+            if not result["entries"]:
+                raise ValueError("activity entry exceeds max-output-bytes; read show --id " + entry.get("id", entry.get("forecast_id", "unknown")) +
+                                 " or increase the explicit budget")
+            break
+    end = cursor + len(result["entries"])
+    result["next_cursor"] = end if end < len(entries) else None
+    return result
+
+
 def followup_plan(path, now=None):
     """Produce the next read-only evidence tasks; do not fetch or schedule them."""
     summary = summarize(path, now=now)
@@ -874,8 +1006,8 @@ def snapshot_health(state_dir, enabled=True):
     """Report whether the best-effort git snapshots are keeping up. Read-only.
 
     A failed snapshot prints one stderr note and never blocks the append, so a
-    journal can go on lagging for days with nothing on the read path showing it.
-    `summary` runs at the start of every round, which makes it the place to look.
+    journal can go on lagging with no append failure. Read paths expose snapshot
+    health separately so a successful append cannot imply a completed snapshot.
     """
     if not enabled:
         return {"status": "disabled"}
@@ -917,12 +1049,20 @@ def main():
     summary.add_argument("--kind", choices=KINDS)
     summary.add_argument("--compact", action="store_true",
                          help="omit long narrative fields while preserving decision fields")
-    for command in ("record", "announce", "review", "withdraw", "finding", "account-followup"):
+    for command in ("record", "announce", "review", "withdraw", "finding", "account-followup", "correct-handoff"):
         p = sub.add_parser(command)
         p.add_argument("--input", type=Path, required=True, help="UTF-8 JSON object file")
     listing = sub.add_parser("findings", help="List recent raw data findings")
     listing.add_argument("--limit", type=int, default=20)
     sub.add_parser("handoff", help="Read the complete latest monitor handoff")
+    activity = sub.add_parser("activity", help="Read byte-bounded pages of monitoring activity; follow every next_cursor")
+    activity.add_argument("--kind", choices=KINDS)
+    activity.add_argument("--cursor", type=int, default=0)
+    activity.add_argument("--limit", type=int, default=10)
+    activity.add_argument("--max-output-bytes", type=int, default=16000)
+    activity.add_argument("--expect-view", help="Require the first page's view_id for subsequent pages")
+    showing = sub.add_parser("show", help="Read one complete original record")
+    showing.add_argument("--id", required=True)
     sub.add_parser("followup", help="List evidence tasks for due promises and account arrival")
     sub.add_parser("snapshot-status", help="Read journal snapshot health and lock diagnostics")
     retry_parser = sub.add_parser("snapshot-retry", help="Explicitly retry snapshots without appending records")
@@ -936,6 +1076,14 @@ def main():
             if args.compact:
                 result = compact_summary(result)
             result["snapshot"] = snapshot_health(state, enabled=not args.no_git)
+        elif args.command == "activity":
+            summary_result = summarize(path, args.kind)
+            summary_result["snapshot"] = snapshot_health(state, enabled=not args.no_git)
+            result = activity_view(summary_result, latest_monitor_handoff(state / "findings.jsonl"),
+                                   cursor=args.cursor, limit=args.limit, max_bytes=args.max_output_bytes,
+                                   expect_view=args.expect_view)
+        elif args.command == "show":
+            result = show_record(state, args.id)
         elif args.command == "findings":
             result = list_findings(state / "findings.jsonl", max(args.limit, 0))
         elif args.command == "handoff":
@@ -957,9 +1105,10 @@ def main():
             snap = snapshot(state, target.name, "account_followup", enabled=not args.no_git)
             if not args.full:
                 result = append_receipt(result, target, snap)
-        elif args.command == "finding":
+        elif args.command in ("finding", "correct-handoff"):
             target = state / "findings.jsonl"
-            result = append_finding(target, json.loads(args.input.read_text(encoding="utf-8")))
+            writer = correct_handoff if args.command == "correct-handoff" else append_finding
+            result = writer(target, json.loads(args.input.read_text(encoding="utf-8")))
             snap = snapshot(state, target.name, "finding", enabled=not args.no_git)
             if not args.full:
                 result = append_receipt(result, target, snap)

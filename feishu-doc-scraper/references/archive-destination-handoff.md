@@ -22,6 +22,12 @@ the extractor does not classify sharing permission or enforce this handoff.
    retention route and destination index in the existing task notes or manifest.
    Explain the chosen location briefly, then continue within existing authority;
    routine classification does not require another permission round.
+5. Hand off access requirements already supplied for the source. Keep a share
+   password only in the destination's authorized material entry, beside the
+   original link; retain a pointer from other indices instead of copying it.
+   Do not copy account credentials, session tokens or private request headers.
+   If sharing the access information with the selected readers is not authorized,
+   keep it private and report that access remains unresolved.
 
 If a material ownership/sharing choice remains unresolved, continue authorized
 extraction in task-private scratch and ask only for that missing choice. Do not
@@ -41,3 +47,7 @@ Read back the filed package through the destination's normal index. Reconcile th
 requested document/file set with the stored manifest and the host's retrieval
 evidence. Report filing, original retention and actual-reader acceptance
 separately; this handoff does not replace the existing reading-delivery gate.
+
+When returning an original link that needs a share password, the executing agent
+also returns its authorized access instructions from the material entry. A saved
+body or a working author login does not prove that the intended reader can enter.

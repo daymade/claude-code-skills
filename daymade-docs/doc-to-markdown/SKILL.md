@@ -2,23 +2,23 @@
 name: doc-to-markdown
 disable-model-invocation: true
 description: >-
-  Converts DOCX/PDF/PPTX and saved HTML/HTM to high-quality Markdown with automatic post-processing. Fixes pandoc grid tables, simple tables, image paths, CJK bold spacing, attribute noise, and code blocks; for PDFs also strips OCR garbage blocks, repeated headers/footers/watermarks, and absolute image paths from pymupdf4llm output. Benchmarked best-in-class (7.6/10) against Docling, MarkItDown, Pandoc raw, and Mammoth. Trigger on "convert document", "docx to markdown", "parse word", "doc to markdown", "解析word", "转换文档", "HTML to Markdown".
+  Converts DOCX/PDF/PPTX and saved HTML/HTM to high-quality Markdown with automatic post-processing. Fixes pandoc grid tables, simple tables, image paths, CJK bold spacing, attribute noise, and code blocks; for PDFs also strips OCR garbage blocks, repeated headers/footers/watermarks, and absolute image paths from pymupdf4llm output. Trigger on "convert document", "docx to markdown", "parse word", "doc to markdown", "解析word", "转换文档", "HTML to Markdown".
 ---
 
 # Doc to Markdown
 
 Convert documents to high-quality markdown with intelligent multi-tool orchestration and automatic DOCX post-processing.
 
-**Architecture**: Pandoc (best-in-class extraction) + 8 post-processing fixes (our value-add).
+**Architecture**: Format-specific converters with automatic post-processing.
 
 ## Quick Start
 
 ```bash
-# DOCX → Markdown (one command, zero manual fixes)
-uv run --with pymupdf4llm --with markitdown scripts/convert.py document.docx -o output.md --assets-dir ./media
+# DOCX → Markdown
+uv run --with pymupdf --with pymupdf4llm --with "markitdown[pdf]" scripts/convert.py document.docx -o output.md --assets-dir ./media
 
 # PDF → Markdown
-uv run --with pymupdf4llm --with markitdown scripts/convert.py document.pdf -o output.md
+uv run --with pymupdf --with pymupdf4llm --with "markitdown[pdf]" scripts/convert.py document.pdf -o output.md
 
 # Saved HTML → Markdown (Pandoc required; no remote fetching)
 uv run scripts/convert.py page.html -o page.md
@@ -27,22 +27,25 @@ uv run scripts/convert.py page.html -o page.md
 uv run --with pytest pytest scripts/test_convert.py -v
 ```
 
-## Dual Mode
+## Conversion Modes
 
-| Mode | Speed | Quality | Use Case |
+| Mode | Speed | Selection | Use Case |
 |------|-------|---------|----------|
-| **Quick** (default) | Fast | Good | Drafts, simple documents |
-| **Heavy** | Slower | Best | Final documents, complex layouts |
+| **Quick** (default) | Fast | Single converter | Drafts, simple documents |
+| **Heavy** | Slower | Compares converter candidates | Complex layouts needing source review |
 
 ## Tool Selection
 
-| Format | Quick Mode | Heavy Mode |
-|--------|-----------|------------|
-| PDF | pymupdf4llm | pymupdf4llm + markitdown |
-| DOCX | pandoc + post-processing | pandoc + markitdown |
-| PPTX | markitdown | markitdown + pandoc |
-| XLSX | markitdown | markitdown |
-| HTML/HTM | pandoc + source-href retention check | unsupported; use the HTML quick path |
+Read [`select_tools`](scripts/convert.py) for format preferences and availability
+filtering. HTML/HTM follows the [saved HTML procedure](references/html-conversion.md).
+For Heavy Mode selection and failure handling, read
+[its procedure](references/heavy-mode-guide.md#selection-behavior).
+
+## PDF Manuals And Question Banks
+
+Before delivering a PDF conversion or changing its structure, follow the
+[PDF acceptance procedure](references/pdf-acceptance.md). It owns source comparison,
+structural review, actual-reader checks and original-file handoff.
 
 ## Saved HTML And Website Manuals
 
@@ -60,7 +63,7 @@ are readable inside the recipient's actual Markdown reader.
 
 ## DOCX Post-Processing (automatic)
 
-When converting DOCX via pandoc, 8 cleanups are applied automatically:
+When converting DOCX via pandoc, these cleanups are applied automatically:
 
 | Problem | Fix | Test coverage |
 |---------|-----|---------------|
@@ -68,24 +71,24 @@ When converting DOCX via pandoc, 8 cleanups are applied automatically:
 | Simple tables (`  ---- ----`) | Multi-column images → pipe table with captions | `TestSimpleTable` |
 | Image path nesting (`media/media/`) | Flatten to `media/`, absolute → relative | `test_stats_tracking` |
 | Pandoc attributes (`{width="..."}`) | Removed | `test_pandoc_attributes_removed` |
-| CJK bold spacing (`**粗体**中文`) | Add space around `**` for CJK bold spans | `TestCjkBoldSpacing` (15 cases) |
+| CJK bold spacing (`**粗体**中文`) | Add space around `**` for CJK bold spans | `TestCjkBoldSpacing` |
 | Indented dashed code blocks | → fenced ``` with language detection | `test_code_block_with_language` |
 | Escaped brackets (`\[...\]`) | → `[...]` | `test_escaped_brackets_fixed` |
 | Double-bracket links (`[[text]](url)`) | → `[text](url)` | `test_double_bracket_links_fixed` |
 
-## PDF Post-Processing (automatic, 2026-08-30 起)
+## PDF Post-Processing (automatic)
 
-When converting PDF via pymupdf4llm, 3 cleanups are applied automatically (skip with `--no-postprocess`):
+When converting PDF via pymupdf4llm, these cleanups are applied automatically (skip with `--no-postprocess`):
 
 | Problem | Fix | Test coverage |
 |---------|-----|---------------|
 | Tesseract OCR garbage on image regions (`<!-- Start of picture text -->...`) | Block removed; images themselves kept | `TestStripOcrPictureText` |
-| Repeated header/footer/watermark lines (same normalized line on ≥60% of pages, incl. diagonal watermarks) | Detected via pymupdf cross-page scan, removed from markdown; bold-wrapped and merged-with-page-number variants also caught | `TestRepeatingLines` |
+| Repeated header/footer/watermark lines (including diagonal watermarks) | Detected via pymupdf cross-page scan, removed from markdown; bold-wrapped and merged-with-page-number variants also caught | `TestRepeatingLines` |
 | Absolute image paths (`![](/abs/tmp/assets/...)`) | Rewritten relative to the output markdown file (portable output) | `TestImagePathsRelative` |
 
-Heavy mode additionally prints a loud `⚠️ HEAVY MODE DEGRADED` warning on stderr when one engine fails and the merge would otherwise silently degrade to single-engine output.
+For engine availability and failure handling, read [Heavy Mode selection](references/heavy-mode-guide.md#selection-behavior).
 
-**Known limits (learned from a 62-page Chinese research-report conversion, 2026-08-30):**
+**Known limits:**
 - pymupdf4llm may emit duplicated paragraphs (source text layer has only one copy) — not auto-fixed; spot-check.
 - Dotted TOC pages get detected as tables — rewrite the TOC manually if it matters.
 - Cross-page tables are NOT merged (each page's fragment keeps its own header row) — merge manually.
@@ -100,27 +103,13 @@ DOCX uses run-level styling (no spaces between bold/normal runs in CJK text). Ma
 
 ```
 Before: 打开**飞书**，就可以    → some renderers fail to bold
-After:  打开 **飞书** ，就可以  → universally renders correctly
+After:  打开 **飞书** ，就可以  → inspect bold rendering in the target reader
 ```
 
 ## Heavy Mode Workflow
 
-Heavy Mode runs multiple tools in parallel and selects the best segments:
-
-1. **Parallel Execution**: Run all applicable tools simultaneously
-2. **Segment Analysis**: Parse each output into segments (tables, headings, images, paragraphs)
-3. **Quality Scoring**: Score each segment based on completeness and structure
-4. **Intelligent Merge**: Select best version of each segment across tools
-
-### Merge Criteria
-
-| Segment Type | Selection Criteria |
-|--------------|-------------------|
-| Tables | More rows/columns, proper header separator |
-| Images | Alt text present, local paths preferred |
-| Headings | Proper hierarchy, appropriate length |
-| Lists | More items, nested structure preserved |
-| Paragraphs | Content completeness |
+Before choosing Heavy Mode, read its [selection and degradation behavior](references/heavy-mode-guide.md#selection-behavior).
+For explicit segment-level merging, use [Merge Outputs Manually](#merge-outputs-manually).
 
 ## Image Extraction
 
@@ -138,21 +127,14 @@ Output:
 
 ## Quality Validation
 
-```bash
-# Validate conversion quality
-uv run --with pymupdf scripts/validate_output.py document.pdf output.md
+For the validator's command, prerequisites, result fields and exit handling, read
+[Mechanical comparison](references/pdf-acceptance.md#mechanical-comparison).
+The CLI accepts PDF or DOCX source files; the remainder of that procedure covers
+PDF structural and recipient acceptance.
 
-# Generate HTML report
-uv run --with pymupdf scripts/validate_output.py document.pdf output.md --report report.html
-```
-
-### Quality Metrics
-
-| Metric | Pass | Warn | Fail |
-|--------|------|------|------|
-| Text Retention | >95% | 85-95% | <85% |
-| Table Retention | 100% | 90-99% | <90% |
-| Image Retention | 100% | 80-99% | <80% |
+From this Skill's source checkout, run the validator's bidirectional controls with
+`python3 -m unittest discover -s tests -v` (Pandoc required). Default packages
+exclude this development test directory; a zero-test run is not validation.
 
 ## Merge Outputs Manually
 
@@ -175,23 +157,20 @@ python scripts/convert_path.py "C:\Users\<windows-user>\Documents\file.pdf"
 ## Common Issues
 
 **"No conversion tools available"**
-```bash
-# Install all tools
-pip install pymupdf4llm
-uv tool install "markitdown[pdf]"
-brew install pandoc
-```
+Follow [converter installation](references/tool-comparison.md#installation), then
+rerun the selected conversion command. Check imports in the same Python runtime
+as the converter; a distribution name alone does not prove an engine is available.
 
 **FontBBox warnings during PDF conversion**
-- Harmless font parsing warnings, output is still correct
+- A font warning alone does not establish output quality; follow [PDF acceptance](references/pdf-acceptance.md).
 
 **Images missing from output**
-- Use Heavy Mode for better image preservation
+- Follow [PDF acceptance](references/pdf-acceptance.md) to reconcile missing images and references.
 - Or extract separately with `scripts/extract_pdf_images.py`
 
 **Tables broken in output**
-- Use Heavy Mode - it selects the most complete table version
-- Or validate with `scripts/validate_output.py`
+- Compare the table with the original and reconstruct missing cells if needed.
+- Read [Heavy Mode selection](references/heavy-mode-guide.md#selection-behavior) before trying another candidate; the validator diagnoses coverage and does not repair tables.
 
 ## Bundled Scripts
 
@@ -199,7 +178,7 @@ brew install pandoc
 |--------|---------|
 | `convert.py` | Main orchestrator with Quick/Heavy mode + DOCX post-processing |
 | `html_to_markdown.py` | Pandoc HTML adapter and saved-output source-href retention verifier |
-| `test_convert.py` | 31 tests covering all post-processing functions |
+| `test_convert.py` | Converter and post-processing regression tests |
 | `merge_outputs.py` | Merge multiple markdown outputs |
 | `validate_output.py` | Quality validation with HTML report |
 | `extract_pdf_images.py` | PDF image extraction with metadata |
@@ -207,11 +186,13 @@ brew install pandoc
 
 ## References
 
-- `references/benchmark-2026-03-22.md` - 5-tool benchmark (Docling/MarkItDown/Pandoc/Mammoth/ours)
+- `references/benchmark-2026-03-22.md` - Historical converter benchmark
 - `references/heavy-mode-guide.md` - Detailed Heavy Mode documentation
 - `references/tool-comparison.md` - Tool capabilities comparison
 - `references/conversion-examples.md` - Batch operation examples
 - `references/html-conversion.md` - Saved HTML scope, link retention, assets and manual heading assembly
+- `references/pdf-acceptance.md` - PDF text/structure checks, synthetic boundary controls, reader and original-file handoff
+- `references/obsidian-link-examples.md` - Native heading/citation and same-name book-index navigation controls
 
 ## Next Step: Clean Up Converted Content
 
