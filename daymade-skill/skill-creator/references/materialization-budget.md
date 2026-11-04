@@ -178,8 +178,9 @@ attempt; count the adapter, copies and logs in the same task budget.
 
 Derive the selected steps from the runner's persisted receipt: include only
 unfinished checks and explicitly required environment preparation, not steps that
-already passed. A step recorded as `running` without its command record did not run.
-The receipt's schema and terminal status are authoritative; finished cleanup or a
+already passed. Treat a `running` step without a command record as unknown unless
+the runner's schema proves it was not launched. Reconcile the original attempt
+before retrying. The receipt's schema and terminal status are authoritative; finished cleanup or a
 shell exit 0 alone is not a passed check.
 
 Propagate a programmatic entry's return code—for example,
