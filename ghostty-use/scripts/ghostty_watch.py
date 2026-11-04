@@ -5,6 +5,7 @@ Runtime reads one bounded process graph, selected process cwd and one small prio
 manifest/profile map. No history index, transcript, GUI, or restore API is used.
 """
 import argparse
+import ctypes
 import hashlib
 import json
 import os
@@ -14,6 +15,7 @@ import re
 import shlex
 import shutil
 import signal
+import struct
 import subprocess
 import sys
 import time
@@ -82,6 +84,43 @@ def executable_tokens(command):
     except ValueError as error:
         raise ValueError('unparseable process command; coverage unknown') from error
     return tokens
+
+
+def decode_darwin_argv(raw):
+    """Read exactly argc arguments; never decode the following environment."""
+    if len(raw) < 5:
+        raise ValueError('kernel argument vector unavailable')
+    count = struct.unpack_from('i', raw)[0]
+    if not 1 <= count <= 65536:
+        raise ValueError('invalid kernel argument count')
+    try:
+        offset = raw.index(b'\0', 4) + 1
+        while offset < len(raw) and raw[offset] == 0:
+            offset += 1
+        args = []
+        for _ in range(count):
+            end = raw.index(b'\0', offset)
+            args.append(os.fsdecode(raw[offset:end]))
+            offset = end + 1
+    except ValueError:
+        raise ValueError('incomplete kernel argument vector') from None
+    if not args[0]:
+        raise ValueError('kernel executable argument unavailable')
+    return args
+
+def darwin_argv(pid):
+    if type(pid) is not int or pid <= 0:
+        raise ValueError('positive process identity required')
+    libc = ctypes.CDLL(None, use_errno=True)
+    libc.sysctl.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.c_uint, ctypes.c_void_p,
+                           ctypes.POINTER(ctypes.c_size_t), ctypes.c_void_p, ctypes.c_size_t]
+    libc.sysctl.restype = ctypes.c_int
+    mib = (ctypes.c_int * 3)(1, 49, pid)  # CTL_KERN, KERN_PROCARGS2
+    buffer = ctypes.create_string_buffer(os.sysconf('SC_ARG_MAX'))
+    size = ctypes.c_size_t(len(buffer))
+    if libc.sysctl(mib, 3, buffer, ctypes.byref(size), None, 0) != 0:
+        raise OSError(ctypes.get_errno(), 'kernel process arguments unavailable')
+    return decode_darwin_argv(buffer.raw[:size.value])
 
 
 # Static option arity from the installed CLIs' --help; never query help per round.
