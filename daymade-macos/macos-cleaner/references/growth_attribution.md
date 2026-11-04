@@ -8,21 +8,10 @@ not answer "what grew", and the largest directories are often old, stable conten
 Everything here is Phase 1 (read-only). Any deletion that follows still goes through the
 Phase 2 entry gate in SKILL.md.
 
-## Contents
-
-- Output shape
-- 1. Find a baseline before estimating
-- 2. Diff a baseline export against the current disk
-- 3. Timestamp estimate
-- 4. Reconcile against free space
-- 5. Name the writer
-- 6. Disk-full emergencies still enter through here
-- Stop condition
-
 ## Output shape
 
 A delta table: directory, baseline size, current size, delta, window, **evidence type**
-(baseline diff or timestamp estimate), and the owner or writer when known. Keep three
+(baseline diff or timestamp estimate), and the owner or writer when known. Keep these
 kinds of row apart. Directories that grew, directories absent from the baseline because
 they were **not scanned**, and directories that shrank. Rows that shrank explain where
 earlier free space came from.
@@ -60,7 +49,7 @@ No baseline at all → go to section 3 and label every number as an estimate.
 ## 2. Diff a baseline export against the current disk
 
 1. **Aggregate the export by directory prefix** up to a fixed depth, streaming it line by
-   line. A whole-disk export runs to millions of lines and about 1 GB.
+   line rather than loading the full export into memory.
 2. **Measure the same paths now** with `du -skx` at matching depths.
 3. **Calibrate the size semantic before trusting any delta.** Pick one directory you know
    has not changed since the export and compare the export's sum with `du` for it. If they
@@ -69,9 +58,8 @@ No baseline at all → go to section 3 and label every number as an estimate.
 4. **Treat absent or near-zero baseline rows as "not scanned", never as "new".** An export
    silently omits whatever the scanner could not read or skipped: privacy-protected folders
    when the app lacked Full Disk Access, other apps' sandbox containers, and sometimes whole
-   hidden directories. Observed: one baseline showed a sandboxed messaging app's container
-   at 2 GiB against 108 GiB now, yet only 1.4 GiB of its files had arrived after the
-   baseline date. A naive diff reported 106 GiB of growth that never happened.
+   hidden directories. A small baseline row can represent only the previously readable
+   subset; check scan coverage before treating the difference as growth.
 5. **Confirm every large delta with the timestamp estimate** (section 3) before calling it
    growth.
 
@@ -106,8 +94,8 @@ Verified on APFS: moving a parent directory kept a child's ctime; renaming the f
 ## 4. Reconcile against free space
 
 Directory deltas are path-accounted, while free space is physical. They diverge whenever
-blocks are shared: APFS clones (see SKILL.md safety rule 11 and
-`references/chromium_code_sign_clones.md`), and caches whose contents are cloned or
+blocks are shared: APFS clones (see [the allocation contract](../SKILL.md#safety-and-authorization-contract) and
+[code-sign clones](chromium_code_sign_clones.md)), and caches whose contents are cloned or
 hard-linked into project environments. Deleting such a cache can shrink `du` by tens of GiB
 and free almost nothing.
 
@@ -134,12 +122,7 @@ directory.
 
 **A clonefile snapshot's allocation can diverge after creation.** A fresh clone
 can share most blocks with a retained source. As the live tree changes, the copy
-can retain old blocks or acquire private blocks —
-measured 2026-10-21, a snapshot already held files that no longer existed in live
-(`raw/codex/history.jsonl`, `generated_images/*.png`), i.e. it was already the sole
-owner of deleted content, and two same-day incremental snapshots' state DBs had
-fully diverged into ~3 G of real bytes. Two consequences: the snapshot directory's
-size root is the live home it captures, so account for source churn as well as
+can retain old blocks or acquire private blocks. Account for source churn as well as
 the capture job. Aged copies and whole selected cohorts need current allocation
 and reference evidence; neither their creation command nor one shared sample
 proves zero release. Name the observed writer or source of churn, retaining
@@ -181,7 +164,7 @@ Use the result cases in `report_templates.md` to reject unsupported attribution.
 
 ### Internal clone-stream bounds
 
-Keep three accounting layers separate: path-accounted bytes, native allocation
+Keep these accounting layers separate: path-accounted bytes, native allocation
 bounds for a closed set of clone streams, and same-volume host `df` change.
 A VM disk allocation decline is a subsystem observation; it need not equal the
 host change over a mixed activity window. Do not force the residual onto cleanup.
@@ -225,17 +208,9 @@ A growing directory without an owner is an unfinished row. For each top row:
 - Build and verification pipelines that keep one full artifact per run grow until someone
   adds a retention rule. That fix belongs in the pipeline, not in a one-off cleanup.
 
-**Multiple independent growth engines mean a one-off cleanup is a recurring crisis, not
-a fix.** Measured 2026-10-21, one disk held at least five mutually independent engines,
-each with its own writer and none with retention/TTL: a package cache fed by ~2,800
-scheduled tool invocations/day plus 48-58 new ephemeral environments/day (~2.6 GB/day);
-an agent session home whose October volume alone was 29 GiB (screenshot-heavy
-computer-use sessions double-writing tool outputs); a releases directory whose retention
-had been silently blocked since install (18 G, only grows); a deliveries directory with
-no retention; a snapshot pipeline still capturing while publishing was broken, plus a
-12 G gate-artifacts directory with no TTL still being written. Cleaning the stock
-without designing retention into each writer repeats the same crisis monthly — the
-09-19 prune to 10-21 full disk was one complete measured cycle. The delta table's owner
+**Multiple independent growth engines require their own lifecycle controls.**
+Cleaning the stock without addressing each writer can repeat the same crisis.
+The delta table's owner
 column is therefore the deliverable, not decoration: every top row needs either a
 retention design routed to its owning pipeline, or an explicit "accepted, will refill"
 note. Related trap: when the volume is concentrated in the recent window, age-based
@@ -245,22 +220,16 @@ rung 3b).
 
 ## 6. Disk-full emergencies still enter through here
 
-A 100%-full disk does not suspend this reference; it makes it mandatory. Measured
-2026-10-21: an emergency run that skipped growth attribution and ranked targets by
-nominal `du` selected targets whose observed windows differed from their path totals
-(a 123 G cache with ~38 GiB reported net recovery; a 108 G clonefile snapshot with
-little reported net recovery; a backup set with the same structure). Those window
-observations do not establish each batch's exclusive release. Meanwhile, an observed
-growth engine (`~/.codex` sessions, 76 G and
-+29 GiB/month) sat outside the governed scope entirely until a late attribution pass
-found it. In an emergency, order targets by *attributed recent physical growth* — the
-section-3 ctime/allocated-bytes estimate and the section-4 `df` reconciliation — not by
-nominal size. A full per-file census also beats briefing arithmetic: the briefing's
-"38.25 GiB / 52 files / avg 753 MB" implied a >500 MB big-file strategy with a 6.9 G
-ceiling; the 15,202-thread census (0 missing, du and stat in agreement) showed the real
-mean is ~5 MB across a long tail, and the big-file strategy was correctly rejected.
-Emergency or not: no df readback, no claimed release; no growth attribution, no target
-ranking.
+A full disk does not suspend attribution or the Skill's scope and authorization
+contract. Follow the same baseline, current-allocation and free-space checks;
+do not rank by nominal size or an average inferred from a briefing. Inspect the
+actual distribution when a size threshold would select the next action.
+
+For cleanup selection, retain the [Phase 2 entry gate](../SKILL.md#phase-2-report-and-resolve-authorization).
+An inactive, verified disposable target does not need to be a recent growth source
+to qualify. Conversely, recent growth does not make protected records or an active
+job's export disposable. No same-volume readback means no claimed release; an
+unexplained residual stays unattributed rather than becoming deletion authority.
 
 ## Stop condition
 
