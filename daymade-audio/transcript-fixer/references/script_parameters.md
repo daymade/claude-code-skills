@@ -109,7 +109,8 @@ uv run scripts/fix_transcription.py --input <file> --stage <1|2|3> [--output <di
 | `context` | `context_snippet` | | Nearby text used to re-anchor if the file drifted since enqueue |
 | `context_offset` | | | Optional zero-based Unicode character index of `original` inside verbatim `context` (Python string indexing, not UTF-8 bytes or UTF-16 units). Supply `line` too. Omitted/null retains legacy anchoring; invalid types, negative values or a nonmatching slice are refused |
 | `kind` | | | `entity` / `unknown` lead; `homophone` / `wording` trail. Reuse follows the [dictionary and identity policy](dictionary_identity_and_context.md#dictionary-addition-after-fixing) |
-| `domain` | | | Default `general`; CLI `--domain` supplies it only for items that don't set their own (per-item `domain` wins — the CLI uses `setdefault`) |
+| `domain` | | | Default `general` for a new/unclassified file; CLI `--domain` supplies it only for items that don't set their own (per-item `domain` wins — the CLI uses `setdefault`). An already project-bound file requires an explicit nonempty domain |
+| `domain_reason` | | | Required for an intentional domain outside that file's existing non-general domains; recorded in enqueue audit. See [domain admission and repair](queue_domain_repair.md) |
 | `source` | | | Default `manual`; `stage1_deferred` is set by Stage 1 safe mode |
 | `evidence` | | | What the search ladder found (rendered on the review card) |
 | `actions` | | | Action pack (`file_edit` / `dict_add` / `append_note`) run on accept; empty + file anchor + non-empty `suggested` = a single `file_edit` on accept (an empty `suggested` with no action pack errors at resolve time, not enqueue time) |
@@ -314,7 +315,13 @@ Generates these files in the output directory:
 
 ## verify_queue_audio.py
 
-Run through `uv run` with `--transcript`, `--audio` and `--engine-script`.
+Run through `uv run` with `--transcript`, exactly one of `--audio` or
+`--source-spec`, and `--engine-script`. `--audio` keeps its existing local/ffmpeg
+URL behavior. For a verified local or authorized SSH source, prepare
+`--source-spec` through [source clips](source_clips.md); optional `--clip-cache`
+defaults to `<outdir>/source-cache`. The adapter checks source identity for either
+engine format and transfers only source-clock windows, with a per-window maximum
+defined by `source_clip.py`. It does not choose the recognizer or a verdict.
 `--engine-format stdout` preserves the pure-text stdout contract (default).
 `--engine-format mlx-file` accepts the existing `transcribe_local_mlx.py` owner:
 it receives both clips plus `--output-dir` through `uv run`, using the prepared

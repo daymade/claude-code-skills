@@ -317,7 +317,10 @@ def recognize_mlx_pair(engine_script, tight, medium, outdir):
 def main():
     ap = argparse.ArgumentParser(description="批量 pending 音频交叉核验（第二引擎双窗口识别）")
     ap.add_argument("--transcript", required=True)
-    ap.add_argument("--audio", required=True)
+    source_args = ap.add_mutually_exclusive_group(required=True)
+    source_args.add_argument("--audio", help="Existing local file/ffmpeg URL route")
+    source_args.add_argument("--source-spec", help="Verified local/authorized SSH spec from source_clip.py prepare")
+    ap.add_argument("--clip-cache", help="Source-bound clip cache; defaults to <outdir>/source-cache")
     ap.add_argument("--speed", type=float, default=1.0,
                     help="转写时间轴→音频轴倍速；经证据核准的源时长/平台时长，同一时间轴默认 1")
     ap.add_argument("--queue-ids", default="", help="逗号分隔；默认该文件全部 pending")
@@ -351,10 +354,26 @@ def main():
         sys.exit("no pending items for this file")
     if set(overrides) - {str(item["id"]) for item in items}:
         ap.error("time overrides contain rows outside this file's selected pending items")
-    source_before = source_fingerprint(a.audio) if a.engine_format == "mlx-file" else None
+    provider = None
+    if a.source_spec:
+        from source_clip import SourceClips
+        provider = SourceClips(a.source_spec, a.clip_cache or os.path.join(a.outdir, "source-cache"))
+    source_before = source_fingerprint(a.audio) if a.engine_format == "mlx-file" and provider is None else None
     source_identity = ({"source_audio": source_before[0],
                         "source_audio_sha256": source_before[-1]}
                        if source_before is not None else {})
+    if provider is not None:
+        source_identity = {"source_spec": str(Path(a.source_spec).resolve()),
+                           "source_audio_sha256": provider.spec["sha256"],
+                           "source_kind": provider.spec["kind"]}
+    def check_source():
+        if provider is not None:
+            try:
+                provider.check()
+            except (OSError, ValueError) as exc:
+                return str(exc)
+            return None
+        return source_error(a.audio, source_before)
     duration, duration_probed = None, False
 
     results = []
@@ -379,7 +398,7 @@ def main():
             # Validate the recorded occurrence before probing/cutting any media.
             token_offset(turns, it["line_number"], it["original_text"], **location)
             if not duration_probed:
-                duration = media_duration(a.audio)
+                duration = provider.duration if provider is not None else media_duration(a.audio)
                 duration_probed = True
             estimate = token_offset(
                 turns, it["line_number"], it["original_text"],
@@ -405,9 +424,14 @@ def main():
             start = max(tok_t - radius, 0)
             end = min(tok_t + radius, duration) if duration is not None else tok_t + radius
             ranges[window] = [round(start, 3), round(end, 3)]
-            subprocess.run(["ffmpeg", "-y", "-ss", f"{start:.3f}", "-t", f"{end - start:.3f}",
-                            "-i", a.audio, "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", clip],
-                           capture_output=True, check=True)
+            if provider is not None:
+                end = min(end, provider.duration)
+                ranges[window] = [round(start, 3), round(end, 3)]
+                provider.fetch(start, end, clip)
+            else:
+                subprocess.run(["ffmpeg", "-y", "-ss", f"{start:.3f}", "-t", f"{end - start:.3f}",
+                                "-i", a.audio, "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", clip],
+                               capture_output=True, check=True)
         if same_clip_bytes(tight, med):
             results.append({
                 **common, "clip_ranges": ranges, "status": "same_clip",
@@ -419,7 +443,7 @@ def main():
             continue
         clip_hashes = {"tight": file_sha256(tight), "medium": file_sha256(med)}
         if a.engine_format == "mlx-file":
-            changed_source = source_error(a.audio, source_before)
+            changed_source = check_source()
             readings = ([("", 1, {"format": "mlx-file"}, changed_source)] * 2
                         if changed_source else recognize_mlx_pair(a.engine_script, tight, med, a.outdir))
         else:
@@ -438,7 +462,7 @@ def main():
             "err": (r1[3] + r2[3])[:400],
         }
         result["status"] = evidence_status(result)
-        changed_source = source_error(a.audio, source_before)
+        changed_source = check_source()
         if changed_source:
             result.update(status="engine_failed", source_identity_error=changed_source,
                           tight_exit=1, medium_exit=1)
@@ -456,7 +480,7 @@ def main():
     # This never records a review verdict.
     attached, unsupported = [], []
     for r in results:
-        changed_source = source_error(a.audio, source_before)
+        changed_source = check_source()
         if changed_source:
             r.update(status="engine_failed", source_identity_error=changed_source,
                      tight_exit=1, medium_exit=1)

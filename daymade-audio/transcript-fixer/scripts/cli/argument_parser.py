@@ -483,7 +483,8 @@ def create_argument_parser() -> argparse.ArgumentParser:
         dest="enqueue_review",
         help="Enqueue review items from a JSON file ('-' = stdin). Each item: "
              "{original, suggested?, file?, line?, context?, kind?, domain?, "
-             "evidence?, actions?, priority?, source?}"
+             "evidence?, actions?, priority?, source?, domain_reason?}. "
+             "Classified files require an explicit domain; intentional new domains require domain_reason."
     )
     parser.add_argument(
         "--list-review",
