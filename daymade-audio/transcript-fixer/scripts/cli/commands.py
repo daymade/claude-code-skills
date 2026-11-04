@@ -33,7 +33,7 @@ def _boundary_check_available() -> bool:
     and --list / --add must not pay that second."""
     from core.dictionary_processor import boundary_check_available
     return boundary_check_available()
-from utils.config import get_config
+from utils.config import get_config, intermediate_directory
 
 # Heavy command-specific imports are deferred to the functions that use them
 # to keep CLI startup fast for simple operations like --list / --add / --stage 1.
@@ -753,6 +753,9 @@ def cmd_close_sidecars(args: argparse.Namespace) -> None:
                              f"--output is not an existing directory: {output_dir}", code=2)
         output_dir = output_dir.resolve()
     extra_dirs = _registered_report_dirs(input_path)
+    configured_dir = intermediate_directory(input_path)
+    if configured_dir is not None and configured_dir.is_dir():
+        extra_dirs.append(configured_dir)
     if getattr(args, "sidecar_dir", None):
         explicit = Path(args.sidecar_dir).expanduser().resolve()
         if not explicit.is_dir():
@@ -1521,9 +1524,11 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
         else:
             output_dir = out_arg
     else:
-        output_dir = input_path.parent
+        output_dir = intermediate_directory(input_path) or input_path.parent
     output_dir.mkdir(parents=True, exist_ok=True)
-    review_dir = Path(args.sidecar_dir).expanduser().resolve() if getattr(args, "sidecar_dir", None) else output_dir
+    review_dir = (Path(args.sidecar_dir).expanduser().resolve()
+                  if getattr(args, "sidecar_dir", None)
+                  else output_dir)
     review_dir.mkdir(parents=True, exist_ok=True)
 
     # Auto-finalize: if a previous Stage 1 run left *_stage1.md behind and it is
@@ -2262,6 +2267,7 @@ def cmd_config(args: argparse.Namespace) -> None:
             'environment': config.environment.value,
             'database_path': str(config.database.path),
             'config_dir': str(config.paths.config_dir),
+            'intermediate_root': str(config.paths.intermediate_root) if config.paths.intermediate_root else None,
             'api_key_set': config.api.api_key is not None,
             'debug': config.debug,
             'features': {
