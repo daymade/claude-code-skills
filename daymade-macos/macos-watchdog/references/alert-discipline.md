@@ -8,6 +8,14 @@ Rate and content decisions only matter after a failure can surface at all. Four 
 
 Design rule: every periodic pipeline gets a designed failure exit — a state file plus a machine-readable event channel (ledger/error_events), escalating to one notification only per the two-tier rule — and something must actually read the exit. Acceptance question for any new or audited pipeline: "if this job starts failing tonight, what observable thing changes, and who or what reads it?" If the answer is "nothing", treat the pipeline as already failing silently; the only unknown is since when.
 
+## Observation-failure timing
+
+Before selecting a failure count, record the check interval, last successful observation and maximum acceptable observation gap for the user's task. A scheduled start or a failed request does not advance the successful-observation time. Failed collection means the business condition is unknown; it is not evidence that the watched event has not happened.
+
+Choose the failure notification deadline separately from any disruptive repair delay. A low-frequency publication check can require notification on its first failure when waiting another interval would exceed the agreed gap. A fast repair watchdog may still wait through its measured self-recovery window. Do not turn either example into a universal failure-count default; respect the user's explicit timing and use an observable, reversible default when timing is unspecified.
+
+The failure message identifies the affected task, what could not be checked, the last successful observation and a known reason or an explicit unknown. Deduplicate the incident and reconcile uncertain sends through the delivery rules below. Test a failed check followed by recovery, as well as an ordinary successful check with no watched event; the latter must not send an outage alert. A separate scheduler or reader is required to detect a job that never starts; an alert inside the job's own exception handler does not establish that coverage.
+
 ## The two-tier rule
 
 | Tier | Meaning | Watchdog equivalent |
@@ -15,7 +23,7 @@ Design rule: every periodic pipeline gets a designed failure exit — a state fi
 | **Page** | Immediate human action required | Send a notification |
 | **Ticket** | Action needed but not now | Open a durable responsibility record with an owner or supervision path — not a log line only |
 
-A personal watchdog almost never has a true page. Default everything to ticket (a durable responsibility record, not a bare log line); page only when *all* of these hold:
+A personal watchdog almost never has a true page. Default everything to ticket (a durable responsibility record, not a bare log line). For a repairing watchdog, page only when *all* of these hold; a business observer uses the observation-gap deadline above rather than waiting for an inapplicable repair ladder:
 
 1. The failure **persists** beyond the self-recovery window (patient mode already filtered blips), and
 2. The watchdog's **full remediation ladder failed** — the human is genuinely the next rung, and
