@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-watchdog** (`daymade-macos` v1.28.0 → v1.28.1): Choose observation-failure notification timing from the business observation gap, separately from disruptive repair patience; retain incident deduplication, uncertain-send reconciliation and scheduler-coverage limits. Change type: bounded alert-timing clarification.
+- **read-codex-history / read-claude-code-history** (`daymade-claude-code` v4.34.2 → v4.35.0): Add optional Codex `launch_source` metadata to JSON and Markdown inventories from the native state database. Render missing sources as `unknown` and preserve unrecognized values. Change type: backward-compatible inventory metadata.
+
 - **macos-permissions** (`daymade-macos` v1.26.16 → v1.28.0): Add Local Network diagnosis for app-specific LAN failures. Compare requester and launch context, inspect the actual permission, and verify the original operation after authorized repair; preserve unknown causes, existing privacy protections and all TCC/Keychain paths. Change type: additive diagnostic branch.
 - **skill-creator** (`daymade-skill` v1.75.0 → v1.75.1): Bound programmatic retries to one owner/budget adapter, derive unfinished steps from persisted receipts, propagate runner exit status, and preserve evidence and reserve during storage recovery. Change type: bounded retry-lifecycle clarification.
 - **feishu-doc-scraper** (v1.11.0 → v1.12.0): Discover external Bilibili, YouTube and direct-media resources while preserving video/part/playlist identity; separate link discovery, text capture and verified media retention, and hand acquisition to the selected installed owner. Change type: additive resource-discovery capability.
@@ -14,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **transcript-fixer** (`daymade-audio` v1.57.0 → v1.57.1): Route prepared source clips and queue domain repair from the repository entry; align existing enqueue examples with project-domain admission and remove redundant runtime-value prose. Change type: operational documentation alignment.
 
 - **transcript-fixer** (`daymade-audio` v1.56.0 → v1.57.0): Bind local or authorized SSH clip extraction to a verified source and reuse it in the existing two-window check; retain local/URL audio inputs. Require explicit domains for project-bound queue appends and provide previewed, audited domain-only repair. Change type: compatible source adapter and queue integrity controls.
-- **macos-cleaner** (`daymade-macos` v1.28.0 → v1.29.0): Add bounded, metadata-only APFS private-allocation measurement with explicit partial/unsupported results. Separate target allocation, confirmed retirement, concurrent activity and mixed volume changes; correct unconditional clone/hard-link reclaim claims and retain original observations without false causal credit. Change type: additive read-only capability and factual SOP correction.
+- **macos-cleaner** (`daymade-macos` v1.28.1 → v1.29.0): Add bounded, metadata-only APFS private-allocation measurement with explicit partial/unsupported results. Separate target allocation, confirmed retirement, concurrent activity and mixed volume changes; correct unconditional clone/hard-link reclaim claims and retain original observations without false causal credit. Change type: additive read-only capability and factual SOP correction.
 
 - **read-codex-history** (`daymade-claude-code` v4.34.1 → v4.34.2): Track consumed raw-byte positions during JSONL streaming instead of repeatedly querying the file position; retain the final physical-position check, exact prefix certificates and existing rejection boundaries. Change type: bounded implementation optimization.
 

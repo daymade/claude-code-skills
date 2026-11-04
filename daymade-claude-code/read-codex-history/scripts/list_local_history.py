@@ -441,6 +441,7 @@ def render_provider_markdown(
         updated_label, title_label = "最近更新", "主题"
         id_label, flags_label, project_label = "会话 ID", "标记", "项目"
         source_label = "来源"
+        launch_source_label = "启动来源"
     else:
         lines = [f"## {provider_name} — {result.total} conversations", ""]
         display_summary = f"Showing {recent_count} most recent"
@@ -458,6 +459,7 @@ def render_provider_markdown(
         updated_label, title_label = "Updated", "Title"
         id_label, flags_label, project_label = "Session ID", "Flags", "Project"
         source_label = "Source"
+        launch_source_label = "Launch source"
     if result.provider == "codex":
         if writer_locks.status == "observed":
             runtime_note = (
@@ -488,6 +490,16 @@ def render_provider_markdown(
                 f"{writer_locks.detail}; no unflagged session is classified as stopped."
             )
         lines.append(runtime_note)
+        lines.append(
+            "启动来源：保留 state DB 原生 `source`；`exec` 只表示非交互启动，"
+            "不表示定时、自动归档、退出或默认隐藏；NULL/空值显示为 `unknown`；"
+            "`kind` 只区分子代理。"
+            if language == "zh"
+            else "Launch source: native state-DB `source`; `exec` means "
+            "non-interactive launch only, not scheduling, automatic archiving, "
+            "exit, or default hiding; NULL/empty becomes `unknown`; "
+            "`kind` only distinguishes subagents."
+        )
     lines.append("")
     include_project = args.all_projects or args.recursive
     headers = [updated_label, title_label, id_label]
@@ -495,6 +507,8 @@ def render_provider_markdown(
         headers.append(project_label)
     if result.provider == "claude":
         headers.append(source_label)
+    if result.provider == "codex":
+        headers.append(launch_source_label)
     headers.append(flags_label)
     lines.append("| " + " | ".join(headers) + " |")
     lines.append("|" + "---|" * len(headers))
@@ -509,11 +523,17 @@ def render_provider_markdown(
             row.append(f"`{markdown_escape(display_cwd_provenance(item))}`")
         if result.provider == "claude":
             row.append(markdown_escape(conversation_source(item)))
+        if result.provider == "codex":
+            row.append(markdown_escape(item.launch_source or "unknown"))
         row.append(conversation_flags(item, language, writer_locks))
         lines.append("| " + " | ".join(row) + " |")
     if not shown:
         empty = "未找到匹配的对话。" if language == "zh" else "No matching conversations found."
-        extra_columns = int(include_project) + int(result.provider == "claude")
+        extra_columns = (
+            int(include_project)
+            + int(result.provider == "claude")
+            + int(result.provider == "codex")
+        )
         lines.append(
             f"| — | {empty} | — |" + (" — |" * extra_columns) + " — |"
         )
