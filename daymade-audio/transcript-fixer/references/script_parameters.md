@@ -25,8 +25,8 @@ uv run scripts/fix_transcription.py --input <file> --stage <1|2|3> [--output <di
   - `1` = Dictionary corrections only
   - `2` = Stage 1 dictionary pass followed by API AI correction
   - `3` = Stage 1 + API AI correction + diff report
-- `--output, -o` (optional): Where results are written — accepts either a **directory** (the sidecars `<stem>_stage1.md` / `_changes.md` / `_needs_review.md` are written into it) **or a file path** ending in `.md`/`.markdown`/`.txt` that is not an existing directory (the corrected Stage 1 output is written directly to that exact file). Defaults to the input file's directory. Every "Saved" / report line prints the full resolved path, so a misdirected output is visible immediately.
-- `--sidecar-dir DIR`: Override the directory for `_changes.md` and `_needs_review.md` only. Defaults to the existing `--output` location. Run outputs retain their existing location. Report generations append rather than overwrite prior evidence; identical generations are reused. Existing unreadable reports or a shared basename belonging to another transcript are refused. Runtime SQLite records the report paths so ordinary `--close-sidecars --input FILE` discovers them. Supply the directory explicitly to recover a report created before registration or moved by an operator; closure retains all pending/unreadable evidence. Keep each destination's tracked/untracked and closure policy.
+- `--output, -o` (optional): Where run results are written — accepts a **directory** or a file path ending in `.md`/`.markdown`/`.txt` that is not an existing directory. A file path receives the corrected Stage 1 output directly. Defaults to the configured per-input workspace, otherwise the input directory; see [background storage](intermediate_storage.md). Every saved path is resolved in the report.
+- `--sidecar-dir DIR`: Override `_changes.md` and `_needs_review.md` only. Without it, reports follow the run-output directory, including an explicit `--output` override. Report generations append rather than overwrite prior evidence; identical generations are reused. Existing unreadable reports or a shared basename belonging to another transcript are refused. Runtime SQLite records the report paths so ordinary `--close-sidecars --input FILE` discovers them, along with the configured workspace. Supply the directory explicitly for recovery of an unregistered report. Closure retains pending/unreadable evidence; keep the destination's tracked/untracked and closure policy.
 - `--domain, -d` (optional): Restrict to one correction domain (default: all domains). Accepts a comma-separated list (`--domain myproject,myproject-alt`): every listed domain's rules load as one union for Stage 1, and `--apply-domain` trusts the whole union. Write commands (`--add`, `--approve`, `--add-context-rule`) still require exactly one domain and fail fast on a list. Domain naming also scopes Stage 1: context rules (global rules always load; a domain-named rule loads only when its domain is active) and **trap demotion** — when the [selected domain context](domain_context_guide.md#location) exists, traps annotated `禁裸词`/`禁入词典` and confirmed-correct （勿修） records demote any same-FROM dictionary rule to safe-mode deferral (beating `--apply-domain` trust-flattening; `--apply-all` still overrides). Without `--domain` no veto fires (a whole-library run has no owner to veto with); in a multi-domain union the veto applies by FROM across the whole union, regardless of which named domain owns the rule or the context file. Demotions are printed on stderr (`🛡️ Trap demotion: N rule(s)…`), never silent.
 - `--apply-all` (optional): Opt out of the default safe mode and apply every risk level (low/medium/high). Higher false-positive risk — see false_positive_guide.md.
 - `--review` (deprecated): No-op kept for backward compatibility; safe mode is now the default.
@@ -41,11 +41,40 @@ uv run scripts/fix_transcription.py --input <file> --stage <1|2|3> [--output <di
 - `--check-corpus` (with `--add`): run the same probe on the FROM term before the rule is written. Requires `--corpus`. Advisory for an ordinary FROM; **mandatory for a real-word-shaped FROM** (common word / ≤2 chars / substring of common words / jieba-decomposable phrase) — the add-time gate refuses those without the probe on the record, and `--force` does not substitute (the missing piece is corpus evidence, not confidence). Sibling write gates (semantics in [dictionary_identity_and_context.md](dictionary_identity_and_context.md)): an OPEN review-queue row touching either text refuses the add, and a person-name-shaped mapping (2-4 char CJK, one edit apart) must converge onto a claimed target — a roster entry / active rule's TO — or carry the authority in `--note`.
 - `--json` works with both: one machine-readable result line on stdout
 
-**Context rules** (regex rules applied before the dictionary at Stage 1; domain-scoped since schema v2.4 — run pending migrations first or `--add-context-rule` fails with the direction):
+**Context rules** (regex rules applied before the dictionary at Stage 1):
 
 - `--add-context-rule PATTERN REPLACEMENT [--domain <project>] [--description TEXT] [--priority N]`: add a context-aware regex rule. PATTERN is a Python regex (validated at write time); omitting `--domain` writes a global rule that applies to every domain. Duplicate patterns and un-migrated databases are hard errors. Use it for corrections that are right only inside a specific recurring phrase — the middle channel between a bare dictionary rule and a prose context trap.
 - `--list-context-rules [--domain <project>] [--all] [--json]`: list rules; `--domain` shows global rules plus that domain's, `--all` includes disabled ones.
-- On a database not yet migrated to v2.4 there is no `domain` column, so by construction every rule is global: loading keeps the legacy behavior and never crashes; only `--add-context-rule` refuses, naming the migration.
+- `--disable-context-rule ID --db PATH --context-rule-domain DOMAIN --context-rule-pattern PATTERN --reason TEXT [--json]`: disable exactly one context rule without deleting it. `--enable-context-rule ID` with the same required arguments restores it. Every call must name an existing database explicitly and supply the expected domain and exact pattern as an identity check; use `--context-rule-domain global` for a SQL-NULL global rule, or `domain:<name>` for a literal named domain (including `domain:global`). The `domain:` prefix is removed once, and its payload must be a non-empty valid domain name under the same validation as unprefixed names. Blank/missing reasons, invalid or unknown IDs, empty or invalid domain payloads, and domain/pattern mismatches fail with exit `2` before any write; incomplete `context_rules`/`audit_log` schemas fail rather than receiving guessed defaults. A real transition updates only that row's `is_active` and inserts one `disable_context_rule`/`enable_context_rule` audit row in the same transaction. JSON returns the exact `rule_id`, `domain`, `pattern`, `is_active`, `changed`, `audit_written`, and `status` (`disabled`, `enabled`, `already_disabled`, or `already_enabled`). Repeating an already-target state returns exit `0` and writes no duplicate audit. These commands manage only `context_rules`: unlike `--report-false-positive`, they never change `corrections`, transcripts, or review queues, and they make no identity decision.
+- Run each state command alone: combining disable/enable with another command fails with exit `2` before dispatch or database initialization. The state preflight requires all columns in the current `context_rules` and `audit_log` table contracts, including rule execution fields and audit timestamps; it never fills missing columns.
+- Before either state command, inspect the exact row in the same explicit database through SQLite's read-only URI mode. `quote(domain)` preserves the distinction between SQL `NULL` and the literal string `'global'`; use the inspected ID, raw domain and exact pattern for the state command. Afterwards, read both state and audit back from that same database:
+
+  ```bash
+  # Before: inspect ID, raw domain, exact pattern and current state.
+  sqlite3 "file:./corrections.db?mode=ro" \
+    "SELECT id, quote(domain) AS raw_domain, pattern, is_active
+     FROM context_rules WHERE id = 123;"
+
+  # Run exactly one state command against the inspected identity.
+  uv run scripts/fix_transcription.py \
+    --disable-context-rule 123 --db ./corrections.db \
+    --context-rule-domain global \
+    --context-rule-pattern '<exact-pattern>' \
+    --reason '<non-empty-reason>'
+
+  # After: read state and the latest audit row from the same database.
+  sqlite3 "file:./corrections.db?mode=ro" \
+    "SELECT id, quote(domain) AS raw_domain, pattern, is_active
+     FROM context_rules WHERE id = 123;"
+  sqlite3 "file:./corrections.db?mode=ro" \
+    "SELECT id, timestamp, action, entity_id, details, success
+     FROM audit_log
+     WHERE entity_type = 'context_rules' AND entity_id = 123
+     ORDER BY id DESC LIMIT 1;"
+  ```
+
+  Do not substitute `--list-context-rules` for these explicit-target checks: this listing path ignores `--db`, opens the configured database, and renders both SQL `NULL` and a literal `global` domain as `[global]`.
+- Inspect actual table columns rather than inferring schema support from `system_config.schema_version`: the recorded version does not prove that `context_rules.domain` is absent. When that column is absent, loading keeps the legacy behavior and treats every rule as global; `--add-context-rule` refuses with migration direction, and the state commands refuse incomplete schemas rather than guessing the expected domain.
 
 **Review queue** (persistent store for uncertain corrections; semantics in [review_queue_dashboard.md](review_queue_dashboard.md)):
 
@@ -69,7 +98,7 @@ uv run scripts/fix_transcription.py --input <file> --stage <1|2|3> [--output <di
 
 ### Review Queue Item Schema
 
-`--enqueue-review` accepts a JSON array of items (or `{"items": [...]}`). Only `original` is required. **Unknown keys are silently ignored** — a typo'd field name (e.g. `line_hint` instead of `line`) drops the value with no warning, and the item enqueues without that anchor. If the anchor matters, spot-check with `--show-review <id>` after enqueueing.
+`--enqueue-review` accepts a JSON array of items (or `{"items": [...]}`). For a new/unclassified file, only `original` is required; project-bound files also follow [domain admission](queue_domain_repair.md). **Unknown keys are silently ignored** — a typo'd field name (e.g. `line_hint` instead of `line`) drops the value with no warning, and the item enqueues without that anchor. If the anchor matters, spot-check with `--show-review <id>` after enqueueing.
 
 | Canonical field | Alias | Required | Notes |
 |---|---|---|---|
@@ -80,7 +109,8 @@ uv run scripts/fix_transcription.py --input <file> --stage <1|2|3> [--output <di
 | `context` | `context_snippet` | | Nearby text used to re-anchor if the file drifted since enqueue |
 | `context_offset` | | | Optional zero-based Unicode character index of `original` inside verbatim `context` (Python string indexing, not UTF-8 bytes or UTF-16 units). Supply `line` too. Omitted/null retains legacy anchoring; invalid types, negative values or a nonmatching slice are refused |
 | `kind` | | | `entity` / `unknown` lead; `homophone` / `wording` trail. Reuse follows the [dictionary and identity policy](dictionary_identity_and_context.md#dictionary-addition-after-fixing) |
-| `domain` | | | Default `general`; CLI `--domain` supplies it only for items that don't set their own (per-item `domain` wins — the CLI uses `setdefault`) |
+| `domain` | | | Default `general` for a new/unclassified file; CLI `--domain` supplies it only for items that don't set their own (per-item `domain` wins — the CLI uses `setdefault`). An already project-bound file requires an explicit nonempty domain |
+| `domain_reason` | | | Required for an intentional domain outside that file's existing non-general domains; recorded in enqueue audit. See [domain admission and repair](queue_domain_repair.md) |
 | `source` | | | Default `manual`; `stage1_deferred` is set by Stage 1 safe mode |
 | `evidence` | | | What the search ladder found (rendered on the review card) |
 | `actions` | | | Action pack (`file_edit` / `dict_add` / `append_note`) run on accept; empty + file anchor + non-empty `suggested` = a single `file_edit` on accept (an empty `suggested` with no action pack errors at resolve time, not enqueue time) |
@@ -285,7 +315,13 @@ Generates these files in the output directory:
 
 ## verify_queue_audio.py
 
-Run through `uv run` with `--transcript`, `--audio` and `--engine-script`.
+Run through `uv run` with `--transcript`, exactly one of `--audio` or
+`--source-spec`, and `--engine-script`. `--audio` keeps its existing local/ffmpeg
+URL behavior. For a verified local or authorized SSH source, prepare
+`--source-spec` through [source clips](source_clips.md); optional `--clip-cache`
+defaults to `<outdir>/source-cache`. The adapter checks source identity for either
+engine format and transfers only source-clock windows, with a per-window maximum
+defined by `source_clip.py`. It does not choose the recognizer or a verdict.
 `--engine-format stdout` preserves the pure-text stdout contract (default).
 `--engine-format mlx-file` accepts the existing `transcribe_local_mlx.py` owner:
 it receives both clips plus `--output-dir` through `uv run`, using the prepared

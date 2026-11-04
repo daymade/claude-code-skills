@@ -40,6 +40,11 @@ RECONCILE_SPEC = importlib.util.spec_from_file_location("reconcile_content_diff"
 assert RECONCILE_SPEC and RECONCILE_SPEC.loader
 RECONCILE_MODULE = importlib.util.module_from_spec(RECONCILE_SPEC)
 RECONCILE_SPEC.loader.exec_module(RECONCILE_MODULE)
+GATE_SPEC = importlib.util.spec_from_file_location("delivery_gate_regression", SKILL_ROOT / "scripts/delivery_gate.py")
+assert GATE_SPEC and GATE_SPEC.loader
+GATE_MODULE = importlib.util.module_from_spec(GATE_SPEC)
+sys.modules[GATE_SPEC.name] = GATE_MODULE
+GATE_SPEC.loader.exec_module(GATE_MODULE)
 
 
 def chrome_binary() -> str:
@@ -692,6 +697,128 @@ window.addEventListener('load', () => {{
 </script></body></html>"""
         state = self.browser_probe("lightbox", html, window_size="390,844")
         self.assertTrue(all(state.values()), state)
+
+    def test_lightbox_tabs_cycle_only_visible_controls(self) -> None:
+        block = component_block("lightbox-gallery")
+        html = f"""<!doctype html><html><head><meta charset="utf-8"><title>fixture</title></head><body>
+<button id="outside">Outside</button>
+<img class="zoom" data-gallery="single" alt="single" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E">
+<img class="zoom" data-gallery="multi" alt="first" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E">
+<img class="zoom" data-gallery="multi" alt="second" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E">
+{block}
+<script>
+window.addEventListener('load', () => {{
+  const dialog = document.querySelector('dialog.lbg');
+  const close = dialog.querySelector('.lbg-close');
+  const previous = dialog.querySelector('.lbg-prev');
+  const next = dialog.querySelector('.lbg-next');
+  const single = document.querySelector('[data-gallery="single"]');
+  const multi = document.querySelector('[data-gallery="multi"]');
+  const tab = (shiftKey = false) => {{
+    const event = new KeyboardEvent('keydown', {{key:'Tab', shiftKey, bubbles:true, cancelable:true}});
+    document.activeElement.dispatchEvent(event);
+    return event.defaultPrevented;
+  }};
+  single.focus();
+  single.click();
+  const state = {{singleHidden: getComputedStyle(previous).display === 'none'
+    && getComputedStyle(next).display === 'none'}};
+  state.singleForward = tab() && document.activeElement === close;
+  state.singleBackward = tab(true) && document.activeElement === close;
+  dialog.close();
+  multi.focus();
+  multi.click();
+  state.multiForward = tab() && document.activeElement === previous
+    && tab() && document.activeElement === next && tab() && document.activeElement === close;
+  state.multiBackward = tab(true) && document.activeElement === next
+    && tab(true) && document.activeElement === previous && tab(true) && document.activeElement === close;
+  dialog.dispatchEvent(new KeyboardEvent('keydown', {{key:'ArrowLeft', bubbles:true}}));
+  state.leftWraps = dialog.querySelector('figure img').alt === 'second';
+  dialog.dispatchEvent(new KeyboardEvent('keydown', {{key:'ArrowRight', bubbles:true}}));
+  state.rightWraps = dialog.querySelector('figure img').alt === 'first';
+  dialog.close();
+  setTimeout(() => {{
+    state.focusRestored = document.activeElement === multi;
+    document.title = 'RWH_RESULT:' + JSON.stringify(state);
+  }}, 0);
+}});
+</script></body></html>"""
+        state = self.browser_probe("lightbox-tab", html)
+        self.assertEqual(len(state), 8, state)
+        self.assertTrue(all(state.values()), state)
+
+    def test_masked_render_keeps_relative_assets_and_existing_base(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="report assets ") as raw:
+            root = Path(raw)
+            assets = root / "assets"
+            assets.mkdir()
+            (assets / "image.svg").write_text(
+                '<svg xmlns="http://www.w3.org/2000/svg" width="23" height="17">'
+                '<rect width="23" height="17" fill="#ff0000"/></svg>', encoding="utf-8")
+            (assets / "style.css").write_text("#geometry{background:rgb(0, 128, 0)}", encoding="utf-8")
+            for base in ["", '<base href="assets/">', f'<base href="{assets.as_uri()}/">',
+                         '<base target="_blank"><base href="assets/">', '<base href="">']:
+                with self.subTest(base=base):
+                    relative = "" if 'href="assets/' in base or assets.as_uri() in base else "assets/"
+                    source = root / "report & source.html"
+                    source.write_text(f'''<!doctype html><html><head><meta charset="utf-8">{base}
+<title>fixture</title><link rel="stylesheet" href="{relative}style.css"></head><body>
+<p id="text">Visible source text</p><div id="geometry">Geometry</div>
+<img id="asset" src="{relative}image.svg">
+<script>window.addEventListener('load', () => {{
+  document.title = 'RWH_RESULT:' + JSON.stringify({{
+    imageLoaded: document.getElementById('asset').naturalWidth === 23,
+    textMasked: getComputedStyle(document.getElementById('text')).color === 'rgba(0, 0, 0, 0)',
+    geometryKept: getComputedStyle(document.getElementById('geometry')).backgroundColor === 'rgb(0, 128, 0)',
+    targetKept: !document.querySelector('base[target]') || document.querySelector('base[target]').target === '_blank'
+  }});
+}});</script></body></html>''', encoding="utf-8")
+                    before = source.read_bytes()
+                    observed = []
+
+                    def inspect_render(masked, output, height):
+                        observed.append(masked)
+                        state = self.browser_probe("masked-relative", masked.read_text(encoding="utf-8"))
+                        self.assertEqual(len(state), 4, state)
+                        self.assertTrue(all(state.values()), state)
+
+                    with patch.object(GATE_MODULE, "render", side_effect=inspect_render):
+                        GATE_MODULE.render_masked(source, root / "masked.png", 480)
+                    self.assertEqual(source.read_bytes(), before)
+                    self.assertEqual(len(observed), 1)
+                    self.assertFalse(observed[0].exists())
+
+    def test_masked_temp_is_removed_when_renderer_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            source = root / "report.html"
+            source.write_text("<p>Fragment</p>", encoding="utf-8")
+            observed = []
+
+            def fail_render(masked, output, height):
+                observed.append(masked)
+                self.assertTrue(masked.is_file())
+                raise SystemExit("renderer failed")
+
+            with patch.object(GATE_MODULE, "render", side_effect=fail_render):
+                with self.assertRaisesRegex(SystemExit, "renderer failed"):
+                    GATE_MODULE.render_masked(source, root / "masked.png", 480)
+            self.assertEqual(len(observed), 1)
+            self.assertFalse(observed[0].exists())
+
+    def test_masked_documents_without_head_preserve_rendering_mode(self) -> None:
+        source = Path.cwd() / "source.html"
+        for html in ["<!doctype html><style>p{font-size:16px}</style><p>Standards mode</p>",
+                     '<!doctype html><html lang="en"><style>p{font-size:16px}</style><body><p>Standards mode</p></body></html>',
+                     "<style>p{font-size:16px}</style><p>Fragment in quirks mode</p>"]:
+            with self.subTest(html=html):
+                script = """<script>window.addEventListener('load', () => {
+document.title = 'RWH_RESULT:' + JSON.stringify({standards: document.compatMode === 'CSS1Compat',
+  masked: getComputedStyle(document.querySelector('p')).color === 'rgba(0, 0, 0, 0)'});
+});</script>"""
+                masked = GATE_MODULE.inject_mask(GATE_MODULE._with_original_base(html, source))
+                state = self.browser_probe("masked-document-mode", masked + script)
+                self.assertEqual(state, {"standards": html.startswith("<!doctype"), "masked": True})
 
     def test_citation_drawer_is_keyboard_modal_and_tabs_work(self) -> None:
         block = component_block("citation-drawer")

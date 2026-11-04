@@ -44,10 +44,33 @@ snapshot verification only. Actual clone metadata compatibility and physical rel
 remain `unverified`; neither command creates a clone or tests metadata overlay.
 
 Ordinary pairs use exact-pair occupancy checks. Do not apply a global Git-LFS veto
-to unrelated ordinary files. For LFS use `kind: "lfs"`, `repo`, `pointer_ref` and
+to unrelated ordinary files. Do not infer Git tracking from `git check-attr filter`:
+globs also match untracked files. Check exact paths in the intended immutable tree
+and current index. Registry-listed ordinary media absent from both use ordinary
+exact-resource checks. Never reclassify real LFS pointers/cache objects or `.git`
+content as ordinary to bypass guards.
+
+For LFS use `kind: "lfs"`, `repo`, `pointer_ref` and
 `work_relative`; bind the immutable Git pointer, full object hash and cooldown.
 The LFS branch additionally requires the global LFS-activity guard. Never weaken
 that guard to finish a batch. Pilot first, then follow [batch selection](batch-selection.md).
+
+### Diagnose candidate-only provenance before swap
+
+If unchanged inputs failed before swap solely on candidate-only `com.apple.provenance`,
+retain failure receipts/originals and strict metadata guards; never strip protected provenance or weaken guards to pass.
+As operator, compare one bounded, self-owned small sample across execution responsibility chains;
+match the xattr premise under test and keep the interpreter and native-copy flags identical.
+Treat a missing matching sample, unavailable context or host denial as a stop, not a workaround.
+An authorized, independent one-shot launchd job is a context probe, not a preservation exemption.
+Require unchanged source identity/full metadata/hash and candidate metadata/xattrs/hash matching
+its frozen expectation, plus native whole-stream sharing; context or `wascloned` alone is insufficient.
+Only then freshly prepare/check the original exact pair, renew inactive/reference evidence
+and authorize a single-pair pilot through the unchanged executor; independently read it back.
+Bind only the self-owned job/PID, positive liveness and finite external supervision before launch.
+Do not use launchd `TimeOut` as a runtime bound: it is unimplemented; preserve unknown terminal
+or writer state and originals, and retire only that registration after its process group has ended.
+Never touch other jobs or generalize a passing sample/pilot to other inputs, contexts or all media.
 
 ## Execute and yield safely
 

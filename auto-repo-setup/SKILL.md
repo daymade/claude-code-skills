@@ -205,6 +205,10 @@ adding or changing any hook.
 4. Verify the event matcher and current runtime payload.
 5. State the root cause before proposing a change.
 
+For Codex hooks that are present but untrusted, read
+[native hook trust](references/codex-hook-trust.md) before choosing a repair.
+Keep trust approval separate from registration, command execution and OS permissions.
+
 ### Install only after the hook gate passes
 
 The bundled initializer is Claude Code-specific and installs only a lightweight
@@ -248,7 +252,8 @@ For automatic artifact validation before ordinary Git commits, use the
 It covers Git hooks across Agent and manual commits, staged-input verification
 and existing-hook preservation. Use the
 [isolated checkout preparation](references/git_safety.md#isolated-checkout-preparation)
-when task isolation must retain repository-specific LFS and security configuration.
+before creating a task copy, including storage lifetime, repository-specific LFS
+and security configuration.
 
 For a read-only history scan, the existing scripts/sanitize_history.sh remains
 available. It never rewrites history; treat its findings as candidates and do not

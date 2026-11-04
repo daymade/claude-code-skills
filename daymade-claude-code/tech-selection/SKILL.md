@@ -70,6 +70,17 @@ Layer 2 has a minimum coverage requirement: use a search tool to enumerate what 
 
 For ingestion, indexing, storage or batch-data choices, load `references/batch-data-probes.md` and derive the representative cases from the actual consumer contract before comparing engines.
 
+For observability choices, name the business decision the missing measurement
+would change before trying another collector. Distinguish application payload,
+host/interface traffic and provider billing by direction, time window and coverage;
+a healthy collector or a more exact counter does not establish cost attribution.
+If existing signals already support the next authorized business action, integrate
+and verify that path before extending the comparison. Keep required but unmet
+coverage open; do not silently replace the user's requirement with the easier
+measurement, or promote optional all-process/wire-byte precision into a new
+requirement. Reopen selection when a concrete coverage gap changes that decision,
+not merely because another candidate can expose more metrics.
+
 Label evidence by what it establishes: observed execution proves the measured
 behavior; current official API docs or inspected source can establish a contract
 or exclude an incompatible candidate, but cannot prove runtime usability or

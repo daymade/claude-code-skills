@@ -54,6 +54,33 @@ supported job or broaden implementation authority to make the layout convenient.
 Verify the affected path through the existing acceptance owner after implementing
 it; a coherent concept is a proposal until its actual use has been checked.
 
+### Example: carry a review slip through the whole task
+
+Use this synthetic example when a source-review app already supports saved
+judgments and contribution receipts, and the user asks for a distinctive redesign.
+First mark two design boundaries: the source excerpt retains its reference
+platform's author, text, timestamp and link relationships; the app's own judgment
+and receipt surfaces may develop an original visual language. Compare the source
+region against the supplied reference, and judge the original region by whether
+the reviewer can inspect, decide and recognize the result later.
+
+One possible concept is a review slip whose open edge closes on a confirmed save.
+Carry the same judgment, source identity and visual motif across these states:
+
+| State | What the reviewer sees and can do |
+|---|---|
+| No judgment yet | An open slip beside the source; inspect the author or original reply and return to the same task before choosing. |
+| Saving or failed | The choice remains legible, with pending or recovery feedback; the slip does not announce a completed save. |
+| Save confirmed | The slip closes around the saved judgment, with a readable acknowledgment and the product's existing revision action. |
+| Round complete | The slips form a recognizable collection showing what was saved and what still lacks review; completion does not imply correctness. |
+| Later contribution result | Reopen the same judgment from its receipt and show the last verified stage, such as local, exported, imported or adopted. An export alone cannot earn an adoption mark. |
+
+The concept succeeds only if the actor recognizes the same work across the path
+and can distinguish its actual outcomes. A red accent, angled edge or particular
+font may suit one application; none is a reusable requirement. Preserve this
+continuity and the fidelity boundary when adapting the example, rather than
+copying its decoration or adding contribution stages the product does not support.
+
 ## Mine experience without manufacturing authority
 
 Use authorized, physically bounded sessions or indexed candidates. Preserve:

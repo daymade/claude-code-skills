@@ -441,7 +441,9 @@ Also verify, when applicable:
 
 - click -> URL/state -> refresh -> deep link -> back/forward;
 - drawer/modal/popover open, focus, background interaction, close, and mobile;
-- transient notification lifecycle with observation armed before the trigger;
+- transient notification or game-feedback lifecycle using
+  [Transient UI](references/journey-and-page-contracts.md#transient-ui), with
+  observation armed before the trigger;
 - advanced mode -> visible current mode and trigger owner -> one-step return to default;
 - provider/model/runtime status -> selected configuration and current status evidence;
 - download -> completed file -> opened recipient artifact;

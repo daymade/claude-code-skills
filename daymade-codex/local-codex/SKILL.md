@@ -23,7 +23,7 @@ Delegate coding tasks to the local OpenAI Codex CLI agent using the authorized C
 **CRITICAL**: Use ChatGPT OAuth through the selected credential store. **Do NOT set `OPENAI_API_KEY` or pass API keys** for this workflow. Keep the authentication route separate from the account's allowance and extra Credit policy; OAuth does not guarantee that long work cannot consume extra Credit.
 
 - Resolve the actual `CODEX_HOME` and store; the desktop app and CLI can share credentials.
-- Before login, account switching or token recovery, read [the OAuth guide](references/oauth-guide.md) and follow its [recovery recipe](references/oauth-guide.md#remote-account-switch-and-expired-login-recovery). Use fresh empty stores for independent grants, retain explicitly authorized single-owner transfers, and verify actual access and existing-process adoption separately.
+- Before login, account switching or token recovery, read [the OAuth guide](references/oauth-guide.md). For a running native owner, [compare its account with the saved login first](references/oauth-guide.md#existing-native-owner-recovery); choose saved-login adoption, token recovery or new authorization from the observed state. Retain [independent-grant recovery](references/oauth-guide.md#remote-account-switch-and-expired-login-recovery), explicit single-owner transfers and separate access, process-adoption and business-continuation checks.
 - Before a native quota query, read [refresh ownership](references/oauth-guide.md#bind-refresh-ownership-before-native-queries); a nominally read-only query can refresh credentials.
 - For quota-driven continuation on another authorized account, use [the included-usage check](references/oauth-guide.md#quota-driven-continuation) before substantial execution; cached login or a new default file is not that check.
 
@@ -157,6 +157,11 @@ rather than a second parameter or output-field table.
 - Use `--ephemeral` for one-off tasks (no session persistence)
 
 ## Session Management
+
+Before an authorized shared-daemon restart or package replacement, read
+[shared daemon maintenance](references/shared-daemon-maintenance.md). Preserve
+affected work, retain an independent operation receipt, and verify continuation
+under the original session IDs; a new daemon is not proof that tasks resumed.
 
 For multi-step tasks, Codex supports session resume:
 ```bash

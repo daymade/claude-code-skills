@@ -91,6 +91,7 @@ and output format. This skill names which providers are in scope.
 | Whether conversation backups are current and recoverable | The backup-health route above; return separate provider/source and destination verdicts, with coverage and recovery limits |
 | A list of conversations: titles, dates, session IDs | The indexed inventory row under **Provider scope**; if unavailable, state the gap |
 | The conversation where a topic, quote, file, or tool result appeared — "find that old chat", "did we ever discuss X" | The **indexed content search** row under **Provider scope**; use supplied clues to narrow candidates first. Listing titles alone is not evidence the content exists |
+| The latest conversation about a topic, including a newer continuation | Use indexed topic recall to locate relevant project(s), then follow `read-codex-history`'s **Latest topic across continuations** route for Codex. Recall is not a recency ranking. For Claude/Kimi or another provider without indexed recent inventory, keep unverified continuation coverage unknown |
 | Their own raw inputs in chronological order, verbatim | The matching reader's verbatim-input path. Preserve duplicates and session boundaries; duplicates are part of the ledger, not noise |
 | Recent requests that may have stalled — "anything we recently forgot to finish?" / "最近提过却没推进的事" | The indexed inventory/content-search routes under **Provider scope**, then the matching exact-session readers. Verify candidates against current project records; a project registry alone does not cover unregistered requests |
 | Picking work back up from an identified session | The matching continuation skill, after a read |
@@ -148,9 +149,9 @@ the stored text while exporting a record.
   give the topic. A zero hit on a topic name cannot support an absence claim;
   widen to the phrasing that person would have used first, and say which forms
   you tried.
-- **A zero has three causes and only one of them is "no history".** The other
-  two are a home that was never found and a scope that excluded everything, and
-  none of the three looks different in an empty table. This bites Kimi hardest:
+- **An empty result does not distinguish no history from failed discovery or
+  excluded scope.** A home that was never found and a scope that excluded
+  everything can produce the same empty table. This bites Kimi hardest:
   its documented default home is not where every install puts it — a desktop
   client can bundle the CLI inside its own runtime and keep sessions there — and
   its sessions belong to their own workspaces, so a default run inside some other
@@ -168,7 +169,7 @@ the stored text while exporting a record.
 - Do not run provider-specific parsing, SQLite, `rg`, `jq`, or JSONL pipelines
   here. Every one of those belongs to an executor that already handles its
   store's schema, archives, and failure modes.
-- Do not copy an executor's flags into this file beyond the three that name
+- Do not copy an executor's flags into this file except those that name
   provider scope (`--source`, `--codex`, `--kimi`) — those are this skill's own
   subject. Every other flag changes on the executor's schedule; copying one here
   makes this file drift silently and then teach the wrong command.

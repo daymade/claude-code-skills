@@ -16,6 +16,14 @@ actions. Keep the existing reboot and automatic-backup routes available.
 
 ## Choose the account owner first
 
+First distinguish a shared native daemon from an independent TUI; appearing in
+Ghostty does not mean every session needs to exit and reopen. For an eligible
+unmanaged shared owner, follow [Local Codex's existing-owner recovery](https://github.com/daymade/claude-code-skills/blob/main/daymade-codex/local-codex/references/oauth-guide.md#existing-native-owner-recovery)
+to compare the live account and saved login before planning terminal exits.
+That owner requires explicit authority and preservation for a shared restart;
+this batch script neither performs it nor certifies its affected sessions.
+Keep the independent-process snapshot/restore route below when reopening is needed.
+
 This route applies only to unmanaged/legacy Ghostty Codex sessions. A Minions
 `native_runtime` row, a Minions-managed launch command, or a managed account-adoption
 error belongs to the owning Account Manager's native session flow. Do not run an
@@ -270,11 +278,10 @@ Matching the delivery's prose or keywords is not acceptance.
 
 ## Restore and resume an interrupted batch
 
-Apply the Skill entry's foreground check: use an authorized bounded Ghostty handoff
-or an existing explicit idle-desktop grant plus current exclusive ownership. Notify
-the user to leave keyboard and mouse untouched through reconciliation; do not ask
-again when the standing grant covers this action. Busy/unknown occupancy or takeover
-stops global input, while dry-run/check work continues. Do not bypass a host denial.
+Apply the Skill entry's
+[foreground authorization](../SKILL.md#ghostty-interaction-channel) before global input.
+Notify the user to leave keyboard and mouse untouched through reconciliation;
+dry-run/check work remains available when foreground execution is blocked.
 
 ```bash
 # Reopen missing sessions as tabs in one window:
@@ -308,9 +315,10 @@ report the parent ID; never independently resume the spawned agent.
 
 Bind progress to the fixed manifest and new account outside the Skill bundle.
 Serialize opening, re-probe account/process state before each send, stop on
-explicit send failure, and reconcile within `--reconcile-seconds` (0–60,
-default 10). Do not count processes predating the handoff or lacking independent
-mode. Rerun using persisted progress to open only missing IDs. If the account
+explicit send failure, and reconcile within `--reconcile-seconds`; use
+[`ghostty_session.py`](../scripts/ghostty_session.py)'s `bounded_seconds()` and
+`main()` definitions for its bounds and default. Do not count processes predating the
+handoff or lacking independent mode. Rerun using persisted progress to open only missing IDs. If the account
 changes again mid-handoff, stop and prepare a new handoff.
 
 Expect `reopened: N/M`, old/unverified processes and every missing ID. Exit 0

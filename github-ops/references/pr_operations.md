@@ -181,16 +181,16 @@ gh pr view 123 --json number,title,state,author,reviews
 
 ```bash
 # Edit PR title/body
-gh pr edit 123 --title "New title" --body "New description"
+gh pr edit 123 -R OWNER/REPO --title "New title" --body "New description"
 
 # Add reviewers
-gh pr edit 123 --add-reviewer username1,username2
+gh pr edit 123 -R OWNER/REPO --add-reviewer username1,username2
 
 # Add labels
-gh pr edit 123 --add-label "bug,priority-high"
+gh pr edit 123 -R OWNER/REPO --add-label "bug,priority-high"
 
 # Remove labels
-gh pr edit 123 --remove-label "wip"
+gh pr edit 123 -R OWNER/REPO --remove-label "wip"
 ```
 
 ### PR body edit-history cleanup
@@ -279,9 +279,10 @@ does not lock the repository or freeze another writer.
    [CI input-matching procedure](ci-demand-and-notifications.md#3-remove-unnecessary-demand-before-moving-execution),
    which distinguishes the actual tested checkout tree from a PR head SHA.
    Coordination alone cannot establish test equivalence or reduce required checks.
-4. Immediately before landing, reread the hosted head/base, mergeability and check
-   results. Use the exact head match in the merge command below. If the base moved,
-   reconcile under the repository's update/check policy before claiming readiness.
+4. Immediately before landing, follow [fresh-base verification](#fresh-base-verification)
+   and reread the hosted head, mergeability and check results. Use the exact head
+   match in the merge command below. If the base moved, reconcile under the
+   repository's update/check policy before claiming readiness.
    Read back the landed commit and owned paths, then release the agreed window.
 
 Check repository capability before choosing automatic merge:
@@ -296,36 +297,128 @@ verification; do not change repository settings or repeatedly retry `--auto`.
 The acting agent and repository protection enforce this sequence's executable
 checks. A peer window remains a coordination agreement, not a mechanical mutex.
 
+### Fresh-base verification
+
+The publishing agent performs this read before merging or diagnosing a conflict.
+A PR's `baseRefOid` / `base.sha` and a cached `origin/<base>` do not independently
+prove the base branch's current tip. Read the exact branch from the named remote,
+fetch it, and require the fetched commit to match that observation. With `REPO`,
+`REMOTE` and `BASE` bound to the authorized repository, remote and PR base branch:
+
+```bash
+base_ref="refs/heads/${BASE}"
+remote_base=$(git -C "$REPO" ls-remote --exit-code "$REMOTE" "$base_ref") || exit 1
+read -r base_sha observed_ref <<< "$remote_base"
+test "$observed_ref" = "$base_ref" || exit 1
+git -C "$REPO" fetch --no-tags "$REMOTE" \
+  "+${base_ref}:refs/remotes/${REMOTE}/${BASE}" || exit 1
+fetched_base=$(git -C "$REPO" rev-parse --verify \
+  "refs/remotes/${REMOTE}/${BASE}^{commit}") || exit 1
+test "$fetched_base" = "$base_sha" || {
+  printf 'Base moved during verification; reconcile before merging.\n' >&2
+  exit 1
+}
+printf 'Verified base %s at %s\n' "$base_ref" "$base_sha"
+```
+
+Compare this commit with the base used for integration/checks and the PR-reported
+base. A changed tip requires reconciliation and the repository's check policy;
+a failed or empty read leaves freshness unknown. Do not call either case a
+mergeability-cache problem or retry a merge through another API.
+
+Only after freshness is established, compare the exact candidate with this base
+using `git merge-tree --write-tree <candidate> <verified-base>`. A conflict is a
+real integration issue. When local and hosted results disagree, follow
+[the merge-semantics diagnostic](https://github.com/daymade/claude-code-skills/blob/main/github-review-pr/SKILL.md#when-local-and-hosted-merge-results-disagree)
+before attributing the discrepancy to a cache; local attributes and drivers can
+change merge semantics. Preserve required checks and wait for confirmed mergeability.
+Do not close/reopen the PR or push an empty commit merely to refresh
+that state. A later base/head change invalidates this observation; repeat the
+preflight against the new objects. These are executor checks, not a server-side
+lock on the base branch.
+
 ### Merging PRs
 
 Before merging, observe the checks required by the task/repository at the exact
 candidate; use `gh pr checks NUMBER -R OWNER/REPO --watch` and inspect its exit
-status. `--auto` follows the requirements actually configured on GitHub. If none
+status, then perform [fresh-base verification](#fresh-base-verification) and reread
+the exact PR head and mergeability. `--auto` follows the requirements actually
+configured on GitHub. If none
 block the merge, it can merge immediately while other CI is still queued. It is
 not a replacement for this check or a way to satisfy a stricter task contract.
 
 ```bash
 # Merge PR (various strategies)
-gh pr merge 123 -R OWNER/REPO --merge --match-head-commit HEAD_SHA
-gh pr merge 123 -R OWNER/REPO --squash --match-head-commit HEAD_SHA
-gh pr merge 123 -R OWNER/REPO --rebase --match-head-commit HEAD_SHA
+gh pr merge 123 -R OWNER/REPO --merge --match-head-commit "$HEAD_SHA"
+gh pr merge 123 -R OWNER/REPO --squash --match-head-commit "$HEAD_SHA"
+gh pr merge 123 -R OWNER/REPO --rebase --match-head-commit "$HEAD_SHA"
 
 # Request server auto-merge only under its verified configured requirements
-gh pr merge 123 -R OWNER/REPO --auto --squash --match-head-commit HEAD_SHA
+gh pr merge 123 -R OWNER/REPO --auto --squash --match-head-commit "$HEAD_SHA"
 ```
 
 Capture `HEAD_SHA` from a fresh `gh pr view` immediately before merging. Afterward, read the PR
 state again and verify the accepted behavior on the fetched base; a changed squash/rebase commit
 identity is not evidence of loss.
 
+Execute these mutations through `scripts/checked_gh.py` as directed by the Skill
+entry. The helper binds one explicit PR/repository and complete reviewed head,
+checks fresh effective approval and merge state, and then invokes `gh pr merge`.
+It rejects raw REST `PUT .../pulls/NUMBER/merge` and GraphQL `mergePullRequest`
+writes; normal API reads and unrelated mutations remain supported. A rejected
+merge is not permission to change API, retarget the PR or create a refresh commit.
+
+Treat an individual `APPROVED` review as evidence, not proof that GitHub counted
+all required approvals. Diagnose effective `reviewDecision`, dismissal events and
+the live base before repairing a branch. Keep an unexplained rejection unknown.
+
+For a separately authorized bypass, first verify the grant applies to this PR,
+actor, remaining requirements and exact head; a grant for the operator's own PR
+does not cover a collaborator's PR. Verify required CI and other non-bypassed
+gates independently. Use `--admin` only with the helper's explicit target-bound
+acknowledgement, placed before `--`:
+
+```bash
+python3 <github-ops-dir>/scripts/checked_gh.py --expected-login EXPECTED_LOGIN \
+  --ack-merge-bypass "OWNER/REPO#NUMBER@FULL_REVIEWED_SHA" -- \
+  pr merge NUMBER -R OWNER/REPO --squash --admin \
+  --match-head-commit FULL_REVIEWED_SHA
+```
+
+The acknowledgement records intent; it grants no permission or independent-review
+attestation. The helper still checks target/head, open/non-draft state, known
+mergeability and reported required CI. A failed, pending, malformed or unavailable
+required-check response stops bypass. An empty result or explicit no-checks
+message additionally requires positive absence in both active rulesets and legacy
+branch protection; a missing response or a legacy API 404 proves neither. Reconcile
+the check evidence or obtain the ordinary effective approval rather than changing
+API. Auto-merge and cancellation remain explicit `gh`
+operations; do not combine auto-merge with bypass or infer scheduling authority
+from an ordinary merge request.
+
+When reporting protection compliance after a merge, inspect the rule suite for
+the exact landed SHA, in addition to checking merged state and landed content:
+
+```bash
+gh api -X GET 'repos/OWNER/REPO/rulesets/rule-suites?ref=refs%2Fheads%2Fmain&time_period=day&per_page=100'
+gh api 'repos/OWNER/REPO/rulesets/rule-suites/SUITE_ID'
+```
+
+Match `after_sha` to the landing commit and read `result` plus active
+`rule_evaluations`. `bypass` is not `pass`, even when the merge command succeeded
+without `--admin`. Missing, delayed or inaccessible evidence leaves compliance
+unverified; do not retry the mutation to obtain a cleaner receipt. If there is no
+matching suite in the first page, paginate the bounded query; do not interpret an
+empty page as a pass. This readback is an executor step, not an atomic server lock.
+
 ### PR Lifecycle Management
 
 ```bash
 # Close PR without merging
-gh pr close 123
+gh pr close 123 -R OWNER/REPO
 
 # Reopen closed PR
-gh pr reopen 123
+gh pr reopen 123 -R OWNER/REPO
 
 # Checkout PR locally for testing
 gh pr checkout 123
@@ -339,26 +432,26 @@ gh pr checkout 123
 
 ```bash
 # Add comment to PR
-gh pr comment 123 --body "Your comment here"
+gh pr comment 123 -R OWNER/REPO --body "Your comment here"
 
 # Add comment from file
-gh pr comment 123 --body-file comment.txt
+gh pr comment 123 -R OWNER/REPO --body-file comment.txt
 ```
 
 ### Reviewing PRs
 
 ```bash
 # Add review comment
-gh pr review 123 --comment --body "Review comments"
+gh pr review 123 -R OWNER/REPO --comment --body "Review comments"
 
 # Approve PR
-gh pr review 123 --approve
+gh pr review 123 -R OWNER/REPO --approve
 
 # Approve with comment
-gh pr review 123 --approve --body "LGTM! Great work."
+gh pr review 123 -R OWNER/REPO --approve --body "LGTM! Great work."
 
 # Request changes
-gh pr review 123 --request-changes --body "Please fix X"
+gh pr review 123 -R OWNER/REPO --request-changes --body "Please fix X"
 ```
 
 ---
@@ -517,19 +610,19 @@ gh pr checks 123 --json name,state,bucket,workflow
 
 ```bash
 # Add assignees
-gh pr edit 123 --add-assignee username
+gh pr edit 123 -R OWNER/REPO --add-assignee username
 
 # Add to project
-gh pr edit 123 --add-project "Project Name"
+gh pr edit 123 -R OWNER/REPO --add-project "Project Name"
 
 # Set milestone
-gh pr edit 123 --milestone "v2.0"
+gh pr edit 123 -R OWNER/REPO --milestone "v2.0"
 
 # Mark as draft
-gh pr ready 123 --undo
+gh pr ready 123 -R OWNER/REPO --undo
 
 # Mark as ready for review
-gh pr ready 123
+gh pr ready 123 -R OWNER/REPO
 ```
 
 ---

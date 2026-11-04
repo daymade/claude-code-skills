@@ -88,12 +88,13 @@ stdin/heredoc 及 Python/Node 子进程调用却可能报 `Failed to start ego l
   evidence_refs 挂链（见[预测反馈的 findings 节](references/forecast-feedback.md)）。
   **实时 banked 查询不能被 §2 替代**：rollout 快照结构上没有备用重置字段。本轮已有身份
   核实、时间仍适用的实时读数时直接复用；缺失、查询期间发生切号或新事件使旧读数失效时，
-  再运行 `scripts/query_usage.py` 补查。把 `account_ref` 连同读数记进 findings；计数的可比范围
-  与字段读法见[账号 SOP](references/account-usage.md)。本条不授权切号或兑换备用。
-  ⚠️ **scan 与 banked 不要 `&&` 串联**：scan_rollouts 无快照时 exit 1，`&&` 会把 banked 查询直接
-  短路掉——表面上全套像跑过了，实际少一维（2026-09-19 实测）。两条分开跑，或串联时给 scan
-  加 `|| true`。**循环场景下 skill 里的裸命令被 `same-cmd-resend-guard` 拦**（端点抖动失败一次
-  后逐字节重发即拦）——命令开头加 `cd <skill 绝对路径> &&` 换结构即放行（2026-09-19 实测）。
+  再按[账号 SOP](references/account-usage.md#实时-api只读一个明确账号)补查并保存同次读数与
+  `account_ref`；计数比较和字段判读也沿该入口执行。本条不授权切号或兑换备用。
+  **scan 与 banked 独立执行并分别记录退出状态**：`scan_rollouts.py` 无快照时退出非零，
+  只表示所选窗口没有观测，不能据此认定没有重置，也不能短路实时 banked 查询。参数、
+  读取或运行错误仍保留失败／unknown；不要用 `|| true` 吞掉错误。
+  宿主提示重复失败时，先核对失败原因和重试依据，再按提示处理；绝对路径只用于纠正
+  已证实的 cwd 问题，不为改变命令文本而绕过提示。修复依赖或取得新证据后再作有依据的重试。
   定时循环（如 `/loop`）重复触发时，若距上次检查间隔很短（<10 分钟）且上轮无改判信号，可只跑
   公告线确认无新官宣、跳过 incidents/banked/本机扫描全套；这是降成本的取舍，未查的维度
   仍标 uncovered。间隔正常、台账里的线索到达复查条件，或上轮出现过新信号时仍跑全套。
@@ -214,23 +215,11 @@ stdin/heredoc 及 Python/Node 子进程调用却可能报 `Failed to start ego l
 到达复查条件时升级为正常轮。每轮按以下顺序执行，停止于证据已足够改变或维持当前行动、
 且下一次需要什么新信息已经写清，而不是停止于固定端点返回空值。
 
-1. **接上上轮的问题。** 读 `forecast_log.py summary --compact`（审计或需要完整叙述时读 `summary`；compact 保留本步全部决策字段），先看 `due_for_followup`（窗口已过期或
-   即将关闭、尚无定论的预测——到期跟进项从这里第一眼读，不用翻 rationale；closing_soon 的
-   阈值定义见 forecast-feedback.md）；若有 `withdrawal_conflicts`，先核对冲突的撤回与旧版核验；
-   若有 `recent_withdrawn`，先排除已撤回的旧窗口；也看 `snapshot.status`——`lagging` 表示台账
-   的 git 快照落后（原因与处置见 forecast-feedback.md 的 findings 节），要在本轮汇报里说明；
-   再从同一 state-dir 运行 `forecast_log.py handoff`
-   读取最新一条 `invocation=monitor` 的完整原始行；`findings` 子命令的紧凑列表不显示
-   `notes`，不能用它代替交接正文。`handoff` 返回 `null` 表示尚无监测交接，不能推断此前
-   没有值得追的线索。
-   其中的 `notes` 记录上轮尚未解决的具体问题、候选来源、下一次复查条件和用户反馈。上轮
-   没有记录就从当前问题与现有预测的 `revision_trigger` 建立这些项，不把空台账说成已覆盖。
-   本轮即使只做降频查询，也要在新 finding 的 `notes` 里结转未决项或写明已由哪条证据关闭，
-   使它始终能从最新轮次读回；逐字读数仍只放 `readings`，判断不得伪装成原始数据。
-   同一 state-dir 再运行 `forecast_log.py followup`，执行其 `event_tasks` 与
-   `account_tasks`，不要把输出清单当成已经查过。`confirmed_unscored` 表示事件已经确认、
-   预测仍不可评分，不为它继续问「重置发生了吗」；`account_followup` 单独保留已绑定账号的
-   未到账项。官宣的具体时刻用 `announce` 保存，字段与状态读
+1. **接上上轮的问题。** 先完整执行[本地预测反馈的回看流程](references/forecast-feedback.md#每次调用先回看)，
+   读完分页和所需原件，再逐项取得事件与账号证据；任务清单不代表已经核验。
+   正常轮与降频轮都按[交接结转](references/forecast-feedback.md#交接结转)生成可接续的当前交接，
+   将判断与原始读数分开保存。只更正一条交接事实时，执行[安全纠错流程](references/forecast-feedback.md#findings原始读数层)，
+   不用只有纠正内容的 monitor 替换完整交接。官宣的具体时刻用 `announce` 保存，字段与状态读
    [本地预测反馈](references/forecast-feedback.md#官宣单点时间与事件账号状态)。
 2. **先取增量，再问它改变什么。** 以 §1 的 Radar、Tibo 主帖、reply、故障与社区监测为
    基线，比较上次已读的 ID/时间和本次实际覆盖；新发现的旧帖也按**首次发现时间**进入本轮
@@ -258,6 +247,10 @@ stdin/heredoc 及 Python/Node 子进程调用却可能报 `Failed to start ego l
    保存本轮失败与下次可执行条件，不把旧的 `unknown` 当作本轮已经尝试。具体现有获取路径
    仍按 §1 与社区读取 Skill 执行，不为一次失败判通道永久不可用。`account_tasks` 则只追对应
    账号到账，不重开已确认的全局事件；未获授权的社区来源保留 uncovered。
+   同型覆盖多轮且结论收敛（官宣完成措辞确认不存在、可归因账号证据已随上下文关闭、tracker
+   与本机扫描均无新形状）时，在该轮 review 的 lesson 写明收敛结论与重开条件（官方追溯提及、
+   新账号读数通道等），后续轮次不再重复同型挖掘；事件保持 unknown，不伪造失败或命中
+   （2026-10-31 实测：Day21 预测四轮同结论 unknown 后收敛停止）。
 4. **分层输出并保留行动差异。** 已核实的事件、未来承诺和行动提示可构成信号；含糊回复、
    里程碑或第三方解读先列候选，若会改变当前安排仍及时提示其歧义与补证条件，不升格为
    明文承诺。明确区分 `global`、`banked`、`both`、个人周期和类型未明：`global` 到来前可
@@ -326,7 +319,8 @@ stdin/heredoc 及 Python/Node 子进程调用却可能报 `Failed to start ego l
 辅助元数据不替代正文、产品观测或 claim gate。
 
 **正常轮次必须实际尝试 Radar、Tibo 主帖时间线与下文的有界 reply 发现。** Radar 可能
-完全没有索引一条新的独立主帖；主帖时间线也不含 replies，所以前两条都无新仍不能跳过 reply
+完全没有索引一条新的独立主帖（滞后波动大：2026-10-31 Day26 实测发布后约 13 分钟即被索引，
+2026-10-30 Day25 实测官宣约 1 小时后仍未索引——滞后是常态而非例外，官宣发现不能依赖 Radar）；主帖时间线也不含 replies，所以前两条都无新仍不能跳过 reply
 发现。宿主没有可用的已登录 X 通道时，reply 腿的执行结果是 `unknown`，不是静默省略。按时段
 降频的已批准例外仍按入口分流执行：降频轮只查 Radar 时，把 `main_posts` 与 `replies` 都记为
 `uncovered`，不能把结果写成全量无新。
@@ -407,9 +401,15 @@ curl -sS --max-time 20 "https://api.fxtwitter.com/<user>/status/<status-id>" \
   无新项，或某个 CLI search 返回 404，都不能写成「没有回复」。
 - 已知候选帖（官宣帖、落地帖）的回复链核验可用 `twitter tweet <id> --json`；返回集合可能混有
   主帖、回复和无关条目，不能把 `len(data)` 当回复数或穷尽信号。作者字段是
-  `data[].author.screenName`，不是 `userName`。按[回复样本判读](references/signal-readings.md#回复样本判读)
+  `data[].author.screenName`，不是 `userName`。CLI 间歇失败时顶层是 `{ok:false, error:{...}}`
+  ——解析脚本先判 `ok` 再取 `data`，否则失败被 `2>/dev/null` 吞成静默空输出（2026-10-30 实测）。
+  找本人追加回复用两跳法：先对承重主帖跑 `tweet <id>` 扫 `data[]` 里 `screenName==thsottiaux`
+  的非主帖条目，命中后对**该回复的 id** 再跑一次 `tweet <回复id>` 取完整 parent 上下文——
+  `data[]` 按相关性混排，本人回复与 parent 常不相邻（2026-10-30 实测：靠第二次调用才拿到
+  「$500 档 50x?」的 parent）。按[回复样本判读](references/signal-readings.md#回复样本判读)
   核对作者、时间和线程关系；未见本人回复只报告「本次样本中未见」。它不枚举本人全部回复；「他最近回过谁」
-  的发现性扫描仍走下面的网页滚动法。`twitter search`（含 `from:` 查询）实测 HTTP 404，搜索路线不可用。
+  的发现性扫描仍走下面的网页滚动法。`twitter search`（含 `from:` 查询）实测 HTTP 404，搜索路线不可用
+  （2026-09-24 首测，2026-10-30 复测仍 404）。
 - **有界 reply 发现路径**（2026-09-23 已登录 X 原站实测能看到一条主帖入口遗漏的旧回复）：
   1. 先固定起点：上次**可靠** reply 检查的 UTC；没有就用本任务窗口或当前未决承诺的起点。
      打开 `https://x.com/thsottiaux/with_replies`，记录本轮 URL、起点与开始时间。
@@ -469,7 +469,9 @@ X announcement」）。这类事件按候选处理：2026-09-29
 DevDay 的 banked 到账最先就是这种形态，站点自述来源是运营者而非原帖，直到用户确认名下多个
 账号都收到才证实。升级为已到账的依据按类型分：`banked` 事件——官方原帖，或用户对自己账号的
 直接观测，或同一 `account_ref` 的 banked 库存前后读数；`global` 事件——官方原帖，或多个账号排除
-自然周期后的用量回满读数。没有前置读数时只报告当前值：banked 写「到账未核实」，global 写「发生未核实」。
+自然周期后的用量回满读数。没有前置读数时只报告当前值：banked 写「到账未核实」，global 写
+「发生未核实」。该站事件列表不完整，缺条目不可作「该日无事件」的反证（2026-10-31 实测：
+completed 列表缺 10-22/10-23 两轮台账已确认的 global 事件）。
 
 **Radar 索引不到官方故障线——这是公告路径的结构性盲区。** Radar 只索引 @thsottiaux，而
 ChatGPT/Codex 的故障由 **@ChatGPT** 账号和 **status.openai.com** 发布。重置也可能用于

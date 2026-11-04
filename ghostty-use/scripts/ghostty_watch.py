@@ -93,7 +93,7 @@ CLAUDE_OTHER_CONTEXT = set("-p --print --bg --background --desktop --cloud --env
 CODEX_REQUIRED = set("-c --config --enable --disable --remote --remote-auth-token-env -m --model --local-provider -p --profile -s --sandbox -C --cd --add-dir -a --ask-for-approval".split())
 CODEX_VARIADIC = set("-i --image".split())
 CODEX_BOOLEAN = set("--strict-config --oss --approve-for-me --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust --worktree --search --no-alt-screen --no-daemon --last --all --include-non-interactive --full-auto -h --help -V --version".split())
-CODEX_OTHER_COMMANDS = set("agents exec e review login logout mcp plugin app-server remote-control app completion update doctor sandbox debug apply queue archive delete migrate-rollouts unarchive cloud exec-server features help mcp-server daemon".split())
+CODEX_OTHER_COMMANDS = set("agents exec e review login logout mcp plugin app-server remote-control app completion update doctor sandbox debug apply queue archive delete migrate-rollouts unarchive cloud exec-server features help mcp-server daemon companion".split())
 
 
 def cli_identity(row):
@@ -118,6 +118,9 @@ def cli_identity(row):
     variadic = CLAUDE_VARIADIC if tool == 'claude' else CODEX_VARIADIC
     boolean = CLAUDE_BOOLEAN if tool == 'claude' else CODEX_BOOLEAN
     tail = tokens[index + 1:]
+    if tool == 'claude' and (tail[:1] in (['code-mode'], ['chrome'], ['--chrome-native-host'])
+                             or tail[:2] == ['Computer', 'Use']):
+        return None
     ids, forked, ambiguous, command = set(), False, False, None
     cursor = 0
     positional_only = False
@@ -208,7 +211,7 @@ def parse_cwds(text, pids):
     return {pid: values[0] for pid, values in paths.items()}
 
 
-def observe(deadline=None):
+def observe(deadline=None, *, include_terminals=False):
     deadline = deadline or time.monotonic() + DEADLINE_SECONDS
     counters = {'ps_calls': 1, 'lsof_calls': 0, 'commands': 0, 'history_body_reads': 0}
     text = run_bounded(['/bin/ps', '-ww', '-axo', 'pid=,ppid=,tty=,command='], deadline, counters)
@@ -216,6 +219,7 @@ def observe(deadline=None):
     roots = {pid for pid, row in procs.items()
              if Path(row['cmdline'].split(None, 1)[0]).name.lower() == 'ghostty'}
     candidates, seen = [], set()
+    terminals, cli_ttys = {}, set()
     for pid, row in procs.items():
         if time.monotonic() >= deadline:
             raise ValueError('observation deadline expired during process selection')
@@ -225,12 +229,21 @@ def observe(deadline=None):
             current = procs[current]['ppid']
         if current not in roots:
             continue
+        terminal = row['tty'].startswith(('ttys', 'pts/'))
+        if include_terminals and terminal:
+            # The shallowest process represents a terminal surface. A surface
+            # is a TTY, not a tab: splits and window membership remain unknown.
+            depth = len(chain)
+            old = terminals.get(row['tty'])
+            if old is None or (depth, pid) < (old[0], old[1]['pid']):
+                terminals[row['tty']] = (depth, row)
         identity = cli_identity(row)
         if identity is None:
             continue
         tool, sid, tokens, index = identity
-        if not row['tty'].startswith(('ttys', 'pts/')):
+        if not terminal:
             continue
+        cli_ttys.add(row['tty'])
         parent = procs.get(row['ppid'])
         wrapper = cli_identity(parent) if parent else None
         if (wrapper and wrapper[0] == tool and wrapper[3] == 1
@@ -244,8 +257,17 @@ def observe(deadline=None):
         if len(candidates) > MAX_SESSIONS:
             raise ValueError('Ghostty session count exceeds observation limit')
     selected, unresolved = [], []
-    if candidates:
-        pids = [row['pid'] for row, _, _, _ in candidates]
+    representatives = {tty: row for tty, (_, row) in terminals.items()}
+    # Prefer the child shell/TUI's cwd over login's home directory.
+    for tty, representative in list(representatives.items()):
+        if Path(representative['cmdline'].split(None, 1)[0]).name == 'login':
+            children = [row for row in procs.values()
+                        if row['ppid'] == representative['pid'] and row['tty'] == tty]
+            if children:
+                representatives[tty] = min(children, key=lambda row: row['pid'])
+    if candidates or representatives:
+        pids = sorted({row['pid'] for row, _, _, _ in candidates}
+                      | {row['pid'] for row in representatives.values()})
         counters['lsof_calls'] = 1
         output = run_bounded(['/usr/sbin/lsof', '-a', '-p', ','.join(map(str, pids)),
                               '-d', 'cwd', '-Fpn'], deadline, counters)
@@ -260,7 +282,16 @@ def observe(deadline=None):
             else:
                 entry['sid'] = sid
                 selected.append(entry)
-    return {'sessions': selected, 'unresolved': unresolved, 'ghostty_processes': len(roots), 'counters': counters}
+    result = {'sessions': selected, 'unresolved': unresolved,
+              'ghostty_processes': len(roots), 'counters': counters}
+    if include_terminals:
+        inventory = [{'tty': tty, 'pid': row['pid'], 'cwd': cwds[row['pid']],
+                      'cmdline': row['cmdline'],
+                      'kind': 'ai' if tty in cli_ttys else 'other'}
+                     for tty, row in sorted(representatives.items())]
+        result.update(terminal_inventory=inventory,
+                      other_terminals=[row for row in inventory if row['kind'] == 'other'])
+    return result
 
 
 def profile_mapping(state):

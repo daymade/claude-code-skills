@@ -29,6 +29,28 @@ can invalidate it in between; exercise that interval under the existing lock,
 transaction or equivalent authority boundary. Report missing protection or an
 unavailable barrier as a specific gap rather than asserting race safety.
 
+## Retained sessions and cached permissions
+
+When login restoration, permissions or upgrades are affected, the QA executor
+tests fresh login and an existing signed-in session separately. Freeze the
+installed artifact, account/tenant binding and authority's permission contract.
+Use an owned disposable fixture to preserve or change the local cache; do not
+alter a real user's role, credentials or data merely to manufacture a case.
+
+| Case | Arrange and act | Assert and healthy control |
+|---|---|---|
+| **Grant after login** | Keep a signed-in session with an earlier denial cached, while the fixture authority now grants the affected permission. Exercise restoration and upgrade without logout or clearing data. | The required refresh reaches the authority and the real consuming page/action becomes usable without a stale denial. Compare with fresh login for the same identity; an API probe with a different session does not establish this path. |
+| **Revoke after login** | Keep an earlier grant cached after the fixture authority revokes it. Re-enter the affected surface using the retained session. | Stale UI state cannot authorize the revoked effect. Check the consumer's denied state and actual server rejection, alongside a still-authorized account that can complete its permitted action. |
+| **Identity changes in flight** | Hold an old permission response, then log out or change the account/tenant/environment before releasing it. Separately reverse two refresh responses for the same binding. | The old binding and superseded refresh cannot overwrite the current user's state or reopen access. The latest valid response still updates its own consumer. |
+| **Unknown refresh result** | Return missing, null, malformed or failed permission data through the real refresh consumer. | Preserve the contract's explicit unresolved/error state; do not manufacture a grant or interpret missing evidence as a confirmed empty permission set. A valid response still recovers normally. |
+
+Verify runtime enforcement independently of declarations: a permission annotation,
+menu entry or hidden button does not prove a server interceptor ran. Use the
+actual controller/security configuration with a denied fixture and an allowed
+control. Keep potentially effective writes isolated; client-cache tests do not
+replace server authorization tests. Record permission outcomes and binding
+identifiers without saving tokens, credentials or full user payloads.
+
 ## Observe the consuming surface
 
 Exercise each changed actual consumer and relevant tool/mode variant. Include

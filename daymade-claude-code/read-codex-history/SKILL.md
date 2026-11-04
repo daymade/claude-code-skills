@@ -97,6 +97,7 @@ interpreting fork snapshots, compaction, event streams, or end reasons.
 
 | User wants | Use |
 |---|---|
+| Identify Codex work after a terminal disappears, including ToDesk/headless terminals | [Terminal-session recovery](references/terminal-session-recovery.md): bind host/cwd, query the index, then verify records and terminal attribution separately |
 | Complete thread ID from a UUID prefix, without conversation reconstruction | `scripts/find_codex_session.py <UUID-prefix>`; stop after verified identity |
 | Recent Codex sessions, titles, IDs, or positive writer-lock evidence | `scripts/list_local_history.py --source codex --index-only`; an unavailable index leaves inventory unknown |
 | Find the Session containing a pasted quote, with a known project, date, or title clue | **Locate a quoted exchange** below: inventory candidates, then verify the original messages |
@@ -107,6 +108,7 @@ interpreting fork snapshots, compaction, event streams, or end reasons.
 | Validate an exporter’s captured rollout prefix without collecting the conversation | [Captured rollout validation for exporters](#captured-rollout-validation-for-exporters) |
 | Verify a tool return, a comment ID, or external messages already read in a known Session | The **Original tool and record evidence** command below; briefing previews are not complete tool evidence |
 | Find a rollout containing a topic or phrase | `read-claude-code-history/scripts/history_index.py recall --provider codex`, then verify the exact rollout |
+| The latest conversation about a topic, including a newer continuation | **Latest topic across continuations** below: recall locates relevant projects, index-only inventory finds recency candidates, and original records decide relatedness |
 | Which live processes are erroring, error shapes over time, reconnect/timeout history | The **Runtime error log** section above (`logs_*.sqlite` bucketing); not the rollout event stream |
 | Content remembered but whose wording drifted | The same indexed recall in hybrid mode, if vectors are complete |
 | Continue after evidence is complete | Stop reading and invoke `daymade-claude-code:continue-codex-work` |
@@ -174,6 +176,61 @@ If a candidate misses, try the remaining plausible candidates. A truncated listi
 missing timestamps, an unavailable inventory, or no matching candidate is not
 absence: refine indexed recall and state its coverage. Do not fall back to raw
 corpus search.
+
+### Latest topic across continuations
+
+First bind the requested recency:
+
+- For the **latest conversation about a topic**, use the route below.
+- For the **newest message matching supplied words**, use indexed content search and
+  compare verified original-record timestamps within the stated coverage. This is
+  not the latest related Session, and relevance rank is not time order.
+- For **two supplied Sessions**, read only those exact IDs and compare their relevant
+  original-record timestamps; do not invoke global inventory.
+
+For the latest conversation about a topic:
+
+1. Run `read-claude-code-history/scripts/history_index.py status`, then `recall`
+   with `--provider codex --exclude-session <CURRENT_ID>` to find earlier related
+   Sessions. Resolve their cwd through `find_codex_session.py <ID>`; an encoded
+   project label is not a verified filesystem path. Treat relevance top-K only as
+   topic/project leads, never as a latest answer. Record provider scope and freshness.
+2. For each relevant cwd, inspect the existing main-session inventory:
+
+   ```text
+   <skill-dir>/scripts/list_local_history.py \
+     --source codex --index-only --cwd <workspace> --include-archived \
+     --from-date <EARLIEST_TOPIC_DATE> --limit 50 --format json
+   ```
+
+   Omit an unknown date bound. Date filters use created/updated overlap, so an older
+   Session resumed later remains a candidate. If the filter reports unknown-time
+   exclusions, rerun without it for that cwd; never substitute file mtime. Exclude
+   the current Session ID and do not add `--include-subagents`.
+3. Treat `recent_rows < total` as truncation; `shown` can also include positive
+   writer-lock rows outside the recent window. Raise the bounded limit or narrow
+   the cwd/time window when rows are truncated. Inventory `updated_at` orders
+   candidate validation only; it is not the timestamp of the latest matching
+   message. Missing timestamps, unavailable inventory, truncation, or a stale recall
+   frontier leaves the affected latest claim unknown.
+4. Read candidates newest-first with `read_codex_session.py --session <ID> --full`.
+   Original records must establish continuity with the earlier topic; cwd, time, or
+   title similarity alone is insufficient. Do not require a continuation's title or
+   new messages to repeat the old entities. A newer unrelated Session is not the
+   answer. Compare the latest topic-related original turns, rather than letting a
+   later unrelated update make an old discussion win. Before selecting an older
+   related Session, validate every newer candidate; an unreadable or unresolved
+   newer candidate leaves the affected latest claim unknown.
+5. Report the selected Session's relevant original-record timestamp separately from
+   its inventory update time, with project and coverage gaps. If the state index is
+   unavailable, keep Codex inventory unknown and do not scan raw rollouts. Keep
+   Claude/Kimi continuation coverage unknown where their indexed recent inventory is
+   unavailable; do not invent a cross-provider Sessions API.
+
+If the user supplies a newer candidate or corrects the answer, read that exact
+Session, add its cwd to the candidate scope, and revalidate every candidate newer
+than the prior selection. Withdraw a contradicted latest claim rather than defending
+the original ranked hit.
 
 ### Exact original inputs
 

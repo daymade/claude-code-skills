@@ -70,6 +70,17 @@ the change crosses those boundaries. Preserve durable source and identifiers;
 avoid reissuing completed work, charging twice or applying a late result to a
 new session. Keep failure displays separate from execution commands.
 
+Synthetic prerequisite-recovery example: a saved source link is pending because
+its required source is unavailable; a later authorized import makes that source
+usable. The engineering owner exercises the ordinary continue/select entry
+without first opening detail or history to repair the record. Verify that the
+original record becomes eligible, retains its identity and saved work, and does
+not duplicate completed actions. Include still-missing, conflicting, withdrawn
+and other-user records as controls under the application's admission policy;
+new availability must not erase those boundaries. Select probes in the existing
+application harness. This example prescribes acceptance observations, not an
+automatic repair mechanism or permission to import new data.
+
 Synthetic example: expose a classified current failure while keeping legacy and
 unknown errors generic. Opening or copying retained source must not start a job.
 Observe the application's precise mutation/API boundaries; unrelated telemetry

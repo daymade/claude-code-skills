@@ -8,6 +8,7 @@ import json
 import re
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 
 
 STRUCTURED_GIT_SUFFIXES = {
@@ -37,7 +38,8 @@ STRUCTURED_MIME_BY_SUFFIX = {
     ".yaml": {"application/yaml", "application/x-yaml", "text/plain"},
     ".yml": {"application/yaml", "application/x-yaml", "text/plain"},
 }
-VALID_STORAGE = {"git", "source", "oss"}
+EXTERNAL_STORAGE = {"source", "oss", "nas"}
+VALID_STORAGE = {"git"} | EXTERNAL_STORAGE
 FEISHU_HOST_SUFFIXES = ("feishu.cn", "larkoffice.com", "larksuite.com")
 FEISHU_LOCATOR_URL_RE = re.compile(
     r"^https://[A-Za-z0-9.-]+\.(?:"
@@ -76,6 +78,34 @@ def stable_locator_error(locator: object, storage: str) -> str | None:
         if system != "oss" or not isinstance(uri, str) or not OSS_URI_RE.fullmatch(uri):
             return "oss locator requires system=oss and oss://bucket/key uri"
         return None
+    if storage == "nas":
+        unexpected = set(locator) - {"system", "device", "account", "path", "source_url"}
+        if unexpected:
+            return f"nas locator contains unsupported fields: {sorted(unexpected)}"
+        if system != "nas":
+            return "nas locator requires system=nas"
+        for key in ("device", "account"):
+            value = locator.get(key)
+            if (not isinstance(value, str) or not value.strip() or value != value.strip()
+                    or any(ord(c) < 32 for c in value) or "/" in value or "\\" in value):
+                return f"nas locator requires a non-empty stable {key} identity"
+        path = locator.get("path")
+        if (not isinstance(path, str) or not path.strip() or "\\" in path
+                or any(ord(c) < 32 for c in path)
+                or any(part in {"", ".", ".."} for part in path.split("/"))):
+            return "nas locator path must be a normalized relative path beneath the named account root"
+        source_url = locator.get("source_url")
+        if not isinstance(source_url, str) or any(c.isspace() for c in source_url):
+            return "nas locator requires a stable HTTP(S) source_url"
+        try:
+            parsed = urlsplit(source_url)
+            valid = (parsed.scheme in {"http", "https"} and bool(parsed.hostname)
+                     and not parsed.username and not parsed.password and not parsed.fragment)
+        except ValueError:
+            valid = False
+        if not valid:
+            return "nas locator requires a stable HTTP(S) source_url without credentials or fragment"
+        return None
     if storage != "source":
         return f"unsupported external storage: {storage!r}"
     if system == "feishu":
@@ -108,6 +138,8 @@ def locator_identity(locator: object, storage: str) -> str:
         return "invalid"
     if storage == "oss":
         return str(locator.get("uri") or "invalid")
+    if storage == "nas":
+        return json.dumps([locator.get(k) for k in ("device", "account", "path")], ensure_ascii=True)
     if locator.get("system") == "wechat":
         return f"{locator.get('chat')}:{locator.get('message_id')}"
     return f"{locator.get('source_url')}:{locator.get('token')}"
@@ -147,8 +179,8 @@ def validate_replicas(entry: dict, label: str) -> tuple[list[str], list[tuple[st
                 f"{replica_label}: unsupported fields: {sorted(unexpected)}"
             )
         storage = replica.get("storage")
-        if storage not in {"source", "oss"}:
-            errors.append(f"{replica_label}: storage must be source or oss")
+        if storage not in EXTERNAL_STORAGE:
+            errors.append(f"{replica_label}: storage must be source, oss or nas")
             continue
         locator_error = stable_locator_error(replica.get("locator"), storage)
         if locator_error:
@@ -181,6 +213,17 @@ def validate_manifest(payload: object) -> list[str]:
         unexpected_fields = set(entry) - allowed_fields
         if unexpected_fields:
             errors.append(f"{label}: unsupported fields: {sorted(unexpected_fields)}")
+        replicas = entry.get("replicas")
+        has_nas_replica = isinstance(replicas, list) and any(
+            isinstance(replica, dict) and replica.get("storage") == "nas" for replica in replicas
+        )
+        if storage == "nas" or has_nas_replica:
+            if type(entry.get("bytes")) is not int or entry["bytes"] <= 0:
+                errors.append(f"{label}: NAS retention requires positive integer bytes")
+            if not isinstance(entry.get("sha256"), str) or not re.fullmatch(r"[a-f0-9]{64}", entry["sha256"]):
+                errors.append(f"{label}: NAS retention requires a complete lowercase SHA-256")
+            if not isinstance(entry.get("mime"), str) or not entry["mime"].strip():
+                errors.append(f"{label}: NAS retention requires mime")
         replica_errors, replica_identities = validate_replicas(entry, label)
         errors.extend(replica_errors)
         if storage == "git":

@@ -4,7 +4,7 @@ Detailed documentation for doc-to-markdown Heavy Mode conversion.
 
 ## Overview
 
-Heavy Mode runs multiple conversion tools in parallel and intelligently merges their outputs to produce the highest quality markdown possible.
+Heavy Mode runs applicable conversion tools in sequence and selects a candidate output. Source comparison is still required before delivery.
 
 ## When to Use Heavy Mode
 
@@ -22,7 +22,7 @@ Use Quick Mode when:
 
 ## Tool Capabilities
 
-### PyMuPDF4LLM (Best for PDFs)
+### PyMuPDF4LLM (PDF Documents)
 
 **Strengths:**
 - Native table detection with multiple strategies
@@ -54,81 +54,63 @@ md_text = pymupdf4llm.to_markdown(
 - May miss complex tables
 - No native image extraction
 
-### pandoc (Best for Office Docs)
+### pandoc (Office Documents)
 
 **Strengths:**
-- Excellent DOCX/PPTX structure preservation
+- DOCX/PPTX structure extraction
 - Proper heading hierarchy
 - List formatting
 
 **Limitations:**
 - Requires system installation
-- PDF support limited
+- Use the format routing in the [Skill entry](../SKILL.md#tool-selection); an offered converter may still reject an unsupported input format.
 
-## Merge Strategy
+## Selection behavior
 
-### Segment-Level Selection
+The implementation owners are [`merge_results`](../scripts/convert.py) and
+`score_markdown` in that file. Heavy Mode scores complete successful Markdown
+outputs and keeps one output body. It also deduplicates image metadata from the
+successful candidates; this does not insert missing image references into the
+selected Markdown.
 
-Heavy Mode doesn't just pick one tool's output. It:
+It does not replace individual tables, headings or paragraphs with segments from
+another converter. Use the separate [manual merge interface](../SKILL.md#merge-outputs-manually)
+when that operation is needed, then compare the result with the source.
 
-1. Parses each output into segments
-2. Scores each segment independently
-3. Selects the best version of each segment
-
-### Segment Types
-
-| Type | Detection Pattern | Scoring Criteria |
-|------|-------------------|------------------|
-| Table | `\|.*\|` rows | Row count, column count, header separator |
-| Heading | `^#{1-6} ` | Proper level, reasonable length |
-| Image | `!\[.*\]\(.*\)` | Alt text present, local path |
-| List | `^[-*+\d.] ` | Item count, nesting depth |
-| Code | Triple backticks | Line count, language specified |
-| Paragraph | Default | Word count, completeness |
-
-### Scoring Example
-
-```
-Table from pymupdf4llm:
-  - 10 rows × 5 columns = 5.0 points
-  - Header separator present = 1.0 points
-  - Total: 6.0 points
-
-Table from markitdown:
-  - 8 rows × 5 columns = 4.0 points
-  - No header separator = 0.0 points
-  - Total: 4.0 points
-
-→ Select pymupdf4llm version
-```
+When an attempted engine fails and another succeeds, Heavy Mode prints
+`HEAVY MODE DEGRADED` on stderr and uses the successful candidates. If only one
+tool is available, it runs alone without that failure warning. If all attempted
+engines report failure, conversion fails. Inspect stderr and the actual output
+body: an empty output is unusable even when the process exits successfully.
+A heuristic score cannot establish text or table fidelity.
 
 ## Advanced Usage
+
+Run from this Skill directory after [converter installation](tool-comparison.md#installation).
 
 ### Force Specific Tool
 
 ```bash
 # Use only pandoc
-uv run scripts/convert.py document.docx -o output.md --tool pandoc
+uv run python scripts/convert.py document.docx -o output.md --tool pandoc
 ```
 
 ### Custom Assets Directory
 
 ```bash
 # Heavy mode with custom image output
-uv run scripts/convert.py document.pdf -o output.md --heavy --assets-dir ./images
+uv run --with pymupdf --with pymupdf4llm --with "markitdown[pdf]" python scripts/convert.py document.pdf -o output.md --heavy --assets-dir ./images
 ```
 
-### Validate After Conversion
+### Validate after conversion
 
-```bash
-# Convert then validate
-uv run scripts/convert.py document.pdf -o output.md --heavy
-uv run scripts/validate_output.py document.pdf output.md --report quality.html
-```
+Follow [Mechanical comparison](pdf-acceptance.md#mechanical-comparison) for the
+validator invocation and result interpretation, then complete the PDF procedure's
+structural and recipient checks before delivery.
 
 ## Troubleshooting
 
-### Low Text Retention Score
+### Text mismatch or unavailable extraction
 
 **Causes:**
 - PDF has scanned images (not searchable text)
@@ -138,7 +120,7 @@ uv run scripts/validate_output.py document.pdf output.md --report quality.html
 **Solutions:**
 - Use OCR preprocessing for scanned PDFs
 - Try different tool with `--tool` flag
-- Manual cleanup may be needed
+- Inspect the reported differences against the source; the diagnostic score does not establish accuracy.
 
 ### Missing Tables
 
@@ -148,7 +130,7 @@ uv run scripts/validate_output.py document.pdf output.md --report quality.html
 - Merged cells
 
 **Solutions:**
-- Use Heavy Mode for better detection
+- Compare the successful converter candidates with the source; Heavy Mode does not merge table fragments.
 - Try pymupdf4llm with different table_strategy
 - Manual table reconstruction
 
@@ -161,5 +143,5 @@ uv run scripts/validate_output.py document.pdf output.md --report quality.html
 
 **Solutions:**
 - Ensure `--assets-dir` points to correct location
-- Check `images_metadata.json` for extraction status
+- If using the separate image extractor, inspect its `images_metadata.json`; `convert.py` does not write that file.
 - Use `extract_pdf_images.py` separately

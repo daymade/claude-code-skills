@@ -15,6 +15,19 @@ URL, directory name, or previous report does not prove those properties.
 
 ## Isolated checkout preparation
 
+Choose the storage lifetime before creating a clone or linked worktree. For work
+that must survive a pause, restart or later session, place the checkout and its
+continuation evidence under a persistent task directory in the user's workspace,
+outside system temporary roots and automatic cleanup targets. Resolve the actual
+parent path; a name such as `worktree` does not establish persistence. Do not use
+`/tmp`, `/private/tmp`, `TMPDIR` or a default `mktemp -d` destination as the only
+copy of source edits, review evidence or recovery instructions needed to resume.
+Keep such evidence until publication and the task's authorized retirement checks
+finish. Use system temporary storage only for bounded scratch work whose loss is
+acceptable and whose inputs and required evidence are retained elsewhere. If a
+previous task directory is missing, recover from verified commits or retained
+copies and report any unavailable uncommitted work or evidence as unknown.
+
 Before the first mutation in a task copy, bind its origin and immutable starting
 commit to the authorized repository. Read that repository's setup and hook owners;
 an independent clone can have different local configuration even with identical

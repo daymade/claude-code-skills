@@ -4,11 +4,11 @@ search_fanout.py — Fan-out search across all IMA knowledge bases with
 user-defined priority boosting and subset-KB skipping.
 
 Rationale for this shape:
-  IMA's OpenAPI has three constraints that force every serious search tool
+  IMA's OpenAPI has constraints that force every serious search tool
   into the same pattern:
     1. No cross-KB endpoint — search_knowledge takes a single knowledge_base_id.
     2. No relevance score in results — ranking must be client-side.
-    3. Silent 100-hit truncation with no cursor — queries that saturate a KB
+    3. Silent truncation with no cursor — queries that saturate a KB
        are invisibly capped.
 
   Given those constraints, the most useful thing a personal wrapper can do
@@ -45,7 +45,8 @@ import urllib.request
 from pathlib import Path
 
 API_BASE = "https://ima.qq.com/openapi"
-HARD_HIT_CAP = 100  # search_knowledge silently caps at 100, no cursor
+HARD_HIT_CAP = 100  # observed search_knowledge ceiling, with no response cursor
+KB_PAGE_SIZE = 20  # verified listing size; the previous request size was rejected
 
 
 def load_credentials():
@@ -130,7 +131,7 @@ def list_all_kbs(client_id, api_key):
     while True:
         data = api_post(
             "wiki/v1/search_knowledge_base",
-            {"query": "", "cursor": cursor, "limit": 50},
+            {"query": "", "cursor": cursor, "limit": KB_PAGE_SIZE},
             client_id,
             api_key,
         )
@@ -156,8 +157,7 @@ def search_one_kb(kb, query, client_id, api_key):
         return {"kb": kb, "hits": [], "truncated": False, "error": str(e)}
 
     hits = data.get("info_list", []) or []
-    # Silent truncation detection: exact 100 hits with no is_end/next_cursor
-    # in the response is the upstream tell-tale.
+    # Reaching HARD_HIT_CAP without is_end/next_cursor is the upstream tell-tale.
     truncated = len(hits) >= HARD_HIT_CAP and not data.get("is_end") and not data.get("next_cursor")
     return {"kb": kb, "hits": hits, "truncated": truncated, "error": None}
 
@@ -171,7 +171,7 @@ def is_permission_denied(result):
 
 def rank_groups(results, priority_kbs, skip_kbs):
     """
-    Partition the per-KB results into four buckets:
+    Partition the per-KB results into buckets:
 
       - priority: kbs named in priority_kbs (in that order), with >0 hits
       - others:   every other searchable kb with >0 hits, sorted by hit count
@@ -246,7 +246,7 @@ def render_text(query, priority, others, denied, skipped_cfg, total_kbs_listed, 
             if note:
                 label += f" {note}"
             if r["truncated"]:
-                label += " (⚠️ truncated at 100)"
+                label += f" (⚠️ truncated at {HARD_HIT_CAP})"
             print(label)
             for i, hit in enumerate(hits[:max_per_kb], 1):
                 title = hit.get("title", "(no title)")
@@ -278,7 +278,7 @@ def render_text(query, priority, others, denied, skipped_cfg, total_kbs_listed, 
 
     if truncated_kbs:
         print(
-            f"\n⚠️  {len(truncated_kbs)} kb(s) hit the 100-result ceiling; try a narrower query:"
+            f"\n⚠️  {len(truncated_kbs)} kb(s) hit the {HARD_HIT_CAP}-result ceiling; try a narrower query:"
         )
         for name in truncated_kbs:
             print(f"   - {name}")
@@ -317,19 +317,20 @@ def render_json(query, priority, others, denied, skipped_cfg):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description=__doc__.split("\n")[1])
+    description = __doc__.strip().split("\n\n", 1)[0].replace("\n", " ")
+    ap = argparse.ArgumentParser(description=description)
     ap.add_argument("query", help="Search query string")
     ap.add_argument(
         "--max-results",
         type=int,
         default=5,
-        help="Max hits to render per KB in text mode (default: 5)",
+        help="Max hits to render per KB in text mode (default: %(default)s)",
     )
     ap.add_argument(
         "--workers",
         type=int,
         default=12,
-        help="Parallel worker count for fan-out calls (default: 12)",
+        help="Parallel worker count for fan-out calls (default: %(default)s)",
     )
     ap.add_argument("--json", action="store_true", help="Output JSON instead of text")
     args = ap.parse_args(argv)

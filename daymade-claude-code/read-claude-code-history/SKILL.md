@@ -32,6 +32,7 @@ hand the verified evidence to `daymade-claude-code:continue-claude-code-work`.
 | A conversation or quote by keyword | `scripts/history_index.py recall --mode bm25`, then the exact-session reader |
 | Prior work whose wording may have changed | `scripts/history_index.py recall` after checking index status |
 | A topic with no known Session ID | `scripts/history_index.py status`, then `recall`; state index coverage and freshness |
+| The latest conversation about a topic, including a newer continuation | Use recall to locate relevant project(s); for Codex, continue with `read-codex-history`'s **Latest topic across continuations** route instead of treating relevance top-K as latest. Claude/Kimi have no indexed recent-session inventory here, so keep unverified continuation coverage unknown |
 | How identified sessions or a physically bounded project ended | Follow **Inspect session endings** in `references/workflow_examples.md` |
 | A deleted/overwritten file preserved in Claude file-history records | `scripts/recover_content.py` |
 | How often each Skill ran and who started it (user command, model after the user named it, model unprompted), e.g. to decide model-visible vs user-invocable-only | `scripts/skill_usage_ledger.py index`, then `report` (Claude and Codex together); see **Skill usage ledger** below |
@@ -95,6 +96,11 @@ discovery, not a complete recent-session inventory. If a complete list is
 needed, report that the current bundled inventory would scan raw bodies.
 
 ### Exact Session evidence
+
+Before running a large Session read, expanding folded/clipped turns, or reading a
+Session whose output size is unknown, follow [file-backed briefing reading](references/large-session-briefing.md).
+Keep the complete chronology in one private artifact and bring only bounded ranges
+into the tool response; do not solve output pressure by selecting only the tail.
 
 ```text
 <skill-dir>/scripts/read_claude_session.py --session <SESSION_ID>

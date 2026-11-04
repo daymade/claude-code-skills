@@ -1,0 +1,10 @@
+{
+  "status": "child_exited",
+  "returncode": 0,
+  "stdout": {
+    "path": null,
+    "model_facing_truncated": true
+  },
+  "requested_record": "the final record in the complete records array",
+  "scope": "Synthetic recorded-read template; resolve its output path and hash through the corpus preparation procedure before dispatch."
+}

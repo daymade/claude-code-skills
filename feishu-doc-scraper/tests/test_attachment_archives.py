@@ -112,6 +112,8 @@ class AttachmentArchiveTests(unittest.TestCase):
             self.assertEqual(archive.validate_manifest(saved), [])
             self.assertEqual(saved['files'][0]['storage'], 'source')
             self.assertEqual(saved['files'][0]['mime'], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            self.assertNotIn('requested_attachments', saved['resource_summary'])
+            self.assertNotIn('verified_attachments', saved['resource_summary'])
             self.assertEqual((self.output/'capture.json').read_bytes(), self.capture.read_bytes())
             archive.archive(self.capture, self.output, SOURCE, workers=1, resume=True)
             self.assertEqual(len(self.calls), 1)
@@ -196,6 +198,10 @@ class AttachmentArchiveTests(unittest.TestCase):
         m['files'].append({'role':'document_snapshot','storage':'git','path':'index.md',
                           'bytes':len(note),'sha256':hashlib.sha256(note).hexdigest(),'mime':'text/markdown'})
         m['resource_summary']['owner_annotation'] = 'retained'
+        m['resource_summary']['reader'] = 'verified-by-owner'
+        m['resource_summary']['independent_retention'] = 'source-only'
+        m['resource_summary']['requested_attachments'] = 999
+        m['resource_summary']['verified_attachments'] = 998
         path.write_text(json.dumps(m))
         with patch.object(archive.subprocess, 'run', side_effect=self.run_cli):
             self.assertEqual(archive.archive(self.capture, self.output, SOURCE, resume=True)['verified'], 2)
@@ -203,6 +209,11 @@ class AttachmentArchiveTests(unittest.TestCase):
         self.assertEqual(actual['files'][0], original)
         self.assertIn(m['files'][-1], actual['files'])
         self.assertEqual(actual['resource_summary']['owner_annotation'], 'retained')
+        self.assertEqual(actual['resource_summary']['reader'], 'verified-by-owner')
+        self.assertEqual(actual['resource_summary']['independent_retention'], 'source-only')
+        self.assertNotIn('requested_attachments', actual['resource_summary'])
+        self.assertNotIn('verified_attachments', actual['resource_summary'])
+        self.assertEqual(actual['resource_summary']['failed_attachments'], [])
         self.assertEqual(archive.validate_manifest(actual), [])
 
     def test_malformed_response_does_not_lose_other_successful_items(self):

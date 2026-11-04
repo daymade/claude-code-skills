@@ -725,12 +725,12 @@ Safely package codebases with repomix by automatically detecting and removing ha
 
 > **Install**: `claude plugin install daymade-audio@daymade-skills` (suite-only — invoked as `daymade-audio:transcript-fixer`)
 
-Correct speech-to-text (ASR/STT) errors with a Stage 1 dictionary pre-filter, a required Native AI whole-transcript pass, and an audio-backed human gate for unresolved wording, names, numbers, and entities.
+Correct speech-to-text (ASR/STT) errors with a Stage 1 dictionary pre-filter, a required Native AI whole-transcript pass, and evidence-based review of unresolved wording, names, numbers, and entities.
 
 **When to use:**
 - Correcting meeting notes, lecture recordings, or interview transcripts
 - Fixing Chinese/English homophone errors and technical terminology
-- Reviewing one exact transcript with its original audio instead of searching a global queue
+- Reviewing one exact transcript's unresolved items with available evidence instead of searching a global queue
 - Improving future transcripts without turning one-off fixes into broad dictionary rules
 - Collaborating with teams on shared correction knowledge bases
 
@@ -751,13 +751,14 @@ Correct speech-to-text (ASR/STT) errors with a Stage 1 dictionary pre-filter, a 
 uv run scripts/fix_transcription.py --init
 uv run scripts/fix_transcription.py --add "错误词" "正确词" --domain general
 
-# Run full correction pipeline
-uv run scripts/fix_transcription.py --input meeting.md --stage 3
+# Run Stage 1
+uv run scripts/fix_transcription.py --input meeting.md --stage 1
 
-# Open only this transcript's unresolved items and listen before deciding
+# Next, load transcript-fixer and complete the Native AI whole-transcript pass.
+# Resolve remaining pending items from available evidence; use audio when available.
 uv run scripts/review-dashboard/server.py --file "/absolute/meeting.md"
 
-# Read the human verdicts back; pending_total must be 0 before final delivery
+# Read back the review state; pending_total must be 0 before final delivery
 uv run scripts/fix_transcription.py \
   --list-review --review-file "/absolute/meeting.md" \
   --review-status all --json
@@ -3588,27 +3589,8 @@ build or buy — evaluate the options
 
 ### **codex-1m-context-window-setup** - Model-Aware Long Context for Codex
 
-> **Install**: `claude plugin install daymade-codex@daymade-skills`
-> (suite-only — invoked as `daymade-codex:codex-1m-context-window-setup`)
-
-Configure the shared Codex CLI/Desktop base config for the largest context window
-the selected model actually declares, up to a one-million-token request. The Skill
-discovers the live model contract, explains the familiar ~258K default, applies a
-60% auto-compaction threshold, preserves unrelated TOML, backs up changed bytes,
-and rolls back if Codex strict-config validation fails.
-
-**Key features:**
-- Model-aware ceiling instead of a hard-coded 1M claim
-- Read-only `doctor`, transactional `apply`, and drift-detecting `verify` modes
-- Exact rollback, idempotent no-op behavior, and macOS/Windows support
-- Changes only `model_context_window` and `model_auto_compact_token_limit`
-
-**Example usage:**
-```text
-/daymade-codex:codex-1m-context-window-setup doctor
-configure Codex CLI and Desktop for the largest verified context window
-verify that my long-context setup still matches the selected model
-```
+For local context inspection, threshold-only changes or full expansion, follow
+the [Codex context workflow](daymade-codex/codex-1m-context-window-setup/SKILL.md#route-the-request).
 
 ---
 
@@ -4016,7 +3998,6 @@ Each skill includes:
 - **read-codex-history**: See `daymade-claude-code/read-codex-history/references/storage_and_portability.md` for local-store selection, cross-platform paths, privacy boundaries, and diagnostics
 - **read-claude-code-history**: See `daymade-claude-code/read-claude-code-history/references/session_file_format.md` for JSONL structure and `daymade-claude-code/read-claude-code-history/references/workflow_examples.md` for recovery workflows
 - **prior-work-retrieval**: See `daymade-claude-code/prior-work-retrieval/SKILL.md` for the retrieval/verification workflow and `daymade-claude-code/prior-work-retrieval/references/source-manifest.md` for the explicit carrier contract
-- **codex-1m-context-window-setup**: See `daymade-codex/codex-1m-context-window-setup/SKILL.md` for the doctor/apply/verify workflow and `daymade-codex/codex-1m-context-window-setup/references/context_window_contract.md` for model-cap, usable-window, and compaction semantics
 - **docs-cleaner**: See `daymade-docs/docs-cleaner/SKILL.md` for consolidation workflows
 - **deep-research**: See `deep-research/references/research_report_template.md` for report structure and `deep-research/references/source_quality_rubric.md` for source triage
 - **tech-selection**: See `daymade-claude-code/tech-selection/references/decision-axes.md` for the 13 core filter criteria, `daymade-claude-code/tech-selection/references/scoped-criteria.md` for scoped supplementary criteria, `daymade-claude-code/tech-selection/references/rejection-modes.md` for rejection patterns and anti-patterns, and `daymade-claude-code/tech-selection/references/delegation-contract.md` for domain ownership and the autonomy threshold
@@ -4059,7 +4040,7 @@ Each skill includes:
 
 
 - **Claude Code** 2.0.13 or higher
-- **Codex CLI with `doctor --json` and `debug models` + uv/Python 3.11+** (for codex-1m-context-window-setup)
+- **Codex context setup**: Follow its [per-command prerequisites](daymade-codex/codex-1m-context-window-setup/SKILL.md#prerequisites).
 - **gh CLI** (for github-ops and github-review-pr)
 - **git with `merge-tree --write-tree` + jq** (for github-review-pr)
 - **markitdown** (for doc-to-markdown)
