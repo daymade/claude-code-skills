@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **CI**: Accept Ubuntu EC2 regional mirror aliases during bounded hosted-runner APT setup; retain official HTTPS rewriting, path validation and refusal checks.
+
 - **docs-router**, **photo-to-scanned-pdf** (`daymade-docs` v1.28.1 → v1.29.0): Route printable identity-document photos through recipient-specific side, spread, scale and copy-form checks; reuse suitable photos and preserve missing-source and physical-acceptance boundaries. Change type: additive document preparation branch.
 - **lark-cli-router** (`daymade-claude-code` v4.35.0 → v4.35.1): Bind linked resources to the authorized source account before the first read and retain explicit-profile access and permission boundaries. Change type: bounded account-routing repair.
 - **feishu-doc-scraper** (v1.12.0 → v1.12.1): Use the current Minutes transcript export route and per-item output readback instead of the retired metadata-only limitation. Change type: factual operating-guide correction.
