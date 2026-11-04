@@ -4,7 +4,7 @@ How to export the **text transcript** of a Feishu Minutes recording. Verified en
 
 ## Start here: `minutes +detail` exports transcripts, and it batches
 
-Before reading, follow [source account binding](../../daymade-claude-code/lark-cli-router/references/source-account-binding.md).
+Before reading, load `lark-cli-router` and follow its [source account binding](https://github.com/daymade/claude-code-skills/blob/main/daymade-claude-code/lark-cli-router/references/source-account-binding.md).
 Use the selected profile and identity throughout; an active organization alone
 does not identify the account that can read the source.
 

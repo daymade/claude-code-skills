@@ -60,8 +60,8 @@ hands off to favorites-search without changing this Skill's filing ownership.
 
 ## Choose the path
 
-Before the first linked-resource read, follow `lark-cli-router`'s
-[source account binding](../daymade-claude-code/lark-cli-router/references/source-account-binding.md).
+Before the first linked-resource read, load `lark-cli-router` and follow its
+[source account binding](https://github.com/daymade/claude-code-skills/blob/main/daymade-claude-code/lark-cli-router/references/source-account-binding.md).
 Retain the selected profile and identity for every branch below.
 
 ```
