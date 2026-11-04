@@ -58,8 +58,10 @@ executing agent; the router itself does not enforce layout preservation.
   CLI-profile read does not establish the browser's active account or organization.
   If the document's own access page explicitly offers another already signed-in
   identity that can access it, first verify that it belongs to the requesting user
-  and is already authorized for this target. Follow the loaded browser Skill's
-  identity-switch and shared-session coordination procedure, then read back the
+  and is already authorized for this target. Use the site's switch/access control
+  through the loaded browser Skill's supported page actions. Before switching,
+  coordinate a bounded window with known tasks sharing that browser login;
+  separate task spaces do not establish isolated login state. Then read back the
   actual browser identity, original document URL and affected rendered content.
   If that identity is unavailable, ownership or authorization is unclear, or
   access remains refused, stop that route and retain the specific unmet check;
