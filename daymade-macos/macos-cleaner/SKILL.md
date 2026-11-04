@@ -41,18 +41,18 @@ User-provided scope exclusions override every generic scan suggestion. Do not in
 8. **Preserve valuable state.** Never target user documents, credentials, SSH material, active databases, application configuration, or running-service state merely to increase the reported savings. Read `references/safety_rules.md` before any file deletion.
 9. **Execution follows the user's authorization.** If the user asks only for analysis or wants to run commands personally, hand off the commands. When explicit existing authorization covers the verified targets, execute the exact approved actions and verify them. Unattended recurring deletion logic needs separate approval before it is written or enabled.
 10. **Fail fast within the affected target.** An unexpected non-zero command, a mismatched postcondition, an unexpected target, or a changed dependency stops that action. Interpret documented probe statuses such as `lsof` exit 1 with empty output before deciding they are failures. Preserve unresolved state and continue independent authorized targets. A failed optional backup is a reason to reassess whether the backup is needed before changing transfer tools or retrying.
-11. **Before promising physical release from any deletion, name the mechanism — and get it from the creating command, not from a guess.** A `df` gap between a nominal `du` total and actual reclaim means one candidate mechanism is at work, and **the strongest evidence is the verbatim command that created the folder**, because the copy verb alone decides the space semantics. Find it in session history before theorizing; a folder-name or size-based inference is not a mechanism. Only if no command can be found does the gap stay `unknown` — do not substitute the most plausible-sounding mechanism for one you can demonstrate.
+11. **Before promising physical release, establish current allocation and references.** Recover the creating command through an authorized, bounded source when available; it explains initial copy semantics, not today's private blocks or remaining references. A folder name, a sampled shared file, or a small/negative whole-volume `df` change cannot establish zero reclaim or a failed deletion. Keep missing evidence unknown and follow `references/growth_attribution.md` for target measurement and concurrent allocation.
 
-    The mechanisms, distinguished by what `du` reports and what deletion releases (all four measured on 2026-09-19, 1 GiB source, drift-controlled):
+    Distinguish these mechanisms; release depends on the current selected set and references outside it:
 
     | Created by | `du` nominal | Deleting the copy releases | Fingerprint |
     |---|---|---|---|
-    | `cp` (bare) / `cp -a` | full, counted per path | full | independent inodes, independent extents |
-    | **`cp -c` / `cp -cR`** (clonefile) | **full, counted per path** | **≈0** | **different inode, `nlink=1`, shared extent** |
-    | `ln` / `cp -l` (hard link) | **counted once** — sibling reads `0` | **≈0** | **same inode, `nlink=2`** |
-    | local APFS snapshot | full | ≈0 until snapshots are thinned | `tmutil listlocalsnapshots /` |
+    | Independent copy | allocated bytes attributed per inode | Its current private allocation, subject to other retained references and snapshots | Verify allocation; the copy verb alone is insufficient |
+    | `cp -c` / `cp -cR` (clonefile) | shared extents may be attributed to every path | Private blocks plus shared blocks whose last references are removed; a fresh clone with a retained source can release little | Different inodes; inspect current native sharing and the selected cohort |
+    | `ln` / `cp -l` (hard link) | inode deduplication depends on the traversal's scope | Removing one name does not release an inode still named elsewhere; close every link before estimating | Same device/inode; compare observed names with `nlink` |
+    | Retained APFS snapshot | path totals do not reveal all pinned extents | Blocks still referenced by a retained snapshot remain allocated | Inspect snapshots on the affected volume within authorized scope |
 
-    Two traps this table exists to kill. **The clonefile and hard-link rows are opposite on `du` but identical on deletion** — both release ≈0, so "deleting it freed nothing" cannot tell them apart, while `du` can: a hard-linked sibling counts once (or as `0`), a clonefile copy counts full. And **calibrating the wrong copy verb proves nothing**: a 98 GiB gap was twice attributed to the wrong mechanism because the probe used bare `cp` when the folder had been built with `cp -cR`. Before any deletion, run the probe with the *same flags as the creating command*. Clonefile is worth flagging as the common case — macOS `cp` defaults to it for `-c`, and directories copied for a delivery/kit routinely carry it.
+    If a copy experiment is needed, use the creating command's actual flags and state its scope. One newly shared sample does not measure an aged directory, partial sharing, or deletion of a whole clone cohort. Distinguish clone streams from hard links using native metadata; do not infer either mechanism from a net `df` delta. Preserve the original observation when later evidence changes its interpretation.
 
 ## Phase contract
 
@@ -288,6 +288,7 @@ uv run scripts/cleanup_report.py --snapshot after --compare
 - `references/batch-selection.md` and `scripts/batch_budget.py` — select a bounded next batch using supplied capacity and pilot evidence; unknown ceilings stay unknown.
 - `references/apfs-shared-blocks.md` and `scripts/apfs_cow.py` — preserve exact inactive local paths with guarded APFS cloning, pinned rollback, per-item lock release and an exact remainder.
 - `scripts/stream_accounting.py` — calculate internal full-clone allocation upper bounds from supplied native observations; not a probe or physical-release measurement.
+- `scripts/measure_apfs_allocation.py` — bounded, metadata-only private-allocation observations for explicit physical paths; report partial/unsupported results as unknown, not zero reclaim.
 
 Load only the branch relevant to the current task:
 
