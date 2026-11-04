@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-permissions** (`daymade-macos` v1.26.16 → v1.28.0): Add Local Network diagnosis for app-specific LAN failures. Compare requester and launch context, inspect the actual permission, and verify the original operation after authorized repair; preserve unknown causes, existing privacy protections and all TCC/Keychain paths. Change type: additive diagnostic branch.
+- **skill-creator** (`daymade-skill` v1.75.0 → v1.75.1): Bound programmatic retries to one owner/budget adapter, derive unfinished steps from persisted receipts, propagate runner exit status, and preserve evidence and reserve during storage recovery. Change type: bounded retry-lifecycle clarification.
 - **feishu-doc-scraper** (v1.11.0 → v1.12.0): Discover external Bilibili, YouTube and direct-media resources while preserving video/part/playlist identity; separate link discovery, text capture and verified media retention, and hand acquisition to the selected installed owner. Change type: additive resource-discovery capability.
 - **deep-research** (v2.13.0 → v2.13.1): Match lane question IDs, unknown publication dates and unique claim records to the existing CLI; require retained source excerpts to include the decisive passage. Change type: bounded operating-contract correction.
 - **transcript-fixer** (`daymade-audio` v1.57.0 → v1.57.1): Route prepared source clips and queue domain repair from the repository entry; align existing enqueue examples with project-domain admission and remove redundant runtime-value prose. Change type: operational documentation alignment.
