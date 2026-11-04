@@ -80,9 +80,11 @@ The script's first act on every run: verify the state that justifies its existen
 - A proxy-repair watchdog checks the proxy app is running first; user quit it → skip the cycle.
 - A "did the config switch back" watcher checks the config state it watches; already switched → self-stop, not another round of misleading notifications. (Real case: a recovery watcher kept firing for 2h after its premise resolved, sending 3 spurious notices, because nothing told it to stop.)
 
-### 2. Remediate first, page only on sustained failure
+### 2. Separate repair patience from observation failure
 
 Detection stays honest on every cycle, but the *disruptive action* defers until the failure persists across N consecutive cycles (patient mode). Rationale: oscillating chains self-recover in minutes; a force-reconnect on a self-limiting blip is net-harmful. Measure your system's real self-recovery window before choosing N (one chain's 94-min observatory run showed ≤3 min self-recovery → N=2 cycles at 5-min interval).
+
+For a business observer, read [observation-failure timing](references/alert-discipline.md#observation-failure-timing) before choosing an alert threshold. A failed check leaves the business condition unknown. Set its notification deadline from the tolerated gap since the last successful observation and the actual check interval; do not inherit a repair watchdog's fixed failure count or wait for a remediation ladder the observer does not have. Keep incident deduplication and uncertain-delivery reconciliation.
 
 When the trigger aggregates several independent sources into one verdict (not a single health check), the cross-source agreement fraction is a *second, separate* parameter from N — don't default to "all sources must agree." An all-or-nothing gate produces a false negative on exactly the correlated-but-partial incident the watchdog exists to catch, because real failures rarely take every source down at once (real case: a 9-source collection-health gate required 9/9 failing and missed a live incident sitting at 6/9; recalibrating against the actual incident data to a ≥60%-of-sources threshold caught it while fixture testing at 0%/11%/100% confirmed it still tolerated a single-source blip). Calibrate breadth (what fraction must agree) against real historical failure data the same way you calibrate depth (N) — a threshold picked from what "sounds strict enough" is a guess, not a calibration.
 
