@@ -283,11 +283,12 @@ read_validated_mirrors() {
     host="${host%%/*}"
     rest="/${url#*://*/}"
     # Known Ubuntu archive hosts only: the official archive/security and their CDN
-    # aliases (azure.archive.ubuntu.com). Anything else is not a mirror list this
-    # helper is willing to rewrite.
+    # aliases, including <region>.ec2.archive.ubuntu.com (cloud-init's EC2
+    # datasource: docs.cloud-init.io/en/latest/reference/yaml_examples/apt.html).
+    # Anything else is not a mirror list this helper is willing to rewrite.
     if [ "$host" != "archive.ubuntu.com" ] \
       && [ "$host" != "security.ubuntu.com" ] \
-      && [[ ! "$host" =~ ^[a-z0-9-]+\.archive\.ubuntu\.com$ ]]; then
+      && [[ ! "$host" =~ ^[a-z0-9-]+\.(ec2\.)?archive\.ubuntu\.com$ ]]; then
       echo "::error::$script_name: unexpected mirror host '$host' in $mirrors_file — not rewriting" >&2
       exit 1
     fi
@@ -551,6 +552,24 @@ self_test() {
     || { echo "SELF-TEST FAIL: bare-URL rewrite did not emit bare security URL"; exit 1; }
   echo "self-test PASS: bare-URL grammar preserved"
 
+  # The hosted EC2 image uses a regional archive host in either list grammar.
+  for grammar in priority bare; do
+    dir="$root/health-ec2-$grammar"; mkdir -p "$dir"; log="$dir/stub.log"
+    make_env "$dir" yes; make_stub "$dir" plain "$log"
+    if [ "$grammar" = priority ]; then
+      printf 'http://us-east-2.ec2.archive.ubuntu.com/ubuntu/\tpriority:1\nhttps://archive.ubuntu.com/ubuntu/\tpriority:2\nhttps://security.ubuntu.com/ubuntu/\tpriority:3\n' > "$dir/apt-mirrors.txt"
+    else
+      printf 'http://us-east-2.ec2.archive.ubuntu.com/ubuntu/\n' > "$dir/apt-mirrors.txt"
+    fi
+    out="$(CI_APT_FIXTURE_MIRRORS_FILE="$dir/apt-mirrors.txt" \
+      CI_APT_FIXTURE_SOURCES_DIR="$dir/sources.list.d" \
+      CI_APT_FIXTURE_APT_GET="$dir/apt-get" \
+      "$0" --deadline 20 --grace 2 ripgrep 2>&1)" && rc=0 || rc=$?
+    expect "regional EC2 mirror ($grammar) rewrites" 0 "$rc" "$out" "bounded apt preparation OK"
+    grep -q '^https://archive.ubuntu.com/ubuntu/' "$dir/apt-mirrors.txt" \
+      || { echo "SELF-TEST FAIL: EC2 mirror not rewritten"; exit 1; }
+  done
+
   # 1c. already-rewritten list is a no-op (pandoc step reuse).
   dir="$root/idempotent"; mkdir -p "$dir"; log="$dir/stub.log"
   make_env "$dir" yes; make_stub "$dir" plain "$log"
@@ -594,6 +613,20 @@ self_test() {
     CI_APT_FIXTURE_APT_GET="$dir/apt-get" \
     "$0" ripgrep 2>&1)" && rc=0 || rc=$?
   expect "unexpected mirror host refuses to rewrite" 1 "$rc" "$out" "unexpected mirror host"
+
+  for host in us-east-2.ec2.archive.ubuntu.com.invalid us-east-2.ec2x.archive.ubuntu.com; do
+    dir="$root/spoof-$host"; mkdir -p "$dir"; log="$dir/stub.log"
+    make_env "$dir" yes; make_stub "$dir" plain "$log"
+    printf 'http://%s/ubuntu/\tpriority:1\n' "$host" > "$dir/apt-mirrors.txt"
+    cp "$dir/apt-mirrors.txt" "$dir/before"
+    out="$(CI_APT_FIXTURE_MIRRORS_FILE="$dir/apt-mirrors.txt" \
+      CI_APT_FIXTURE_SOURCES_DIR="$dir/sources.list.d" \
+      CI_APT_FIXTURE_APT_GET="$dir/apt-get" \
+      "$0" ripgrep 2>&1)" && rc=0 || rc=$?
+    expect "EC2 lookalike refuses ($host)" 1 "$rc" "$out" "unexpected mirror host"
+    cmp "$dir/before" "$dir/apt-mirrors.txt" || exit 1
+    [ ! -e "$log" ] || { echo "SELF-TEST FAIL: refused host reached apt"; exit 1; }
+  done
 
   # 4b. empty mirror list refuses.
   dir="$root/emptylist"; mkdir -p "$dir"; log="$dir/stub.log"
