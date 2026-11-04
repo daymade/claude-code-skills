@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **deep-research** (v2.13.0 → v2.13.1): Match lane question IDs, unknown publication dates and unique claim records to the existing CLI; require retained source excerpts to include the decisive passage. Change type: bounded operating-contract correction.
+
 - **transcript-fixer** (`daymade-audio` v1.56.0 → v1.57.0): Bind local or authorized SSH clip extraction to a verified source and reuse it in the existing two-window check; retain local/URL audio inputs. Require explicit domains for project-bound queue appends and provide previewed, audited domain-only repair. Change type: compatible source adapter and queue integrity controls.
 - **macos-cleaner** (`daymade-macos` v1.26.16 → v1.27.0): Add bounded, metadata-only APFS private-allocation measurement with explicit partial/unsupported results. Separate target allocation, confirmed retirement, concurrent activity and mixed volume changes; correct unconditional clone/hard-link reclaim claims and retain original observations without false causal credit. Change type: additive read-only capability and factual SOP correction.
 
