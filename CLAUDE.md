@@ -395,6 +395,8 @@ For uv cache diagnosis or retirement, enter
 [uv target semantics](daymade-macos/macos-cleaner/references/cleanup_targets.md#uv-cache-retirement).
 For Cargo or manual CI cleanup, read its
 [artifact selection rules](daymade-macos/macos-cleaner/references/cleanup_targets.md#cargo-and-manual-ci-outputs).
+When free space falls during cleanup, or copy semantics are used to estimate
+reclaim, follow [growth attribution and target allocation](daymade-macos/macos-cleaner/references/growth_attribution.md#target-allocation-and-mixed-free-space-windows).
 
 ### Automated Test Suites (CI)
 
