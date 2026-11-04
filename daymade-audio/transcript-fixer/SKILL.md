@@ -193,6 +193,8 @@ a rare sentence-local mishearing stays file-only.
 | Dictionary, people roster, domain contexts | [dictionary_identity_and_context.md](references/dictionary_identity_and_context.md) |
 | False-positive policy | [false_positive_guide.md](references/false_positive_guide.md) |
 | Queue, dashboard, audio, re-anchor | [review_queue_dashboard.md](references/review_queue_dashboard.md) |
+| Verified local/authorized SSH source clips for the existing two-window check | [Source clips](references/source_clips.md); retain the existing local/URL `--audio` route |
+| Append project-bound queue rows or repair omitted domain metadata | [Queue domain repair](references/queue_domain_repair.md); preview first, preserve verdicts |
 | Resume pending evidence or apply an explicit human verdict | [pending-continuation.md](references/pending-continuation.md) |
 | Numbers, photos, multi-recording, clip cross-check, batches, batch pending-queue audio adjudication | [advanced_correction_evidence.md](references/advanced_correction_evidence.md) |
 | Context-file location and grammar/template | [domain_context_guide.md](references/domain_context_guide.md) |
