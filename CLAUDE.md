@@ -103,6 +103,8 @@ within the current user/host contract.
 
 For research asset discovery, follow [deep-research's catalog contract](deep-research/references/research-asset-contract.md#start-before-external-retrieval);
 keep discovery observations separate from final result checks.
+For source captures, dates and claim records, use its [capture procedure](deep-research/references/research-asset-contract.md#capture-sources-and-claims-during-the-run);
+lane question IDs follow the [provider-run contract](deep-research/references/provider-run-contract.md#task-file-studyjson).
 
 For research-driven evolution of a specified existing Skill, start at
 [skill-evolver](skill-evolver/SKILL.md) and follow its public stage routes; use
