@@ -1,34 +1,41 @@
 #!/usr/bin/env bash
-# git_prepare_clone_retirement.sh — freeze an independent clone before retirement.
+# git_prepare_clone_retirement.sh — prove preservation before clone retirement.
 #
 # The script never moves or deletes a checkout and never changes repository refs.
 # It refuses to certify a clone that still has working-tree bytes, ignored files,
 # stashes, reflog-only commits, clone-only unreachable objects, linked worktrees,
 # local submodule repositories, partial/promisor clones, known extension object
 # stores, or tracked content filters. Repository fsmonitor commands are disabled.
-# A successful run
-# writes a private recovery directory containing:
-#   all-refs.bundle       self-contained history for every current ref
-#   refs.manifest         exact ref tips frozen before the bundle
+# By default, require every clone object to remain reachable from the independent
+# survivor's current refs. Write only recovery manifests and unique metadata;
+# identical survivor metadata needs no new payload. Refuse incomplete coverage
+# rather than silently exporting the whole repository. Preserve unique work first.
+# --full-backup explicitly selects the legacy self-contained recovery export.
+# A successful run writes a private evidence directory containing:
+#   all-refs.bundle       only with --full-backup: all current ref history
+#   refs.manifest         exact ref tips needed for recovery
 #   symrefs.manifest      exact symbolic-ref name -> target topology
 #   reflog-oids.manifest  every commit identity named by a reflog
-#   metadata.manifest     types, modes, and hashes for config/hooks/info
-#   repo-metadata.tar     exact config/hooks/info payload
-#   receipt.txt           source/survivor identity and bundle digest
+#   metadata.manifest     supported metadata types, modes, and hashes
+#   repo-metadata.tar     unique metadata (all scoped metadata for --full-backup)
+#   receipt.txt           selected preservation mode and carrier identity
 #
 # Usage:
 #   git_prepare_clone_retirement.sh \
 #     --clone <independent-clone> --survivor <kept-checkout> --out <new-backup-dir>
+#   git_prepare_clone_retirement.sh \
+#     --clone <independent-clone> --survivor <kept-checkout> --out <new-backup-dir> --full-backup
 #   git_prepare_clone_retirement.sh --verify-current <backup-dir>
 #
-# `--verify-current` is the final compare-and-swap gate. Freeze an absent no-clobber
-# quarantine destination, run process occupancy by itself, then run this command.
-# After success, the move must be the next operation with no intervening probe.
+# `--verify-current` is the final compare-and-swap gate. Freeze the exact authorized
+# target (and absent no-clobber destination for a move), then run process occupancy
+# by itself. After final verification, that action must be the next operation.
 
 set -euo pipefail
 umask 077
 export GIT_OPTIONAL_LOCKS=0
 export GIT_NO_LAZY_FETCH=1
+export GIT_NO_REPLACE_OBJECTS=1
 
 safe_git() {
   command git --no-pager \
@@ -109,10 +116,11 @@ list_reflog_oids() {
 
 metadata_manifest() {
   local checkout="$1"
+  local scope="${2:-legacy}"
   local git_dir rel_path object_id link_target entry mode
   local escaped_path escaped_target
 
-  git_dir="$(absolute_git_dir "$checkout")" || return 1
+  git_dir="$(survivor_common_dir "$checkout")" || return 1
   emit_metadata_entry() {
     rel_path="${entry#"$git_dir"/}"
     printf -v escaped_path '%q' "$rel_path"
@@ -130,7 +138,7 @@ metadata_manifest() {
   }
 
   {
-    for entry in config config.worktree hooks info; do
+    for entry in $(metadata_roots "$scope"); do
       entry="$git_dir/$entry"
       if [ -e "$entry" ] || [ -L "$entry" ]; then
         emit_metadata_entry
@@ -145,11 +153,132 @@ metadata_manifest() {
   } | LC_ALL=C sort
 }
 
+metadata_roots() {
+  printf '%s\n' config config.worktree hooks info
+  if [ "${1:-legacy}" = survivor ]; then
+    printf '%s\n' logs description ORIG_HEAD COMMIT_EDITMSG FETCH_HEAD
+    printf '%s\n' objects/info/alternates objects/info/http-alternates
+  fi
+}
+
+check_known_metadata() {
+  local clone="$1" git_dir entry name
+  git_dir="$(absolute_git_dir "$clone")"
+  while IFS= read -r -d '' entry; do
+    name="${entry##*/}"
+    case "$name" in
+      HEAD|index|packed-refs|objects|refs|config|config.worktree|hooks|info|logs|description|ORIG_HEAD|COMMIT_EDITMSG|FETCH_HEAD) ;;
+      lfs|annex)
+        if find "$entry" -mindepth 1 ! -type d -print | LC_ALL=C grep . >/dev/null; then
+          unsafe "UNHANDLED_REPOSITORY_METADATA" "$entry contains extension-managed state"
+        fi
+        ;;
+      *) unsafe "UNHANDLED_REPOSITORY_METADATA" "$entry; audit and preserve this state explicitly" ;;
+    esac
+    [ ! -L "$entry" ] || unsafe "SYMLINKED_REPOSITORY_METADATA" "$entry"
+    if [ -d "$entry" ] && [ "$name" != objects ]; then
+      while IFS= read -r -d '' entry; do
+        unsafe "SYMLINKED_REPOSITORY_METADATA" "$entry"
+      done < <(find "$entry" -type l -print0)
+    fi
+  done < <(find "$git_dir" -mindepth 1 -maxdepth 1 -print0)
+  check_object_store_layout "$git_dir/objects"
+}
+
+check_object_store_layout() {
+  local objects="$1" entry rel
+  while IFS= read -r -d '' entry; do
+    rel="${entry#"$objects"/}"
+    if [ -d "$entry" ] && [ ! -L "$entry" ]; then
+      case "$rel" in info|info/commit-graphs|pack) continue ;; esac
+      [[ "$rel" =~ ^[0-9a-f]{2}$ ]] && continue
+    elif [ -f "$entry" ] && [ ! -L "$entry" ]; then
+      case "$rel" in
+        info/alternates|info/http-alternates|info/commit-graph|info/packs|info/commit-graphs/commit-graph-chain|pack/multi-pack-index) continue ;;
+      esac
+      [[ "$rel" =~ ^[0-9a-f]{2}/[0-9a-f]{38}([0-9a-f]{24})?$ ]] && continue
+      [[ "$rel" =~ ^pack/pack-[0-9a-f]+\.(pack|idx|rev|bitmap|mtimes)$ ]] && continue
+      [[ "$rel" =~ ^info/commit-graphs/graph-[0-9a-f]+\.graph$ ]] && continue
+    fi
+    unsafe "UNHANDLED_REPOSITORY_METADATA" "$entry is outside the supported Git object-store layout"
+  done < <(find "$objects" -mindepth 1 -print0)
+}
+
+survivor_common_dir() {
+  local path
+  path="$(safe_git -C "$1" rev-parse --path-format=absolute --git-common-dir)" || return 1
+  canonical_dir "$path"
+}
+
+check_survivor_independence() {
+  local clone="$1" survivor="$2" common objects entry
+  common="$(survivor_common_dir "$survivor")" || unsafe "SURVIVOR_PATH_CHANGED" "$survivor"
+  case "$common/" in "$clone/"*) unsafe "SURVIVOR_OBJECT_DEPENDENCY" "$common is inside the retiring clone" ;; esac
+  [ "$common" != "$(absolute_git_dir "$clone")" ] || \
+    unsafe "SURVIVOR_OBJECT_DEPENDENCY" "clone and survivor share the same repository"
+  objects="$common/objects"
+  [ -d "$objects" ] && [ ! -L "$objects" ] || \
+    unsafe "SURVIVOR_OBJECT_DEPENDENCY" "$objects is absent or symlinked"
+  [ ! -s "$objects/info/alternates" ] && [ ! -s "$objects/info/http-alternates" ] || \
+    unsafe "SURVIVOR_OBJECT_DEPENDENCY" "survivor borrows objects; prove/dissociate that dependency separately"
+  while IFS= read -r -d '' entry; do
+    unsafe "SURVIVOR_OBJECT_DEPENDENCY" "survivor object path is symlinked: $entry"
+  done < <(find "$objects" -type l -print0)
+  check_no_promisor_clone "$survivor"
+  [ "$(safe_git -C "$survivor" rev-parse --is-shallow-repository)" = false ] || \
+    unsafe "SURVIVOR_INCOMPLETE" "survivor has shallow history"
+}
+
+check_survivor_coverage() {
+  local clone="$1" survivor="$2" clone_objects retained_objects missing
+  check_survivor_independence "$clone" "$survivor"
+  safe_git -C "$survivor" fsck --no-reflogs --no-dangling --no-progress >/dev/null 2>&1 || \
+    unsafe "SURVIVOR_FSCK_FAILED" "$survivor"
+  clone_objects="$(safe_git -C "$clone" cat-file --batch-all-objects --batch-check='%(objectname)' | LC_ALL=C sort -u)" || \
+    unsafe "CLONE_OBJECT_INVENTORY_UNREADABLE" "$clone"
+  retained_objects="$(safe_git -C "$survivor" rev-list --objects --all --no-object-names | LC_ALL=C sort -u)" || \
+    unsafe "SURVIVOR_OBJECT_INVENTORY_UNREADABLE" "$survivor"
+  [ -n "$clone_objects" ] && [ -n "$retained_objects" ] || \
+    unsafe "SURVIVOR_INCOMPLETE" "empty object inventory cannot prove preservation"
+  missing="$(comm -23 <(printf '%s\n' "$clone_objects") <(printf '%s\n' "$retained_objects"))"
+  [ -z "$missing" ] || {
+    printf '%s\n' "$missing" >&2
+    unsafe "SURVIVOR_INCOMPLETE" "objects above lack a retained survivor ref; preserve only that unique work before retrying (or explicitly select --full-backup)"
+  }
+  printf '%s\n' "$clone_objects" | wc -l | tr -d ' '
+}
+
+unique_metadata_roots() {
+  local clone_metadata="$1" survivor_metadata="$2" entry clone_part survivor_part
+  for entry in $(metadata_roots survivor); do
+    clone_part="$(printf '%s\n' "$clone_metadata" | awk -F'|' -v root="$entry" '$1 == root || index($1, root "/") == 1')"
+    [ -n "$clone_part" ] || continue
+    survivor_part="$(printf '%s\n' "$survivor_metadata" | awk -F'|' -v root="$entry" '$1 == root || index($1, root "/") == 1')"
+    [ "$clone_part" = "$survivor_part" ] || printf '%s\n' "$entry"
+  done
+}
+
+copy_unique_metadata() {
+  local clone="$1" out="$3" entry git_dir roots
+  local entries=()
+  git_dir="$(absolute_git_dir "$clone")"
+  roots="$(unique_metadata_roots "$(cat "$out/metadata.manifest")" "$(cat "$out/survivor-metadata.manifest")")"
+  while IFS= read -r entry; do
+    [ -z "$entry" ] || entries+=("$entry")
+  done < <(printf '%s\n' "$roots")
+  : > "$out/metadata-roots.manifest"
+  if [ ${#entries[@]} -gt 0 ]; then
+    printf '%s\n' "${entries[@]}" > "$out/metadata-roots.manifest"
+    tar -cf "$out/repo-metadata.tar" -C "$git_dir" "${entries[@]}"
+    sha256_file "$out/repo-metadata.tar" > "$out/metadata.sha256"
+  fi
+}
+
 check_metadata_scope() {
   local clone="$1"
   local git_dir config_file config_keys lowered_key symlink_path
 
-  git_dir="$(absolute_git_dir "$clone")" || return 1
+  git_dir="$(survivor_common_dir "$clone")" || return 1
   for config_file in "$git_dir/config" "$git_dir/config.worktree"; do
     [ -e "$config_file" ] || continue
     config_keys="$(safe_git config --file "$config_file" --no-includes --name-only --list)" || \
@@ -296,7 +425,8 @@ check_identity() {
   local clone_remote survivor_remote clone_head survivor_head
 
   [ "$clone" != "$survivor" ] || die "clone and survivor resolve to the same checkout"
-  [ -d "$clone/.git" ] || die "--clone must name an independent clone with a .git directory"
+  case "$survivor/" in "$clone/"*) die "survivor is inside the retiring clone" ;; esac
+  [ -d "$clone/.git" ] && [ ! -L "$clone/.git" ] || die "--clone must name an independent clone with a physical .git directory"
   safe_git -C "$clone" rev-parse --git-dir >/dev/null 2>&1 || die "clone is not a Git repository: $clone"
   safe_git -C "$survivor" rev-parse --git-dir >/dev/null 2>&1 || die "survivor is not a Git repository: $survivor"
 
@@ -322,7 +452,12 @@ check_identity() {
 
 check_physical_state() {
   local clone="$1"
-  local normal_state physical_state stash_state
+  local normal_state physical_state stash_state index_state
+
+  index_state="$(safe_git -C "$clone" ls-files -v)" || unsafe "INDEX_UNREADABLE" "$clone"
+  if printf '%s\n' "$index_state" | LC_ALL=C grep '^[a-zS] ' >/dev/null; then
+    unsafe "HIDDEN_INDEX_STATE" "assume-unchanged/skip-worktree flags can conceal unique bytes; inspect and clear them before retirement"
+  fi
 
   normal_state="$(safe_git -C "$clone" status --porcelain=v1 --untracked-files=all)" || \
     unsafe "STATUS_UNREADABLE" "$clone"
@@ -407,6 +542,11 @@ verify_current() {
   local current_refs current_symrefs current_reflog current_metadata bundle_heads
 
   [ -d "$out" ] || die "backup directory does not exist: $out"
+  if [ -f "$out/preservation.mode" ]; then
+    [ "$(cat "$out/preservation.mode")" = survivor-v1 ] || die "unknown preservation mode"
+    verify_survivor_current "$out"
+    return
+  fi
   for required in clone.path survivor.path refs.manifest metadata.manifest \
     bundle-heads.manifest repo-metadata.tar metadata.sha256 all-refs.bundle \
     bundle.sha256 receipt.txt; do
@@ -468,16 +608,66 @@ verify_current() {
   echo "READY_TO_QUARANTINE clone=$clone backup=$out sha256=$current_digest"
 }
 
+verify_survivor_current() {
+  local out="$1" clone survivor objects_count required
+  for required in clone.path survivor.path survivor-common.path head.oid refs.manifest \
+    survivor-refs.manifest metadata.manifest survivor-metadata.manifest receipt.txt; do
+    [ -s "$out/$required" ] || die "evidence is incomplete: missing $out/$required"
+  done
+  for required in symrefs.manifest reflog-oids.manifest metadata-roots.manifest; do
+    [ -f "$out/$required" ] || die "evidence is incomplete: missing $out/$required"
+  done
+  IFS= read -r clone < "$out/clone.path"
+  IFS= read -r survivor < "$out/survivor.path"
+  [ -d "$clone/.git" ] || unsafe "CLONE_PATH_CHANGED" "$clone"
+  [ -d "$survivor" ] || unsafe "SURVIVOR_PATH_CHANGED" "$survivor"
+  [ "$(survivor_common_dir "$survivor")" = "$(cat "$out/survivor-common.path")" ] || \
+    unsafe "SURVIVOR_PATH_CHANGED" "$survivor repository identity changed"
+  check_survivor_independence "$clone" "$survivor"
+  check_no_promisor_clone "$clone"
+  check_no_extension_object_stores "$clone"
+  check_no_tracked_content_filters "$clone"
+  check_identity "$clone" "$survivor" >/dev/null
+  check_no_linked_worktrees "$clone"
+  check_no_submodule_repositories "$clone"
+  check_metadata_scope "$clone"
+  check_metadata_scope "$survivor"
+  check_known_metadata "$clone"
+  check_physical_state "$clone"
+  check_reflog_coverage "$clone"
+  check_clone_owned_unreachable_objects "$clone" "$survivor"
+  [ "$(safe_git -C "$clone" rev-parse HEAD)" = "$(cat "$out/head.oid")" ] || unsafe "HEAD_CHANGED" "prepare fresh evidence"
+  [ "$(safe_git -C "$clone" rev-parse --is-shallow-repository)" = false ] || unsafe "SHALLOW_CLONE" "$clone"
+  [ "$(list_refs "$clone")" = "$(cat "$out/refs.manifest")" ] || unsafe "REFSET_CHANGED" "prepare fresh evidence"
+  [ "$(list_symbolic_refs "$clone")" = "$(cat "$out/symrefs.manifest")" ] || unsafe "SYMREFS_CHANGED" "prepare fresh evidence"
+  [ "$(list_reflog_oids "$clone")" = "$(cat "$out/reflog-oids.manifest")" ] || unsafe "REFLOG_CHANGED" "prepare fresh evidence"
+  [ "$(metadata_manifest "$clone" survivor)" = "$(cat "$out/metadata.manifest")" ] || unsafe "METADATA_CHANGED" "prepare fresh evidence"
+  [ "$(list_refs "$survivor")" = "$(cat "$out/survivor-refs.manifest")" ] || unsafe "SURVIVOR_REFSET_CHANGED" "retained carrier moved; prepare fresh evidence"
+  [ "$(metadata_manifest "$survivor" survivor)" = "$(cat "$out/survivor-metadata.manifest")" ] || unsafe "SURVIVOR_METADATA_CHANGED" "retained metadata changed"
+  [ "$(unique_metadata_roots "$(cat "$out/metadata.manifest")" "$(cat "$out/survivor-metadata.manifest")")" = "$(cat "$out/metadata-roots.manifest")" ] || \
+    unsafe "METADATA_SCOPE_CHANGED" "unique metadata recovery roots no longer match the frozen carriers"
+  objects_count="$(check_survivor_coverage "$clone" "$survivor")" || return $?
+  if [ -s "$out/metadata-roots.manifest" ]; then
+    [ -f "$out/repo-metadata.tar" ] && [ -s "$out/metadata.sha256" ] || die "unique metadata archive is missing"
+    [ "$(sha256_file "$out/repo-metadata.tar")" = "$(cat "$out/metadata.sha256")" ] || unsafe "METADATA_ARCHIVE_CHANGED" "$out/repo-metadata.tar"
+  else
+    [ ! -e "$out/repo-metadata.tar" ] || die "unexpected metadata payload"
+  fi
+  echo "READY_TO_RETIRE clone=$clone survivor=$survivor objects=$objects_count evidence=$out"
+}
+
 CLONE=""
 SURVIVOR=""
 OUT=""
 VERIFY_CURRENT=""
+FULL_BACKUP=false
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --clone) CLONE="${2:?--clone needs a path}"; shift 2 ;;
     --survivor) SURVIVOR="${2:?--survivor needs a path}"; shift 2 ;;
     --out) OUT="${2:?--out needs a directory}"; shift 2 ;;
+    --full-backup) FULL_BACKUP=true; shift ;;
     --verify-current)
       [ -z "$VERIFY_CURRENT" ] || die "--verify-current may be passed only once"
       VERIFY_CURRENT="${2:?--verify-current needs a backup directory}"
@@ -488,8 +678,12 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+for inherited_name in GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE GIT_NAMESPACE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES; do
+  [ -z "${!inherited_name:-}" ] || die "unset repository override $inherited_name before preparation"
+done
+
 if [ -n "$VERIFY_CURRENT" ]; then
-  [ -z "$CLONE" ] && [ -z "$SURVIVOR" ] && [ -z "$OUT" ] || \
+  [ -z "$CLONE" ] && [ -z "$SURVIVOR" ] && [ -z "$OUT" ] && [ "$FULL_BACKUP" = false ] || \
     die "--verify-current is standalone; do not combine it with preparation options"
   verify_current "$VERIFY_CURRENT"
   exit 0
@@ -523,6 +717,31 @@ check_metadata_scope "$CLONE"
 check_physical_state "$CLONE"
 check_reflog_coverage "$CLONE"
 check_clone_owned_unreachable_objects "$CLONE" "$SURVIVOR"
+
+if [ "$FULL_BACKUP" = false ]; then
+  check_known_metadata "$CLONE"
+  check_metadata_scope "$SURVIVOR"
+  OBJECTS_COUNT="$(check_survivor_coverage "$CLONE" "$SURVIVOR")" || exit $?
+  /bin/mkdir "$OUT"
+  printf '%s\n' survivor-v1 > "$OUT/preservation.mode"
+  printf '%s\n' "$CLONE" > "$OUT/clone.path"
+  printf '%s\n' "$SURVIVOR" > "$OUT/survivor.path"
+  survivor_common_dir "$SURVIVOR" > "$OUT/survivor-common.path"
+  safe_git -C "$CLONE" rev-parse HEAD > "$OUT/head.oid"
+  list_refs "$CLONE" > "$OUT/refs.manifest"
+  list_refs "$SURVIVOR" > "$OUT/survivor-refs.manifest"
+  list_symbolic_refs "$CLONE" > "$OUT/symrefs.manifest"
+  list_reflog_oids "$CLONE" > "$OUT/reflog-oids.manifest"
+  metadata_manifest "$CLONE" survivor > "$OUT/metadata.manifest"
+  metadata_manifest "$SURVIVOR" survivor > "$OUT/survivor-metadata.manifest"
+  copy_unique_metadata "$CLONE" "$SURVIVOR" "$OUT"
+  printf '%s\n' "preservation=survivor" "objects=$OBJECTS_COUNT" "identity_mode=$IDENTITY_MODE" \
+    "clone=$CLONE" "survivor=$SURVIVOR" > "$OUT/receipt.txt"
+  verify_current "$OUT"
+  echo "PRESERVATION survivor"
+  if [ -f "$OUT/repo-metadata.tar" ]; then echo "PAYLOAD unique-metadata"; else echo "PAYLOAD none"; fi
+  exit 0
+fi
 
 REFS="$(list_refs "$CLONE")"
 [ -n "$REFS" ] || unsafe "NO_REFS" "the clone has no ref to bundle"

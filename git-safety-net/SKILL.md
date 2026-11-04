@@ -693,18 +693,22 @@ and final branch-count gates that a single-branch retirement does not need.
 - **Independent clones need ref-complete preparation before retirement.** A clean worktree says
   nothing about clone-only refs, reflog history, ignored bytes, stashes, hooks/config, or an
   `objects/info/alternates` dependency created by `git clone --shared`. Run
-  `scripts/git_prepare_clone_retirement.sh --clone <absolute-clone> --survivor <absolute-kept-checkout> --out <new-external-backup-dir>`;
+  `scripts/git_prepare_clone_retirement.sh --clone <absolute-clone> --survivor <absolute-kept-checkout> --out <new-external-evidence-dir>`;
   it refuses those hidden loss states, every clone-only unreachable Git object, partial/promisor
   clones, attached linked worktrees, local submodule repositories, known Git LFS/annex object stores,
-  tracked content filters, and repository-local config/hook indirection that the recovery archive
-  cannot resolve safely. It disables repository fsmonitor execution, freezes ref tips plus
-  symbolic-ref topology and metadata file types/modes, then creates a self-contained all-refs bundle
-  and a content-bound receipt. Finish every preliminary Git probe, freeze the absent quarantine
-  target, run process occupancy by itself, then run `--verify-current <backup-dir>` as the final
-  probe with the authorized no-clobber quarantine move as the **next operation**. This order keeps
-  `lsof` from observing a sibling Git process without opening a larger post-verification gap. Prove
-  old-path absence + new-path presence; permanent deletion is a separate explicit decision. Full
-  READ-DO sequence and `--shared` boundary:
+  tracked content filters, and unresolved repository metadata or dependency state. By default it
+  proves that every clone object remains reachable from the independent survivor's durable refs,
+  freezes both carriers, and retains only metadata not already present there. An equivalent
+  survivor needs no new payload. Incomplete coverage stops preparation: preserve only the unique
+  work first; select `--full-backup` only when a self-contained recovery export is actually needed.
+  Finish every preliminary Git probe, freeze the exact authorized removal path (and absent
+  no-clobber destination when moving), run process occupancy by itself, then run
+  `--verify-current <evidence-dir>` as the final probe with the authorized removal or move as the
+  **next operation**. This order keeps `lsof` from observing a sibling Git process without opening
+  a larger post-verification gap. Prove
+  old-path absence and the selected retained carrier; a move also requires new-path presence.
+  A preparation receipt supplies no deletion authority and does not require a new quarantine copy
+  when existing authority already covers exact removal. Full READ-DO sequence and `--shared` boundary:
   **[references/merge_verification.md](references/merge_verification.md)** § Independent clone retirement.
   The shared-file writer probe in `references/prevention_practices.md` and the clone/worktree
   occupancy probes in `references/merge_verification.md` share the same read-only,
@@ -759,7 +763,7 @@ never tell a user to run bare `git_verify_branch_merged.sh` unless `command -v` 
 | `scripts/git_align_checkout.sh --preview --target SHA` / `--apply --target SHA --source-worktree PATH --backup-manifest FILE` | Preview or materialize a checkout's content up to a target commit without a throwaway snapshot branch and without moving HEAD; `--apply` only overwrites a path once its current content is proven reproducible (target's own history, or a manifest sha256) | `--preview`: nothing. `--apply`: working-tree files only for paths it proves safe — never the real index, never HEAD, never a delete |
 | `scripts/git_export_before_drop.sh [export options]` | Export stashes plus selected branches or every current ref into verified bundles | Writes backup files only (never drops/deletes) |
 | `scripts/git_export_before_drop.sh --verify-current BUNDLE` | Fail if any bundled ref moved or disappeared since export | Nothing (read-only) |
-| `scripts/git_prepare_clone_retirement.sh --clone PATH --survivor PATH --out DIR` | Refuse hidden/unhandled clone state, then freeze every ref tip, symbolic-ref target, reflog identity, and scoped config/hooks/info metadata into a self-contained recovery set; after freezing an absent no-clobber destination and process occupancy, `--verify-current DIR` is the final probe and the move must be the next operation | Writes only the new external backup directory; disables lazy fetch/fsmonitor and refuses tracked content filters; never moves/deletes or changes refs |
+| `scripts/git_prepare_clone_retirement.sh --clone PATH --survivor PATH --out DIR [--full-backup]` | Default: prove every clone object retained by an independent survivor's refs, record exact recovery identities and copy only unique metadata. Refuse gaps rather than silently creating a full bundle; `--full-backup` explicitly retains the self-contained export branch. Run `--verify-current DIR` after standalone occupancy and immediately before the authorized removal/move. | Writes only the new external evidence directory and any necessary metadata/export; disables lazy fetch/fsmonitor; never moves/deletes or changes refs |
 
 These helpers run from the repository root. They use read-only enumeration/configuration commands such as
 `find`, `config`, `symbolic-ref`, `submodule status`, `status`, `cat-file`, `rev-list`, `rev-parse`,
