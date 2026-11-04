@@ -132,19 +132,52 @@ directories:
 Report the remainder as **unattributed** rather than forcing it onto the nearest large
 directory.
 
-**A clonefile snapshot's cost is delayed, not zero.** Deleting a full-clonefile
-snapshot releases ≈0 at deletion time, but the cost lands later: as the live tree
-churns, blocks shared with the snapshot get pinned and gradually turn real —
+**A clonefile snapshot's allocation can diverge after creation.** A fresh clone
+can share most blocks with a retained source. As the live tree changes, the copy
+can retain old blocks or acquire private blocks —
 measured 2026-10-21, a snapshot already held files that no longer existed in live
 (`raw/codex/history.jsonl`, `generated_images/*.png`), i.e. it was already the sole
 owner of deleted content, and two same-day incremental snapshots' state DBs had
 fully diverged into ~3 G of real bytes. Two consequences: the snapshot directory's
-size root is the *live home it captures* (here `~/.codex` 108 G / `~/.claude` 20 G),
-so governing the snapshot directory without governing the live source solves
-nothing; and as an emergency-reclaim target a clonefile snapshot is a complete
-miss — it frees ≈0 today while its real cost accrues tomorrow. Attribution rows
-for snapshot directories must name the live source as the writer, not the capture
-script.
+size root is the live home it captures, so account for source churn as well as
+the capture job. Aged copies and whole selected cohorts need current allocation
+and reference evidence; neither their creation command nor one shared sample
+proves zero release. Name the observed writer or source of churn, retaining
+unknown when it was not captured. Protected records remain protected.
+
+### Target allocation and mixed free-space windows
+
+Before an authorized retirement, record the exact target identity, deletion
+postcondition, target allocation and same-volume free-space timestamps separately.
+Use the read-only native allocation helper below for explicitly selected paths.
+From this Skill directory, using physical paths without symlink ancestors:
+
+```bash
+python3 scripts/measure_apfs_allocation.py /absolute/selected-root --max-seconds 30 --max-files 100000
+```
+
+Exit 0 means the selected bounded metadata walk completed, not that any bytes
+are disposable. Exit 2 reports invalid, unsupported or partial measurement;
+read `status`, errors and known subsets instead of treating null totals as zero.
+Run different devices separately. The limits are checked between metadata calls;
+they cannot interrupt a blocked syscall or provide an atomic snapshot.
+On supported macOS/APFS it queries ordinary files' `ATTR_CMNEXT_PRIVATESIZE`;
+a directory's own zero value is not its recursive allocation. Missing support,
+permission failures, disappearing files, unstable identities and bounded partial
+walks remain unknown. Deduplicate inodes and close hard-link names.
+
+Single-file private allocation is a diagnostic observation, not the exact release
+from jointly deleting a clone cohort. Shared blocks can become free only when
+their last references disappear. Keep the target observation, the whole-volume
+net change and unknown concurrent allocation/deallocation in separate fields.
+Do not subtract one from the other to invent an exclusive writer's contribution.
+
+For short-lived exports, observe the existing job's directory identity, current
+allocation and process identity, then read them back after natural completion.
+A point observation is not the whole run's peak; natural cleanup is not a leak.
+Later activity cannot explain an earlier window without overlapping evidence.
+Do not stop another job or delete its active export to isolate a measurement.
+Use the result cases in `report_templates.md` to reject unsupported attribution.
 
 ### Internal clone-stream bounds
 
@@ -214,9 +247,11 @@ rung 3b).
 
 A 100%-full disk does not suspend this reference; it makes it mandatory. Measured
 2026-10-21: an emergency run that skipped growth attribution and ranked targets by
-nominal `du` picked phantom targets three times in one day (a 123 G cache that released
-~38 GiB; a 108 G clonefile snapshot that released ≈0; a backup set with the same
-structure), while the largest real growth engine (`~/.codex` sessions, 76 G and
+nominal `du` selected targets whose observed windows differed from their path totals
+(a 123 G cache with ~38 GiB reported net recovery; a 108 G clonefile snapshot with
+little reported net recovery; a backup set with the same structure). Those window
+observations do not establish each batch's exclusive release. Meanwhile, an observed
+growth engine (`~/.codex` sessions, 76 G and
 +29 GiB/month) sat outside the governed scope entirely until a late attribution pass
 found it. In an emergency, order targets by *attributed recent physical growth* — the
 section-3 ctime/allocated-bytes estimate and the section-4 `df` reconciliation — not by

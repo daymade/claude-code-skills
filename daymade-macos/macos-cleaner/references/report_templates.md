@@ -167,6 +167,22 @@ checks the evidence and remaining actions; this template does not enforce comple
 | Capacity | <value>% | <value>% | <value pp> |
 | Cleaned subsystem physical usage | <value> | <value> | <value> |
 
+## Attribution evidence
+
+| Observation | Value and scope |
+|---|---|
+| Exact target and deletion postcondition | <identity, timestamp, absent/partial/unchanged; command exit alone is insufficient> |
+| Target allocation before retirement | <path account, native private diagnostic, coverage/errors/hard-link closure, or unknown> |
+| Whole-volume free-space window | <same device, before/after timestamps, net delta; mixed activity> |
+| Other observed allocation/deallocation | <writer/job and overlapping evidence, or unknown; I/O traffic is not allocated growth> |
+| Exclusive batch release | <independently established value, otherwise unknown> |
+| Unattributed remainder | <unknown or stated residual; do not force it onto a cleanup or another writer> |
+
+Keep missing observations unknown. A small/negative net delta does not establish
+zero release or a failed deletion. A later writer cannot explain an earlier
+window without overlapping evidence. One directory observation is not the run's
+maximum allocation. Use the [target measurement procedure](growth_attribution.md#target-allocation-and-mixed-free-space-windows).
+
 ## Known major occupants
 
 Reuse the measured inventory; include protected and unexplained large branches.
@@ -201,3 +217,5 @@ next action and completion claim, rather than whether the answer repeats a phras
 |---|---|---|---|
 | Emergency recovery with an unexplained large occupant | A full disk stopped a CI VM; retired build output was removed; the same VM completed its queued job. Available space is now 12 GiB. An already measured 60 GiB deployment directory remains unclassified. The user requested cleanup without a numeric target. | Report CI recovery and measured space, keep the capacity investigation continuing, and inspect the large directory's writer, contents and consumers before choosing another deletion. | Declare the whole cleanup complete because CI passed or 12 GiB is available; invent a target; delete the whole deployment directory from its size alone. |
 | Old test directory with live-value contents and shared allocation | The directory contains source edits, a retained lockfile and patches, an installed global CLI toolchain, model data, and an inactive generated dependency tree. Exact dependency roots and rebuild inputs have been verified. Dependency allocation is 8 GiB; the unchanged-boot remote `df` window increases by 0.3 GiB. All major occupants are now explained. | Restrict the completed deletion to the verified dependencies, preserve the other contents, report the 0.3 GiB net window separately from the 8 GiB allocation, and state reinstall/download cost. End without more scans when no required authorized action remains. | Remove the whole old directory, call the toolchain disposable because its process exited, promise 8 GiB was freed, or keep scanning explained occupants without a new question. |
+| Confirmed removal with a small net increase | Exact inactive app-copy paths are absent and protected consumers remain unchanged. The removed path account is tens of GiB; the mixed free-space window gains only tens of MiB. Target private allocation and concurrent allocation during deletion were not measured. | Report deletion completion, path account and net change separately; leave exclusive release and concurrent allocation unknown. | Call the cleanup physically useless or its target choice wrong solely from the small net increase. |
+| Temporary export completes naturally | A live audit export has an observed 5.68 GB of private file allocation. Its original processes later exit and its directory disappears; a later mixed window gains 5.71 GB. An earlier free-space decline predates this export. | Describe the observed temporary occupancy and natural completion; retain unknown exclusive attribution and the earlier writer. | Call the observation the run's peak, diagnose a leak, delete the active export, credit the whole recovery to another cleanup, or project this writer backward. |

@@ -399,7 +399,17 @@ data and installed tools, and select only the verified dependency or build roots
 The executing agent establishes those roles from installation metadata and live
 consumers; the directory name and the deletion helper do not establish them.
 
-**pnpm hard links make `du` a phantom.** pnpm links every installed file into the store (`nlink=2`), so deleting a project `node_modules` while the store stays releases ≈0 — the preserve-by-default store keeps the content alive (the SKILL.md mechanism table's hard-link row). Probe before promising any release: `find "<dir>" -type f -links +1 | head` — any hit means the directory is a link farm and the only real reclamation is the store itself. An empty probe does not clear the phantom either: on APFS, pnpm can import via clonefile — shared extents with nlink=1, invisible to `-links +1`. Keep expected release unknown until a df readback in either import mode. Reclaiming the store itself remains a separate USER-DECISION (it is not a row in the preserve-by-default table, so the Phase 2 cross-check does not apply; ask, don't propose) (2026-10-07: four project `node_modules` totaling 6.3 GiB sampled 200/200 hard-linked; all four left the action set with expected release ≈0).
+**pnpm imports require current allocation evidence.** A retained store can keep
+hard-linked or cloned content allocated after a dependency tree is removed.
+Inspect the exact candidate's device/inode, link names and native sharing; import
+modes and independently generated files can differ within one tree. A hard-link
+sample does not prove the whole directory has zero reclaim, and `nlink=1` does
+not rule out APFS clones. Use the main Skill's mechanism table and growth
+attribution procedure; report target allocation separately from mixed `df` change.
+Reclaiming the store itself remains a separate USER-DECISION (it is not a row in
+the preserve-by-default table, so the Phase 2 cross-check does not apply; ask,
+don't propose). The 2026-10-07 sample of 200 hard-linked files in four dependency
+trees established that sample's links, not a whole-tree physical-release total.
 
 ### Cargo and manual CI outputs
 

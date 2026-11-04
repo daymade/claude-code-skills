@@ -37,6 +37,32 @@ def ok(result, label):
     if result < 0: raise OSError(c.get_errno(), label)
     return result
 def xb(path): return os.fsencode(path)
+def private_size(path):
+    """Return one regular file's ATTR_CMNEXT_PRIVATESIZE, never a tree total.
+
+    Missing/unsupported attributes and malformed replies raise rather than
+    turning an unknown allocation into zero. No file contents are read.
+    """
+    if not stat.S_ISREG(os.lstat(path).st_mode):
+        raise ValueError('private_size requires a regular file')
+    a=Attr(5,0,0x80000000,0,0,0,0x8)
+    buf=c.create_string_buffer(64)
+    c.set_errno(0)
+    rc=getattrlist(xb(path),c.byref(a),buf,len(buf),0x821)
+    if rc != 0:
+        if rc == -1:
+            raise OSError(c.get_errno(), 'getattrlist private size', os.fspath(path))
+        raise RuntimeError(f'getattrlist private size returned {rc}')
+    length=struct.unpack_from('<I',buf.raw,0)[0]
+    if length != 32:
+        raise ValueError(f'malformed private size reply length: {length}')
+    returned=struct.unpack_from('<5I',buf.raw,4)
+    if not returned[4] & 0x8:
+        raise NotImplementedError('ATTR_CMNEXT_PRIVATESIZE was not returned')
+    value=struct.unpack_from('<q',buf.raw,24)[0]
+    if value < 0:
+        raise ValueError(f'negative private size: {value}')
+    return value
 def attrs(path):
     p=xb(path); n=ok(listx(p,None,0,1),'listxattr'); buf=c.create_string_buffer(n)
     if n: assert listx(p,buf,n,1)==n
