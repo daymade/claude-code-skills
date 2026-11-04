@@ -89,6 +89,34 @@ def create_codex_database(path: Path, rows: list[tuple[object, ...]]) -> None:
         connection.close()
 
 
+def synthetic_codex_row(
+    session_id: str,
+    workspace: Path,
+    title: str,
+    source: object,
+    *,
+    thread_source: object = "user",
+    agent_role: object = None,
+    rollout_path: str = "sessions/synthetic.jsonl",
+) -> tuple[object, ...]:
+    return (
+        session_id,
+        str(workspace),
+        title,
+        "",
+        "",
+        1768000000,
+        1768000000000,
+        1768000100,
+        1768000100000,
+        source,
+        thread_source,
+        agent_role,
+        0,
+        rollout_path,
+    )
+
+
 class LocalConversationHistoryTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -336,6 +364,222 @@ with path.open("r+b") as handle:
         )
         self.assertIn("demo-project", row)
         self.assertNotIn("`(unknown)`", row)
+
+    def test_codex_launch_source_distinguishes_exec_from_same_titled_vscode(self) -> None:
+        exec_id = "00000000-0000-4000-8000-000000000001"
+        vscode_id = "00000000-0000-4000-8000-000000000002"
+        title = "Inspect an ordinary request"
+        create_codex_database(
+            self.codex_home / "state_5.sqlite",
+            [
+                synthetic_codex_row(exec_id, self.workspace, title, "exec"),
+                synthetic_codex_row(vscode_id, self.workspace, title, "vscode"),
+            ],
+        )
+
+        structured = self.run_cli(
+            "--cwd", str(self.workspace), "--source", "codex", "--index-only",
+            "--codex-home", str(self.codex_home), "--format", "json",
+        )
+        provider = json.loads(structured.stdout)["providers"]["codex"]
+        self.assertEqual(provider["total"], 2)
+        rows = {item["session_id"]: item for item in provider["conversations"]}
+        self.assertEqual(rows[exec_id]["launch_source"], "exec")
+        self.assertEqual(rows[vscode_id]["launch_source"], "vscode")
+        for item in rows.values():
+            self.assertEqual(item["title"], title)
+            self.assertEqual(item["kind"], "main")
+            self.assertEqual(item["source_kind"], "")
+            self.assertEqual(item["source_labels"], [])
+            self.assertNotIn("runtime", item)
+
+        markdown = self.run_cli(
+            "--cwd", str(self.workspace), "--source", "codex", "--index-only",
+            "--codex-home", str(self.codex_home), "--language", "en",
+        ).stdout
+        self.assertIn(
+            "| Updated | Title | Session ID | Launch source | Flags |",
+            markdown,
+        )
+        self.assertIn("non-interactive launch only", markdown)
+        exec_row = next(line for line in markdown.splitlines() if exec_id in line)
+        vscode_row = next(line for line in markdown.splitlines() if vscode_id in line)
+        self.assertIn(title, exec_row)
+        self.assertIn(title, vscode_row)
+        self.assertIn("| exec |", exec_row)
+        self.assertIn("| vscode |", vscode_row)
+        self.assertTrue(exec_row.endswith("| — |"))
+        self.assertTrue(vscode_row.endswith("| — |"))
+
+    def test_codex_launch_source_handles_null_empty_and_future_values(self) -> None:
+        sources = {
+            "00000000-0000-4000-8000-000000000011": (None, "unknown"),
+            "00000000-0000-4000-8000-000000000012": ("", "unknown"),
+            "00000000-0000-4000-8000-000000000013": ("   ", "unknown"),
+            "00000000-0000-4000-8000-000000000014": (
+                "future-surface",
+                "future-surface",
+            ),
+        }
+        create_codex_database(
+            self.codex_home / "state_5.sqlite",
+            [
+                synthetic_codex_row(session_id, self.workspace, "Source case", source)
+                for session_id, (source, _) in sources.items()
+            ],
+        )
+
+        structured = self.run_cli(
+            "--cwd", str(self.workspace), "--source", "codex", "--index-only",
+            "--codex-home", str(self.codex_home), "--format", "json",
+        )
+        provider = json.loads(structured.stdout)["providers"]["codex"]
+        self.assertEqual(provider["total"], len(sources))
+        rows = {item["session_id"]: item for item in provider["conversations"]}
+        for session_id, (_, expected) in sources.items():
+            with self.subTest(session_id=session_id):
+                self.assertEqual(rows[session_id]["launch_source"], expected)
+
+        markdown = self.run_cli(
+            "--cwd", str(self.workspace), "--source", "codex", "--index-only",
+            "--codex-home", str(self.codex_home), "--language", "en",
+        ).stdout
+        self.assertEqual(markdown.count("| unknown |"), 3)
+        self.assertEqual(markdown.count("| future-surface |"), 1)
+
+    def test_codex_exec_and_subagent_are_independent_dimensions(self) -> None:
+        main_id = "00000000-0000-4000-8000-000000000021"
+        subagent_id = "00000000-0000-4000-8000-000000000022"
+        create_codex_database(
+            self.codex_home / "state_5.sqlite",
+            [
+                synthetic_codex_row(main_id, self.workspace, "Main exec", "exec"),
+                synthetic_codex_row(
+                    subagent_id,
+                    self.workspace,
+                    "Subagent exec",
+                    "exec",
+                    thread_source="subagent",
+                    agent_role="worker",
+                ),
+            ],
+        )
+
+        default = self.run_cli(
+            "--cwd", str(self.workspace), "--source", "codex", "--index-only",
+            "--codex-home", str(self.codex_home), "--format", "json",
+        )
+        default_provider = json.loads(default.stdout)["providers"]["codex"]
+        self.assertEqual(default_provider["total"], 1)
+        self.assertEqual(default_provider["excluded"]["subagents"], 1)
+        self.assertEqual(
+            [item["session_id"] for item in default_provider["conversations"]],
+            [main_id],
+        )
+
+        included = self.run_cli(
+            "--cwd", str(self.workspace), "--source", "codex", "--index-only",
+            "--codex-home", str(self.codex_home), "--include-subagents",
+            "--format", "json",
+        )
+        rows = {
+            item["session_id"]: item
+            for item in json.loads(included.stdout)["providers"]["codex"]["conversations"]
+        }
+        self.assertEqual(rows[main_id]["kind"], "main")
+        self.assertEqual(rows[main_id]["launch_source"], "exec")
+        self.assertEqual(rows[subagent_id]["kind"], "subagent")
+        self.assertEqual(rows[subagent_id]["launch_source"], "exec")
+
+        markdown = self.run_cli(
+            "--cwd", str(self.workspace), "--source", "codex", "--index-only",
+            "--codex-home", str(self.codex_home), "--include-subagents",
+            "--language", "en",
+        ).stdout
+        subagent_row = next(
+            line for line in markdown.splitlines() if subagent_id in line
+        )
+        self.assertIn("| exec |", subagent_row)
+        self.assertIn("sub-agent", subagent_row)
+
+    def test_codex_index_only_does_not_open_cwd_or_rollout_metadata(self) -> None:
+        hostile_cwd = self.root / "fixtures" / "state-looking-cwd"
+        hostile_cwd.mkdir(parents=True)
+        run_json = hostile_cwd / "run.json"
+        run_json.write_text(
+            json.dumps({"source": "file-value", "title": "Wrong file title"}),
+            encoding="utf-8",
+        )
+        session_id = "00000000-0000-4000-8000-000000000031"
+        rollout = self.codex_home / "sessions" / "hostile-rollout.jsonl"
+        write_jsonl(
+            rollout,
+            [{
+                "type": "session_meta",
+                "payload": {
+                    "id": session_id,
+                    "cwd": str(hostile_cwd),
+                    "source": "file-value",
+                },
+            }],
+        )
+        create_codex_database(
+            self.codex_home / "state_5.sqlite",
+            [synthetic_codex_row(
+                session_id,
+                hostile_cwd,
+                "State index title",
+                "exec",
+                rollout_path=str(rollout),
+            )],
+        )
+
+        spec = importlib.util.spec_from_file_location(
+            f"local_history_index_only_{id(self)}",
+            SCRIPT,
+        )
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        from _core import codex as core
+
+        args = module.argparse.Namespace(
+            all_projects=True,
+            cwd=None,
+            recursive=False,
+            include_archived=False,
+            include_subagents=False,
+            include_automated=False,
+            max_title_chars=120,
+            index_only=True,
+        )
+        blocked = {run_json, rollout}
+        blocked_opens: list[Path] = []
+        real_path_open = Path.open
+
+        def guarded_path_open(path: Path, *args: object, **kwargs: object) -> object:
+            candidate = Path(path)
+            if candidate in blocked:
+                blocked_opens.append(candidate)
+                raise AssertionError(f"index-only opened forbidden metadata: {candidate}")
+            return real_path_open(path, *args, **kwargs)
+
+        with mock.patch.object(Path, "open", new=guarded_path_open), mock.patch.object(
+            core,
+            "iter_jsonl",
+            side_effect=AssertionError("index-only parsed a rollout"),
+        ):
+            with self.assertRaises(AssertionError):
+                run_json.open("r", encoding="utf-8")
+            self.assertEqual(blocked_opens, [run_json])
+            result = core.collect_codex(args, self.codex_home)
+
+        self.assertEqual(blocked_opens, [run_json])
+        self.assertEqual(result.total, 1)
+        conversation = result.conversations[0]
+        self.assertEqual(conversation.title, "State index title")
+        self.assertEqual(conversation.cwd, str(hostile_cwd))
+        self.assertEqual(conversation.path, str(rollout))
 
     def test_combined_json_inventory_filters_noise(self) -> None:
         self.seed_claude()

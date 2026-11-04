@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **read-codex-history / read-claude-code-history** (`daymade-claude-code` v4.34.2 → v4.35.0): Add optional Codex `launch_source` metadata to JSON and Markdown inventories from the native state database. Render missing sources as `unknown` and preserve unrecognized values. Change type: backward-compatible inventory metadata.
+
 - **skill-creator** (`daymade-skill` v1.75.0 → v1.75.1): Bound programmatic retries to one owner/budget adapter, derive unfinished steps from persisted receipts, propagate runner exit status, and preserve evidence and reserve during storage recovery. Change type: bounded retry-lifecycle clarification.
 - **feishu-doc-scraper** (v1.11.0 → v1.12.0): Discover external Bilibili, YouTube and direct-media resources while preserving video/part/playlist identity; separate link discovery, text capture and verified media retention, and hand acquisition to the selected installed owner. Change type: additive resource-discovery capability.
 - **deep-research** (v2.13.0 → v2.13.1): Match lane question IDs, unknown publication dates and unique claim records to the existing CLI; require retained source excerpts to include the decisive passage. Change type: bounded operating-contract correction.
