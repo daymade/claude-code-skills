@@ -52,6 +52,7 @@ For missing Codex terminals without confirmed Ghostty ownership, load the instal
 | Snapshot looks too large, or "which sessions were active after <time>?" | Follow [time-window selection](references/session_liveness.md#select-recovery-candidates-by-a-time-window) before choosing a restore set |
 | One specific session to bring back | `restore --only <id-prefix>` |
 | Minions `native_runtime` session or managed account-adoption error | Follow [account-owner selection](references/codex-account-switch.md#choose-the-account-owner-first) |
+| An existing Account Manager selects a legacy Ghostty terminal through its configured bridge | Follow [the legacy terminal port](references/account-manager-terminal-port.md); retain that caller's original operation |
 | Unmanaged/legacy Codex quota running out; manually switching account, keeping all Codex work | Start with [account-owner selection](references/codex-account-switch.md#choose-the-account-owner-first) |
 | After a switch, want the same sessions back ("换号后恢复原会话"); opening blocked or delegated | Follow [the original-set recovery route](references/codex-account-switch.md#reopen-the-original-recorded-set-not-a-blank-session) |
 
@@ -65,6 +66,14 @@ For blocked or delegated reopening, follow
 [the original-set route](references/codex-account-switch.md#reopen-the-original-recorded-set-not-a-blank-session).
 Keep command examples, handoff, authorization and acceptance in that SOP.
 Implementation: [ghostty_switch.py](scripts/ghostty_switch.py).
+
+For an explicitly configured legacy-terminal integration, use the
+[versioned JSON port](scripts/ghostty_session_port.py), its
+[native host](scripts/ghostty_native_host.py), and
+[bound-window AX reader](scripts/ghostty_ax_read.swift) through the
+[terminal-port contract](references/account-manager-terminal-port.md).
+Keep account policy and credentials with the calling product; preserve its
+native-runtime and shared-owner routes as separate operations.
 
 ## Quick start
 

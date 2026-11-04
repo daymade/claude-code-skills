@@ -65,6 +65,10 @@ def observe(gs):
             parent = graph[parent]["ppid"]
         if parent not in roots or not p["tty"].startswith("ttys"):
             continue
+        if sys.platform == "darwin":
+            # ps loses argv boundaries and can split initial prompts across lines.
+            p = dict(p, cmdline=shlex.join(watch.darwin_argv(pid)))
+            graph[pid] = p
         identity = watch.cli_identity(p)
         if identity is None:
             continue
@@ -78,7 +82,9 @@ def observe(gs):
     if len(candidates) > watch.MAX_SESSIONS:
         raise ValueError("Codex inventory exceeds observation limit")
     if not candidates:
-        return gs.SessionList()
+        result = gs.SessionList()
+        result.process_ids = frozenset(graph)
+        return result
     pids = [p["pid"] for p, _, _ in candidates]
     raw = watch.run_bounded(["/usr/sbin/lsof", "-a", "-p", ",".join(map(str, pids)),
                              "-d", "cwd", "-Fpn"], deadline, counters)
@@ -106,7 +112,9 @@ def observe(gs):
             seen[p["sid"]]["anchor"] = "transcript"
         else:
             unresolved.append(p)
-    return gs.SessionList(sorted(seen.values(), key=lambda p: p["tty"]), unresolved=unresolved)
+    result = gs.SessionList(sorted(seen.values(), key=lambda p: p["tty"]), unresolved=unresolved)
+    result.process_ids = frozenset(graph)
+    return result
 
 
 def resume_argv(session, gs):
@@ -248,6 +256,8 @@ def prepare(args, gs):
     doc = dict(schema=1, kind=KIND, captured_at=now.isoformat(), prepared_at=now.timestamp(),
                codex_home=str(home), source_account=before, sessions=saved,
                coverage="partial" if unresolved else "complete", unresolved=unresolved)
+    if getattr(args, "port_binding", None) is not None:
+        doc["port_binding"] = args.port_binding
     folder = Path(gs.STATE_DIR) / "switches"
     path = Path(args.out).expanduser().resolve() if args.out else folder / ("switch-" + now.strftime("%Y%m%dT%H%M%S%fZ") + ".json")
     with snapshot_lock(folder):
@@ -674,6 +684,13 @@ def guarded_control(expected, control, controller, *, now=time.time, receipt=Non
         if type(stamp) not in (float, int) or not math.isfinite(stamp) or not 0 <= now() - stamp <= 5:
             raise ValueError("fresh surface observation required; stop input")
 
+    return _durable_literal({key: expected[key] for key in fields}, control, controller,
+                            check, now=now, receipt=receipt)
+
+
+def _durable_literal(expected, control, controller, check, *, now=time.time, receipt=None,
+                     kind="codex-exit-control"):
+    """Persist input attempts; let each caller enforce its own readiness contract."""
     def deliver(save):
         check("")
         save("paste_started")  # write ahead of input; failure to persist prevents input
@@ -690,8 +707,7 @@ def guarded_control(expected, control, controller, *, now=time.time, receipt=Non
     with snapshot_lock(receipt.parent):
         if receipt.exists():
             raise ValueError("control receipt already exists; reconcile the original attempt, never replay")
-        record = dict(kind="codex-exit-control", schema=1,
-                      expected={key: expected[key] for key in fields}, control=control)
+        record = dict(kind=kind, schema=1, expected=expected, control=control)
         reserved = False
 
         def save(stage):

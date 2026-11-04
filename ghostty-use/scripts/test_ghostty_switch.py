@@ -805,6 +805,8 @@ class ObserverTest(unittest.TestCase):
                  '5 0 ttys003 codex resume ' + B + '\n'
                  '6 2 ttys004 codex app-server\n')
         with mock.patch.object(sw.watch, "run_bounded", side_effect=[graph, 'p3\nn/tmp/example\n']), \
+                mock.patch.object(sw.watch, "darwin_argv", side_effect=lambda pid:
+                    ['codex', 'resume', A] if pid == 3 else ['codex', 'app-server']), \
                 mock.patch.object(gs, "_proc_start", return_value=100), \
                 mock.patch.object(gs, "_assign_transcripts", return_value=[]) as assign, \
                 mock.patch.object(gs, "_claude_candidates") as claude:
@@ -813,13 +815,54 @@ class ObserverTest(unittest.TestCase):
         self.assertEqual(live[0]["pid"], 3)
         claude.assert_not_called()
         self.assertEqual(assign.call_args.args[0], [])
+        self.assertEqual(live.process_ids, frozenset(range(1, 7)))
+
+    def test_kernel_arguments_preserve_quoted_options_and_drop_initial_prompt(self):
+        row = dict(tool='codex', sid=A,
+            cmdline=sw.shlex.join(['codex', '--model', 'model with space',
+                                  "The user's prompt\nwith another line"]))
+        self.assertEqual(sw.resume_argv(row, gs),
+                         ['codex', 'resume', A, '--no-daemon', '--model', 'model with space'])
+
+    def test_kernel_argv_decodes_only_counted_arguments(self):
+        import struct
+        argv = [b'codex', b'--model', b'model with space', b"The user's prompt\nnext"]
+        raw = struct.pack('i', len(argv)) + b'/synthetic/codex\0\0' + b'\0'.join(argv) + b'\0SECRET=synthetic-value\0'
+        self.assertEqual(sw.watch.decode_darwin_argv(raw), [s.decode() for s in argv])
+        for invalid in (b'', struct.pack('i', 0) + b'\0', struct.pack('i', -1) + b'\0',
+                        struct.pack('i', 2) + b'/synthetic/codex\0\0codex\0'):
+            with self.assertRaises(ValueError):
+                sw.watch.decode_darwin_argv(invalid)
+
+    def test_darwin_observer_uses_kernel_argv_instead_of_joined_prompt(self):
+        graph = ('1 0 ?? /Applications/Ghostty.app/Contents/MacOS/ghostty\n'
+                 '2 1 ttys001 codex --model model with space broken-prompt"\n')
+        argv = ['codex', '--model', 'model with space', "The user's prompt\nnext"]
+        with mock.patch.object(sw.sys, 'platform', 'darwin'), \
+                mock.patch.object(sw.watch, 'run_bounded', side_effect=[graph, 'p2\nn/tmp/example\n']), \
+                mock.patch.object(sw.watch, 'darwin_argv', return_value=argv), \
+                mock.patch.object(gs, '_proc_start', return_value=100), \
+                mock.patch.object(gs, '_assign_transcripts', side_effect=lambda fresh, seen:
+                    [dict(row, sid=A) for row in fresh]):
+            live = sw.observe(gs)
+        self.assertEqual(live[0]['cmdline'], sw.shlex.join(argv))
+        self.assertEqual(sw.resume_argv(live[0], gs),
+                         ['codex', 'resume', A, '--no-daemon', '--model', 'model with space'])
+
+    def test_empty_inventory_retains_process_identity_for_port_reconciliation(self):
+        graph = '1 0 ?? /Applications/Ghostty.app/Contents/MacOS/ghostty\n2 1 ttys001 zsh\n'
+        with mock.patch.object(sw.watch, 'run_bounded', return_value=graph):
+            live = sw.observe(gs)
+        self.assertEqual(live, [])
+        self.assertEqual(live.process_ids, frozenset({1, 2}))
 
     def test_opaque_prompt_uuid_stays_unresolved_and_skips_transcript_assignment(self):
         prompt_uuid = "33333333-3333-3333-3333-333333333333"
         graph = ('1 0 ?? /Applications/Ghostty.app/Contents/MacOS/ghostty\n'
                  '2 1 ttys001 zsh\n3 2 ttys001 codex resume ' + A + '\n'
                  '7 2 ttys007 codex discuss ' + prompt_uuid + ' in prompt-with-quote"\n')
-        with mock.patch.object(sw.watch, "run_bounded",
+        with mock.patch.object(sw.sys, "platform", "linux"), \
+                mock.patch.object(sw.watch, "run_bounded",
                                side_effect=[graph, 'p3\nn/tmp/example\np7\nn/tmp/opaque\n']), \
                 mock.patch.object(gs, "_proc_start", return_value=100), \
                 mock.patch.object(gs, "_assign_transcripts", return_value=[]) as assign:
@@ -839,7 +882,8 @@ class ObserverTest(unittest.TestCase):
                  '2 1 ttys001 zsh\n'
                  '6 2 ttys006 node /opt/bin/codex discuss synthetic-prompt-with-quote"\n'
                  '7 6 ttys006 /opt/vendor/codex resume ' + A + '\n')
-        with mock.patch.object(sw.watch, "run_bounded",
+        with mock.patch.object(sw.sys, "platform", "linux"), \
+                mock.patch.object(sw.watch, "run_bounded",
                                side_effect=[graph, 'p6\nn/tmp/wrapper\np7\nn/tmp/native\n']), \
                 mock.patch.object(gs, "_proc_start", return_value=100), \
                 mock.patch.object(gs, "_assign_transcripts", return_value=[]) as assign:
