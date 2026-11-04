@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **lark-cli-router** (`daymade-claude-code` v4.36.0 → v4.37.0): Add external customer group and Wiki collaboration guidance, including reuse of manually created groups, explicit external-group creation, descendant-scoped group grants, and separate configuration/access acceptance. Change type: additive collaboration workflow.
+
 - **macos-cleaner** (`daymade-macos` v1.29.0 → v1.29.1): Retire historical incident arithmetic from growth diagnosis, preserve allocation and mixed-window evidence boundaries, and route emergency cleanup through the existing authorization gate.
 
 - **docs-router** (`daymade-docs` v1.29.0 → v1.29.1): Keep all document jobs, including documentation cleanup, inside the first 130 description characters and bytes; retain the full existing routing table and manual-command boundary. Change type: recovered discovery-prefix correction.
