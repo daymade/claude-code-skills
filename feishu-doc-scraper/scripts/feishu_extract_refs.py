@@ -12,7 +12,10 @@ title=...>`, verified 2026-08-17 — see RE_CITE_TAG), sheet, image (real raw
 tag is `<img src=... alt=...>`, verified 2026-08-17 — see RE_IMG_TAG), file,
 whiteboard (`<whiteboard token=...>` — an inline diagram block, NOT a
 followable reference, see DISPATCH["whiteboard"]), lark-table, and
-cross-tenant / personal-space / Minutes / Tencent-Meeting URLs.
+cross-tenant / personal-space / Minutes / Tencent-Meeting URLs, and external
+video links (Bilibili, YouTube, or direct media files). External records add
+source_url, source_urls, platform, resource_kind and status="discovered";
+discovery never claims that media was downloaded or accessible.
 
 Input : the fetched Feishu body. Choose the field from the actual response.
         A nonblank `.data.markdown` string is a valid Markdown input.
@@ -33,15 +36,18 @@ Usage:
     python3 feishu_extract_refs.py FETCHED_BODY.html   # prefer the raw HTML
     python3 feishu_extract_refs.py FETCHED_BODY.md      # only if no .html was saved
     python3 feishu_extract_refs.py FETCHED_BODY.html --type docx   # filter
+    python3 feishu_extract_refs.py FETCHED_BODY.html --type external-video
 """
 from __future__ import annotations
 
 import argparse
+from html import unescape
 from html.parser import HTMLParser
 import json
 import re
 import sys
 from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from check_archive_storage import FEISHU_HOST_SUFFIXES
 
 # Keep reference extraction on the bundle's canonical Feishu/Lark host family.
@@ -183,6 +189,83 @@ RE_FEISHU_URL = re.compile(
 RE_TENCENT_MEETING = re.compile(
     r"https://meeting\.tencent\.com/crm/([A-Za-z0-9]+)"
 )
+
+# Scan raw HTML attributes, Markdown destinations and bare URLs. Decode HTML
+# entities before parsing query strings, so &amp;p=2 keeps its episode identity.
+RE_HTTP_URL = re.compile(r'https?://[^\s<>"\'`]+', re.IGNORECASE)
+TRACKING_KEYS = frozenset({
+    "spm_id_from", "vd_source", "share_source", "share_medium", "share_plat",
+    "share_tag", "share_session_id", "bbid", "si", "feature",
+})
+
+
+def external_video_refs(text: str) -> list[dict]:
+    """Discover video locators without network access or platform downloads.
+
+    Remove only named tracking fields. Keep all other query fields and fragments,
+    including p/cid, v, list/index and timestamps; unknown identity is not merged.
+    Short links remain unresolved locators until the platform owner resolves them.
+    """
+    refs = []
+    decoded = unescape(text)
+    for match in RE_HTTP_URL.finditer(decoded):
+        # Closing prose/Markdown punctuation is not part of these URL forms.
+        # A quoted HTML attribute is exact: a signature may end in punctuation.
+        source_url = match.group()
+        if match.start() == 0 or decoded[match.start() - 1] not in "\"'":
+            source_url = source_url.rstrip(".,;:!?，。；：！？）】》")
+            for opening, closing in (("(", ")"), ("[", "]"), ("{", "}")):
+                while source_url.endswith(closing) and source_url.count(closing) > source_url.count(opening):
+                    source_url = source_url[:-1]
+        try:
+            parsed = urlsplit(source_url)
+            host = (parsed.hostname or "").lower()
+            if parsed.username or parsed.password or parsed.port:
+                continue
+        except ValueError:
+            continue
+        path = parsed.path
+        query = parse_qsl(parsed.query, keep_blank_values=True)
+        keys = {key for key, _ in query}
+        platform, resource_kind = "", "video"
+        if host in {"www.bilibili.com", "bilibili.com", "m.bilibili.com"}:
+            if re.fullmatch(r"/video/(?:BV[A-Za-z0-9]+|av[0-9]+)/?", path):
+                platform = "bilibili"
+            elif re.fullmatch(r"/(?:bangumi|cheese)/play/(?:ep|ss)[0-9]+/?", path):
+                platform = "bilibili"
+                resource_kind = "series" if "/ss" in path else "episode"
+            elif path.startswith(("/list/", "/medialist/play/")):
+                platform, resource_kind = "bilibili", "playlist"
+        elif host == "b23.tv" and path.strip("/"):
+            platform, resource_kind = "bilibili", "short-link"
+        elif host in {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com"}:
+            if (path == "/watch" and "v" in keys) or re.fullmatch(r"/(?:shorts|live|embed|v)/[^/]+/?", path):
+                platform = "youtube"
+            elif path == "/playlist" and "list" in keys:
+                platform, resource_kind = "youtube", "playlist"
+        elif host == "youtu.be" and path.strip("/"):
+            platform = "youtube"
+        elif host and re.search(r"\.(?:mp4|m4v|webm|mov|m3u8|mpd)$", path, re.IGNORECASE):
+            platform = "direct"
+        if not platform:
+            continue
+        # A direct-media query may be a signed access credential. Preserve it
+        # verbatim; the destination owner decides whether it can be stored.
+        if platform == "direct":
+            canonical = source_url
+        else:
+            retained = [(k, v) for k, v in query if k.lower() not in TRACKING_KEYS and not k.lower().startswith("utm_")]
+            # Sort keys only: repeated selector values must retain their order.
+            canonical = urlunsplit((parsed.scheme.lower(), host, path, urlencode(sorted(retained, key=lambda item: item[0])), parsed.fragment))
+        kind = f"external-video-{platform}"
+        refs.append({
+            "type": kind, "ref": canonical, "title": "",
+            "source_url": source_url, "source_urls": [source_url],
+            "platform": platform, "resource_kind": resource_kind,
+            "status": "discovered",
+            "dispatch": "external video handoff (references/external-video-resources.md); preserve requested scope and resolve the installed platform owner before downloading",
+        })
+    return refs
 
 # How the caller should handle each type (mirrors the reference's dispatch
 # table, surfaced here so the caller does not have to re-derive it). Wiki and
@@ -363,6 +446,8 @@ def extract(text: str) -> list[dict]:
             "dispatch": DISPATCH["tencent-meeting"],
         })
 
+    refs.extend(external_video_refs(text))
+
     n_tables = len(RE_LARK_TABLE.findall(text))
     if n_tables:
         # Inline content, not a link to follow — surfaced so the caller knows
@@ -380,13 +465,17 @@ def extract(text: str) -> list[dict]:
         key = (r["type"], r["ref"])
         if key not in seen:
             seen[key] = r
+        elif "source_urls" in r:
+            for url in r["source_urls"]:
+                if url not in seen[key]["source_urls"]:
+                    seen[key]["source_urls"].append(url)
     return list(seen.values())
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("markdown_file", help="fetched Feishu body (.html preferred, .md if no .html was saved)")
-    ap.add_argument("--type", help="only emit refs of this type (e.g. docx, image)")
+    ap.add_argument("--type", help="only emit refs whose type contains this string (e.g. docx, image, external-video, youtube)")
     args = ap.parse_args()
 
     text = _read_text(Path(args.markdown_file))
