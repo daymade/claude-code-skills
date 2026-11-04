@@ -308,6 +308,11 @@ fits the topic.
 
 ### Batch pending adjudication — queue-level clip cross-check
 
+When the original stays on an already authorized remote machine, use the
+[source clip adapter](source_clips.md) with the same two-window command below.
+It binds the full source hash, source-host identity and clock, avoiding a whole
+original transfer. Existing local-file and URL inputs remain available.
+
 The single-token rung above scales to a backlog. A finished native pass often
 leaves a queue of pendings whose local ladder is already exhausted (entities,
 garbled terms, numbers). Check available audio before handing the entire queue
