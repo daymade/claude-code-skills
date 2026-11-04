@@ -60,16 +60,19 @@ hands off to favorites-search without changing this Skill's filing ownership.
 
 ## Choose the path
 
+Before the first linked-resource read, follow `lark-cli-router`'s
+[source account binding](../daymade-claude-code/lark-cli-router/references/source-account-binding.md).
+Retain the selected profile and identity for every branch below.
+
 ```
-Is the source a Feishu/Lark URL (wiki / docx / sheets / minutes / base)?
-├── YES → is lark-cli installed and authenticated to that tenant?
-│        ├── YES → PATH A: lark-cli API extraction  (primary — start here)
-│        │         └── hit code 131006 / 99991679 (permission denied)?
-│        │              └── PATH B: owner-exported .docx → faithful Markdown
-│        └── NO  → install/auth lark-cli first (it is worth it); only if
-│                  truly impossible → PATH D: browser DOM fallback
-├── the URL is a Minutes / 妙记 link, or a doc references one → PATH C: Minutes transcript
-└── you were handed an exported .docx (not a URL) → PATH B
+What is the source?
+├── Minutes / 妙记 URL, or a document references one → PATH C: Minutes transcript
+├── Owner-exported .docx → PATH B: faithful Markdown
+└── Other Feishu/Lark URL (wiki / docx / sheets / base)
+    ├── CLI available and source account bound → PATH A: API extraction
+    │   └── Body-read permission refused → PATH B: owner-exported .docx
+    └── CLI/auth prerequisite missing → use lark-cli-router's preparation route;
+        if unavailable, use PATH D only with an authorized browser session
 ```
 
 **Resolve wiki nodes before choosing a handler.** Use the actual `obj_type` and its installed CLI guide; for example, `bitable` uses `lark-base`. A `3380002 Unsupported document type` response from `docs +fetch` identifies a handler mismatch, not a permission denial. If the required guide is unavailable, retain the token and type in the worklist as unextracted.
@@ -170,7 +173,7 @@ equate a zero-reference result with completeness before checking raw capture tag
 
 ## Path B — permission denied → owner-exported .docx
 
-`lark-cli wiki spaces get_node` returning `code 131006 … node permission denied, user needs read permission` (or fetch returning it) is a **hard Feishu-side boundary**. lark-cli, anonymous curl, and the browser all fail it — this has been verified exhaustively; do not spend cycles trying to bypass it. The only correct move: ask the permission holder to export the doc as `.docx` and send it back out-of-band, then convert with fidelity (font-size→heading and `w:shd`→highlight restoration, then visual verification). Full procedure: **[references/docx-export-to-markdown.md](references/docx-export-to-markdown.md)**.
+After source account binding, `code 131006 … node permission denied, user needs read permission` from `wiki spaces get_node` or `docs +fetch` is a **Feishu-side body-read boundary for that identity**. Do not retry it through curl, another transport or an unbound account. Ask the permission holder for an owner-exported `.docx`, then convert with fidelity. Full procedure: **[references/docx-export-to-markdown.md](references/docx-export-to-markdown.md)**. Minutes scope and per-minute errors follow **[Path C](#path-c--feishu-minutes-妙记-transcript)** instead.
 
 ## Path C — Feishu Minutes (妙记) transcript
 

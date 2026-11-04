@@ -166,6 +166,8 @@ For relative-image resource paths or Markdown → PDF rendering, read
 
 For Word creation, existing Word/WPS → PDF, DOCX review or version comparison, enter
 [docs-router](daymade-docs/docs-router/SKILL.md) and load its selected child before acting.
+For printable ID/passport photos, use the same router's
+[identity-copy procedure](daymade-docs/photo-to-scanned-pdf/references/identity-document-copies.md).
 DOCX delivery follows docx-creator's
 [native acceptance procedure](daymade-docs/docx-creator/references/verification_protocol.md#step-3a--check-the-actual-file-in-microsoft-word-when-the-native-route-is-usable),
 including refused/unavailable checks and reviewable handoff. DOCX comparison follows
@@ -521,6 +523,8 @@ For updates that preserve manual formatting or change table/page width, enter
 
 ### Feishu Document Capture
 
+Before the first linked-resource read, follow
+[source account binding](daymade-claude-code/lark-cli-router/references/source-account-binding.md).
 For Feishu document reads and archives, enter
 [feishu-doc-scraper](feishu-doc-scraper/SKILL.md). Its
 [API extraction SOP](feishu-doc-scraper/references/lark-cli-api-extraction.md)
@@ -537,6 +541,8 @@ alongside the destination repository's storage SOP.
 Keep generated manifest metadata aligned with that contract's on-demand statistics rule.
 For local originals, Obsidian delivery or a personal source-catalog handoff, follow the Skill's
 [original-media and reader SOP](feishu-doc-scraper/references/original-media-and-reader.md).
+For Minutes transcript export and permission handling, follow its
+[Minutes procedure](feishu-doc-scraper/references/feishu-minutes-transcript.md).
 
 ### Prior Work Retrieval Boundary
 
