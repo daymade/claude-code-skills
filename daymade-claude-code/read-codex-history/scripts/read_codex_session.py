@@ -40,6 +40,7 @@ MAX_SUMMARY_CHARS = 8000
 MAX_TOOL_CALLS = 20
 MAX_FILES = 40
 MAX_LINEAGE_DEPTH = 16
+PREFIX_COMPLETE_VERSION = 1
 MAX_ROLLOUT_BYTES = 1 << 30
 MAX_RECORD_BYTES = 64 << 20
 MAX_HISTORY_POSITION = (1 << 64) - 1
@@ -408,6 +409,7 @@ def _iter_rollout_records(
     path: Path, end_byte_offset: Optional[int] = None, *,
     max_total_bytes: Optional[int] = None,
     on_record_end: Optional[Callable[[int], None]] = None,
+    on_prefix_complete: Optional[Callable[[dict[str, Any]], None]] = None,
 ) -> Iterator[dict[str, Any]]:
     """Yield rollout records, optionally stopping at an exact byte boundary.
 
@@ -416,7 +418,10 @@ def _iter_rollout_records(
     can make a partial receipt look complete even though the omitted line could
     contain the original objective or latest correction.
     """
-    physical_size = path.stat().st_size
+    physical_stat = path.stat()
+    physical_size = physical_stat.st_size
+    if on_prefix_complete is not None and not callable(on_prefix_complete):
+        raise TypeError("on_prefix_complete must be callable or None")
     if end_byte_offset is None:
         end_byte_offset = physical_size
     if isinstance(end_byte_offset, bool) or not isinstance(end_byte_offset, int):
@@ -435,20 +440,32 @@ def _iter_rollout_records(
         raise LineageResolutionError(f"rollout prefix exceeds byte safety limit: {path}")
 
     with path.open("rb") as handle:
+        prefix_hash = hashlib.sha256() if on_prefix_complete is not None else None
+        prefix_bytes = 0
+        if prefix_hash is not None:
+            opened = os.fstat(handle.fileno())
+            identity = [opened.st_dev, opened.st_ino, opened.st_uid]
+            if identity != [physical_stat.st_dev, physical_stat.st_ino, physical_stat.st_uid]:
+                raise LineageResolutionError("rollout changed before prefix read")
         line_number = 0
         record_number = 0
         next_ordinal: Optional[int] = None
         copied=None;declared_ancestors=set();imported=set()
-        while handle.tell() < end_byte_offset:
-            start = handle.tell()
+        position = 0
+        while position < end_byte_offset:
+            start = position
             raw_line = handle.readline(MAX_RECORD_BYTES + 1)
+            position += len(raw_line)
+            if prefix_hash is not None:
+                prefix_hash.update(raw_line)
+                prefix_bytes += len(raw_line)
             line_number += 1
             if not raw_line:
                 raise LineageResolutionError(
                     f"rollout ended at byte {start} before declared history boundary "
                     f"{end_byte_offset}: {path}"
                 )
-            if handle.tell() > end_byte_offset:
+            if position > end_byte_offset:
                 raise LineageResolutionError(
                     f"history_base.end_byte_offset {end_byte_offset} splits JSONL line "
                     f"{line_number} in {path}"
@@ -503,15 +520,26 @@ def _iter_rollout_records(
                     raise LineageResolutionError(f"paginated record ordinal overflow in {path}")
             record_number += 1
             if on_record_end is not None:
-                on_record_end(handle.tell())
+                on_record_end(position)
             yield record
 
-        if handle.tell() != end_byte_offset:
+        if handle.tell() != position or position != end_byte_offset:
             raise LineageResolutionError(
                 f"could not stop at exact history boundary {end_byte_offset} in {path}"
             )
         if copied and end_byte_offset==physical_size and next_ordinal<copied["start_ordinal"]:
             raise LineageResolutionError("captured copied context is incomplete before own-history boundary")
+        if prefix_hash is not None:
+            finished, current = os.fstat(handle.fileno()), path.stat()
+            if (prefix_bytes != end_byte_offset or finished.st_size < end_byte_offset
+                    or current.st_size < end_byte_offset
+                    or [finished.st_dev, finished.st_ino, finished.st_uid] != identity
+                    or [current.st_dev, current.st_ino, current.st_uid] != identity):
+                raise LineageResolutionError("rollout changed during prefix read")
+            on_prefix_complete({"version": PREFIX_COMPLETE_VERSION,
+                "path": _resolved_path_key(path), "end_byte_offset": end_byte_offset,
+                "bytes": prefix_bytes, "sha256": prefix_hash.hexdigest(),
+                "file_identity": identity})
 
 
 def _history_base(meta: dict[str, Any], session_id: str) -> Optional[dict[str, Any]]:
@@ -725,6 +753,7 @@ def _consume_rollout_metadata(
 def _summarize_codex_rollout(
     path: Path, *, end_byte_offset: int,
     skip_record_index_range: Optional[tuple[int, int]] = None,
+    on_prefix_complete: Optional[Callable[[dict[str, Any]], None]] = None,
 ) -> dict[str, Any]:
     """Consume a caller-captured prefix without retaining conversation records."""
     physical_size = path.stat().st_size
@@ -750,6 +779,7 @@ def _summarize_codex_rollout(
     }
     for original, record in _iter_rollout_views(
         path, end_byte_offset, max_total_bytes=end_byte_offset,
+        **({"on_prefix_complete": on_prefix_complete} if on_prefix_complete is not None else {}),
     ):
         index = data["total_lines"]
         data["total_lines"] += 1
@@ -788,6 +818,7 @@ def _summarize_codex_rollout(
 def validate_codex_rollout(
     path: Path, expected_session_id: str, *, end_byte_offset: int,
     resolve_session: Optional[Callable[[str], Optional[Path]]] = None,
+    on_prefix_complete: Optional[Callable[[dict[str, Any]], None]] = None,
 ) -> dict[str, Any]:
     """Validate an explicitly captured prefix with bounded retained metadata.
 
@@ -805,7 +836,11 @@ def validate_codex_rollout(
     """
     if not isinstance(expected_session_id, str) or not expected_session_id.strip():
         raise LineageResolutionError("streaming validation requires an expected session identity")
-    data = _summarize_codex_rollout(path, end_byte_offset=end_byte_offset)
+    if on_prefix_complete is not None and not callable(on_prefix_complete):
+        raise TypeError("on_prefix_complete must be callable or None")
+    prefixes: list[dict[str, Any]] = []
+    data = _summarize_codex_rollout(path, end_byte_offset=end_byte_offset,
+        **({"on_prefix_complete": prefixes.append} if on_prefix_complete is not None else {}))
     if data["meta"].get("id") != expected_session_id:
         validate_selected_rollout_identity(data, expected_session_id)
     parent_id = _detect_legacy_embedded_fork(
@@ -822,6 +857,10 @@ def validate_codex_rollout(
             data, edge = recovered
             data["legacy_parent_edge"] = edge
     validate_selected_rollout_identity(data, expected_session_id)
+    if on_prefix_complete is not None:
+        if len(prefixes) != 1:
+            raise LineageResolutionError("complete rollout prefix proof unavailable")
+        on_prefix_complete(prefixes[0])
     return data
 
 

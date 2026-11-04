@@ -2,9 +2,20 @@
 
 This document is the reference for Capability 4 (fan-out search with personalization). Read it when the user asks about how to search, reports weird search results, or wants to tune the `copilot.json` configuration.
 
-## The three hard constraints of the IMA search API
+## Constraints of the IMA search API
 
-Any search workflow on top of IMA has to account for these three constraints. They are not documented by upstream; they were discovered by observation.
+Account for the following observed constraints when searching IMA.
+
+### Knowledge-base enumeration
+
+Use `scripts/search_fanout.py` to enumerate knowledge bases before searching. Its
+`KB_PAGE_SIZE` defines the page size accepted by `search_knowledge_base`; follow
+the returned cursor until the list ends. An API error about
+`SearchKnowledgeBaseReq.Limit` is a request-parameter failure, not evidence that
+the account has no knowledge bases. Upstream module tables may describe a larger
+limit; use the endpoint's actual response and retain the wrapper's pagination.
+Do not apply this endpoint's limit to `get_knowledge_list` or other APIs, and do
+not patch the third-party Skill installation to make this wrapper work.
 
 ### 1. No cross-knowledge-base endpoint
 
@@ -38,16 +49,19 @@ High-frequency queries against large KBs (e.g., searching "AI" across a 25,000-e
 
 **Mitigation**: the only workaround is to narrow the query — add a second term, a phrase match, or a distinctive keyword that reduces the candidate set below 100 per KB.
 
-## Permission model: subscribed KBs return 'no permission'
+## Search access is separate from enumeration
 
-Empirically, the IMA OpenAPI search endpoints only work on KBs the user **created themselves**. KBs the user subscribed to (e.g., public curated libraries, friends' shared knowledge bases) enumerate successfully via `search_knowledge_base` (so they show up in the fan-out target list) but return `code: 220030, msg: 没有权限` when hit with `search_knowledge`.
+Listing a KB via `search_knowledge_base` does not establish that `search_knowledge`
+can search it. Subscribed or shared KBs may enumerate successfully and then return
+`code: 220030, msg: 没有权限`. Classify the actual search response rather than
+inferring access solely from ownership or subscription.
 
-This is not configurable on the client side — it is a server-side entitlement check tied to KB ownership.
+This wrapper reports that API denial; it does not grant access or change permissions.
 
 **Consequence for the wrapper**:
-- Do not hide denied KBs from the fan-out call list entirely — the user needs to know which ones they could search if they forked a copy.
+- Do not hide denied KBs from the fan-out call list entirely — the user needs to know which enumerated KBs denied the search.
 - Do not render denied KBs in the main results area — they are noise that drowns out real hits.
-- Collect them in a separate "ℹ️ subscribed KBs (no search permission)" block at the end of the output.
+- Collect them in a separate informational denied-KB block at the end of the output.
 
 `search_fanout.py` implements this partitioning in its `rank_groups()` function using the `220030` error code as the partition key.
 
@@ -58,7 +72,7 @@ load credentials
 load ~/.config/ima/copilot.json  (optional)
 enumerate all KBs via search_knowledge_base("")
 filter out KBs in skip_kbs
-fan out search_knowledge to the remainder, in parallel (default 12 workers)
+fan out search_knowledge to the remainder, in parallel
 partition results into: priority | others | denied | empty
 render:
   priority group first, in user-declared order
@@ -68,7 +82,8 @@ render:
   truncated warning (if any)
 ```
 
-Every step after credential load is stateless — rerunning the script with the same query produces the same output, modulo rare eventual-consistency windows on newly added content.
+The helper does not persist search results. Each run queries the current KB contents;
+the same query can return different results as the source changes.
 
 ## The `copilot.json` configuration file
 
@@ -115,14 +130,12 @@ Before adding a KB to `skip_kbs` as a strict subset of another, verify the subse
 3. Compute `set(B) - set(A)`. If this is consistently empty across all queries, B is (probably) a subset of A. If any difference persists, they are not in a subset relationship.
 4. If truncated results show up (exactly 100 hits), discard that query — the set difference will be a truncation artifact, not a real content difference.
 
-The rationale is that querying at most ~100 hits is cheap (3–4 API calls) and any genuine subset relationship will be visible with just a few narrow queries, whereas high-frequency queries will mislead. See the conversation history around this skill's creation for a worked example on the `personal-kb` vs `master-kb` pair.
-
 ## Rendering details
 
 Text mode (the default):
 
 - Each KB group is a header line with an emoji (`🥇` for priority, `📚` for others) and a hit count.
-- The first `--max-results` hits per KB are listed with title and highlight snippet (truncated to 120 chars).
+- The first `--max-results` hits per KB are listed with title and a bounded highlight snippet.
 - "N more" is printed if hits exceed the limit.
 - A separator line precedes the summary.
 - The summary shows total hits and total KBs with results.

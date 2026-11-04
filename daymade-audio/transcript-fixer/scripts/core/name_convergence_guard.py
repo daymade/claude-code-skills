@@ -36,6 +36,7 @@ review queue).
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from dataclasses import dataclass
@@ -244,6 +245,75 @@ def _organization_short_name(quote: str, target: str, original: str,
     return False
 
 
+def _replayed_place_reference(record: dict, *, entity_type: str, source_text: str,
+                             source_bytes: bytes, quote: str, target: str,
+                             original: str, context: str, offset: int) -> bool:
+    """Bind a municipal-place slot to an explicitly replayed passage, not a name vote.
+
+    This verifies the supplied text coordinates. The operator still establishes
+    that the source is one recording and both passages replay the same utterance.
+    """
+    if "replay" not in record:
+        return False
+    replay = record["replay"]
+    if entity_type != "place" or not isinstance(replay, dict):
+        raise ValueError("replay citation requires entity_type=place and a replay object")
+    if replay.get("source_type") != "same_recording_replay":
+        raise ValueError("replay citation requires source_type=same_recording_replay")
+    digest = replay.get("source_sha256")
+    if not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None \
+            or hashlib.sha256(source_bytes).hexdigest() != digest:
+        raise ValueError("replay source_sha256 does not match the source bytes")
+    positions = {}
+    for key in ("occurrence_offset", "cue_offset", "quote_offset", "target_offset"):
+        value = replay.get(key)
+        if type(value) is not int or value < 0:
+            raise ValueError(f"replay {key} requires a nonnegative character offset")
+        positions[key] = value
+    first, cue_at, second, selected = (positions[k] for k in
+        ("occurrence_offset", "cue_offset", "quote_offset", "target_offset"))
+    cue = replay.get("cue")
+    if cue not in ("我再放一遍。", "再放一遍。", "我们再听一遍。", "我再播放一遍。"):
+        raise ValueError("replay citation requires a supported affirmative replay cue")
+    if source_text[first:first + len(context)] != context \
+            or source_text[second:second + len(quote)] != quote \
+            or source_text[cue_at:cue_at + len(cue)] != cue \
+            or not first + len(context) <= cue_at < cue_at + len(cue) <= second:
+        raise ValueError("replay passages/cue do not match the ordered source coordinates")
+    # Do not accept an affirmative substring of e.g. 我不再放一遍。 or
+    # 别说我再放一遍。; the selected cue must start its own clause.
+    boundary = max((m.end() for m in re.finditer(r"[，,。.!！?？;；\n\r]", source_text[:cue_at])), default=0)
+    if source_text[boundary:cue_at].strip():
+        raise ValueError("replay cue must be a whole affirmative clause")
+    if quote[selected:selected + len(target)] != target:
+        raise ValueError("replay target_offset does not select the target")
+    # This bounded construction is a city discussion, not arbitrary nonperson
+    # classification. A comma alone never turns a person into a place.
+    first_tail, second_tail = context[offset + len(original):], quote[selected + len(target):]
+    municipal = r"^[，,]\s*市长"
+    if re.match(municipal, first_tail) is None or re.match(municipal, second_tail) is None \
+            or "城市" not in first_tail or "城市" not in second_tail:
+        raise ValueError("replay place slots require the municipal discussion construction")
+    for text, at in ((context, offset), (quote, selected)):
+        if re.search(r"(?:我叫|姓名[是为：:]?|名叫|老师|先生|女士)\s*$", text[max(0, at - 12):at]):
+            raise ValueError("replay citation cannot replace a person-name introduction")
+    anchors = replay.get("anchors")
+    if not isinstance(anchors, list) or len(anchors) != 2 \
+            or any(not isinstance(a, str) or len(a) < 6 or not a.strip() for a in anchors) \
+            or anchors[0] == anchors[1]:
+        raise ValueError("replay citation requires two distinct neighbouring anchors of at least six characters")
+    for tail in (first_tail, second_tail):
+        end = 0
+        for index, anchor in enumerate(anchors):
+            if tail.count(anchor) != 1:
+                raise ValueError("replay anchor must occur exactly once after each selected slot")
+            at = tail.index(anchor)
+            if at < end or at > 200 or (index == 0 and at > 8):
+                raise ValueError("replay anchors must be ordered, nonoverlapping and local to each slot")
+            end = at + len(anchor)
+    return True
+
+
 def entity_reference_citation(record: object, *, item_id: int, target: str,
                               entity_type: str, original: str, context: Optional[str],
                               context_offset: Optional[int] = None) -> str:
@@ -265,14 +335,21 @@ def entity_reference_citation(record: object, *, item_id: int, target: str,
     if target not in quote:
         raise ValueError("entity_reference quote must contain the exact target")
     source = Path(record["source_path"]).expanduser()
-    if quote not in source.read_text(encoding="utf-8"):
+    source_bytes = source.read_bytes()
+    # Match the previous read_text() universal-newline semantics; the digest
+    # still binds the exact physical bytes, including CRLF when present.
+    source_text = source_bytes.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
+    if quote not in source_text:
         raise ValueError("entity_reference quote is absent from source_path")
     # A typed citation must describe the selected occurrence as that referent.
     offset = _citation_occurrence(original, context, context_offset)
     cues = NONPERSON_CUES[entity_type]
     adjacent = any(re.match(r"\s*" + re.escape(cue), context[offset + len(original):], re.I) for cue in cues)
     short_name = entity_type == "organization" and _organization_short_name(quote, target, original, context, offset)
-    if not adjacent and not short_name:
+    replay = _replayed_place_reference(record, entity_type=entity_type, source_text=source_text,
+        source_bytes=source_bytes, quote=quote, target=target, original=original,
+        context=context, offset=offset)
+    if not adjacent and not short_name and not replay:
         raise ValueError("this occurrence has no supported source-bound cue for entity_type")
     return ENTITY_REFERENCE_PREFIX + json.dumps(record, ensure_ascii=False, separators=(",", ":"))
 

@@ -88,6 +88,7 @@ data: {"type":"error","message":"content blocked ..."}
 | Model | Endpoint | Request format |
 |---|---|---|
 | `stepaudio-3-asr-max` (this skill) | `/v1/audio/asr/sse` | JSON + base64 audio + SSE response |
+| `stepaudio-2.5-asr` (Step Plan) | `/step_plan/v1/audio/asr/sse` | Same JSON/SSE shape; consumes subscription Credit |
 | `stepaudio-3-tts` (sibling, see `stepfun-tts` skill) | `/v1/audio/speech` | JSON with `instruction` (no `voice_label`) |
 | `step-asr` / `step-asr-1.1` (legacy) | `/v1/audio/transcriptions` | multipart/form-data |
 | `step-tts-2` / `step-tts-mini` (legacy) | `/v1/audio/speech` | JSON with `voice_label` |
@@ -98,7 +99,7 @@ Legacy `step-asr-1.1` is the fallback when the current model hits the repetition
 
 - Key header: `Authorization: Bearer <key>`
 - Keys can be retrieved at https://platform.stepfun.com/ → API Keys
-- "Plan" keys (cheaper subscription) are **restricted** to text models on `api.stepfun.com/step_plan`. They **cannot** call audio endpoints. Use a "Normal" key for ASR calls.
+- Step Plan supports `stepaudio-2.5-asr` at `https://api.stepfun.com/step_plan/v1/audio/asr/sse`. Use that exact endpoint/model pair for subscription billing; `stepaudio-3-asr-max` uses the wallet endpoint. Verify current entitlement at [Step Plan audio integration](https://platform.stepfun.com/docs/zh/step-plan/integrations/audio-api).
 - Same key works for both TTS and ASR — no separate scopes
 
 ## Rate / throughput notes (observed, not officially documented)

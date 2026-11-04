@@ -29,14 +29,19 @@ Never use either channel to bypass a host denial.
 
 Snapshot, reconstruction, dry-run and reconciliation can proceed without taking
 the desktop. Actual restore uses global keyboard/clipboard input and is foreground
-work even when launched as a background shell job. Before restore, use a concrete
-Ghostty handoff or existing explicit idle-desktop permission; check current activity
-and coordinate exclusive agent ownership. Under that standing grant, notify and
-execute without asking again. Idle input alone is not ownership. If busy/unknown,
-continue preparation and read-only checks; stop input on human takeover and never
-restore your old focus. Host denials remain binding.
+work even when launched as a background shell job. Apply the current user's
+foreground authorization. When it already covers this app and action, notify and
+proceed without requesting another handoff or requiring a lease or idle proof.
+Coordinate observed competing use. On human takeover, actual agent competition or
+externally overwritten state, stop input and yield; do not restore your old focus.
+If foreground use is not authorized, continue preparation and read-only checks
+until the missing bounded authorization is supplied. Host denials remain binding.
 
 ## Entry decision tree
+
+For missing Codex terminals without confirmed Ghostty ownership, load the installed
+`read-codex-history` Skill and follow its
+[terminal-session recovery recipe](https://github.com/daymade/claude-code-skills/blob/main/daymade-claude-code/read-codex-history/references/terminal-session-recovery.md).
 
 | You just said / want | Run |
 |---|---|
@@ -44,87 +49,66 @@ restore your old focus. Host denials remain binding.
 | Periodic backup, save only changes ("定期增量快照") | Read automatic-snapshots.md, then `ghostty_watch.py install --apply` |
 | Rebooted, want tabs back ("恢复之前的窗口") | Use a suitable snapshot; if absent or outdated, `reconstruct`, then `restore --all` on the selected manifest |
 | "Was anything lost?" / suspicion after restore | `check` |
+| Snapshot looks too large, or "which sessions were active after <time>?" | Follow [time-window selection](references/session_liveness.md#select-recovery-candidates-by-a-time-window) before choosing a restore set |
 | One specific session to bring back | `restore --only <id-prefix>` |
-| Minions `native_runtime` session or managed account-adoption error | Do not use the manual switch route; use the owning Account Manager's native session flow |
-| Unmanaged/legacy Codex quota running out; manually switching account, keeping all Codex work | Read codex-account-switch.md; `switch-prepare [--only <unmanaged-uuid>...]` → manual exit/login → `switch-restore` |
-| After a switch, want the same sessions back ("换号后恢复原会话"); opening blocked or delegated | Same SOP's original-set route: deliver the fixed manifest's exact per-SID commands with per-item status; a blank tab is not a recovery |
+| Minions `native_runtime` session or managed account-adoption error | Follow [account-owner selection](references/codex-account-switch.md#choose-the-account-owner-first) |
+| Unmanaged/legacy Codex quota running out; manually switching account, keeping all Codex work | Start with [account-owner selection](references/codex-account-switch.md#choose-the-account-owner-first) |
+| After a switch, want the same sessions back ("换号后恢复原会话"); opening blocked or delegated | Follow [the original-set recovery route](references/codex-account-switch.md#reopen-the-original-recorded-set-not-a-blank-session) |
 
 ## Codex account switch
 
-Preserve unmanaged/legacy Ghostty Codex sessions before the user manually switches
-ChatGPT accounts, then reopen the original session IDs in one batch. Exclude Claude
-Code and Minions `native_runtime` sessions; those managed rows use the owning Account
-Manager, not this route's manual logout/login or batch restore.
-Read [codex-account-switch.md](references/codex-account-switch.md) before this route.
-Use `scripts/ghostty_session.py switch-prepare` and `switch-restore`; the bundled
-`scripts/ghostty_switch.py` owns fixed-manifest selection, account/process checks,
-duplicate-safe retries and separate authentication reporting.
-If login already changed before capture, use the explicit `switch-restore
---after-login` branch. For a controlled exit sequence including the executing
-session, use `switch-plan --current-session <full-uuid>` first; it defers that
-session until an independent executor exists. Save its recovery inputs outside the
-exiting terminal with `switch-handoff`, then recheck them with
-`switch-handoff-check`; these commands preserve the host-adapter gap rather than
-authorize an exit. The reference specifies the exact commands and durable
-literal-control receipt.
-
-```bash
-python3 <skill-dir>/scripts/ghostty_session.py switch-prepare
-# Mixed managed/unmanaged inventory: capture only the eligible unmanaged/legacy UUIDs.
-python3 <skill-dir>/scripts/ghostty_session.py switch-prepare --only <unmanaged-uuid> [...]
-# User: finish work, exit the saved Codex TUIs and manually switch account.
-python3 <skill-dir>/scripts/ghostty_session.py switch-restore
-```
-
-Default to tabs in one window; use `--layout windows` only when independent windows are requested.
-Keep the printed fixed manifest through the handoff. Treat unresolved capture,
-unverified original processes and missing sessions as incomplete. Recovery means
-reopening the fixed manifest's original IDs; when reopening is blocked or
-delegated (kept old processes, user-managed locks, denied UI automation), follow
-[the original-set route](references/codex-account-switch.md#reopen-the-original-recorded-set-not-a-blank-session)
-and deliver the complete exact per-session commands with per-item status — a
-blank tab is never a recovery. Mode selection,
-account preconditions and partial-restore readiness belong to
-[the switch SOP](references/codex-account-switch.md). Never send process-termination
-signals or switch credentials through this route; normal local exit controls use
-that SOP's authorized-host protocol. Apply the foreground
-conditions above before actual opening; ask only when that handoff is missing. `--dry-run` and `--check`
-remain read-only. Distinguish reopened IDs from new-account requests that worked:
-the script reports authentication as `not_checked` and sends no test prompt.
+Start with [account-owner selection](references/codex-account-switch.md#choose-the-account-owner-first).
+For the selected independent-TUI workflow, follow
+[save before switching](references/codex-account-switch.md#save-before-switching)
+and [restore or resume the batch](references/codex-account-switch.md#restore-and-resume-an-interrupted-batch).
+For blocked or delegated reopening, follow
+[the original-set route](references/codex-account-switch.md#reopen-the-original-recorded-set-not-a-blank-session).
+Keep command examples, handoff, authorization and acceptance in that SOP.
+Implementation: [ghostty_switch.py](scripts/ghostty_switch.py).
 
 ## Quick start
+
+Before reopening sessions, follow
+[current-set reconciliation](references/restore_mechanics.md#reconcile-the-current-wanted-set).
+Keep the same explicit manifest and selection through preview, restore and check.
 
 ```bash
 # Before quitting (from any directory):
 python3 <skill-dir>/scripts/ghostty_session.py snapshot
 
-# After restart (from any directory; needs Accessibility permission for keystrokes):
-python3 <skill-dir>/scripts/ghostty_session.py restore        # manual: active only; automatic: full recorded set
-python3 <skill-dir>/scripts/ghostty_session.py restore --all  # include waiting/quota/dead/stale/unknown records
+# After selecting the wanted set, preview it before any foreground input:
+python3 <skill-dir>/scripts/ghostty_session.py restore --snapshot <manifest.json> --all --dry-run
+# Carry the selected --only/--exclude options into this preview, then omit --dry-run to execute.
 ```
 
+Without `--all`, manual manifests select active sessions only; automatic manifests
+select their recorded set. Use `--all` to include waiting/quota/dead/stale/unknown rows.
+
 The snapshot lands in `~/.ghostty-session/snapshots/` (home-relative, survives reboot).
-The report accounts for every live TUI: captured sessions plus an `unresolved`
-section for fresh tabs that have no transcript yet — a session count lower than
-the tab count is explained there, not silently lost.
+Manual snapshots record Ghostty process descendants only. They persist resumable
+AI `sessions`, `unresolved` TUIs, `other_terminals` with cwd/process evidence, and
+the observed `terminal_inventory`. Other terminal emulators are excluded.
+Treat a TTY as a terminal surface, not a tab: splits and window membership are
+unknown. If the user supplies a tab count, record it with `snapshot --expected-tabs <N>`;
+do not use matching session/TTY totals as proof of current-window coverage.
+State the unmapped window/tab boundary before the update. An empty observation
+refuses to replace the previous backup. Non-AI commands and unresolved argv are
+evidence, not instructions to execute automatically.
 `restore` skips already-live IDs by default. It finishes with a bounded auto-check
 that prints `N/M present`, a manual reopen command and a retry command containing only
 missing IDs. Read that result before declaring success; per-tab `SENT (unverified)`
 is a paste acknowledgement, not proof that a session reopened. Re-running the same
 manifest opens only the IDs still missing. `--dry-run` prints commands without GUI actions.
+Repeat current-set reconciliation after a manual handoff or any change in selection.
+After process reconciliation, follow [history-readiness acceptance](references/restore_mechanics.md#verify-history-readiness-after-process-reconciliation)
+before claiming that the selected conversations are ready to read.
 
 ## Automatic change-only backups
 
 Read [automatic-snapshots.md](references/automatic-snapshots.md) before installing
-or operating `scripts/ghostty_watch.py`. It saves only changed restore state and
-keeps all prior versions. Unchanged
-rounds write no snapshot or routine log. Automatic manifests cover Ghostty
-process descendants without transcript reads; their liveness is explicitly unknown
-and `restore` selects the whole recorded set. UUID-less TUIs remain unresolved in
-automatic manifests — the watcher's bounded scan deliberately reads no transcripts;
-manual snapshot/check/restore resolve them (see the anchor bullet below).
-Partial observations preserve prior missing IDs conservatively. The watcher never
-opens apps or tabs. Manual snapshots keep their active-only restore default.
+or operating `scripts/ghostty_watch.py`, including an upgrade of its installed
+script copies. That SOP owns schedule/enable-state preservation, partial coverage,
+change-only writes and native-round verification.
 
 ## No suitable snapshot: reconstruct the recovery manifest
 
@@ -139,7 +123,7 @@ or state index fails explicitly; do not replace it with a rollout corpus scan.
 ```bash
 # Review candidates without writing state or opening tabs:
 python3 <skill-dir>/scripts/ghostty_session.py reconstruct \
-  --history-reader <reader-skill-dir> --recent-hours 72 --limit 100 --dry-run
+  --history-reader <reader-skill-dir> --dry-run
 
 # Build one chosen set in a NEW file; --only accepts unambiguous ID prefixes:
 python3 <skill-dir>/scripts/ghostty_session.py reconstruct \
@@ -176,18 +160,21 @@ or unavailable evidence. Dry-run output is JSON for inspection.
 
 ## What manual snapshot records per session
 
-- **Anchor**: the session UUID from the process command line when present (never
+- **Anchor**: the session UUID from a recognized resume/session selector (never
   match on process names — argv[0] flips between bare `claude` and
-  `/usr/local/bin/claude`). Fresh TUIs carry no UUID on argv (only
-  resume/fork writes one), so they are anchored from transcript storage instead:
+  `/usr/local/bin/claude`). Option values and prompt text cannot establish identity.
+  A fork selector names the parent; resolve the child's own ID from verified
+  transcript evidence, then resume that child without replaying `fork` or
+  `--fork-session`. Fresh TUIs likewise use transcript storage:
   the session file born at or after the process started, in the project bucket
   of the same cwd, internal identity verified. When several
   fresh TUIs share one bucket, transcripts are assigned disjointly — one file
   per TUI; an undecidable race (equidistant claims) refuses to the unresolved
-  section rather than guessing. Live TUIs matching neither way are printed as
-  unresolved rows in the snapshot report — visible, never silently dropped.
-- **Liveness**: last real interaction time read from the *content* of the session file —
-  not the file mtime, which can change without real interaction.
+  section rather than guessing. Live TUIs matching neither way are persisted as
+  unresolved rows and printed in the snapshot report — visible, never silently dropped.
+- **Liveness**: last timestamp read from the *content* of the session file — not
+  its mtime, which can change without real interaction. Use the time-window recipe
+  above to qualify actual work rather than treating every record as interaction.
 - **Channel health**: `dead-channel` when a Claude transcript's tail carries a
   structured `isApiErrorMessage` with "Login expired" — restoring such a tab reopens
   history but the session stops at `/login`; the snapshot marks it so you can skip it.
@@ -215,8 +202,10 @@ or unavailable evidence. Dry-run output is JSON for inspection.
   then reconcile after permitted execution. Reboot recovery uses read-only
   `check --snapshot <manifest> --strict`; account switching uses
   [the mode-bound switch check](references/codex-account-switch.md#restore-and-resume-an-interrupted-batch).
-- Window grouping is **not** restorable — Ghostty's macOS accessibility surface exposes
-  no tab→window mapping. All tabs reopen into one window; reorder manually if needed.
+- The batch restore does not reconstruct original window grouping or splits; it
+  opens missing sessions as tabs in the active window. Captured grouping remains
+  unknown. Do not infer a platform-wide AX limitation from this script boundary;
+  use the [current native observations](references/restore_mechanics.md#current-native-observation-boundary).
 - Rollout files that codex itself cannot find anymore print `no-artifact`; restoring
   them replays the same `codex resume <id>` and stays a best effort.
 
@@ -238,13 +227,13 @@ user-local data outside the skill bundle; no default mapping ships.
 
 | Symptom | Cause / fix |
 |---|---|
-| `restore` reports `STILL MISSING` | run the printed missing-only retry, or the exact reopen command by hand in a new tab |
+| `restore` reports `NOT OBSERVED` | reconcile the current wanted set first; retry only still-wanted IDs, excluding intentional closures |
 | `no-artifact` on a Codex session | the verified indexed session has no usable rollout; resume remains best-effort |
 | `unknown` Codex liveness | reader/index unavailable or identity ambiguous; resolve the dependency/store instead of choosing the first filename match |
 | `dead-channel` sessions restored anyway | expected: history reopens, session stops at `/login`; re-auth or switch provider |
 | `check` says present but tab looks empty | another live process already claimed that session id (e.g. resumed in another tab) |
 | osascript refuses keystrokes | grant Accessibility (System Events) permission; verify with `osascript -e 'tell application "System Events" to get UI elements enabled'` |
-| a brand-new tab is missing from the session list | a fresh TUI has no argv UUID and its transcript file appears with its first message; until then it shows under unresolved live TUIs. If the first message came >20 minutes after the tab opened, the birth window has passed and the tab stays unresolved by design |
+| a brand-new tab is missing from the session list | a fresh TUI has no argv UUID and its transcript file appears with its first message; until then it shows under unresolved live TUIs. A late first message can fall outside the upper window defined by `FIRST_WRITE_WINDOW_SECONDS` and the candidate filters in [the resolver](scripts/ghostty_session.py) |
 
 ## One-shot helper terminals and original sessions
 
@@ -284,10 +273,8 @@ snapshots and restores. Keep the following evidence boundaries:
 
 ## Deeper details
 
-- [references/session_liveness.md](references/session_liveness.md) — storage layouts
-  (Claude projects / Codex sessions), transcript structures, resume-fork naming,
-  liveness rules and the misclassification cases behind them. Read when a liveness
-  result looks wrong or layouts changed after an app update.
-- [references/restore_mechanics.md](references/restore_mechanics.md) — why Ghostty
-  offers no CLI/AX restore path, the keystroke-paste protocol, reconciliation design,
-  and the window-grouping boundary. Read before modifying the restore path.
+- [references/session_liveness.md](references/session_liveness.md) — Read before
+  filtering recovery by activity, investigating a liveness result, or adapting to a
+  changed transcript layout.
+- [references/restore_mechanics.md](references/restore_mechanics.md) — Read before
+  restoring sessions, investigating a restore result, or modifying the restore path.

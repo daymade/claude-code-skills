@@ -10,8 +10,8 @@ ARCHITECTURE:
   - Action Layer: Creates .security-scan-passed marker on clean scan
 
 USAGE:
-  uv run --frozen python -m scripts.security_scan <skill-dir>              # Quick scan
-  uv run --frozen python -m scripts.security_scan <skill-dir> --verbose    # Detailed review
+  uv run --project "<skill-creator-path>" --frozen python "<skill-creator-path>/scripts/security_scan.py" "<absolute-skill-dir>"  # Quick scan
+  uv run --project "<skill-creator-path>" --frozen python "<skill-creator-path>/scripts/security_scan.py" "<absolute-skill-dir>" --verbose  # Detailed review
 """
 
 from __future__ import annotations
@@ -558,8 +558,8 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  uv run --frozen python -m scripts.security_scan ../my-skill              # Quick scan
-  uv run --frozen python -m scripts.security_scan ../my-skill --verbose    # Detailed review
+  uv run --project "<skill-creator-path>" --frozen python "<skill-creator-path>/scripts/security_scan.py" "<absolute-skill-dir>"  # Quick scan
+  uv run --project "<skill-creator-path>" --frozen python "<skill-creator-path>/scripts/security_scan.py" "<absolute-skill-dir>" --verbose  # Detailed review
 
 Exit codes:
   0 - Clean (no issues)

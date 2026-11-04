@@ -17,7 +17,7 @@ import tempfile
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 
 TARGET_CONTEXT_CEILING = 1_000_000
@@ -226,14 +226,28 @@ def inspect(codex_bin: str) -> Inspection:
 
 
 def render_config(original: bytes, config: dict[str, Any], values: dict[str, int]) -> bytes:
+    if not values or not set(values).issubset(TARGET_KEYS):
+        raise SetupError("unsupported configuration keys; no file was changed")
+    if all(config.get(key) == value for key, value in values.items()):
+        return original
     if original.startswith(b"\xef\xbb\xbf"):
         raise SetupError("UTF-8 BOM in config.toml is unsupported; no file was changed")
     text = original.decode("utf-8") if original else ""
     newline = "\r\n" if "\r\n" in text else "\n"
     lines = text.splitlines(keepends=True)
+
+    def complete_prefix(index: int) -> bool:
+        # An assignment/header-looking line inside a multiline TOML value has
+        # an incomplete prefix. Ask the parser rather than interpreting it as config.
+        try:
+            tomllib.loads("".join(lines[:index]))
+        except tomllib.TOMLDecodeError:
+            return False
+        return True
+
     first_table = len(lines)
     for index, line in enumerate(lines):
-        if TABLE_HEADER.match(line) and not line.lstrip().startswith("#"):
+        if TABLE_HEADER.match(line) and complete_prefix(index):
             first_table = index
             break
 
@@ -243,6 +257,10 @@ def render_config(original: bytes, config: dict[str, Any], values: dict[str, int
         if not match:
             continue
         key = match.group(2)
+        if key not in values:
+            continue
+        if not complete_prefix(index):
+            continue
         if key in found:
             raise SetupError(f"duplicate textual assignment for top-level {key}")
         found[key] = index
@@ -252,14 +270,14 @@ def render_config(original: bytes, config: dict[str, Any], values: dict[str, int
         )
         lines[index] = replacement
 
-    for key in TARGET_KEYS:
+    for key in values:
         if key in config and key not in found:
             raise SetupError(
                 f"top-level {key} uses syntax the conservative editor cannot preserve; "
                 "no file was changed"
             )
 
-    missing = [key for key in TARGET_KEYS if key not in found]
+    missing = [key for key in values if key not in found]
     if missing:
         insert_at = first_table
         additions = [f"{key} = {values[key]}{newline}" for key in missing]
@@ -279,12 +297,15 @@ def render_config(original: bytes, config: dict[str, Any], values: dict[str, int
     for key, expected in values.items():
         if parsed.get(key) != expected:
             raise SetupError(f"edited config did not preserve top-level {key}={expected}")
+    expected_config = {**config, **values}
+    if parsed != expected_config:
+        raise SetupError("edited config would change unrelated settings; no file was changed")
     return rendered.encode("utf-8")
 
 
 def backup_config(path: Path, original: bytes) -> Path:
     digest = hashlib.sha256(original).hexdigest()[:12]
-    timestamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    timestamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     backup_dir = path.parent / "backups" / "codex-1m-context-window-setup"
     backup_dir.mkdir(parents=True, exist_ok=True)
     backup = backup_dir / f"config.toml.{timestamp}.{digest}.bak"
@@ -324,36 +345,31 @@ def strict_config_check(codex_bin: str) -> None:
         raise SetupError("strict Codex diagnostics did not confirm config.load=ok")
 
 
-def apply_configuration(inspection: Inspection) -> dict[str, Any]:
-    report = dict(inspection.report)
-    values = {
-        "model_context_window": report["recommended_raw_tokens"],
-        "model_auto_compact_token_limit": report["recommended_auto_compact_tokens"],
-    }
-    updated = render_config(inspection.original_bytes, inspection.config, values)
-    if updated == inspection.original_bytes:
-        strict_config_check(inspection.codex_bin)
-        report.update(
-            {
-                "status": "configured",
-                "changed": False,
-                "backup_path": None,
-                "restart_required": False,
-            }
-        )
-        return report
-
-    path = inspection.config_path
+def persist_values(
+    path: Path,
+    original: bytes,
+    config: dict[str, Any],
+    values: dict[str, int],
+    validate: Callable[[], None],
+) -> dict[str, Any]:
+    updated = render_config(original, config, values)
+    if updated == original:
+        validate()
+        if (path.read_bytes() if path.exists() else b"") != original:
+            raise SetupError("config.toml changed during validation")
+        return {"changed": False, "backup_path": None, "restart_required": False}
     existed = path.exists()
     mode = stat.S_IMODE(path.stat().st_mode) if existed else 0o600
     current = path.read_bytes() if existed else b""
-    if current != inspection.original_bytes:
+    if current != original:
         raise SetupError("config.toml changed during planning; no write was attempted")
-    backup = backup_config(path, inspection.original_bytes) if existed else None
+    backup = backup_config(path, original) if existed else None
+    if (path.read_bytes() if path.exists() else b"") != original:
+        raise SetupError("config.toml changed during backup; no write was attempted")
 
     atomic_write(path, updated, mode)
     try:
-        strict_config_check(inspection.codex_bin)
+        validate()
         written, parsed = read_config(path)
         if written != updated:
             raise SetupError("config.toml changed before verification completed")
@@ -368,29 +384,91 @@ def apply_configuration(inspection: Inspection) -> dict[str, Any]:
                 f"manual recovery may use {backup or '<new-file-no-backup>'}: {error}"
             ) from error
         if existed:
-            atomic_write(path, inspection.original_bytes, mode)
+            atomic_write(path, original, mode)
         else:
             path.unlink(missing_ok=True)
         raise SetupError(f"post-write validation failed; prior config restored: {error}") from error
 
-    report.update(
-        {
-            "status": "configured",
-            "changed": True,
-            "backup_path": str(backup) if backup else None,
-            "restart_required": True,
-            "current_model_context_window": values["model_context_window"],
-            "current_model_auto_compact_token_limit": values[
-                "model_auto_compact_token_limit"
-            ],
-        }
+    return {
+        "changed": True,
+        "backup_path": str(backup) if backup else None,
+        "restart_required": True,
+    }
+
+
+def apply_configuration(inspection: Inspection) -> dict[str, Any]:
+    report = dict(inspection.report)
+    values = {
+        "model_context_window": report["recommended_raw_tokens"],
+        "model_auto_compact_token_limit": report["recommended_auto_compact_tokens"],
+    }
+    result = persist_values(
+        inspection.config_path, inspection.original_bytes, inspection.config, values,
+        lambda: strict_config_check(inspection.codex_bin),
     )
+    report.update(result)
+    report.update({"status": "configured", "session_adoption": "unverified"})
+    for key, value in values.items():
+        report[f"current_{key}"] = value
+    return report
+
+
+def local_report(path: Path, config: dict[str, Any]) -> dict[str, Any]:
+    report: dict[str, Any] = {
+        "status": "read", "config_path": str(path), "configuration_scope": "base",
+        "session_adoption": "unverified",
+    }
+    for key in TARGET_KEYS:
+        value = config.get(key)
+        if key in config and (type(value) is not int or value <= 0):
+            raise SetupError(f"top-level {key} must be a positive integer when present")
+        report[f"current_{key}"] = value
+    return report
+
+
+def local_config_check(codex_bin: str) -> None:
+    # This command loads base config without model discovery or a provider request.
+    try:
+        result = subprocess.run(
+            [codex_bin, "features", "list"], capture_output=True, timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise SetupError("local Codex config check could not complete") from error
+    if result.returncode != 0 or not result.stdout.strip():
+        # Never echo diagnostic bodies from a potentially secret-bearing config.
+        raise SetupError("local Codex config check failed; diagnostic output withheld")
+
+
+def set_compact(codex_bin: str, tokens: int) -> dict[str, Any]:
+    if not 0 < tokens <= 2**63 - 1:
+        raise SetupError("--tokens must be a positive signed 64-bit integer")
+    path = resolve_codex_home() / "config.toml"
+    original, config = read_config(path)
+    report = local_report(path, config)
+    window = config.get("model_context_window")
+    if window is not None and tokens > window:
+        raise SetupError("--tokens exceeds the configured base context window")
+    previous = config.get("model_auto_compact_token_limit")
+    result = persist_values(
+        path, original, config, {"model_auto_compact_token_limit": tokens},
+        lambda: local_config_check(codex_bin),
+    )
+    report.update(result)
+    report.update({
+        "status": "configured", "config_load": "ok",
+        "previous_model_auto_compact_token_limit": previous,
+        "current_model_auto_compact_token_limit": tokens,
+    })
     return report
 
 
 def print_human(report: dict[str, Any]) -> None:
     ordered = (
         "status",
+        "configuration_scope",
+        "config_load",
+        "session_adoption",
         "model",
         "catalog_default_raw_tokens",
         "catalog_default_usable_tokens",
@@ -404,6 +482,7 @@ def print_human(report: dict[str, Any]) -> None:
         "capped_by_model",
         "expands_catalog_default",
         "current_model_context_window",
+        "previous_model_auto_compact_token_limit",
         "current_model_auto_compact_token_limit",
         "config_path",
         "changed",
@@ -417,22 +496,42 @@ def print_human(report: dict[str, Any]) -> None:
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Configure up to 1M Codex context with model-aware 60% compaction."
+        description="Inspect base config, set only compaction, or apply model-aware expansion."
     )
-    parser.add_argument("mode", choices=("doctor", "apply", "verify"))
+    parser.add_argument("mode", choices=("show", "set-compact", "doctor", "apply", "verify"))
+    parser.add_argument("--tokens", type=int, help="explicit threshold for set-compact only")
     parser.add_argument("--json", action="store_true", help="emit machine-readable JSON")
     parser.add_argument(
         "--codex-bin",
         help="explicit Codex executable path (primarily for diagnostics/tests)",
     )
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if (args.mode == "set-compact") != (args.tokens is not None):
+        parser.error("--tokens is required for set-compact and forbidden for other modes")
+    return args
 
 
 def main(argv: list[str] | None = None) -> int:
     configure_stdio()
     args = parse_args(argv)
     try:
+        if args.mode == "show":
+            path = resolve_codex_home() / "config.toml"
+            _, config = read_config(path)
+            report = local_report(path, config)
+            if args.json:
+                print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+            else:
+                print_human(report)
+            return 0
         codex_bin = resolve_codex_bin(args.codex_bin)
+        if args.mode == "set-compact":
+            report = set_compact(codex_bin, args.tokens)
+            if args.json:
+                print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+            else:
+                print_human(report)
+            return 0
         inspection = inspect(codex_bin)
         if args.mode == "apply":
             report = apply_configuration(inspection)

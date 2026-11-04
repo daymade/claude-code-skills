@@ -36,6 +36,67 @@ Use variable validation and resource preconditions for values Terraform knows be
 Postconditions run after a resource operation and do not roll back earlier effects. Terraform `check`
 blocks report warnings and continue, so they are observability rather than a destructive-change gate.
 
+### Preserve typed inputs in the saved plan
+
+When a publisher compares frozen approval values with `terraform show -json`, the release executor
+checks the saved plan's `variables` values separately from evaluated outputs. A `number` constraint
+can produce a numeric output while the original environment input remains a string in `variables`.
+This was reproduced with Terraform 1.5.7 and 1.15.8; it is not a claim that `TF_VAR_*` is invalid.
+
+For a type-sensitive comparison, pass the frozen values through a typed `.tfvars.json` file and
+the actual publisher's `-var-file` path. Preserve the approved values and verify their types in
+the saved plan; do not fix a mismatch by weakening the approval comparison or inventing new values.
+Run the following provider-free control with the release's approved Terraform binary
+(`TERRAFORM_BIN` may select its absolute path). It prints the real CLI version and checks a numeric
+freeze against each saved representation; it does not apply resources or contact a cloud backend.
+
+```bash
+python3 - <<'PY'
+import json, os, pathlib, subprocess, tempfile
+
+terraform = os.environ.get("TERRAFORM_BIN", "terraform")
+env = {k: v for k, v in os.environ.items()
+       if not k.startswith(("TF_VAR_", "TF_CLI_ARGS"))
+       and k not in ("TF_DATA_DIR", "TF_WORKSPACE")}
+env.update(TF_IN_AUTOMATION="1", CHECKPOINT_DISABLE="1")
+expected = 2000000600
+with tempfile.TemporaryDirectory(prefix="saved plan types ") as directory:
+    root = pathlib.Path(directory)
+    (root / "main.tf").write_text(
+        'variable "deadline" { type = number }\n'
+        'output "deadline" { value = var.deadline }\n')
+    (root / "frozen.tfvars.json").write_text(json.dumps({"deadline": expected}))
+
+    def run(*args, variables=None):
+        return subprocess.check_output([terraform, *args], cwd=root,
+            env={**env, **(variables or {})}, text=True, stderr=subprocess.STDOUT)
+
+    print(json.loads(run("version", "-json"))["terraform_version"])
+    run("init", "-backend=false", "-input=false", "-no-color")
+    for name, args, variables in (
+        ("environment", [], {"TF_VAR_deadline": str(expected)}),
+        ("typed-file", ["-var-file=frozen.tfvars.json"], {})):
+        run("plan", "-input=false", "-no-color", "-out=" + name + ".plan",
+            *args, variables=variables)
+        plan = json.loads(run("show", "-json", name + ".plan"))
+        raw = plan["variables"]["deadline"]["value"]
+        output = plan["planned_values"]["outputs"]["deadline"]["value"]
+        assert type(output) is int and output == expected
+        matches = type(raw) is int and raw == expected
+        print(json.dumps({"input": name, "saved_value": raw,
+                          "saved_type": type(raw).__name__,
+                          "integer_freeze_matches": matches}))
+        if name == "typed-file":
+            assert matches
+PY
+```
+
+On the reproduced versions, `environment` reports `saved_type: "str"` and a failed integer
+comparison; `typed-file` reports `"int"` and passes. If another version produces two numeric
+representations, retain that result rather than diagnosing this mismatch. The local control covers
+this numeric representation only. Before publishing, exercise the real wrapper's input construction
+and saved-plan comparison too; a direct CLI control does not prove the wrapper forwarded the file.
+
 ## 2. One environment schema
 
 Define runtime-required keys once in a machine-readable manifest or derive them from the canonical

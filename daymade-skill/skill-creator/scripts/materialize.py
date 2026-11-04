@@ -21,7 +21,7 @@ import time
 STATE = ".materialization.json"
 LOCK = ".materialization.lock"
 EXIT = {"budget_exceeded": 20, "free_space_low": 21, "measurement_unknown": 22,
-        "child_failed": 23, "interrupted": 130}
+        "child_failed": 23, "interrupted": 130, "invalid_manifest": 2}
 
 
 class MaterializationError(Exception):
@@ -38,6 +38,56 @@ def relative_path(value):
     return value
 
 
+def capacity_config_path(value):
+    if not isinstance(value, str) or not value.strip():
+        raise MaterializationError("capacity_config must be a nonblank absolute physical path")
+    path = Path(value)
+    if not path.is_absolute() or ".." in path.parts:
+        raise MaterializationError("capacity_config must be an absolute physical path")
+    return path
+
+
+def resolve_capacity_limits(record, capacity_config=None):
+    """Freeze a caller-selected reserve; never discover a machine policy implicitly.
+
+    Mutate only the selected binding and its greatest observed reserve. Callers
+    persisting a task record must hold that task's lock before adopting a change.
+    Cleanup uses the stored contract without calling this execution preflight.
+    """
+    selected = record.get("capacity_config")
+    if capacity_config is not None:
+        requested = str(capacity_config_path(capacity_config))
+        if "capacity_config" in record and requested != str(capacity_config_path(selected)):
+            raise MaterializationError("an existing capacity_config binding cannot be replaced")
+        selected = requested
+    limits = {key: record[key] for key in ("max_total_bytes", "minimum_free_bytes")}
+    if selected is None and "capacity_config" not in record:
+        return limits
+    path = capacity_config_path(selected)
+    try:
+        if path.resolve(strict=True) != path:
+            raise ValueError("capacity config path is not physical")
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(fd) as source:
+            if not stat.S_ISREG(os.fstat(source.fileno()).st_mode):
+                raise ValueError("capacity config is not a regular file")
+            value = json.load(source)
+    except (OSError, ValueError) as error:
+        raise MaterializationError("selected capacity config is unavailable or invalid") from error
+    floor = value.get("minimum_free_bytes") if isinstance(value, dict) else None
+    if type(floor) is not int or floor <= 0:
+        raise MaterializationError("capacity config minimum_free_bytes must be a positive integer")
+    frozen = record.get("capacity_policy", {}).get("minimum_free_bytes", floor)
+    if type(frozen) is not int or frozen <= 0:
+        raise MaterializationError("invalid frozen capacity reserve")
+    frozen = max(frozen, floor)
+    limits["minimum_free_bytes"] = max(limits["minimum_free_bytes"], frozen)
+    record["capacity_config"] = str(path)
+    record["capacity_policy"] = {"minimum_free_bytes": frozen,
+                                 "effective_minimum_free_bytes": limits["minimum_free_bytes"]}
+    return limits
+
+
 def validate_manifest(data, require_source=True):
     if not isinstance(data, dict):
         raise MaterializationError("manifest must be an object")
@@ -49,6 +99,14 @@ def validate_manifest(data, require_source=True):
     for key in ("max_total_bytes", "minimum_free_bytes"):
         if type(data.get(key)) is not int or data[key] <= 0:
             raise MaterializationError(f"{key} must be an explicit positive integer")
+    if "capacity_config" in data:
+        capacity_config_path(data["capacity_config"])
+    if "capacity_policy" in data:
+        policy = data["capacity_policy"]
+        if ("capacity_config" not in data or not isinstance(policy, dict)
+                or any(type(policy.get(key)) is not int or policy[key] <= 0
+                       for key in ("minimum_free_bytes", "effective_minimum_free_bytes"))):
+            raise MaterializationError("invalid persisted capacity policy")
     if not isinstance(data.get("paths"), list) or not data["paths"]:
         raise MaterializationError("paths must be a nonempty explicit list; no whole repository")
     paths = [relative_path(p) for p in data["paths"]]
@@ -185,9 +243,19 @@ def free_bytes(root):
 
 
 def check_limits(record, root):
-    if record["charged_bytes"] > record["max_total_bytes"]:
+    limits = resolve_capacity_limits(record)
+    if record["charged_bytes"] > limits["max_total_bytes"]:
         raise MaterializationError("cumulative task byte budget exceeded", "budget_exceeded")
-    if free_bytes(root) < record["minimum_free_bytes"]:
+    available = free_bytes(root)
+    sampled_at = time.time()
+    capacity = record.setdefault("capacity", {
+        "scope": "mixed_filesystem_available_space",
+        "initial_free_bytes": available, "initial_sampled_at": sampled_at,
+        "min_free_bytes": available, "min_sampled_at": sampled_at})
+    capacity.update(latest_free_bytes=available, latest_sampled_at=sampled_at)
+    if available < capacity["min_free_bytes"]:
+        capacity.update(min_free_bytes=available, min_sampled_at=sampled_at)
+    if available < limits["minimum_free_bytes"]:
         raise MaterializationError("free space below explicit minimum", "free_space_low")
 
 
@@ -305,8 +373,9 @@ def lock_root(root, owner):
             pass
 
 
-def prepare(manifest, destination):
+def prepare(manifest, destination, *, capacity_config=None):
     data = validate_manifest(manifest)
+    limits = resolve_capacity_limits(data, capacity_config)
     target = Path(destination).absolute()
     if target.exists() or target.is_symlink():
         raise MaterializationError("destination must be new; existing roots are never reused")
@@ -322,7 +391,7 @@ def prepare(manifest, destination):
     estimate = sum(max(block, math.ceil(f["size"] / block) * block) for f in files) * len(data["arms"])
     if estimate > data["max_total_bytes"]:
         raise MaterializationError("selected ref × all arms exceeds budget before export", "budget_exceeded")
-    if free_bytes(parent) - estimate < data["minimum_free_bytes"]:
+    if free_bytes(parent) - estimate < limits["minimum_free_bytes"]:
         raise MaterializationError("projected free space below explicit minimum", "free_space_low")
     target.mkdir(mode=0o700)
     s = target.stat()
@@ -383,7 +452,7 @@ def stop_group(process):
     process.wait()
 
 
-def run(root, owner, arm, argv, poll_interval=0.1):
+def run(root, owner, arm, argv, poll_interval=0.1, *, capacity_config=None):
     if not argv or not all(isinstance(a, str) and a for a in argv):
         raise MaterializationError("run requires a nonempty argv, never a shell string")
     if not math.isfinite(poll_interval) or poll_interval <= 0:
@@ -398,6 +467,7 @@ def run(root, owner, arm, argv, poll_interval=0.1):
         trial = {"arm": arm, "argv": argv, "started_at": time.time(), "state": "starting"}
         record["runs"].append(trial)
         try:
+            resolve_capacity_limits(record, capacity_config)
             measure(record, root)
             cwd = root / "arms" / arm
             # cwd and output directory must not traverse any child-created symlink.
@@ -553,16 +623,47 @@ def recover(root, owner):
     return record
 
 
+def cleanup_summary(record):
+    """Project declared-input cleanup scope and counts; unknown stays unknown.
+
+    Only declared inputs are ever removed. Counts are reported only when the
+    recorded inventory is complete; a missing, null, or failed inventory stays
+    unknown instead of implying an emptied directory. Paths are never echoed.
+    """
+    cleanup = record.get("cleanup")
+    if not isinstance(cleanup, dict):
+        return None
+    complete = cleanup.get("inventory_complete")
+    removed, retained = cleanup.get("removed"), cleanup.get("retained")
+    counts_known = complete is True and isinstance(removed, list) and isinstance(retained, list)
+    return {"scope": "declared_inputs",
+            "inventory_complete": complete if isinstance(complete, bool) else None,
+            "removed_count": len(removed) if counts_known else None,
+            "retained_count": len(retained) if counts_known else None}
+
+
 def receipt_summary(record):
     """Project recorded outcomes without echoing input inventories or child argv."""
     result = {key: record[key] for key in
               ("state", "charged_bytes", "max_total_bytes", "outcome_before_finish")
               if key in record}
     result["receipt_path"] = str(Path(record["root"]) / STATE)
+    if "capacity_policy" in record:
+        result["capacity_policy"] = {key: record["capacity_policy"][key] for key in
+                                     ("minimum_free_bytes", "effective_minimum_free_bytes")
+                                     if key in record["capacity_policy"]}
+    if "capacity" in record:
+        result["capacity"] = {key: record["capacity"][key] for key in
+                              ("scope", "initial_free_bytes", "initial_sampled_at",
+                               "latest_free_bytes", "latest_sampled_at",
+                               "min_free_bytes", "min_sampled_at") if key in record["capacity"]}
     runs = record.get("runs")
     if isinstance(runs, list) and runs and isinstance(runs[-1], dict):
         result["last_run"] = {key: runs[-1][key] for key in ("state", "returncode")
                               if key in runs[-1]}
+    cleanup = cleanup_summary(record)
+    if cleanup is not None:
+        result["cleanup"] = cleanup
     return result
 
 
@@ -572,6 +673,7 @@ def _main(argv=None):
     p = sub.add_parser("prepare")
     p.add_argument("--manifest", required=True)
     p.add_argument("--root", required=True)
+    p.add_argument("--capacity-config", help="explicit physical JSON with minimum_free_bytes; no implicit machine policy")
     p.add_argument("--summary", action="store_true",
                    help="print outcome fields and the full receipt path instead of the full JSON")
     for command in ("run", "finish", "recover"):
@@ -582,20 +684,22 @@ def _main(argv=None):
                        help="print outcome fields and the full receipt path instead of the full JSON")
         if command == "run":
             p.add_argument("--arm", required=True)
+            p.add_argument("--capacity-config", help="select or retain this task's explicit capacity config")
             p.add_argument("--poll-interval", type=float, default=0.1)
             p.add_argument("argv", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     try:
         if args.command == "prepare":
             with open(args.manifest) as f:
-                result, code = prepare(json.load(f), args.root), 0
+                result, code = prepare(json.load(f), args.root, capacity_config=args.capacity_config), 0
         elif args.command == "finish":
             result, code = finish(args.root, args.owner), 0
         elif args.command == "recover":
             result, code = recover(args.root, args.owner), 0
         else:
             command = args.argv[1:] if args.argv[:1] == ["--"] else args.argv
-            result, code = run(args.root, args.owner, args.arm, command, args.poll_interval)
+            result, code = run(args.root, args.owner, args.arm, command, args.poll_interval,
+                               capacity_config=args.capacity_config)
         print(json.dumps(receipt_summary(result) if args.summary else result, sort_keys=True))
         return code
     except (MaterializationError, OSError, ValueError, KeyError) as e:

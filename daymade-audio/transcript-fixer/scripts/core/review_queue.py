@@ -261,6 +261,29 @@ class ReviewQueue:
         anchor_cache: dict[str, Optional[str]] = {}  # path -> file content (read once per file)
         consolidated: set[str] = set()
         with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            # Check the complete batch before consolidation or insertion writes.
+            # General is the default for a new/unclassified file, not a fallback
+            # for forgetting the project domain on an already classified file.
+            for raw in items:
+                item = self._normalize(raw)
+                if not item["file_path"] or is_temp_path(item["file_path"]):
+                    continue
+                known = {row[0] for row in conn.execute(
+                    "SELECT DISTINCT domain FROM review_items WHERE file_path=?",
+                    (item["file_path"],))} - {"general"}
+                explicit = isinstance(raw.get("domain"), str) and bool(raw["domain"].strip())
+                if known and not explicit:
+                    raise ReviewQueueError(
+                        f"domain required for classified file {item['file_path']}; "
+                        f"existing domains: {', '.join(sorted(known))}; pass --domain or item.domain")
+                if known and item["domain"] not in known:
+                    reason = raw.get("domain_reason")
+                    if not isinstance(reason, str) or not reason.strip():
+                        raise ReviewQueueError(
+                            f"domain conflict for {item['file_path']}: {item['domain']} versus "
+                            f"{', '.join(sorted(known))}; intentional multi-domain additions "
+                            "require item.domain_reason")
             for raw in items:
                 item = self._normalize(raw)
                 if item["file_path"] and is_temp_path(item["file_path"]):
@@ -386,11 +409,59 @@ class ReviewQueue:
                 self._store_anchor(conn, item_id, item)
                 self._audit(conn, "review_enqueue", item_id, None,
                             {"source": item["source"], "domain": item["domain"],
-                             "original": item["original_text"][:80]})
+                             "original": item["original_text"][:80],
+                             "domain_reason": raw.get("domain_reason")})
             conn.commit()
         return {"added": added, "skipped_duplicates": skipped_dup, "skipped_temp": skipped_temp,
                 "rejected_unanchored": rejected_unanchored, "repaired_hints": repaired_hints,
                 "merged_candidates": merged_candidates}
+
+    def repair_domain(self, ids: list[int], *, file_path: str,
+                      from_domain: str, to_domain: str, reason: str,
+                      by: str, apply: bool = False) -> dict[str, Any]:
+        """Preview or atomically reclassify unlinked pending rows; never resolve.
+
+        Exact IDs, file and old domain are compare-and-swap predicates. Historical
+        decisions and linked occurrence families require their owning recovery
+        route instead of being silently reclassified here.
+        """
+        if (not ids or len(ids) > 1000 or len(set(ids)) != len(ids)
+                or any(type(i) is not int or i <= 0 for i in ids)):
+            raise ReviewQueueError("ids must be 1–1000 distinct positive integers")
+        if any(not isinstance(v, str) or not v.strip()
+               for v in (file_path, from_domain, to_domain, reason, by)):
+            raise ReviewQueueError("file, old/new domain, reason and actor are required")
+        if from_domain == to_domain:
+            raise ReviewQueueError("old and new domain must differ")
+        path = str(Path(file_path).expanduser().resolve())
+        with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            rows = []
+            for item_id in ids:
+                row = conn.execute("SELECT * FROM review_items WHERE id=?", (item_id,)).fetchone()
+                if (row is None or row["file_path"] != path or row["domain"] != from_domain
+                        or row["status"] != PENDING or row["occurrence_parent"] is not None
+                        or conn.execute("SELECT 1 FROM review_items WHERE occurrence_parent=?",
+                                        (item_id,)).fetchone()):
+                    raise ReviewQueueError(
+                        f"domain repair precondition failed for {item_id}; "
+                        "expected exact file/old domain, pending and no occurrence links; no rows changed")
+                rows.append(row)
+            if apply:
+                for row in rows:
+                    cursor = conn.execute(
+                        "UPDATE review_items SET domain=? WHERE id=? AND domain=? "
+                        "AND file_path=? AND status='pending' AND occurrence_parent IS NULL",
+                        (to_domain, row["id"], from_domain, path))
+                    if cursor.rowcount != 1:
+                        raise ReviewQueueError("domain repair raced; transaction rolled back")
+                    self._audit(conn, "review_domain_repair", row["id"], by,
+                                {"from_domain": from_domain, "to_domain": to_domain,
+                                 "file": path, "reason": reason})
+            conn.commit()
+        return {"applied": apply, "ids": ids, "file": path,
+                "from_domain": from_domain, "to_domain": to_domain,
+                "reason": reason, "verdicts_unchanged": True}
 
     @staticmethod
     def _store_anchor(conn, item_id: int, item: dict[str, Any]) -> None:

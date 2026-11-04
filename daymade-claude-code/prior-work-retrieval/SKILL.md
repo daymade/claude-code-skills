@@ -163,6 +163,11 @@ success-evidence requirement.
 
 Open promising candidates at their original path. Check:
 
+For a visual artifact or a request to improve an older visual, follow
+[visual-result reuse](references/visual-result-reuse.md) while inspecting candidates.
+Compare the actual rendered editions as well as their source; preserve effective
+visual decisions without importing superseded facts or inventing user style approval.
+
 - **Match**: does it solve the same business problem, not merely share words?
 - **Authority**: current implementation/SSOT beats a historical proposal;
   raw transcript proves what was said, not that it remains correct.
@@ -287,20 +292,29 @@ those remain the verification duties above.
 
 ## Companion hooks
 
-Install after the manifest is valid and the self-test is green:
+For standalone registration, install after the manifest is valid and the
+self-test is green:
 
 ```bash
 scripts/prior-work-retrieval.sh --selftest
 scripts/prior-work-retrieval.sh --install
+scripts/prior-work-retrieval.sh --check-install
 ```
 
-The versioned wrapper is the synchronous hook-runtime SSOT. It resolves a
-direct Python interpreter and never enters a package-manager/cache lifecycle;
-keep the `uv run ... prior_work.py` commands above as explicit retrieval and
+`--check-install` compares the standalone handler entries and wrapper link. It
+does not inspect a managed dispatcher's activation, selected rules or loaded
+source. If the host already delegates this rule to a managed-hook owner, use
+that owner's update and verification procedure instead of adding standalone
+handlers. Confirm the active rule and source, then probe the affected behavior;
+a missing/stale standalone result alone does not establish integration failure.
+
+The versioned wrapper owns standalone hook launch and interpreter selection.
+It resolves a direct Python interpreter and never enters a package-manager/cache
+lifecycle. Keep the `uv run ... prior_work.py` commands above as explicit retrieval and
 receipt operations, not as hook launchers.
 
-The installer adds the required handlers to both Claude and Codex without replacing
-unrelated hooks:
+The standalone installer adds the required handlers to both Claude and Codex
+without replacing unrelated hooks:
 
 - `UserPromptSubmit` creates a prompt-scoped requirement only for an explicit
   prior-work/reuse/history signal and injects the Skill route. The filters keep
@@ -329,8 +343,9 @@ unrelated hooks:
     longer mints a fresh requirement that strands the completed receipt. An
     explicit new prior-work ask still does.
   - **Current execution continuity.** Instructions such as `沿用当前 child`,
-    continuing the current session, working directory or read-only scope do not
-    request historical retrieval. Exclude only a complete list of execution
+    continuing the current session, working directory, read-only scope or an
+    explicitly timestamped current execution deadline do not request historical
+    retrieval. Exclude only a complete list of execution
     objects; keep `沿用` when the same list also names a historical asset.
     Historical reuse requests elsewhere in the prompt still count.
 
@@ -409,6 +424,11 @@ path remain possible so the agent can repair the gate without bypassing it.
 - Search results are hypotheses. The receipt records verification and reuse.
 - Do not copy private project data into a public example or Skill fixture.
 - Do not silently fall back from a failed required carrier. Record the gap.
+- Keep formal read-only discovery available before a receipt: the owned Codex
+  inventory in `--source codex --index-only` mode, UUID lookup, exact-session
+  reader and this Skill's no-argument surface fingerprint. The hook validates
+  the source-bound entry and supported arguments; an arbitrary script with the
+  same filename, an unknown mode or an adjacent write does not acquire this exemption.
 - External web research starts after local prior work, unless the user explicitly
   asks for current external facts or the local evidence cannot answer.
 - This Skill is the workflow. Companion hooks may require a fresh receipt before

@@ -91,6 +91,7 @@ Read [the download SOP](references/internal-sop.md) before retrying a failure. S
 - Run `scripts/download_video.py URL --info` for metadata. It never starts a provider; its oEmbed fallback supplies limited fields when extraction fails.
 - Render the thumbnail when available. Use the requested file/audio, quality, subtitles and save location; proceed with defaults when already specified or implied.
 - Run the ordinary download first. With an installed Node runtime, pass `--js-runtimes node` when yt-dlp needs it; runtime installation still follows dependency authorization.
+- After a local failure, use the [existing authorized downloader handoff](references/internal-sop.md#existing-authorized-downloader-handoff) when an available owner can complete the same file request; retain the local diagnostic and original archive destination.
 - On failure, read the actual error and `-F` output. An absent requested format, images-only output, 403 or low resolution alone does not establish a token problem.
 - If a failed request explicitly reports a missing/required PO Token, read [provider setup](references/po-token-setup.md). Within existing setup authorization, execute `--auto-po-token` and finish the original download; do not stop at giving the user a command. This option attempts the native route first, then permits a bounded provider retry and WPC recovery.
 - Request browser-cookie permission before supplying either cookie option. Preserve the authorized cookie session and a compatible client throughout retries.

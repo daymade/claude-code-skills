@@ -34,6 +34,16 @@ Then enforce these boundaries:
    A collaborator-owned worktree, branch, or PR discovered later stays report-only until the user
    names it as a change target. If the user says to leave it alone, record that exclusion and do
    not inspect its working-tree contents, back it up, merge it, unlock/remove it, or mutate its refs.
+- **Resolve authority from the current request and applicable standing user instructions.**
+   Authority for any action under this Skill is the current request read together with the standing
+   user instructions that apply to this task (for example, a standing instruction that a task ends
+   with checks, commit, publication, readback, and retiring that task's own temporary
+   branches/worktrees). Later user restrictions still control. Splitting the work into phases alone
+   does not revoke authority the task already carries: when the task already includes retiring its exact temporary resources, complete Mode E
+   within that same task — a new task or fresh confirmation solely for entering retirement is a
+   re-ask, not a gate. Mode E's evidence, preservation, and readback gates still apply in full.
+   A merge alone still does not authorize extra targets, and targets the task's authority does not
+   name stay report-only until separately authorized.
 - **Preserve the smallest set threatened by the next authorized destructive action.** If the
    current phase is only commit/push/verify and no deletion, reset, gc, history rewrite, or
    worktree removal is authorized, do not create an all-refs bundle or pin every dangler.
@@ -144,11 +154,11 @@ report-only until the user expands the authorized targets.
 5. **Verify "merged" by CONTENT, never by commit count — and know that most content checks are
    also unsound.** After a squash-merge, `main..branch` shows the branch's original commits as
    "unmerged" even though their content is on main — often 100+ phantom commits. But swapping
-   counts for the *nearest* content check is not enough: in one audit, three successive
+   counts for the *nearest* content check is not enough: in one audit, successive
    "surely this is content-level now" instruments each returned a wrong answer — `git cherry`
    (squash rewrites patch-ids → false UNMERGED), a **three-dot** `diff base...ref` used to ask
    "what does base lack" (three-dot answers a different question and **under-reported missing
-   files by 5×**), and a file-level existence check (a file present on base can still be missing
+   files**), and a file-level existence check (a file present on base can still be missing
    the ref's lines). Only the trial merge (`git merge-tree`, what `git_verify_branch_merged.sh`
    runs) was right every time. Diff-form and rung-by-rung reliability: **[references/merge_verification.md](references/merge_verification.md)**.
 6. **For a high-stakes exhaustive "is everything merged?" call that will authorize deletion,
@@ -336,7 +346,7 @@ It reports **MERGED (ancestor)** or **MERGED (content contained)** — content-s
 authorized Mode E deletion gate — versus
 **UNMERGED / NEEDS REVIEW**, listing the files the branch would still change. The verdict is sound,
 not heuristic: it does a trial 3-way merge of the branch *into* the base with `git merge-tree`
-(in memory, no checkout) and only reports content containment when that merge changes nothing — so a
+(without checkout) and only reports content containment when that merge changes nothing — so a
 squash-merged branch reads MERGED despite a nonzero commit count, while a revert/edit/new-file the
 base lacks reads UNMERGED. It is **safety-biased**: anything it can't prove contained is reported
 for review, because a false "merged" loses work while a false "unmerged" only costs a look
@@ -351,7 +361,7 @@ historical-merge-commit rung). For a whole
 repo of branches against one frozen base, `scripts/git_classify_refs.sh --base <sha> [--pr-map
 <json>]` runs this same ladder — including the merge-commit rung, via `--pr-map` — in one offline
 pass instead of one invocation per branch. For a whole
-repo of branches, the read-only fan-out pattern — one agent per batch, each told to *falsify*
+repo of branches, the verification fan-out pattern — one agent per batch, each told to *falsify*
 "everything is merged," every finding independently re-checked — is
 § Adversarial multi-agent verification, with the constraints those agents must be given in
 § Rules for the verification agents.
@@ -371,13 +381,15 @@ The load-bearing few:
   branch inside the same checkout does not isolate the shared working files, current branch, or
   index. Writer ownership comes from the repository's task/coordination contract, not a guessed
   file list. If ownership is unclear or another writer is active, do not mutate the checkout.
-  (§ Shared checkout and concurrent sessions: one writer — also governs the two "parallel session"
-  bullets below, and now also covers finding an unidentified writer by process evidence rather
+  (§ Shared checkout and concurrent sessions: one writer — also governs the "parallel session"
+  bullets below and covers finding an unidentified writer by process evidence rather
   than a guessed name.)
 - **Commit before switching and push WIP early.** Prefer a remote-backed commit over stash
   juggling, but preserve a higher-authority narrow stash exception; never use an unscoped stash
   to make a dirty checkout look ready.
   (§ Parallel / multi-branch work; § Push work-in-progress branches early.)
+- **Failed fast-forward or partially synchronized checkout:** follow
+  [Guarded checkout recovery](references/prevention_practices.md#guarded-checkout-recovery).
 - **Worktrees are explicitly authorized, named exceptions — not the standing default.** They
   isolate working files, `HEAD`, and index but still share refs, stashes, object storage, config,
   and hooks, and do not copy ignored dependencies. When approved, a linked worktree is safer than
@@ -392,8 +404,9 @@ The load-bearing few:
   can write this checkout counts as a writer even when its paths are disjoint. Before Git mutation,
   the project's existing coordination must prove it quiescent and transfer exclusive ownership;
   without that mechanism, stay read-only and report the gap. Do not stop, reconfigure, or invent a
-  lease for automation under this generic Skill. Retire refs or checkouts only through separately
-  authorized Mode E evidence. (§ Known automated writers are not session-owned WIP.)
+  lease for automation under this generic Skill. Retire refs or checkouts only through Mode E
+  evidence, with authority resolved per the authority definition in the Outcome contract above.
+  (§ Known automated writers are not session-owned WIP.)
 - **Confirm the current branch before committing** (`git branch --show-current`) — a fix committed
   onto the wrong feature branch is invisible to its real PR and easy to lose on cleanup.
   (§ Confirm the branch before every commit — including why removal from the wrong branch waits
@@ -418,7 +431,8 @@ The load-bearing few:
   follow the incident-only relocation procedure in § Recover stranded work after a parallel session
   switched the shared tree: prove your files match
   across bases, commit only explicit paths, and restore the prior branch before handing ownership
-  back. Branch deletion remains a separately authorized Mode E action.
+  back. Branch deletion remains a Mode E action, with authority resolved per the authority
+  definition in the Outcome contract above; a merge or handoff does not itself authorize it.
 - **The inverse case: another session's *commit* lands on your branch, and every check you already
   run stays green.** In a shared checkout, a commit a sibling session makes while `HEAD` sits on
   your branch becomes a parent of yours and ships inside your PR. `git branch --show-current` names
@@ -453,7 +467,7 @@ The load-bearing few:
   commit, your own earlier commits included, and exits 0. Then re-run the detection above: the
   rebase's exit code does not tell you whether it took something of yours with it. Retiring either
   ref afterwards requires Mode C/E deletion-grade evidence, not a guess. Full procedure,
-  and why the two obvious "did their work survive?" probes return the wrong answer, in **A foreign
+  and why the "did their work survive?" probes return the wrong answer, in **A foreign
   commit adopted onto your branch** in
   [references/prevention_practices.md](references/prevention_practices.md). Real incident: a
   sibling session committed while `HEAD` sat on a freshly created branch; the PR carried that
@@ -508,7 +522,7 @@ The load-bearing few:
   delivered files vanish from HEAD while the working tree looks untouched. Real incident:
   a 24-file delivered directory sat in that window after a temporary-index commit; one bare commit
   by a parallel session would have deleted it from the branch tip, and the only sign anywhere was
-  `D ` lines in `git status`. Two obligations follow. **Whoever advanced the branch past the index
+  `D ` lines in `git status`. **Whoever advanced the branch past the index
   re-syncs immediately** — `git diff --cached --name-status`, then `git restore --staged --
   <the paths the commit touched>` until those paths no longer appear in the diff (a parallel
   session's own staged entries are theirs, not yours to clear). **And before any bare commit on a
@@ -526,7 +540,8 @@ The load-bearing few:
 
 The opposite worry from Mode A: not "I lost something" but "these leftovers are piling up —
 which can I destroy?" Deleting is trivial; **proving each item is superseded is the work**.
-Start from the Outcome contract. For an exhaustive audit or unknown target, run checkout discovery;
+Start from the [Outcome contract](#outcome-contract--keep-the-safety-net-subordinate-to-the-users-job), including its authority definition.
+For an exhaustive audit or unknown target, run checkout discovery;
 for one named worktree/branch, stay in its owning repository. Run `git_loss_audit.sh` only when all
 worktrees/refs/tags/reflogs/stashes/danglers it enumerates are inside evidence scope; treat inspect-only
 objects as report-only, keep explicitly excluded collaborator resources out of both the retirement
@@ -618,7 +633,8 @@ and final branch-count gates that a single-branch retirement does not need.
   relative path, and verify it against a recorded pre-removal content hash.
   Record the exact HEAD, prove it contained/superseded against a freshly fetched base, apply the
   preservation decision above, retain its exact ref manifest or required verified bundle, and obtain
-  current-session deletion authority. As the final pre-remove gate, re-run the empty status and
+  deletion authority per the authority definition in the Outcome contract above. As the final
+  pre-remove gate, re-run the empty status and
   the complete ignored inventory. Require exact equality with the frozen
   pre-removal manifest for every ignored path, entry type, file hash, and symlink target, and
   re-verify each preserved source and backup copy; any difference aborts. Removal must be the next
@@ -628,8 +644,8 @@ and final branch-count gates that a single-branch retirement does not need.
   locked, occupied, or incompletely backed-up state still stops removal. Afterwards prove the path and
   registration are gone while the recorded HEAD still resolves through the kept branch/base or the
   verified bundle and every copied ignored item still matches its recorded hash. Never remove the
-  primary/current checkout; retire its branch only as a separate,
-  separately authorized action. Follow
+  primary/current checkout; retire its branch only as a separate action under the authority
+  definition in the Outcome contract above. Follow
   **[references/merge_verification.md](references/merge_verification.md)** § Worktree retirement.
 - Local branches: prefer `git branch -d` (refuses unmerged); use `-D` only for items Step 1
   proved superseded, backed up, and the user authorized deleting. **A squash-merge is the usual
@@ -738,8 +754,8 @@ never tell a user to run bare `git_verify_branch_merged.sh` unless `command -v` 
 | `scripts/git_hosted_vs_cached.sh [remote]` | Ask the hosting service directly (`git ls-remote --heads`) and diff it against this checkout's cached `refs/remotes/<remote>/*`: same / different-SHA / hosted-only / cached-only (prune candidate). A failed `ls-remote` exits 3 and never presents the cache as hosted truth | Nothing (read-only, no fetch — the one authoritative query is `ls-remote`, not `fetch`) |
 | `scripts/git_loss_audit.sh [remote]` | Refresh one remote, then report every worktree, local ref/tag, reflog-only commit, stash, and dangler; no exclusions, so the whole evidence surface must be in scope | Remote-tracking refs only |
 | `scripts/git_preserve_danglers.sh [--patch-dir DIR]` | Pin every dangling commit to `refs/dangling-backup/`, optional patches; whole-set only | Adds refs only (never deletes/gc) |
-| `scripts/git_verify_branch_merged.sh <branch> [base] [--no-fetch] [--base REF] [--merge-commit SHA]` | Give a content-level MERGED/UNMERGED verdict for one branch. `--merge-commit` adds a rung that proves containment at a historical merge commit when base later changed the same lines and the CURRENT base can no longer prove it; the verdict also names the current-base shape (conflict = routine, clean-but-changes = regression candidate). `--no-fetch`/`--base` support offline and flag-driven batch use | Remote-tracking refs only (skipped entirely with `--no-fetch`) |
-| `scripts/git_classify_refs.sh --base SHA [--pr-map JSON] [--all-namespaces]` | Batch content classification; bind a selected set with `--expected-common-dir PATH --target-manifest TSV` to reject another clone or missing/moved tips and report full OIDs plus coverage. Classification success does not establish convergence. `--pr-map` retains the historical-merge rung. | Nothing (read-only, no fetch; no ownership or deletion authority) |
+| `scripts/git_verify_branch_merged.sh <branch> [base] [--no-fetch] [--base REF] [--merge-commit SHA]` | Give a content-level MERGED/UNMERGED verdict for one branch. `--merge-commit` adds a rung that proves containment at a historical merge commit when base later changed the same lines and the CURRENT base can no longer prove it; the verdict also names the current-base shape (conflict = routine, clean-but-changes = regression candidate). `--no-fetch`/`--base` support offline and flag-driven batch use | Remote-tracking refs unless `--no-fetch`; trial merges can write unreferenced Git objects in either mode |
+| `scripts/git_classify_refs.sh --base SHA [--pr-map JSON] [--all-namespaces]` | Batch content classification; bind a selected set with `--expected-common-dir PATH --target-manifest TSV` to reject another clone or missing/moved tips and report full OIDs plus coverage. Classification success does not establish convergence. `--pr-map` retains the historical-merge rung. | Trial merges can write unreferenced Git objects; no fetch or changes to refs, index or working files; no ownership or deletion authority |
 | `scripts/git_align_checkout.sh --preview --target SHA` / `--apply --target SHA --source-worktree PATH --backup-manifest FILE` | Preview or materialize a checkout's content up to a target commit without a throwaway snapshot branch and without moving HEAD; `--apply` only overwrites a path once its current content is proven reproducible (target's own history, or a manifest sha256) | `--preview`: nothing. `--apply`: working-tree files only for paths it proves safe — never the real index, never HEAD, never a delete |
 | `scripts/git_export_before_drop.sh [export options]` | Export stashes plus selected branches or every current ref into verified bundles | Writes backup files only (never drops/deletes) |
 | `scripts/git_export_before_drop.sh --verify-current BUNDLE` | Fail if any bundled ref moved or disappeared since export | Nothing (read-only) |
@@ -749,9 +765,8 @@ These helpers run from the repository root. They use read-only enumeration/confi
 `find`, `config`, `symbolic-ref`, `submodule status`, `status`, `cat-file`, `rev-list`, `rev-parse`,
 `fsck`, `for-each-ref`, and `remote get-url`; plus scoped `fetch`, `archive`, `bundle create/verify`,
 metadata hashing/archive, and (preserve only) `update-ref` where each script's table row says so.
-Only `git_find_all_checkouts.sh` is repository-read-only and safe beside read-only agents; it never
-fetches, so it also works offline and behind a proxy. Any helper that fetches, writes backup state,
-or adds refs runs only after existing coordination transfers exclusive writer ownership. None of
+Any helper that fetches, writes backup state,
+adds refs, or creates trial-merge objects runs only after existing coordination transfers exclusive writer ownership. None of
 the helpers authorizes `checkout`, `reset`, `push`, `stash drop`, `branch -d`, or `gc`.
 
 ## Troubleshooting

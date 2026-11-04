@@ -27,7 +27,8 @@ class _TranscriptArgumentParser(argparse.ArgumentParser):
             other_commands = (
                 "init", "health", "metrics", "config_action", "migration_action",
                 "audit_retention_action", "validate", "add_correction", "add_context_rule",
-                "list_context_rules", "audit_dictionary", "list_corrections", "export_path",
+                "list_context_rules", "disable_context_rule", "enable_context_rule",
+                "audit_dictionary", "list_corrections", "export_path",
                 "import_path", "review_learned", "approve", "report_false_positive",
                 "load_presets", "extract_uncertain", "enqueue_review", "list_review",
                 "show_review", "attach_authority", "resolve_review", "scan_traps",
@@ -81,6 +82,47 @@ def create_argument_parser() -> argparse.ArgumentParser:
         action="store_true",
         dest="list_context_rules",
         help="List context rules (--domain filters to one domain plus globals)"
+    )
+    parser.add_argument(
+        "--disable-context-rule",
+        metavar="ID",
+        type=int,
+        dest="disable_context_rule",
+        help="Disable one exact context rule ID; requires --db, "
+             "--context-rule-domain, --context-rule-pattern and --reason"
+    )
+    parser.add_argument(
+        "--enable-context-rule",
+        metavar="ID",
+        type=int,
+        dest="enable_context_rule",
+        help="Re-enable one exact context rule ID with the same required "
+             "identity and reason arguments as --disable-context-rule"
+    )
+    parser.add_argument(
+        "--db",
+        metavar="PATH",
+        dest="db_path",
+        help="With --disable/enable-context-rule: explicit existing SQLite "
+             "database path (required; no default)"
+    )
+    parser.add_argument(
+        "--context-rule-domain",
+        metavar="DOMAIN",
+        help="Expected domain for context-rule state changes; 'global' means "
+             "SQL NULL, while 'domain:<name>' selects a literal named domain "
+             "(for example, 'domain:global') (required)"
+    )
+    parser.add_argument(
+        "--context-rule-pattern",
+        metavar="PATTERN",
+        help="Expected exact pattern for context-rule state changes (required)"
+    )
+    parser.add_argument(
+        "--reason",
+        metavar="TEXT",
+        help="Non-empty reason recorded in context-rule state audit details "
+             "(required)"
     )
     parser.add_argument(
         "--all",
@@ -145,7 +187,7 @@ def create_argument_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--output", "-o",
-        help="Output directory"
+        help="Output file or directory (default: configured paths.intermediate_root per-input workspace, otherwise beside input)"
     )
     parser.add_argument(
         "--stage", "-s",
@@ -206,7 +248,9 @@ def create_argument_parser() -> argparse.ArgumentParser:
              "always present. Lets "
              "consumers stop inferring no-op vs failure from whether a *_stage1.md "
              "sidecar exists. Also applies to the review-queue commands "
-             "(--enqueue-review/--list-review/--show-review/--resolve-review)."
+             "(--enqueue-review/--list-review/--show-review/--resolve-review) "
+             "and context-rule state commands "
+             "(--disable-context-rule/--enable-context-rule)."
     )
 
     # Evidence commands (advisory, read-only): turn the native pass's manual
@@ -439,7 +483,8 @@ def create_argument_parser() -> argparse.ArgumentParser:
         dest="enqueue_review",
         help="Enqueue review items from a JSON file ('-' = stdin). Each item: "
              "{original, suggested?, file?, line?, context?, kind?, domain?, "
-             "evidence?, actions?, priority?, source?}"
+             "evidence?, actions?, priority?, source?, domain_reason?}. "
+             "Classified files require an explicit domain; intentional new domains require domain_reason."
     )
     parser.add_argument(
         "--list-review",
@@ -600,7 +645,7 @@ def create_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--consolidate-review", action="store_true", dest="consolidate_review",
         help="With --review-file: persist links between uniquely located duplicate occurrences, retain old rows and all candidates, and report ambiguous legacy anchors. No verdict or transcript edit.")
     parser.add_argument("--sidecar-dir", metavar="DIR",
-        help="Write review reports to this directory (default: beside input). Reuse with --close-sidecars; run outputs still follow --output. Existing reports are preserved.")
+        help="Write review reports to this directory (default: --output location, which uses the configured workspace when omitted). Reuse with --close-sidecars. Existing reports are preserved.")
     parser.add_argument(
         "--ledger-entry", dest="review_ledger_entry",
         help="Append a confirmed entry beginning with the actual original→resolved pair to the anchored transcript's "

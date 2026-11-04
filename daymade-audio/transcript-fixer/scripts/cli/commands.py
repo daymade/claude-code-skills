@@ -33,7 +33,7 @@ def _boundary_check_available() -> bool:
     and --list / --add must not pay that second."""
     from core.dictionary_processor import boundary_check_available
     return boundary_check_available()
-from utils.config import get_config
+from utils.config import get_config, intermediate_directory
 
 # Heavy command-specific imports are deferred to the functions that use them
 # to keep CLI startup fast for simple operations like --list / --add / --stage 1.
@@ -753,6 +753,9 @@ def cmd_close_sidecars(args: argparse.Namespace) -> None:
                              f"--output is not an existing directory: {output_dir}", code=2)
         output_dir = output_dir.resolve()
     extra_dirs = _registered_report_dirs(input_path)
+    configured_dir = intermediate_directory(input_path)
+    if configured_dir is not None and configured_dir.is_dir():
+        extra_dirs.append(configured_dir)
     if getattr(args, "sidecar_dir", None):
         explicit = Path(args.sidecar_dir).expanduser().resolve()
         if not explicit.is_dir():
@@ -1119,6 +1122,105 @@ def cmd_list_context_rules(args: argparse.Namespace) -> None:
               f" (priority {r['priority']}){desc}{inactive}")
 
 
+def cmd_disable_context_rule(args: argparse.Namespace) -> None:
+    """Disable one exact context rule (--disable-context-rule)."""
+    _cmd_context_rule_state(args, False, args.disable_context_rule)
+
+
+def cmd_enable_context_rule(args: argparse.Namespace) -> None:
+    """Enable one exact context rule (--enable-context-rule)."""
+    _cmd_context_rule_state(args, True, args.enable_context_rule)
+
+
+def _cmd_context_rule_state(
+    args: argparse.Namespace, active: bool, rule_id: int
+) -> None:
+    """Shared CLI path for reversible, identity-checked context-rule state."""
+    other_name = "disable_context_rule" if active else "enable_context_rule"
+    if getattr(args, other_name, None) is not None:
+        _queue_cmd_error(
+            args,
+            "context_rule_state_error",
+            "--disable-context-rule and --enable-context-rule cannot be combined; "
+            "no changes applied",
+            2,
+        )
+    required = {
+        "--db": getattr(args, "db_path", None),
+        "--context-rule-domain": getattr(args, "context_rule_domain", None),
+        "--context-rule-pattern": getattr(args, "context_rule_pattern", None),
+        "--reason": getattr(args, "reason", None),
+    }
+    missing = [flag for flag, value in required.items() if value is None]
+    if missing:
+        _queue_cmd_error(
+            args,
+            "context_rule_state_error",
+            f"missing required argument(s): {', '.join(missing)}; "
+            "no changes applied",
+            2,
+        )
+
+    raw_domain = required["--context-rule-domain"]
+    if raw_domain == "global":
+        domain = None
+    elif raw_domain.startswith("domain:"):
+        # Strip exactly one prefix; the service still validates the literal name.
+        domain = raw_domain[len("domain:"):]
+    else:
+        domain = raw_domain
+    service = None
+    try:
+        repository = CorrectionRepository(
+            Path(required["--db"]).expanduser(),
+            initialize_schema=False,
+        )
+        service = CorrectionService(repository)
+        # Validate through a separate read-only connection before the pool's
+        # connection setup can issue PRAGMAs or any write can begin.
+        service.preflight_context_rule_state(
+            rule_id,
+            domain,
+            required["--context-rule-pattern"],
+            required["--reason"],
+        )
+        if active:
+            result = service.enable_context_rule(
+                rule_id,
+                domain,
+                required["--context-rule-pattern"],
+                required["--reason"],
+                changed_by="cli",
+            )
+        else:
+            result = service.disable_context_rule(
+                rule_id,
+                domain,
+                required["--context-rule-pattern"],
+                required["--reason"],
+                changed_by="cli",
+            )
+    except Exception as exc:
+        message = str(exc)
+        if "no changes applied" not in message:
+            message = f"{message}; no changes applied"
+        _queue_cmd_error(args, "context_rule_state_error", message, 2)
+    finally:
+        if service is not None:
+            service.close()
+
+    if getattr(args, "json_output", False):
+        _emit_json(result)
+        return
+    scope = result["domain"] or "global"
+    print(
+        f"Context rule #{result['rule_id']} [{scope}] {result['status']}: "
+        f"is_active={str(result['is_active']).lower()}, "
+        f"audit_written={str(result['audit_written']).lower()}, "
+        f"pattern={result['pattern']!r}"
+    )
+
+
 def cmd_scan_traps(args: argparse.Namespace) -> None:
     """Scan --input for every trap documented in a domain context file.
 
@@ -1422,9 +1524,11 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
         else:
             output_dir = out_arg
     else:
-        output_dir = input_path.parent
+        output_dir = intermediate_directory(input_path) or input_path.parent
     output_dir.mkdir(parents=True, exist_ok=True)
-    review_dir = Path(args.sidecar_dir).expanduser().resolve() if getattr(args, "sidecar_dir", None) else output_dir
+    review_dir = (Path(args.sidecar_dir).expanduser().resolve()
+                  if getattr(args, "sidecar_dir", None)
+                  else output_dir)
     review_dir.mkdir(parents=True, exist_ok=True)
 
     # Auto-finalize: if a previous Stage 1 run left *_stage1.md behind and it is
@@ -2163,6 +2267,7 @@ def cmd_config(args: argparse.Namespace) -> None:
             'environment': config.environment.value,
             'database_path': str(config.database.path),
             'config_dir': str(config.paths.config_dir),
+            'intermediate_root': str(config.paths.intermediate_root) if config.paths.intermediate_root else None,
             'api_key_set': config.api.api_key is not None,
             'debug': config.debug,
             'features': {

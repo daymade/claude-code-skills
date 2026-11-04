@@ -15,7 +15,7 @@ against an explicit no-crop instruction. Every structural delta was visible in
 the reference from the first day (the letterbox was fix-induced, §4 tells that
 part). One decomposition pass would have caught them together; the
 complaint-driven loop caught them one at a time, at the price of the user's
-patience. Every rule below was paid for in that engagement — the deltas
+patience. The original decomposition rules came from that engagement — the deltas
 themselves, the loop that kept missing them, the green assertion suite that
 certified each miss, and the ratio translation that finally closed it.
 
@@ -30,6 +30,30 @@ certified each miss, and the ratio translation that finally closed it.
 - Pre-report confirmation
 
 ## 1. The first deliverable is a measured inventory, not a fix list
+
+The auditor first marks which regions the user wants faithful to the reference
+and which permit original expression. Judge those contracts separately: a native
+post/reply region can require the reference's author identity, colors, hierarchy
+and thread structure while surrounding controls or feedback permit a different
+voice. Originality outside that region does not excuse changing it; fidelity
+inside it does not justify reducing explicitly requested expressive feedback to
+a generic toast. Record each region's boundary and observable pass condition,
+then inspect both the resting view and the triggered feedback at the required
+evidence level. Neither contract implies the other. This is the auditor's
+judgment; no bundled checker enforces the boundary or emotional quality.
+
+For a data-backed reference, the auditor compares native visible content as well
+as geometry. Raw API text, entities and metadata are not automatically the
+display contract: inspect the native product's author/avatar/time treatment,
+reply-recipient presentation and visible body against the same source item.
+Respect any source display range using its documented indexing unit, including
+code-point versus UTF-16 boundaries; check an emoji at the boundary and a
+handwritten leading mention as counterexamples. Do not strip every leading
+mention with a regex or silently alter the raw record to imitate the display.
+Keep source data intact and derive presentation from verified semantics. If the
+range or native display is unavailable, report the parity limit instead of
+inventing one. The auditor makes this comparison using native evidence and the
+source contract; the generic layout sweep cannot certify these semantics.
 
 Before writing or judging any implementation, decompose the reference into
 measured structural relationships. Screenshot pixels are measurable with any

@@ -56,8 +56,9 @@ major app update rather than trusting the dates.
 
 ## Classification
 
-- `active` / `stale`: last in-file interaction within / beyond 48h (threshold
-  is one constant in `scripts/ghostty_session.py`).
+- `active` / `stale`: compare the last in-file timestamp with `ACTIVE_HOURS` in
+  [`ghostty_session.py::classify`](../scripts/ghostty_session.py). This coarse
+  classification does not establish substantive work within a user-selected window.
 - `dead-channel`: structured `isApiErrorMessage` + "Login expired" text.
   Restore reopens history; the TUI stops at `/login`. The keychain may still
   hold a refreshToken with a future expiry while the account itself refuses
@@ -67,6 +68,55 @@ major app update rather than trusting the dates.
 - `unknown`: Codex reader/index unavailable or rollout identity cannot be proved.
   Default active-only restoration skips it; explicit `--only` or `--all` preserves
   the user's option to resume the recorded ID. Report the boundary.
+
+## Select recovery candidates by a time window
+
+Use this recipe when a user questions a snapshot's size or asks which sessions
+were active after a time. The executing agent uses the installed history readers;
+the snapshot watcher remains transcript-free. This is a read-only selection step,
+not authorization to reopen or continue any candidate.
+
+1. Bind the date, timezone and end of the requested window before querying. For
+   reboot recovery, stop at the reboot boundary so the current recovery conversation
+   cannot enter the old set. State an inferred date explicitly; do not silently
+   replace the user's window with the default `active` threshold.
+2. Report automatic backup coverage separately: recorded IDs, identified at
+   capture, retained-unverified IDs, and unresolved TUIs. A retained row is neither
+   confirmed live nor confirmed closed. Snapshot capture time is the last saved
+   inventory change, not the last conversation activity or observer success.
+3. Load `read-codex-history` and use its indexed inventory with explicit bounds:
+
+   ```bash
+   python3 <codex-reader-dir>/scripts/list_local_history.py \
+     --source codex --index-only --all-projects --include-archived \
+     --from-date <FROM_ISO_WITH_ZONE> --to-date <TO_ISO_WITH_ZONE> \
+     --limit <candidate-cap> --format json
+   ```
+
+   Read coverage, warnings and truncation. The index's created/updated interval
+   selects candidates only; an older session resumed during the window remains
+   eligible. Verify selected rollout identity and original records through that
+   reader. Exclude automated/noninteractive work from terminal candidates using
+   verified metadata. Preserve unknown when the index or selected artifact is
+   unavailable; do not replace it with a raw-history scan.
+4. For Claude rows already named in the snapshot, load `read-claude-code-history`
+   and read those exact IDs. The Codex inventory above cannot establish Claude
+   continuation coverage. Keep absent/unexamined Claude membership explicitly unknown.
+5. Qualify activity by original event timestamps inside the window: user or agent
+   messages, reasoning, and tool calls/results can establish activity. File mtime,
+   index update time, metadata-only records and token/heartbeat events cannot.
+   Distinguish substantive work, scheduled status reports and peer coordination;
+   the latter two do not establish continued work on the business task. Use the
+   latest relevant exchange to name the work, rather than an old title or prompt.
+6. Return last qualifying activity with timezone, current topic, session ID and
+   membership evidence. Separate past-snapshot rows from additional verified
+   terminal-origin candidates: terminal origin does not prove Ghostty membership
+   or that the tab remained open at shutdown. Do not infer either from a matching cwd.
+7. Once the user selects the wanted IDs, freeze that exact set with the existing
+   `reconstruct --only ... --out ...` route and carry the same manifest through
+   preview, restore and reconciliation. Keep the original snapshot unchanged.
+   Do not automatically discard waiting or older sessions when no time filter was
+   requested. Stop selection when the requested set and coverage gaps are clear.
 
 ## Misclassification war stories (why each rule exists)
 
@@ -78,11 +128,13 @@ major app update rather than trusting the dates.
    structured flag only.
 3. **argv[0] instability** — matching processes by name missed every bare-name
    process and produced two false "all sessions gone" reports in one session.
-   Rule: anchor on the command-line UUID at argv-token boundaries, skipping
+   Rule: anchor on the recognized session selector at argv-token boundaries, skipping
    companion/snapshot/daemon processes. (For argv that carries no UUID — fresh
    TUIs — this rule is extended by item 4.)
-4. **Fresh-TUI invisibility** — only resume/fork writes the session UUID into
-   argv; a brand-new TUI has none. On 2026-10-07, 11 of 25 live Ghostty
+4. **Fresh-TUI invisibility** — a resume selector can carry the current ID;
+   a fork selector carries its parent ID, and a brand-new TUI has none.
+   Resolve forks as UUID-less children rather than claiming their parent is live.
+   On 2026-10-07, 11 of 25 live Ghostty
    sessions were fresh TUIs, and argv-only anchoring silently dropped them
    from the snapshot, from `check` presence (false "gone"), and from
    `restore`'s already-live filter (which would have reopened duplicate tabs).
@@ -105,7 +157,7 @@ major app update rather than trusting the dates.
    fresh TUIs share one bucket, candidates bind disjointly (one file per TUI,
    closest verified claim first, fallback to the TUI's next candidate);
    equidistant claims refuse to the unresolved section, and whatever still
-   matches nothing is reported as an unresolved row, never dropped silently.
+   matches nothing is persisted and reported as an unresolved row, never dropped silently.
    Corpse files from dead earlier TUIs are the standing theft hazard: the
    2026-10-07 pkm bucket held one born 10s before a live TUI's start, and the
    disjoint-assignment rule plus the ½s leeway are what keep it from winning.

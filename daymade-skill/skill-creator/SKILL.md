@@ -123,6 +123,8 @@ Treat “unsupported” as a hypothesis and investigate alternative documented p
   prerequisite is affected.
 - For persisted formats/partial updates, permission-sensitive checks or large
   command output, follow the affected [stateful verification recipe](references/stateful-script-verification.md).
+  For resumable writes to human-edited state, include its
+  [interrupted-write controls](references/stateful-script-verification.md#interrupted-writes-and-later-human-changes).
   A truncated response is not a complete read; use its complete-read recipe.
   For provider/default-route/enable-switch changes, use its **Operational route
   changes** recipe: preserve the original user result and exercise the actual
@@ -225,6 +227,11 @@ fresh context and evidence outside the author's changes. Reproduce hypotheses;
 after substantive fixes recheck the failed axes plus preservation with fresh
 context. Persist and commit the current review in the private review archive,
 not public source or disposable eval scratch. Stop at the declared boundary.
+
+For repository publication, enter [release readiness](references/release-readiness.md)
+before requesting the first review. Select the destination's publication contract,
+integrate the required base and declare any opt-in rebind dependency scope there;
+do not discover those prerequisites only when attesting the completed review.
 
 ## Step 5: Sanitization Review
 

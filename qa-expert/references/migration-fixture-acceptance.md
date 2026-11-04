@@ -40,6 +40,43 @@ happy path. Use ordinary products and closed snapshots as healthy controls. Keep
 different backend accounting contracts separate; do not copy one backend's fee
 ledger into another merely to make results look identical.
 
+## Compare existing environments when migration acceptance requires it
+
+Use the actual application consumers when the authorized migration task requires
+an old/new environment comparison. Keep ordinary populated-upgrade fixtures on
+their existing harness; this check does not require two live services for every
+schema change.
+
+Before changing the candidate, bind the effective application/schema revisions,
+database identities and business-data frontier. Freeze the same principal,
+effective permissions, filters, date window, sort, pagination and calculation time.
+List other changing axes: engine and resource settings, query definitions, data
+shape, statistics, cache/load and network location. Comparing two combinations
+does not isolate any one axis; retain causal uncertainty without automatically
+building a full cross-product experiment.
+
+Inspect the real startup and request paths before replay. A GET can trigger
+acquisition or another write. Use independently owned loopback ports and lifecycle
+state, and keep schema synchronization, seed/reset, workers and external effects
+outside a read-only comparison. Existing credentials do not authorize those effects.
+
+Compare complete business results, not only status, counts or hashes of IDs.
+Preserve numeric precision, array order, null, zero and unavailable values. Declare
+intended contract changes before inspecting differences; report the full diff
+and, separately, any projection of unchanged fields. If one side fails to return
+a business result, mark that equivalence check incomplete rather than treating
+matching errors or the other side's success as preservation evidence.
+
+Keep correctness and latency verdicts separate under the original request budget.
+Record the timing boundary and full-response completion. A longer independent
+diagnostic read may recover an output for comparison, but does not pass the
+original latency criterion or authorize bypassing the application's validator.
+Name whether evidence covers SQL, raw RPC, API DTO or the user-facing request;
+do not promote a lower-layer comparison to an end-to-end result. Check the actual
+consumer path before transferring a local diagnostic failure to the deployed app.
+Stop after the declared cases decide the next action; retain remaining unknowns
+and do not retry until a preferred result appears.
+
 ## Keep shipped fixtures portable
 
 Reuse the repository's shared fixture and its documented environment variable,

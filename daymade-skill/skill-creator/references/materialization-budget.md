@@ -28,9 +28,10 @@ and the available disk reserve. Include metadata and logs in the allowance.
 | `paths` | Nonempty list of exact repository-relative files/directories needed by this task |
 | `arms` | Unique names such as `with_skill`, `old_skill`; each gets the selected inputs |
 | `max_total_bytes` | Positive integer; one cumulative allowance across all arms, retries, receipts, logs and evidence |
-| `minimum_free_bytes` | Positive integer; minimum available filesystem bytes after estimated input export and during execution |
+| `minimum_free_bytes` | Positive integer; caller's minimum available filesystem bytes after estimated input export and during execution |
 | `owner` | Nonblank caller session identifier; use the same value on every subsequent command |
 | `materialize_lfs` | Optional boolean, false when omitted; true permits only already-present local LFS objects |
+| `capacity_config` | Optional absolute physical JSON file whose positive integer `minimum_free_bytes` adds a selected reserve |
 
 Empty, missing, null and nonpositive required values fail. Whole-repository `.` or
 empty path lists, traversal, absolute paths, Git pathspec magic, `.git`, symlinks
@@ -51,11 +52,64 @@ external LFS cache.
 Git object reads disable lazy promisor fetches and remote protocols, so a missing
 partial-clone object fails instead of silently downloading into a shared cache.
 
+### Bind an optional capacity reserve
+
+Select a configuration explicitly in the manifest or with
+`prepare --capacity-config /absolute/capacity.json`. The JSON must contain a
+positive integer `minimum_free_bytes`; other fields do not affect this runner.
+No machine configuration is discovered automatically. Omit the binding to retain
+the existing caller-only reserve.
+
+The receipt freezes the selected path and the greatest configured reserve seen.
+Execution uses the maximum of the caller's reserve, that frozen reserve and the
+current selected value. Raising the configuration takes effect on the next
+measurement; lowering it does not lower an existing task's reserve. The path
+cannot be replaced for that task. Missing, malformed or invalid selected
+configuration refuses new input export or child launch. Use a regular physical
+file without symlink components.
+
+Use `run --capacity-config /absolute/capacity.json` to bind an existing unbound
+root before its next child. A wrapper holding the root lock can call
+`resolve_capacity_limits(record, capacity_config)` to adopt the selection, then
+use the existing `measure` and `save` functions. The helper returns the effective
+`max_total_bytes` and `minimum_free_bytes`; it does not persist the record itself.
+Use a runner supporting this interface for bound roots; older runners do not
+enforce this optional binding. `finish` and `recover` never read the configuration
+or require available space above the reserve, so an unavailable configuration or
+low disk space does not prevent safe cleanup of declared inputs.
+
+## Reserve storage outside the monitored root
+
+Before preparation, the caller records the whole-task allowance and any external
+storage reservation in the existing task plan. Include task-created worktrees,
+dependency caches, container images and writable layers that cannot live under
+the monitored root. Set `max_total_bytes` to the whole-task allowance minus that
+reservation; reject a nonpositive remainder before calling `prepare`. The free-space
+reserve remains a separate requirement, not extra spending allowance.
+
+At admission and before a retry that can grow external storage, read the current
+local charged bytes and conservatively account for external task allocations.
+Keep observed sizes, estimates and unknowns separate; do not count the same shared
+image layer twice or claim that logical image sizes measure physical disk release.
+For example, a 1 GiB task with 384 MiB reserved externally permits at most 640 MiB
+in `max_total_bytes`; 600 MiB charged locally plus 450 MiB externally exceeds the
+task allowance even when `run` exits 0. Stop new allocation if external usage
+exceeds its reservation, the combined charge exceeds the allowance, or the required
+external measurement is unknown. Preserve the evidence and original allowance;
+do not reset the root or enlarge its limit to hide an overage.
+
+Report the runner's local result and the caller's combined-budget judgment
+separately, naming the external coverage and unresolved estimates. The caller
+performs this reconciliation; `materialize.py` does not discover external Docker
+or cache usage, enforce this reservation, or stop those external services.
+
 ## Runnable small example
 
 Use `--summary` on `prepare`, `run`, `finish` or `recover` for smaller tool-visible
 stdout. It projects recorded state and byte limits, the full receipt's path, the
 latest recorded run state/return code when present, and the pre-finish outcome.
+It also projects the selected `capacity_policy` and `capacity` observations when
+recorded, without echoing the configuration path.
 The complete receipt remains in `root/.materialization.json`; inputs, child argv,
 path inventories and cleanup lists are not echoed in summary mode. Default stdout
 still returns the full JSON. Exit codes remain unchanged: a child exiting 7 still
@@ -135,6 +189,14 @@ Writes outside this root, global dependency caches, and descendants that escape
 the created process group are outside its accounting/control boundary. Keep all
 task-generated outputs inside the root and prevent dependency installation from
 duplicating runtime caches as part of the task plan.
+
+Read `capacity` in the receipt or summary for the first, latest and lowest
+observed filesystem-available bytes and their sampling times. Its
+`mixed_filesystem_available_space` scope includes unrelated writers and external
+caches on that filesystem. A free-space decrease does not identify its owner or
+measure the task's complete cumulative allocation. Samples update memory and
+persist at the runner's existing receipt-write points; they add no per-sample
+write loop and do not recover observations lost in an uncatchable runner death.
 
 On cumulative overage, low free space, unknown measurement, Ctrl-C or CLI SIGTERM, the runner
 forcibly stops only the new process group it created. It also checks immediately

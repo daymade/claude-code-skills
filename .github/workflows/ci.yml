@@ -177,6 +177,15 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Verify Linux suite selection
+        run: python3 -m unittest discover -s tests -p test_registered_suite_selection.py -v
+
+      - name: Select affected Linux suites
+        id: scope
+        run: python3 scripts/ci/select_registered_suites.py --output "$RUNNER_TEMP/registered-suites.txt"
 
       - uses: actions/setup-python@v7
         with:
@@ -230,34 +239,46 @@ jobs:
       # mtime on BSD/macOS and means --file-system to GNU, where it prints filesystem
       # output and exits nonzero. That bug shipped green from a macOS-only test run.
       - name: Run registered suites
-        run: scripts/ci/run_registered_tests.sh
+        run: scripts/ci/run_registered_tests.sh --selection "$RUNNER_TEMP/registered-suites.txt"
 
       # The static HTML batch gate exercises the actual converter; schema-only
       # fixtures cannot establish conversion behavior. Keep its CLI dependency
       # explicit and its selected stdlib suite separate from unrelated tests.
-      # Same bounded preparation as the runtime tools above — this reuses the mirror
-      # list that step already rewrote on the same one-shot VM (the helper re-checks
-      # the reference shape and is a no-op rewrite when the list is already official).
-      - name: HTML reader pilot and batch safety
-        if: ${{ !cancelled() }}
+      # Keep Pandoc in this phase: provisioning it before the registry changes
+      # which optional parser suites run in otherwise unchanged skills.
+      - name: Install selected reader runtime
+        if: ${{ !cancelled() && (steps.scope.outcome != 'success' || steps.scope.outputs.html_reader != 'false' || steps.scope.outputs.feishu_reader != 'false') }}
         run: |
-          scripts/ci/apt_install_bounded.sh pandoc
+          scripts/ci/apt_install_bounded.sh pandoc poppler-utils
+          pandoc --version
+
+      - name: HTML reader pilot and batch safety
+        if: ${{ !cancelled() && (steps.scope.outcome != 'success' || steps.scope.outputs.html_reader != 'false') }}
+        run: |
           pandoc --version
           python3 -m unittest discover -s daymade-docs/doc-to-markdown/scripts -p test_reader_pilot_gate.py
+          python3 -m unittest discover -s daymade-docs/doc-to-markdown/tests -v
+
+      - name: Feishu reader delivery with real Pandoc
+        if: ${{ !cancelled() && (steps.scope.outcome != 'success' || steps.scope.outputs.feishu_reader != 'false') }}
+        run: |
+          pandoc --version
+          python3 -m unittest discover -s feishu-doc-scraper/tests -p test_reader_delivery.py -v
 
       # Not in the registry: its point is that a leaked child process surfaces as a
       # ResourceWarning, which only fails the run under -W error.
       - name: Report renderer reaps its process group
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && (steps.scope.outcome != 'success' || steps.scope.outputs.report != 'false') }}
         run: python3 -W error::ResourceWarning -m unittest report-with-html/scripts/test_reconcile_content_diff.py
 
       # Needs a real browser (the runner image ships Google Chrome), so it is not in the
       # stdlib-only registry. It drives render_report.sh, the reconciler and the shelf
       # components headless; a Chrome that hangs after --dump-dom is part of what it covers.
       - name: report-with-html regression suite
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && (steps.scope.outcome != 'success' || steps.scope.outputs.report != 'false') }}
         run: |
-          export CHROME_BIN="$(command -v google-chrome)"
+          CHROME_BIN="$(command -v google-chrome)"
+          export CHROME_BIN
           "$CHROME_BIN" --version
           python3 -m unittest tests/report-with-html/test_regressions.py
 

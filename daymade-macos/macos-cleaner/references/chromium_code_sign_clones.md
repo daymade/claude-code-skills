@@ -129,9 +129,11 @@ Before asking for approval, report:
 - protected browser/automation process invariants;
 - postconditions and a bounded refill observation.
 
-For a nominal batch above 10 GiB, recommend a current backup before permanent
-deletion even though the content is reconstructible. Do not describe it as
-“absolutely safe”; a mistaken target is still permanent.
+For verified inactive generated clones, retain the current browser installation
+as the rebuild source and state the recreation cost. Do not create another App
+copy or backup based on nominal size or clone count. Keep unknown or unique
+content and apply the main Skill's existing deletion-basis and authorization
+contract. Do not describe cleanup as “absolutely safe”: a mistaken target is permanent.
 
 If one child is active or unknown, explicitly preserve it in the approved plan.
 Its later transition to inactive does not expand the approved target set.

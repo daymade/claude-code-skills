@@ -209,11 +209,8 @@ Replace anything in the second category. Pay special attention to:
 - Internal folder structures and absolute paths
 - Verbatim spoken lines from a transcript
 
-Run the automated scan as a secondary check:
-
-```bash
-uv run --frozen python -m scripts.security_scan <target-skill> --verbose
-```
+Run the automated scan against the target Skill in verbose mode as a secondary check,
+using [Security Review](../../references/publishing-and-packaging.md#step-6-security-review).
 
 A green scan does **not** mean the content is clean. The manual read-through is the real gate.
 
@@ -230,10 +227,12 @@ Use the new-reference sequence below only for knowledge that needs that resource
 2. Copy the sanitized outline into `references/<name>.md`.
 3. Add a `description:` and the rest of the frontmatter.
 4. Update the `相关文件` section with real cross-links to other references in the skill.
-5. Run validation:
+5. Run validation in order:
    ```bash
    uv run --frozen python -m scripts.quick_validate <target-skill>
-   uv run --frozen python -m scripts.security_scan <target-skill>
+   ```
+   Scan the same target Skill using [Security Review](../../references/publishing-and-packaging.md#step-6-security-review), then check its references:
+   ```bash
    uv run --frozen python -m scripts.check_references --skill <target-skill> --enrich <target-skill>/.enrich/<timestamp>
    ```
 

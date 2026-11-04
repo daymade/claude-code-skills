@@ -20,14 +20,14 @@ The only trustworthy question is: **is the branch's content already contained in
 
 `scripts/git_verify_branch_merged.sh <branch> [base]` answers that question with Git's own merge
 machinery instead of per-file guesses. It rejects the base ref itself as a deletion target, then
-runs two checks in order:
+runs these checks in order:
 
 1. **Ancestor** — the branch is literally in the base's history:
    ```bash
    git merge-base --is-ancestor origin/<branch> origin/main && echo "MERGED (ancestor)"
    ```
 
-2. **Content-contained** — do a trial 3-way merge of the branch *into* the base, in memory, and
+2. **Content-contained** — do a trial 3-way merge of the branch *into* the base, without checkout, and
    ask whether it changes anything. If merging the branch produces the base's exact tree, the
    branch adds nothing the base lacks — which is precisely the squash/rebase case where the count
    says "ahead" but the content is already upstream:
@@ -63,7 +63,8 @@ base's parallel work is the point. It is the wrong form for "what does the base 
 For each branch, the script returns one of these outcomes:
 
 - **MERGED (ancestor)** — in the base's history. Content containment is proven; deletion still
-  requires the separately authorized Mode E target, current ref equality, and preservation gate.
+  requires an authorized Mode E target — authority per the authority definition in the SKILL
+  Outcome contract — plus current ref equality and the preservation gate.
 - **MERGED (content contained)** — a trial merge into the base changes nothing; the "commits
   ahead" count is a squash/rebase artifact. This proves content containment, not deletion authority.
 - **UNMERGED / NEEDS REVIEW** — a trial merge *would* change the base, so the branch carries
@@ -190,7 +191,7 @@ whatever base did afterward (the same double-apply hazard SKILL.md's troubleshoo
 already warns about for a mis-timed rescue); the right response is to find and understand the
 regression, not to re-ship.
 
-**Two ways to find it, in order of how targeted the loss is:**
+**Find it in order of how targeted the loss is:**
 
 1. **Walk base's own history for the regression, first-parent, comparing one tracked value per
    commit.** Useful whenever the lost content is (or is summarized by) an orderable or
@@ -472,18 +473,26 @@ Two independent clones may share the same remote and base but hold different loc
 
 ```bash
 # REPO is the already authorized canonical checkout; TASK_DIR is its existing external scratch.
-COMMON_DIR=$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir)
-BASE=$(git -C "$REPO" rev-parse --verify 'origin/main^{commit}')
+(
+COMMON_DIR=$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir) || exit 2
+BASE=$(git -C "$REPO" rev-parse --verify 'origin/main^{commit}') || exit 2
 # Replace this explicit list with the selected, inspect-authorized refs; a missing ref is an error.
 for ref in refs/heads/feature-a refs/heads/feature-b; do
   oid=$(git -C "$REPO" rev-parse --verify "$ref") || exit 2
-  printf '%s\t%s\n' "$ref" "$oid"
-done > "$TASK_DIR/targets.tsv"
+  printf '%s\t%s\n' "$ref" "$oid" || exit 2
+done > "$TASK_DIR/targets.tsv" || exit 2
 (cd "$REPO" && bash "$SKILL_DIR/scripts/git_classify_refs.sh" --base "$BASE" \
   --expected-common-dir "$COMMON_DIR" --target-manifest "$TASK_DIR/targets.tsv")
+)
 ```
 
-Use absolute input paths. Bound mode requires both options and nonempty two-column TSV with
+The task owner runs this recipe with absolute input paths. Its checked prerequisites stop the
+subshell before classification when repository/base resolution or manifest creation fails;
+an old manifest must not become a successful substitute. Trial merges can write unreferenced
+Git objects, so this is not a repository-read-only probe: refs, index and working files stay
+unchanged, but existing sole-writer coordination still applies.
+
+Bound mode requires both options and nonempty two-column TSV with
 full refnames and 40-hex OIDs; it cannot be combined with `--all-namespaces`. Missing, moved or
 invalid targets return 2 instead of disappearing from the inventory; classification errors return 1.
 Exit 0 means the selected objects were classified, including any `NEEDS-REVIEW` rows. Read
@@ -727,9 +736,10 @@ Use this READ-DO sequence for one explicitly authorized clone:
    bundle's refs into a recovery repository, replay each `<name> <target>` line with
    `git symbolic-ref <name> <target>`, then read every target back. A bundle-only restore that turns
    `refs/remotes/origin/HEAD` or another symbolic alias into a direct ref is not complete.
-3. **Obtain current-session retirement authority.** A prior cleanup request or a different clone's
-   approval does not transfer. Prefer a recoverable OS Trash/quarantine move; permanent deletion
-   is a distinct consequence and requires an explicit decision plus the verified bundle.
+3. **Verify retirement authority under the SKILL Outcome contract.** Do not extend a narrower
+   cleanup request or another clone's approval to this target or consequence. Prefer a recoverable
+   OS Trash/quarantine move; permanent deletion is a distinct consequence and requires an explicit
+   decision plus the verified bundle.
 4. **Freeze the quarantine target, then run process occupancy as a separate probe.** Resolve one
    absolute, unique quarantine/OS Trash destination, prove it does not exist, and select a
    no-clobber move form now. Do not target the clone's parent unless a separate inventory proves
@@ -837,7 +847,8 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
    important. Real case: a retirement pass that named 22 paths (a few credentials and plan files)
    missed that the actual `!!` set was 8092 entries and roughly 200MB, including 13 build-output
    directories that existed only in that worktree. For every regular leaf, record
-   `git hash-object --no-filters -- <path>`; for every symlink, record its `readlink` output. Stop on
+   `git hash-object --no-filters -- <path>`; use the [batch example](#batch-regular-file-hashes-without-dropping-manifest-entries)
+   for a large regular-file set. For every symlink, record its `readlink` output. Stop on
    an unsupported special-file type. An entry is disposable on one of two grounds only: the primary
    checkout has the same relative path with byte-identical content (the same `git hash-object`
    output), or a named tool rebuilds it from tracked inputs alone (dependency caches, bytecode,
@@ -879,7 +890,8 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
    if it still depends on the source. Unresolved alternates, partial/promisor or extension object
    stores, shared module stores, unsupported file types, or incomplete recovery evidence stop
    retirement; do not deinitialize a module or delete its Git directory to evade this gate.
-7. **Obtain current-session deletion authority, then try normal removal:** run
+7. **Obtain deletion authority per the authority definition in the SKILL Outcome contract, then
+   try normal removal:** run
    the tracked/untracked status check again. Then re-run the exact ignored-inventory command from
    step 3, expand directories the same way, and rebuild the ignored manifest. Its path set, entry
    types, regular-file hashes, and symlink targets must exactly equal the frozen step 3 manifest;
@@ -909,6 +921,73 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
 
 The recovery artifacts created in step 6 may later follow § Retire task-owned temporary recovery
 artifacts. A copied ignored path that exists only in that backup keeps the artifact ineligible.
+
+### Batch regular-file hashes without dropping manifest entries
+
+Use this read-only Python 3.10+ example for the regular-file subset of the complete
+ignored inventory. Pass the authorized checkout root, its frozen relative paths
+and the absolute path of the installed Git binary already checked with
+`git --version`. Keep symlinks and their `readlink` targets in the full manifest;
+do not pass symlinks, directories or special files to this function.
+
+```python
+import stat
+import subprocess
+from pathlib import Path, PurePosixPath
+
+
+def hash_regular_files(root, paths, git_binary):
+    root = Path(root).resolve(strict=True)
+    paths = tuple(paths)
+    if not Path(git_binary).is_absolute() or len(set(paths)) != len(paths):
+        raise ValueError("Require an absolute Git binary and unique paths")
+
+    def stamp(rel):
+        parts = PurePosixPath(rel)
+        if not parts.parts or parts.is_absolute() or ".." in parts.parts or str(parts) != rel:
+            raise ValueError("Require normalized relative paths")
+        entry = root / rel
+        if entry.resolve(strict=True) != entry:
+            raise ValueError("Keep symlinks outside the regular-file batch")
+        info = entry.lstat()
+        if not stat.S_ISREG(info.st_mode):
+            raise ValueError("Require a regular file")
+        return (info.st_dev, info.st_ino, info.st_mode, info.st_size,
+                info.st_mtime_ns, info.st_ctime_ns)
+
+    result = {}
+    for offset in range(0, len(paths), 16):
+        batch = paths[offset:offset + 16]
+        before = [stamp(rel) for rel in batch]
+        run = subprocess.run(
+            [git_binary, "-C", str(root), "hash-object", "--no-filters", "--", *batch],
+            check=True, capture_output=True, text=True,
+        )
+        hashes = run.stdout.splitlines()
+        if len(hashes) != len(batch) or any(
+            len(value) not in (40, 64) or any(c not in "0123456789abcdef" for c in value)
+            for value in hashes
+        ):
+            raise RuntimeError("Incomplete or invalid hash output")
+        if before != [stamp(rel) for rel in batch]:
+            raise RuntimeError("File identity or metadata changed during hashing")
+        result.update(zip(batch, hashes))
+    return result
+```
+
+Preserve every returned path/hash pair in the existing manifest; require its key
+set to equal the supplied regular-file set, not just a sample or total. An empty
+mapping proves no inventory completeness by itself. Run the same recipe at each
+source/backup root in the same Git object format, then compare corresponding
+paths. Argument vectors preserve spaces, Unicode and newlines without shell
+splitting; command errors abort the batch without returning a partial manifest.
+
+Keep the original retirement gates: classify every physical leaf, preserve unique
+bytes, check symlink targets, then re-freeze the full inventory immediately before
+removal. Metadata checks do not lock files or make hashing atomic; detected change
+requires a new manifest, and a possible writer still blocks retirement. Use batches
+to reduce Git process launches, not to claim a measured speedup or permission to
+delete anything.
 
 ### Clean-submodule exception — one force flag after a specific normal refusal
 
@@ -947,18 +1026,25 @@ session this skill was distilled from: a solo pass mis-judged a genuine 2-line f
 merged" by matching the wrong call site; a fan-out of independent agents caught it). For a
 high-stakes "is *everything* merged?" verdict, fan out:
 
+Before fan-out, the coordinated sole writer produces trial-merge classifications against the
+frozen snapshot. Supply that report and its exact input OIDs to the read-only reviewers;
+`merge-tree --write-tree` is not a read-only reviewer command. Missing trial-merge evidence
+leaves containment unverified until the sole writer supplies it.
+
 1. **Partition** the branches across N agents (e.g. large feature-adding branches, small fix
-   branches, local-only-history branches, plus one agent that independently re-runs the loss
-   check and re-derives the "should this old branch be merged?" verdict from content).
+   branches, local-only-history branches, plus one agent that independently reviews the supplied
+   scoped loss inventory and re-derives the "should this old branch be merged?" verdict from content).
 2. **Frame each agent adversarially**: "Default to the assumption that these branches still have
-   unmerged unique content, and try to *prove* it. Judge by content (the trial-merge check above),
+   unmerged unique content, and try to *prove* it. Judge by content using the supplied trial-merge
+   report and immutable objects,
    never by commit count. Report per branch: MERGED / **UNMERGED / NEEDS REVIEW (with the file(s)
    the trial merge would change)**."
 3. **Lock them read-only** (see rules below) so concurrent agents don't corrupt each other's tree.
-   The sole writer refreshes authority first and hands them frozen SHAs; reviewers never fetch.
+   The sole writer refreshes authority first and hands them frozen SHAs and trial-merge evidence;
+   reviewers never fetch or run trial merges in that shared repository.
 4. **Counter-review every finding yourself.** An agent's "UNMERGED" is a *hypothesis*: re-run the
-   trial-merge / inspect the specific files before believing it (agents produce false positives
-   too). An agent's "all merged" is only as good as its method — spot-check that it judged by
+   trial merge as the sole writer, or inspect the specific immutable files before believing it
+   (agents produce false positives too). An agent's "all merged" is only as good as its method — spot-check that it judged by
    content, not counts.
 5. **Converge**: everything merged across all agents = strong confirmation; any single
    content-backed UNMERGED finding = a real gap to land.
@@ -970,13 +1056,14 @@ a subagent cannot spawn subagents.
 
 Put these in every agent's prompt — they are what make parallel verification safe and correct:
 
-- **Read-only, always.** Only `merge-base`, `merge-tree`, `diff`, `log`, `show`, `cat-file`,
+- **Read-only, always.** Only `merge-base`, `diff`, `log`, `show`, `cat-file`,
   `rev-list`, `rev-parse`, `ls-tree`, `for-each-ref`, `branch -r --contains`. **Never** `fetch`,
   `checkout`, `switch`, `reset`, `rebase`, `commit`, `push`, `update-ref`, or `gc`. The sole writer
   refreshes once before fan-out and supplies immutable SHAs; a reviewer does not move even a
-  remote-tracking ref.
+  remote-tracking ref or create trial-merge objects. Trial merges belong to the sole writer.
 - **Explicit frozen SHAs first.** Use the supplied immutable object IDs for conclusions. Named refs
   (`origin/main`, `origin/<branch>`) may be displayed for attribution but are not merge authority.
-- **Judge by content via the trial merge, not by counts** — restate the check in the prompt.
+- **Judge by content via the supplied trial-merge evidence, not by counts** — restate the
+  check and its evidence source in the prompt.
 - **Return structured per-branch verdicts with the file(s) the trial merge would change for any
   UNMERGED**, not prose.

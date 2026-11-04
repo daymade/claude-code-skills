@@ -28,6 +28,141 @@ hook = load_module("prior_work_hook_under_test", SCRIPTS_DIR / "prior_work_hook.
 
 
 class PriorWorkHookTests(unittest.TestCase):
+    def history_command(self, script: str, arguments: str) -> str:
+        reader = SKILL_DIR.parent / "read-codex-history" / "scripts" / script
+        return f'python3 "{reader}" {arguments}'
+
+    def assert_discovery_classification(self, command: str, *, gated: bool) -> None:
+        events = [
+            {"tool_name": "Bash", "tool_input": {"command": command}},
+            {"tool_name": "exec_command", "tool_input": {"cmd": command}},
+            {"tool_name": "functions.exec", "tool_input": {"code":
+                'text(await tools.exec_command({cmd:' + json.dumps(command) + '}));'}},
+        ]
+        for event in events:
+            with self.subTest(event=event):
+                self.assertEqual(hook.substantial_tool_use(event)[0], gated)
+
+    def test_owned_codex_discovery_keeps_real_read_only_call_shapes_available(self):
+        # Recorded terminal-recovery operations; paths/identities are synthetic.
+        # Bind the script path to this distribution rather than the author's host.
+        inventory = self.history_command(
+            "list_local_history.py",
+            '--source codex --index-only --cwd "/workspace/example project" '
+            '--include-archived --from-date 2026-02-03 --to-date 2026-02-04 '
+            '--limit 60 --format json',
+        )
+        lookup = self.history_command("find_codex_session.py", "01234567")
+        reader = self.history_command(
+            "read_codex_session.py",
+            '--session 01234567-89ab-cdef-0123-456789abcdef --tools '
+            '--contains "git commit" --record 2 --record 3 --format json',
+        )
+        for command in (inventory, lookup, reader,
+                        f'python3 "{SCRIPTS_DIR / "surface_version.py"}"'):
+            self.assert_discovery_classification(command, gated=False)
+
+        requirement = hook.handle_user_prompt({
+            "hook_event_name": "UserPromptSubmit", "session_id": "reader-session",
+            "prompt": "找回我们之前的会话记录",
+        })
+        self.assertIsNotNone(requirement)
+        self.assertIsNone(hook.handle_event({
+            "hook_event_name": "PreToolUse", "session_id": "reader-session",
+            "tool_name": "exec", "tool_input": {"code":
+                'text(await tools.exec_command({cmd:' + json.dumps(inventory) + '}));'},
+        }))
+
+    def test_owned_reader_symlink_and_arguments_with_equals_are_supported(self):
+        entry = self.root / "installed reader with spaces.py"
+        entry.symlink_to(SKILL_DIR.parent / "read-codex-history/scripts/list_local_history.py")
+        self.assert_discovery_classification(
+            f'python3 "{entry}" --source=codex --index-only --cwd=/workspace '
+            '--format=json', gated=False,
+        )
+
+    def test_reader_exemption_rejects_missing_empty_and_unknown_modes(self):
+        for arguments in (
+            '', '--index-only', '--source codex', '--source --index-only',
+            '--source "" --index-only', '--source= --index-only',
+            '--source codex --index-only --cwd',
+            '--source codex --index-only --cwd ""',
+            '--source codex --index-only --write',
+            '--source codex --index-only --source all',
+        ):
+            self.assert_discovery_classification(
+                self.history_command("list_local_history.py", arguments), gated=True,
+            )
+        for script, arguments in (
+            ("find_codex_session.py", ''),
+            ("find_codex_session.py", '""'),
+            ("find_codex_session.py", '01234567 --output result.json'),
+            ("read_codex_session.py", ''),
+            ("read_codex_session.py", '--session'),
+            ("read_codex_session.py", '--session ""'),
+            ("read_codex_session.py", '--session not-an-id'),
+            ("read_codex_session.py", '--session 01234567'),
+            ("read_codex_session.py", '--session 01234567-89ab-cdef-0123-456789abcdef --resume'),
+        ):
+            self.assert_discovery_classification(
+                self.history_command(script, arguments), gated=True,
+            )
+
+    def test_owned_reader_exemption_does_not_trust_names_or_hide_writes(self):
+        fake = self.root / "list_local_history.py"
+        fake.write_text("print('untrusted')\n", encoding="utf-8")
+        self.assert_discovery_classification(
+            f'python3 "{fake}" --source codex --index-only', gated=True,
+        )
+        known = self.history_command(
+            "list_local_history.py", '--source codex --index-only --cwd /workspace',
+        )
+        for command in (
+            known + '; mkdir /tmp/new-output',
+            known + ' && python3 -c "print(1)"',
+            known + ' --cwd "$(touch /tmp/new-output)"',
+            f'python3 "{SCRIPTS_DIR / "surface_version.py"}" --write',
+        ):
+            self.assert_discovery_classification(command, gated=True)
+        event = {"tool_name": "exec", "tool_input": {"code":
+            'await tools.exec_command({cmd:' + json.dumps(known) + '});\n'
+            'await tools.apply_patch("*** Add File: /tmp/new-output");'}}
+        self.assertTrue(hook.substantial_tool_use(event)[0])
+
+    def test_native_exec_retrieval_query_is_data_for_both_key_spellings(self):
+        command = "python scripts/prior_work.py retrieve --query 'install-policy-consolidation'"
+        for name in ('exec', 'functions.exec'):
+            for key in ('cmd', '"cmd"', "'command'"):
+                source = 'text(await tools.exec_command({' + key + ': ' + json.dumps(command) + '}));'
+                event = {'tool_name': name, 'tool_input': {'code': source}}
+                self.assertFalse(hook.substantial_tool_use(event)[0], event)
+                event['tool_input']['code'] = source + '\ntext(await tools.apply_patch("*** Add File: /tmp/new"));'
+                self.assertTrue(hook.substantial_tool_use(event)[0])
+
+    def test_native_exec_escaped_command_separator_does_not_exempt_write(self):
+        for name in ('exec', 'functions.exec'):
+            for command in ('python scripts/prior_work.py check\nmkdir /tmp/new',
+                            'python scripts/prior_work.py check && git commit -a'):
+                source = 'await tools.exec_command(' + json.dumps({'cmd': command}) + ');'
+                self.assertTrue(hook.substantial_tool_use({'tool_name': name, 'tool_input': {'code': source}})[0])
+
+    def test_literal_read_does_not_hide_computed_write_in_same_cell(self):
+        for name in ('exec', 'functions.exec'):
+            for read in ('pwd', 'python scripts/prior_work.py check'):
+                source = ('const command = "mkdir /tmp/new"; '
+                          'await tools.exec_command({cmd: command}); '
+                          'await tools.exec_command({cmd: ' + json.dumps(read) + '});')
+                self.assertTrue(hook.substantial_tool_use({'tool_name': name, 'tool_input': {'code': source}})[0])
+
+    def test_all_static_js_quote_forms_decode_shell_separators(self):
+        for name in ('exec', 'functions.exec'):
+            for quote in ('"', "'", '`'):
+                for separator in (r'\n', r'\x0a', r'\u000a', r'\u{a}'):
+                    source = ('await tools.exec_command({cmd: ' + quote +
+                              'python scripts/prior_work.py check ' + separator +
+                              ' mkdir /tmp/new' + quote + '});')
+                    self.assertTrue(hook.substantial_tool_use({'tool_name': name, 'tool_input': {'code': source}})[0], source)
+
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)

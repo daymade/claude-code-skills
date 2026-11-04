@@ -10,11 +10,13 @@ Essential when onboarding a new gateway/vendor, when writing a customer-facing
 
 Verdicts (per model x format)
 -----------------------------
-- ``available``       HTTP 200 AND non-empty text content
-- ``empty-content``   HTTP 200 but no text — usually NOT "model broken": reasoning
-                      models spend the token budget on thinking first, so a small
-                      ``max_tokens`` silently produces an empty reply. The probe
-                      reports thinking size to make this diagnosis obvious.
+- ``available``       HTTP 200, non-empty text and no explicit refusal marker
+- ``refused``         Explicit refusal/content-filter marker; the service responded,
+                      but this probe did not receive a usable answer. This is not
+                      evidence that the model or provider is unavailable.
+- ``empty-content``   HTTP 200 without text or an explicit refusal marker. The cause
+                      stays unknown unless a native terminal reason identifies it;
+                      thinking characters alone do not prove budget exhaustion.
 - ``no-channel``      4xx "model not found / no available channel" — the ID has no
                       route here. This is only meaningful if the ID is REAL (see
                       the discipline below).
@@ -69,8 +71,14 @@ Usage
         --base-url https://api.example.com --key-env MY_API_KEY \
         --models @models.txt --format openai
 
-Exit codes: 0 = all probed IDs available; 1 = at least one ID not available;
+Results retain native stop_reason/finish_reason/stop_details/refusal when present.
+response_outcome is answered/refused/empty/unknown; transport_ok means HTTP response
+headers were obtained, including HTTP errors or a body that failed during reading.
+It does not mean the response body was complete, valid, or answered the probe.
+
+Exit codes: 0 = all probes answered; 1 = at least one lacks a usable answer;
 2 = configuration error (missing key/env); 3 = transport-level failure only.
+Exit 1 alone is not a provider/model-unavailable diagnosis.
 """
 
 import argparse
@@ -85,7 +93,7 @@ import aiohttp
 
 # Generous by default: reasoning models spend budget on thinking BEFORE any text.
 # Small budgets produce HTTP 200 + empty content, which reads as "broken model"
-# but is actually a probe artifact. 8192 clears every mainstream thinking model.
+# but may be a probe artifact. No fixed budget guarantees visible text.
 DEFAULT_MAX_TOKENS = 8192
 
 # One short, language-neutral task. Deterministic enough to yield text from any
@@ -150,6 +158,27 @@ def extract_text_and_thinking(fmt: str, data: dict):
     return (msg.get("content") or "").strip(), len(msg.get("reasoning_content") or "")
 
 
+def response_details(fmt: str, data: dict) -> dict:
+    """Preserve native terminal fields; never infer a refusal from answer prose."""
+    if fmt == "anthropic":
+        return {name: data[name] for name in ("stop_reason", "stop_details", "refusal")
+                if name in data}
+    choice = (data.get("choices") or [{}])[0]
+    message = choice.get("message") or {}
+    details = {"finish_reason": choice["finish_reason"]} if "finish_reason" in choice else {}
+    if "refusal" in message:
+        details["refusal"] = message["refusal"]
+    return details
+
+
+def explicit_refusal(fmt: str, details: dict) -> bool:
+    if fmt == "anthropic":
+        return details.get("stop_reason") == "refusal"
+    refusal = details.get("refusal")
+    return (details.get("finish_reason") == "content_filter"
+            or isinstance(refusal, str) and bool(refusal.strip()))
+
+
 def classify_http_error(status: int, body: str) -> str:
     if status in (401, 403):
         return "auth-error"
@@ -172,8 +201,14 @@ async def probe_one(session, fmt, base_url, model, key, max_tokens, raw_dir=None
                 "url": url,
                 "request_headers": _mask_secrets(headers),
                 "request_body": body}
+    transport_ok = False
+    response_status = None
     try:
         async with session.post(url, headers=headers, json=body) as resp:
+            transport_ok = True
+            response_status = resp.status
+            evidence.update({"response_status": resp.status,
+                             "response_headers": list(resp.headers.items())})
             raw = await resp.text()
             # list-of-pairs, NOT dict(): HTTP allows repeated header names
             # (multiple Set-Cookie lines) and dict() silently keeps only one —
@@ -186,27 +221,45 @@ async def probe_one(session, fmt, base_url, model, key, max_tokens, raw_dir=None
                 verdict = classify_http_error(resp.status, raw)
                 return {"model": model, "format": fmt, "verdict": verdict,
                         "http": resp.status, "detail": raw[:160],
-                        "raw": raw_path}
-            data = json.loads(raw)
+                        "raw": raw_path, "transport_ok": transport_ok,
+                        "response_outcome": "unknown"}
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError:
+                data = None
+            if not isinstance(data, dict):
+                return {"model": model, "format": fmt, "verdict": "invalid-response",
+                        "http": 200, "detail": "Expected a JSON response object",
+                        "raw": raw_path, "transport_ok": transport_ok,
+                        "response_outcome": "unknown"}
             text, thinking_len = extract_text_and_thinking(fmt, data)
             usage = data.get("usage") or {}
+            details = response_details(fmt, data)
+            common = {"model": model, "format": fmt, "http": 200,
+                      "transport_ok": transport_ok, "thinking_chars": thinking_len,
+                      "usage": usage, "raw": raw_path, **details}
+            if explicit_refusal(fmt, details):
+                return {**common, "verdict": "refused", "response_outcome": "refused",
+                        "sample": text[:60],
+                        "hint": "request refused; service responded — this does not "
+                                "establish model/provider unavailability"}
             if text:
-                return {"model": model, "format": fmt, "verdict": "available",
-                        "http": 200, "sample": text[:60],
-                        "served_model_field": data.get("model"),
-                        "raw": raw_path}
-            return {"model": model, "format": fmt, "verdict": "empty-content",
-                    "http": 200, "thinking_chars": thinking_len,
-                    "usage": usage, "raw": raw_path,
-                    "hint": ("thinking consumed the budget — raise --max-tokens"
-                             if thinking_len else
-                             "no text and no thinking — treat as not usable")}
-    except aiohttp.ClientError as exc:
+                return {**common, "verdict": "available", "response_outcome": "answered",
+                        "sample": text[:60], "served_model_field": data.get("model")}
+            reason = details.get("stop_reason" if fmt == "anthropic" else "finish_reason")
+            return {**common, "verdict": "empty-content", "response_outcome": "empty",
+                    "hint": ("native terminal reason reports token limit; consider "
+                             "raising --max-tokens" if reason in ("max_tokens", "length")
+                             else "no visible text; cause unknown — inspect native "
+                                  "terminal fields and the raw response")}
+    except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
         evidence["transport_error"] = f"{type(exc).__name__}: {exc}"
         raw_path = _dump_raw(raw_dir, model, fmt, evidence)
         return {"model": model, "format": fmt, "verdict": "transport-error",
                 "detail": f"{type(exc).__name__}: {exc}"[:160],
-                "raw": raw_path}
+                "raw": raw_path, "transport_ok": transport_ok,
+                "response_outcome": "unknown",
+                **({"http": response_status} if response_status is not None else {})}
 
 
 async def run(args, key):
@@ -289,23 +342,25 @@ def main():
     width = max(len(m) for m in models) + 2
     print(f"{'model':<{width}}{'format':<11}verdict")
     print("-" * (width + 40))
-    any_unavailable = False
+    any_unanswered = False
     all_transport = bool(results)
     for r in results:
-        mark = {"available": "OK ", "empty-content": "?? ",
+        mark = {"available": "OK ", "empty-content": "?? ", "refused": "?? ",
                 "no-channel": "-- ", "upstream-error": "!! ",
                 "auth-error": "!! ", "transport-error": "!! "}.get(r["verdict"], "?? ")
         extra = r.get("hint") or r.get("detail") or r.get("sample") or ""
         print(f"{r['model']:<{width}}{r['format']:<11}{mark}{r['verdict']}"
               f"{('  ' + extra) if extra else ''}")
         if r["verdict"] != "available":
-            any_unavailable = True
+            any_unanswered = True
         if r["verdict"] != "transport-error":
             all_transport = False
 
     print("\nReminders: 'no-channel' on an ID you invented proves nothing — "
-          "verify IDs against official docs first. 'empty-content' with "
-          "thinking_chars>0 is a max_tokens artifact, not an unavailable model. "
+          "verify IDs against official docs first. Refusal/content-filter responses "
+          "are not proof of model/provider unavailability. Empty text or thinking "
+          "characters alone do not establish the cause. Exit 1 means at least "
+          "one probe lacks a usable answer, not a service diagnosis. "
           "A gateway's /v1/models listing routinely omits routable models.")
 
     if args.output:
@@ -316,7 +371,7 @@ def main():
 
     if all_transport:
         sys.exit(EXIT_TRANSPORT)
-    sys.exit(EXIT_UNAVAILABLE if any_unavailable else EXIT_OK)
+    sys.exit(EXIT_UNAVAILABLE if any_unanswered else EXIT_OK)
 
 
 if __name__ == "__main__":
