@@ -53,6 +53,12 @@ machine-readable JSON is needed, also set
 `LARKSUITE_CLI_NO_UPDATE_NOTIFIER=1` and
 `LARKSUITE_CLI_NO_SKILLS_NOTIFIER=1` so notices do not pollute the result.
 
+Before the first target-resource read, follow [source account binding](references/source-account-binding.md).
+Reuse the source's authorized profile binding or match its URL tenant against
+the user's existing account registry; the active organization alone does not
+establish the right account. Keep the selected `--profile` and `--as` explicit
+through subsequent calls.
+
 ### 2. Select the embedded guide
 
 Run `lark-cli skills list --json`. Match the user's intent and any URL path or

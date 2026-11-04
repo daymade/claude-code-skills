@@ -30,6 +30,7 @@ modes that ship wrong PDFs if skipped.
 
 | The input is... | Use |
 |---|---|
+| Existing ID/passport photos needed as printable copies | Read [identity-document copies](references/identity-document-copies.md) before processing; bind required sides/pages and the recipient's accepted copy form |
 | Phone photos of an already-signed/stamped paper document | This file, main pipeline below |
 | A digital document (docx/PDF) with **no signature yet**, and you need to make it look hand-signed | [references/digital-signature-synthesis.md](references/digital-signature-synthesis.md) |
 
@@ -147,6 +148,10 @@ uv run <skill>/scripts/make_contact_sheet.py scanned.pdf --out contact.png
 correct (each date/title where it should be, no duplicates, none missing), no
 off-color page, stamps/signatures present. Then spot-read 1–2 pages at full
 resolution for text sharpness.
+
+For identity documents, also reconcile the required sides/spread against the
+source-coverage table from the linked identity-copy procedure. A readable data
+page or matching PDF page count does not establish a complete required spread.
 
 Why whole-document, every time: two shipped-bug stories from the session this
 skill was distilled from —
