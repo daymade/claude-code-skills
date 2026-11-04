@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **ghostty-use** (v1.9.8 → v1.10.0): Add the configured Account Manager legacy-terminal JSON bridge, targeted native host and bound-window reader; preserve manual restore, unresolved inventory and uncertain-input reconciliation. Read Darwin argv by its kernel argument count without treating initial prompts or environment data as options. Change type: recovered compatible terminal integration.
+
 - **macos-cleaner** (`daymade-macos` v1.29.0 → v1.29.1): Retire historical incident arithmetic from growth diagnosis, preserve allocation and mixed-window evidence boundaries, and route emergency cleanup through the existing authorization gate.
 
 - **docs-router** (`daymade-docs` v1.29.0 → v1.29.1): Keep all document jobs, including documentation cleanup, inside the first 130 description characters and bytes; retain the full existing routing table and manual-command boundary. Change type: recovered discovery-prefix correction.
