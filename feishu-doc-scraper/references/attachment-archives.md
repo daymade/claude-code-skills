@@ -18,6 +18,9 @@ does not authorize changing source content, permissions or cloud storage.
    figure. Attribute order and quote style are not identity. Handle referenced
    documents, sheets, images, whiteboards and Minutes through their existing
    routes; the attachment helper does not recursively fetch them.
+   Route external Bilibili/YouTube/direct-media links through
+   [external video discovery and handoff](external-video-resources.md); a source-card
+   attachment batch does not acquire those videos or authorize their whole series.
 4. Run the bundled helper against a new output directory:
 
 ```bash
