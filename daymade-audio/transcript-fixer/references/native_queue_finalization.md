@@ -9,12 +9,14 @@ Read before enqueueing/resolving, finalization, archiving/renaming, or propagati
 
    ```json
    [
-     {"file": "/abs/path/to/the/transcript.md", "line": 142,
+     {"file": "/abs/path/to/the/transcript.md", "line": 142, "domain": "myproject",
       "original": "<garbled-name>", "suggested": "", "kind": "entity",
       "context": "<verbatim sentence, or unique clause/span for same-line repeats>",
       "evidence": "speaker-label fragment near line 142; not in roster or project alias ledger — needs user confirmation"}
    ]
    ```
+   `myproject` is a synthetic domain; bind it through [domain admission](queue_domain_repair.md)
+   before enqueueing. Per-item domains take precedence over the CLI default.
    **`file` binds the item to its transcript; omitting it can silently disable the behaviors below.** The following guarantees are gated on it (see [review_queue.py](../scripts/core/review_queue.py)):
    - *Verbatim-anchor rejection.* With `file` set, a `context` that is not a literal substring of that file is **rejected at enqueue** (exit 3) — so an authoring error dies immediately instead of at verdict time. With `file` absent there is no file to check against, so a paraphrased `context` is accepted and the drift surfaces much later.
    - *The default edit.* With `file` set and no explicit action pack, an accept runs a single `file_edit(old=original, new=suggested)`. With `file` absent the accept still records the verdict and still exits 0 — **and never touches the transcript.** Nothing errors; the queue just says `accepted` while the file is unchanged.
