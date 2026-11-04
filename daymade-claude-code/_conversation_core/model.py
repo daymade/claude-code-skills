@@ -35,6 +35,7 @@ class Conversation:
     original_cwd_line: Optional[int] = None
     last_runtime_cwd: Optional[str] = None
     last_runtime_cwd_line: Optional[int] = None
+    launch_source: Optional[str] = None  # Codex threads.source; others: None
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
