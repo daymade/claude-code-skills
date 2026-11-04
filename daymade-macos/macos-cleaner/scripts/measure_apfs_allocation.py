@@ -43,11 +43,15 @@ def open_directory(path):
         raise
 
 
-def stat_path(path):
+def stat_path(path, *, expected_parent_fd=None):
     if path == '/':
         return os.lstat(path)
     fd = open_directory(os.path.dirname(path))
     try:
+        if expected_parent_fd is not None:
+            expected, current = os.fstat(expected_parent_fd), os.fstat(fd)
+            if (current.st_dev, current.st_ino) != (expected.st_dev, expected.st_ino):
+                raise RuntimeError('parent directory identity changed')
         return os.stat(os.path.basename(path), dir_fd=fd, follow_symlinks=False)
     finally:
         os.close(fd)
@@ -62,7 +66,7 @@ def space(fd):
 
 
 def measure(paths, *, max_seconds=30.0, max_files=100_000, private_query=None):
-    """Observe one or more paths; file budget counts all encountered entries."""
+    """Observe explicit paths; an injected private_query receives a pinned fd."""
     if not paths or len(paths) > 64:
         raise ValueError('select 1 to 64 explicit paths')
     if (isinstance(max_files, bool) or not isinstance(max_files, int) or max_files < 1
@@ -88,8 +92,8 @@ def measure(paths, *, max_seconds=30.0, max_files=100_000, private_query=None):
                           reason='APFS native allocation requires macOS')
             return result
         try:
-            from _apfs_native import private_size
-            private_query = private_size
+            from _apfs_native import private_size_fd
+            private_query = private_size_fd
         except (OSError, AttributeError) as exc:
             result.update(status='unsupported', finished_at=stamp(), reason=str(exc))
             return result
@@ -116,13 +120,13 @@ def measure(paths, *, max_seconds=30.0, max_files=100_000, private_query=None):
             return 'file_limit'
         return None
 
-    def volume(s, path):
+    def volume(s, path, parent_fd):
         if s.st_dev in volumes:
             return volumes[s.st_dev]
         if volumes:
             raise OSError(errno.EXDEV, 'cross-device input or mount is excluded; run separately')
         parent = path if stat.S_ISDIR(s.st_mode) else os.path.dirname(path)
-        fd = open_directory(parent)
+        fd = open_directory(parent) if stat.S_ISDIR(s.st_mode) else os.dup(parent_fd)
         if os.fstat(fd).st_dev != s.st_dev:
             os.close(fd)
             raise OSError('volume identity differs from metadata directory')
@@ -137,7 +141,7 @@ def measure(paths, *, max_seconds=30.0, max_files=100_000, private_query=None):
         volumes[s.st_dev] = v
         return v
 
-    def visit(path, s):
+    def visit(path, s, parent_fd, name):
         if path in visited:
             result['duplicate_paths_skipped'] += 1
             return
@@ -149,7 +153,7 @@ def measure(paths, *, max_seconds=30.0, max_files=100_000, private_query=None):
             result['special_files_skipped'] += 1
             return
         try:
-            v = volume(s, path)
+            v = volume(s, path, parent_fd)
         except OSError as exc:
             error(path, 'volume_metadata_error', exc)
             return
@@ -170,15 +174,26 @@ def measure(paths, *, max_seconds=30.0, max_files=100_000, private_query=None):
         row = dict(signature=signature(s), nlink=s.st_nlink, names={path},
                    allocated=s.st_blocks * 512, private=None, stable=False)
         inodes[key] = row
+        file_fd = None
         try:
-            value = private_query(path)
+            # macOS uses metadata-only O_EVTONLY; the read-only/nonblocking
+            # fallback serves portable injected probes, never the non-macOS CLI.
+            flags = getattr(os, 'O_EVTONLY', os.O_RDONLY | os.O_NONBLOCK)
+            file_fd = os.open(name, flags | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=parent_fd)
+            if signature(os.fstat(file_fd)) != signature(s):
+                raise RuntimeError('file identity or metadata changed before query')
+            value = private_query(file_fd)
             if isinstance(value, bool) or not isinstance(value, int) or value < 0:
                 raise ValueError('private size must be a nonnegative integer')
-            if signature(stat_path(path)) != signature(s):
+            if (signature(os.fstat(file_fd)) != signature(s)
+                    or signature(stat_path(path, expected_parent_fd=parent_fd)) != signature(s)):
                 raise RuntimeError('file identity or metadata changed during query')
             row.update(private=value, stable=True)
         except (OSError, ValueError, RuntimeError, NotImplementedError) as exc:
             error(path, 'private_size_unknown', exc)
+        finally:
+            if file_fd is not None:
+                os.close(file_fd)
 
     try:
         for root in roots:
@@ -187,10 +202,17 @@ def measure(paths, *, max_seconds=30.0, max_files=100_000, private_query=None):
                 error(root, stop)
                 break
             result['entries_seen'] += 1
+            parent_fd = None
             try:
-                visit(root, stat_path(root))
+                parent_fd = open_directory(os.path.dirname(root))
+                name = os.path.basename(root) or '.'
+                s = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+                visit(root, s, parent_fd, name)
             except OSError as exc:
                 error(root, 'lstat_error', exc)
+            finally:
+                if parent_fd is not None:
+                    os.close(parent_fd)
         while directories:
             path, original = directories.pop()
             stop = budget()
@@ -212,7 +234,7 @@ def measure(paths, *, max_seconds=30.0, max_files=100_000, private_query=None):
                             child = os.path.join(path, entry.name)
                             try:
                                 visit(child, os.stat(entry.name, dir_fd=fd,
-                                                     follow_symlinks=False))
+                                                     follow_symlinks=False), fd, entry.name)
                             except OSError as exc:
                                 error(child, 'lstat_error', exc)
                     if signature(os.fstat(fd)) != signature(original):

@@ -25,55 +25,117 @@ class NativeReplyTests(unittest.TestCase):
         with mock.patch('ctypes.CDLL', return_value=mock.MagicMock()):
             spec.loader.exec_module(self.native)
         self.tmp = tempfile.TemporaryDirectory()
-        self.path = Path(self.tmp.name) / 'fixture'
+        self.path = Path(self.tmp.name).resolve() / 'fixture'
         self.path.touch()
         self.addCleanup(self.tmp.cleanup)
+        if not hasattr(os, 'O_EVTONLY'):
+            patch = mock.patch.object(os, 'O_EVTONLY', os.O_RDONLY, create=True)
+            patch.start()
+            self.addCleanup(patch.stop)
 
     def reply(self, value=0, length=32, fork=8, rc=0):
-        def call(path, attr, buf, capacity, options):
+        def call(fd, attr, buf, capacity, options):
             a = ctypes.cast(attr, ctypes.POINTER(self.native.Attr)).contents
-            self.assertEqual((a.count, a.common, a.fork, capacity, options), (5, 0x80000000, 8, 64, 0x821))
+            self.assertIsInstance(fd, int)
+            self.assertEqual(os.fstat(fd).st_ino, self.path.stat().st_ino)
+            self.assertEqual((a.count, a.common, a.fork, capacity, options), (5, 0x80000000, 8, 64, 0x20))
             struct.pack_into('<I5Iq', buf, 0, length, 0x80000000, 0, 0, 0, fork, value)
             ctypes.set_errno(errno.ENOENT)
             return rc
         return call
 
     def test_true_zero_is_known(self):
-        with mock.patch.object(self.native, 'getattrlist', self.reply()):
+        with mock.patch.object(self.native, 'fgetattrlist', self.reply()):
             self.assertEqual(self.native.private_size(self.path), 0)
 
     def test_missing_returned_bit_is_unknown_independent_of_value(self):
         for value in (0, 4096):
-            with mock.patch.object(self.native, 'getattrlist', self.reply(value=value, fork=0)):
+            with mock.patch.object(self.native, 'fgetattrlist', self.reply(value=value, fork=0)):
                 with self.assertRaises(NotImplementedError):
                     self.native.private_size(self.path)
 
     def test_malformed_lengths_and_negative_value(self):
         for length in (0, 24, 31, 33, 65):
-            with mock.patch.object(self.native, 'getattrlist', self.reply(length=length)):
+            with mock.patch.object(self.native, 'fgetattrlist', self.reply(length=length)):
                 with self.assertRaises(ValueError):
                     self.native.private_size(self.path)
-        with mock.patch.object(self.native, 'getattrlist', self.reply(value=-1)):
+        with mock.patch.object(self.native, 'fgetattrlist', self.reply(value=-1)):
             with self.assertRaises(ValueError):
                 self.native.private_size(self.path)
 
     def test_system_error_and_unexpected_return(self):
-        with mock.patch.object(self.native, 'getattrlist', self.reply(rc=-1)):
+        with mock.patch.object(self.native, 'fgetattrlist', self.reply(rc=-1)):
             with self.assertRaises(OSError) as caught:
                 self.native.private_size(self.path)
             self.assertEqual(caught.exception.errno, errno.ENOENT)
-        with mock.patch.object(self.native, 'getattrlist', self.reply(rc=1)):
+        with mock.patch.object(self.native, 'fgetattrlist', self.reply(rc=1)):
             with self.assertRaises(RuntimeError):
                 self.native.private_size(self.path)
 
     def test_directory_and_symlink_never_query_private_size(self):
         link = Path(self.tmp.name) / 'link'
         link.symlink_to(self.path)
-        with mock.patch.object(self.native, 'getattrlist') as call:
-            for path in (Path(self.tmp.name), link):
-                with self.assertRaises(ValueError):
+        with mock.patch.object(self.native, 'fgetattrlist') as call:
+            for path in (Path(self.tmp.name).resolve(), link):
+                with self.assertRaises((ValueError, OSError)):
                     self.native.private_size(path)
             call.assert_not_called()
+
+    def test_symlink_ancestor_never_reaches_file_metadata(self):
+        selected = self.path.parent / 'selected'
+        excluded = self.path.parent / 'excluded'
+        excluded.mkdir()
+        (excluded / 'file').touch()
+        selected.symlink_to(excluded, target_is_directory=True)
+        with mock.patch.object(self.native.os, 'lstat', side_effect=AssertionError('pathname preflight')):
+            with mock.patch.object(self.native.os, 'fstat') as preflight:
+                with mock.patch.object(self.native, 'fgetattrlist') as query:
+                    with self.assertRaises(OSError):
+                        self.native.private_size(selected / 'file')
+                    preflight.assert_not_called()
+                    query.assert_not_called()
+
+    def test_pinned_fd_survives_real_ancestor_replacement_before_query(self):
+        selected = self.path.parent / 'selected'
+        excluded = self.path.parent / 'excluded'
+        saved = self.path.parent / 'saved'
+        selected.mkdir(); excluded.mkdir()
+        (selected / 'file').touch(); (excluded / 'file').touch()
+        wanted = (selected / 'file').stat().st_ino
+        observed = []
+        def query(fd, attr, buf, capacity, options):
+            selected.rename(saved)
+            excluded.rename(selected)
+            try:
+                observed.append(os.fstat(fd).st_ino)
+                self.assertEqual(observed, [wanted])
+                struct.pack_into('<I5Iq', buf, 0, 32, 0x80000000, 0, 0, 0, 8, 4096)
+                return 0
+            finally:
+                selected.rename(excluded)
+                saved.rename(selected)
+        with mock.patch.object(self.native, 'fgetattrlist', query):
+            self.assertEqual(self.native.private_size(selected / 'file'), 4096)
+        self.assertEqual(observed, [wanted])
+
+    def test_descriptor_api_retains_caller_ownership_and_closes_wrapper_fd(self):
+        with mock.patch.object(self.native, 'fgetattrlist', self.reply()):
+            fd = os.open(self.path, os.O_RDONLY)
+            try:
+                self.assertEqual(self.native.private_size_fd(fd), 0)
+                self.assertEqual(os.fstat(fd).st_ino, self.path.stat().st_ino)
+            finally:
+                os.close(fd)
+        seen = []
+        def broken(fd, *args):
+            seen.append(fd)
+            raise RuntimeError('synthetic query failure')
+        with mock.patch.object(self.native, 'fgetattrlist', broken):
+            with self.assertRaises(RuntimeError):
+                self.native.private_size(self.path)
+        with self.assertRaises(OSError) as caught:
+            os.fstat(seen[0])
+        self.assertEqual(caught.exception.errno, errno.EBADF)
 
 
 class AllocationTests(unittest.TestCase):
@@ -123,10 +185,91 @@ class AllocationTests(unittest.TestCase):
         self.assertEqual(r['status'], 'partial')
         self.assertEqual(seen, [])
 
+    def test_handoff_symlink_replacement_queries_only_pinned_selected_inode(self):
+        selected = self.root / 'selected'
+        excluded = self.root / 'excluded'
+        saved = self.root / 'saved'
+        selected.mkdir(); excluded.mkdir()
+        (selected / 'file').touch(); (excluded / 'file').touch()
+        wanted = (selected / 'file').stat().st_ino
+        queried = []
+        def query(fd):
+            selected.rename(saved)
+            selected.symlink_to(excluded, target_is_directory=True)
+            queried.append((os.fstat(fd) if isinstance(fd, int) else os.lstat(fd)).st_ino)
+            return 4096
+        r = allocation.measure([selected / 'file'], private_query=query)
+        self.assertEqual(queried, [wanted])
+        self.assertEqual(r['status'], 'partial')
+        self.assertIsNone(r['volumes'][0]['private_bytes']['total_bytes'])
+
+    def test_handoff_real_directory_replacement_cannot_return_other_inode_as_complete(self):
+        selected = self.root / 'selected'
+        excluded = self.root / 'excluded'
+        saved = self.root / 'saved'
+        selected.mkdir(); excluded.mkdir()
+        (selected / 'file').touch(); (excluded / 'file').touch()
+        wanted = (selected / 'file').stat().st_ino
+        seen = []
+        def query(fd):
+            selected.rename(saved)
+            excluded.rename(selected)
+            try:
+                seen.append((os.fstat(fd) if isinstance(fd, int) else os.lstat(fd)).st_ino)
+                return 4096 if seen[-1] == wanted else 65536
+            finally:
+                selected.rename(excluded)
+                saved.rename(selected)
+        r = allocation.measure([selected / 'file'], private_query=query)
+        self.assertEqual(r['status'], 'complete')
+        self.assertEqual(r['volumes'][0]['private_bytes']['total_bytes'], 4096)
+        self.assertEqual(seen, [wanted])
+
+    def test_leaf_changed_before_open_is_rejected_before_private_query(self):
+        b = self.root / 'b'
+        b.touch()
+        original = os.open
+        swapped = []
+        def opening(path, flags, *args, **kwargs):
+            if path == 'a' and not flags & os.O_DIRECTORY and not swapped:
+                self.a.rename(self.root / 'original-a')
+                b.rename(self.a)
+                swapped.append(True)
+            return original(path, flags, *args, **kwargs)
+        query = mock.Mock(return_value=0)
+        with mock.patch.object(allocation.os, 'open', side_effect=opening):
+            r = allocation.measure([self.a], private_query=query)
+        self.assertEqual(r['status'], 'partial')
+        self.assertEqual(swapped, [True])
+        query.assert_not_called()
+
+    def test_replaced_real_parent_is_rejected_before_outside_leaf_recheck(self):
+        selected = self.root / 'selected'
+        excluded = self.root / 'excluded'
+        saved = self.root / 'saved'
+        selected.mkdir(); excluded.mkdir()
+        (selected / 'file').touch(); (excluded / 'file').touch()
+        outside_parent = excluded.stat().st_ino
+        original = os.stat
+        outside_leaf_stats = []
+        def observed(path, *args, **kwargs):
+            if path == 'file' and os.fstat(kwargs['dir_fd']).st_ino == outside_parent:
+                outside_leaf_stats.append(path)
+            return original(path, *args, **kwargs)
+        def query(fd):
+            selected.rename(saved)
+            excluded.rename(selected)
+            return 4096
+        with mock.patch.object(allocation.os, 'stat', side_effect=observed):
+            r = allocation.measure([selected / 'file'], private_query=query)
+        self.assertEqual(r['status'], 'partial')
+        self.assertEqual(outside_leaf_stats, [])
+
     def test_unknown_zero_and_known_subset_are_distinct(self):
         (self.root / 'b').touch()
-        def query(path):
-            if path == str(self.a):
+        wanted = self.a.stat().st_ino
+        def query(fd):
+            if os.fstat(fd).st_ino == wanted:
                 return 0
             raise NotImplementedError('synthetic missing attribute')
         r = allocation.measure([self.root], private_query=query)
@@ -146,7 +289,7 @@ class AllocationTests(unittest.TestCase):
     def test_permission_and_missing_inputs_are_partial(self):
         for exc in (PermissionError(errno.EACCES, 'synthetic denied'),
                     FileNotFoundError(errno.ENOENT, 'synthetic gone')):
-            with mock.patch.object(allocation, 'stat_path', side_effect=exc):
+            with mock.patch.object(allocation, 'open_directory', side_effect=exc):
                 r = self.measure()
             self.assertEqual(r['status'], 'partial')
             self.assertEqual(r['volumes'], [])
@@ -189,16 +332,16 @@ class AllocationTests(unittest.TestCase):
     def test_cross_device_input_is_partial_and_never_combined(self):
         b = self.root / 'b'
         b.touch()
-        original = allocation.stat_path
-        def altered(path):
-            s = original(path)
-            if path != str(b):
+        original = os.stat
+        def altered(path, *args, **kwargs):
+            s = original(path, *args, **kwargs)
+            if path != 'b':
                 return s
             fields = {key: getattr(s, key) for key in ('st_dev', 'st_ino', 'st_mode',
                       'st_size', 'st_mtime_ns', 'st_ctime_ns', 'st_nlink', 'st_blocks')}
             fields['st_dev'] += 1
             return SimpleNamespace(**fields)
-        with mock.patch.object(allocation, 'stat_path', side_effect=altered):
+        with mock.patch.object(allocation.os, 'stat', side_effect=altered):
             r = self.measure([self.a, b])
         self.assertEqual(r['status'], 'partial')
         self.assertEqual(len(r['volumes']), 1)
@@ -263,6 +406,54 @@ class HostNativeTests(unittest.TestCase):
             self.assertEqual(r['volumes'][0]['private_bytes']['total_bytes'], value)
             with self.assertRaises(FileNotFoundError):
                 _apfs_native.private_size(p.parent / 'synthetic-missing')
+
+    def test_native_handoff_symlink_and_real_directory_races(self):
+        import _apfs_native
+        for kind in ('symlink', 'real_directory'):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp).resolve()
+                selected, excluded, saved = (root / name for name in ('selected', 'excluded', 'saved'))
+                selected.mkdir(); excluded.mkdir()
+                (selected / 'file').write_bytes(b'a'*4096)
+                (excluded / 'file').write_bytes(b'b'*65536)
+                wanted = (selected / 'file').stat().st_ino
+                expected = _apfs_native.private_size(selected / 'file')
+                wrong = _apfs_native.private_size(excluded / 'file')
+                self.assertNotEqual(expected, wrong)
+                queried = []
+                def query(fd):
+                    selected.rename(saved)
+                    if kind == 'symlink':
+                        selected.symlink_to(excluded, target_is_directory=True)
+                    else:
+                        excluded.rename(selected)
+                    try:
+                        queried.append(os.fstat(fd).st_ino)
+                        value = _apfs_native.private_size_fd(fd)
+                        self.assertEqual(value, expected)
+                        return value
+                    finally:
+                        if kind == 'real_directory':
+                            selected.rename(excluded)
+                            saved.rename(selected)
+                r = allocation.measure([selected / 'file'], private_query=query)
+                self.assertEqual(queried, [wanted])
+                self.assertEqual(r['status'], 'partial' if kind == 'symlink' else 'complete')
+                total = r['volumes'][0]['private_bytes']['total_bytes']
+                self.assertEqual(total, None if kind == 'symlink' else expected)
+
+    def test_real_descriptor_errno_and_regular_file_check(self):
+        import _apfs_native
+        with self.assertRaises(OSError) as caught:
+            _apfs_native.private_size_fd(-1)
+        self.assertEqual(caught.exception.errno, errno.EBADF)
+        with tempfile.TemporaryDirectory() as temp:
+            fd = os.open(temp, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                with self.assertRaises(ValueError):
+                    _apfs_native.private_size_fd(fd)
+            finally:
+                os.close(fd)
 
 
 if __name__ == '__main__':

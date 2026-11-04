@@ -24,6 +24,7 @@ acl_get = bind('acl_get_file', [c.c_char_p,c.c_int], c.c_void_p)
 acl_text = bind('acl_to_text', [c.c_void_p,c.c_void_p], c.c_void_p)
 acl_free = bind('acl_free', [c.c_void_p])
 getattrlist = bind('getattrlist', [c.c_char_p,c.c_void_p,c.c_void_p,c.c_size_t,c.c_ulong])
+fgetattrlist = bind('fgetattrlist', [c.c_int,c.c_void_p,c.c_void_p,c.c_size_t,c.c_uint])
 setattrlist = bind('setattrlist', [c.c_char_p,c.c_void_p,c.c_void_p,c.c_size_t,c.c_ulong])
 swap = bind('renamex_np', [c.c_char_p,c.c_char_p,c.c_uint])
 chflags = bind('chflags', [c.c_char_p,c.c_uint32])
@@ -37,22 +38,22 @@ def ok(result, label):
     if result < 0: raise OSError(c.get_errno(), label)
     return result
 def xb(path): return os.fsencode(path)
-def private_size(path):
-    """Return one regular file's ATTR_CMNEXT_PRIVATESIZE, never a tree total.
+def private_size_fd(fd):
+    """Query one caller-owned, pinned regular-file descriptor without payload I/O.
 
     Missing/unsupported attributes and malformed replies raise rather than
-    turning an unknown allocation into zero. No file contents are read.
+    turning an unknown allocation into zero. The caller retains fd ownership.
     """
-    if not stat.S_ISREG(os.lstat(path).st_mode):
-        raise ValueError('private_size requires a regular file')
+    if not stat.S_ISREG(os.fstat(fd).st_mode):
+        raise ValueError('private_size_fd requires a regular file')
     a=Attr(5,0,0x80000000,0,0,0,0x8)
     buf=c.create_string_buffer(64)
     c.set_errno(0)
-    rc=getattrlist(xb(path),c.byref(a),buf,len(buf),0x821)
+    rc=fgetattrlist(fd,c.byref(a),buf,len(buf),0x20)
     if rc != 0:
         if rc == -1:
-            raise OSError(c.get_errno(), 'getattrlist private size', os.fspath(path))
-        raise RuntimeError(f'getattrlist private size returned {rc}')
+            raise OSError(c.get_errno(), 'fgetattrlist private size')
+        raise RuntimeError(f'fgetattrlist private size returned {rc}')
     length=struct.unpack_from('<I',buf.raw,0)[0]
     if length != 32:
         raise ValueError(f'malformed private size reply length: {length}')
@@ -63,6 +64,30 @@ def private_size(path):
     if value < 0:
         raise ValueError(f'negative private size: {value}')
     return value
+def private_size(path):
+    """Open an explicit path without following any symlink, then query its fd.
+
+    Call private_size_fd with the already pinned descriptor when another step
+    established the selected file's identity before this call.
+    """
+    p=Path(os.fsdecode(path))
+    if '..' in p.parts:
+        raise ValueError('parent components are ambiguous with symlinks')
+    parts=Path(os.path.abspath(p)).parts[1:]
+    directory_fd=os.open('/',os.O_RDONLY|os.O_DIRECTORY|os.O_CLOEXEC)
+    file_fd=None
+    try:
+        for part in parts[:-1]:
+            next_fd=os.open(part,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC,
+                            dir_fd=directory_fd)
+            os.close(directory_fd)
+            directory_fd=next_fd
+        file_fd=os.open(parts[-1] if parts else '.',
+                        os.O_EVTONLY|os.O_NOFOLLOW|os.O_CLOEXEC,dir_fd=directory_fd)
+        return private_size_fd(file_fd)
+    finally:
+        if file_fd is not None: os.close(file_fd)
+        os.close(directory_fd)
 def attrs(path):
     p=xb(path); n=ok(listx(p,None,0,1),'listxattr'); buf=c.create_string_buffer(n)
     if n: assert listx(p,buf,n,1)==n
