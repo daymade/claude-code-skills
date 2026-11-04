@@ -451,9 +451,11 @@ def _iter_rollout_records(
         record_number = 0
         next_ordinal: Optional[int] = None
         copied=None;declared_ancestors=set();imported=set()
-        while handle.tell() < end_byte_offset:
-            start = handle.tell()
+        position = 0
+        while position < end_byte_offset:
+            start = position
             raw_line = handle.readline(MAX_RECORD_BYTES + 1)
+            position += len(raw_line)
             if prefix_hash is not None:
                 prefix_hash.update(raw_line)
                 prefix_bytes += len(raw_line)
@@ -463,7 +465,7 @@ def _iter_rollout_records(
                     f"rollout ended at byte {start} before declared history boundary "
                     f"{end_byte_offset}: {path}"
                 )
-            if handle.tell() > end_byte_offset:
+            if position > end_byte_offset:
                 raise LineageResolutionError(
                     f"history_base.end_byte_offset {end_byte_offset} splits JSONL line "
                     f"{line_number} in {path}"
@@ -518,10 +520,10 @@ def _iter_rollout_records(
                     raise LineageResolutionError(f"paginated record ordinal overflow in {path}")
             record_number += 1
             if on_record_end is not None:
-                on_record_end(handle.tell())
+                on_record_end(position)
             yield record
 
-        if handle.tell() != end_byte_offset:
+        if handle.tell() != position or position != end_byte_offset:
             raise LineageResolutionError(
                 f"could not stop at exact history boundary {end_byte_offset} in {path}"
             )
