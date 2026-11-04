@@ -74,7 +74,9 @@ resources), so use local listed assets instead of CDN dependencies. It is not a
 sandbox for arbitrary untrusted HTML or protection from other software running
 as the same local user. Serve only the authorized reviewed report snapshot.
 
-Run the narrow safety suite after helper changes:
+Maintainers: run the narrow safety suite from a source repository checkout after
+helper changes. The packaged Skill omits `tests/`; installed consumers use the
+manifest/serve commands above and perform the stated HTTP/browser checks.
 
 ```bash
 python3 -m unittest discover \

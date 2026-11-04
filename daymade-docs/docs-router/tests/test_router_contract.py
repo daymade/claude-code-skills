@@ -65,7 +65,7 @@ class DocsRouterContractTest(unittest.TestCase):
             self.assertIn("disable-model-invocation: true", frontmatter(path))
             self.assertIn(f"name: {path.parent.name}", frontmatter(path))
 
-    def test_codex_visible_prefix_covers_document_routes(self):
+    def test_compact_visible_prefix_covers_document_routes(self):
         header = frontmatter(ROUTER)
         description = " ".join(
             line.strip()
@@ -76,19 +76,21 @@ class DocsRouterContractTest(unittest.TestCase):
         plugin = next(item for item in manifest["plugins"] if item["name"] == "daymade-docs")
         self.assertEqual(plugin["description"], description)
         self.assertLessEqual(len(description), 420)
-        visible = description[:150]
+        visible = description[:130]
+        byte_visible = description.encode("utf-8")[:130].decode("utf-8")
         for signal in (
-            "Word/PDF/PPTX/HTML→Markdown",
+            "Word/PDF/PPTX/HTML→MD",
             "MD/Word→PDF",
-            "create Word",
+            "new Word",
             "PDF HTML/translate",
-            "Excel/xlsm/macOS",
-            "photo/signed scans",
+            "Excel/xlsm/Mac",
+            "photo/signed scan",
             "Mermaid",
             "DOCX review",
-            "post-change docs",
+            "doc cleanup",
         ):
             self.assertIn(signal, visible)
+            self.assertIn(signal, byte_visible)
 
     def test_neighbors_and_unknown_tasks_have_explicit_exits(self):
         body = ROUTER.read_text(encoding="utf-8")
