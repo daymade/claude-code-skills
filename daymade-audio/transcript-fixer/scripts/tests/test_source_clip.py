@@ -139,3 +139,20 @@ def test_null_cache_metadata_is_reacquired(source, tmp_path):
     second = clips.fetch(1, 2, tmp_path/"second.wav")
     assert second["cache_reused"] is False
     assert second["clip_sha256"] == first["clip_sha256"]
+
+
+def test_cache_metadata_cannot_replace_source_spec(source, tmp_path):
+    from source_clip import CLIP_SCHEMA
+    spec = json.loads(source[1].read_text())
+    identity = {"schema": CLIP_SCHEMA, "source": {k: v for k, v in spec.items() if k != "verified_at"},
+                "start": 1, "end": 2, "sample_rate": 16000, "channels": 1, "codec": "pcm_s16le"}
+    key = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
+    cache = tmp_path/"cache"
+    cache.mkdir()
+    path = cache/(key+".json")
+    path.write_text(json.dumps(spec))
+    before = path.read_bytes()
+    with pytest.raises(ValueError, match="cache path conflicts"):
+        SourceClips(path, cache).fetch(1, 2, tmp_path/"out.wav")
+    assert path.read_bytes() == before
+    assert not (tmp_path/"out.wav").exists()

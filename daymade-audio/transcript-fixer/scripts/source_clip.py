@@ -171,6 +171,8 @@ class SourceClips:
         key = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
         cached, metadata = self.cache / (key+".wav"), self.cache / (key+".json")
         lock = self.cache / (key+".lock")
+        if any(path.resolve() in reserved for path in (cached, metadata, lock)):
+            raise ValueError("cache path conflicts with the source/spec")
         try:
             fd = os.open(lock, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         except FileExistsError as exc:
