@@ -698,17 +698,17 @@ contains nothing — its refs remain unique state even while their objects live 
 
 Use this READ-DO sequence for one explicitly authorized clone:
 
-1. **Name the survivor, clone, and external backup directory.** The backup must be a fresh absolute
+1. **Name the survivor, clone, and external evidence directory.** The directory must be a fresh absolute
    path outside both repositories; reusing an existing directory can mix two audits while looking
    valid. Confirm the clone has a `.git` directory. A `.git` file is a linked worktree and belongs
    to the worktree-retirement procedure below.
-2. **Prepare the recovery set:**
+2. **Prove existing preservation before creating payload:**
 
    ```bash
    scripts/git_prepare_clone_retirement.sh \
      --clone <absolute-clone> \
      --survivor <absolute-kept-checkout> \
-     --out <new-external-backup-dir>
+     --out <new-external-evidence-dir>
    ```
 
    The helper is intentionally non-destructive. It refuses tracked/untracked changes, ignored
@@ -722,27 +722,56 @@ Use this READ-DO sequence for one explicitly authorized clone:
    helper also refuses tracked content filters, repository-local `include.path` / `includeIf`
    config, and local `core.hooksPath` overrides rather than pretending their external processes or
    closure were archived. Every Git call disables repository `core.fsmonitor`, untracked-cache
-   refresh, and optional locks. It snapshots every ref tip, every symbolic-ref target, every reflog
-   OID, and the default config/hooks/info tree with file types and modes; creates `all-refs.bundle`
-   without revision exclusions; runs `git bundle verify`; compares every advertised bundle head
-   (including `HEAD`) with the frozen ref set; and binds both the bundle and repository-metadata
-   archive to SHA-256 receipts.
-   The regression suite also verifies the no-prerequisite bundle from an empty bare repository. A
-   successful `READY_TO_QUARANTINE` means the recovery set is
-   complete for that instant, not that deletion authority exists.
+   refresh, and optional locks. Index flags that can hide working bytes also stop preparation.
+   The default survivor proof additionally refuses unknown operation/metadata state.
 
-   A bundle records the OID advertised under each ref name; it does not recreate symbolic-ref
-   topology. `symrefs.manifest` is therefore part of the recovery contract. After fetching the
-   bundle's refs into a recovery repository, replay each `<name> <target>` line with
+   The default branch requires every object visible in the clone, including borrowed and
+   unreachable objects, to remain reachable from the survivor's current refs. Mere object
+   existence and content-only squash containment do not pass. The survivor must have complete,
+   intact history and an independent object store outside the retiring clone: alternate object
+   stores, symlinked object paths and partial/shallow survivors stop this branch. A linked survivor
+   may use its retained common directory outside the clone. The helper freezes exact clone HEAD,
+   refs, symbolic-ref topology, reflog identities, survivor identity/refs and metadata manifests.
+   It writes no history bundle. Matching metadata stays in the survivor; only differing
+   config/hooks/info, reflog and other supported metadata roots enter `repo-metadata.tar`, bound
+   to a SHA-256 digest. An equivalent clone/survivor pair reports `PAYLOAD none` and creates no tar.
+   Its `READY_TO_RETIRE ... objects=<count>` reports the positively examined object count.
+
+   `SURVIVOR_INCOMPLETE` leaves the evidence directory absent. Preserve only the missing work
+   through the existing targeted-ref/file procedure, then prepare again. A clone-only ref name
+   whose objects are already retained needs only its recovery manifest. Never turn a gap into an
+   automatic full-history export. When the authorized recovery requirement actually needs a
+   self-contained export, explicitly add `--full-backup`. That compatibility branch still creates
+   `all-refs.bundle` without revision exclusions, verifies it, checks every advertised ref/HEAD,
+   and preserves config/hooks/info as before. Its bundle has no restore prerequisites; the
+   regression suite verifies it from an empty bare repository. Previously prepared full-backup
+   directories remain readable by `--verify-current`.
+
+   Both success signals prove preservation only at that instant. Neither supplies deletion
+   authority. Keep the evidence directory through removal and its postconditions; it is the
+   recovery consumer's ref/topology/metadata map, not another copy of repository history.
+
+   Recover the default branch from the retained survivor's exact objects: initialize a recovery
+   repository with an unborn branch name outside the frozen ref set, then fetch every
+   `<OID> <ref>` in `refs.manifest` from that survivor. Restore the recorded `head.oid` and
+   symbolic HEAD target (or detached HEAD) from the manifests. Restore matching metadata from the
+   retained survivor and overlay the metadata roots listed in `metadata-roots.manifest` from the
+   optional archive. Inspect config
+   paths before activation; old clone paths are not automatically valid at a new location.
+   A full-backup recovery instead fetches those objects from `all-refs.bundle`.
+   Neither source recreates symbolic-ref topology. Replay each `<name> <target>` line with
    `git symbolic-ref <name> <target>`, then read every target back. A bundle-only restore that turns
    `refs/remotes/origin/HEAD` or another symbolic alias into a direct ref is not complete.
 3. **Verify retirement authority under the SKILL Outcome contract.** Do not extend a narrower
-   cleanup request or another clone's approval to this target or consequence. Prefer a recoverable
-   OS Trash/quarantine move; permanent deletion is a distinct consequence and requires an explicit
-   decision plus the verified bundle.
-4. **Freeze the quarantine target, then run process occupancy as a separate probe.** Resolve one
-   absolute, unique quarantine/OS Trash destination, prove it does not exist, and select a
-   no-clobber move form now. Do not target the clone's parent unless a separate inventory proves
+   cleanup request or another clone's approval to this target or consequence. Use the consequence
+   already authorized for that exact clone. When exact removal is covered and preservation passes,
+   do not create another quarantine copy or bundle merely for entering this procedure. Otherwise
+   prefer a recoverable OS Trash/quarantine move; permanent deletion remains a separately
+   authorized consequence. Neither mode of this helper moves or deletes anything.
+4. **Freeze the exact action target, then run process occupancy as a separate probe.** For a move,
+   resolve one absolute, unique quarantine/OS Trash destination, prove it does not exist, and select
+   a no-clobber move form now. For authorized removal, freeze the exact clone path and consequence.
+   Do not target the clone's parent unless a separate inventory proves
    that parent contains nothing else. Then finish every preliminary Git command.
    On macOS, `/usr/sbin/lsof +D <absolute-clone>` is one available probe; use the platform-native
    equivalent elsewhere. A process result gathered in parallel with another Git probe can be the
@@ -750,30 +779,35 @@ Use this READ-DO sequence for one explicitly authorized clone:
    unknown occupant stops the retirement. This occupancy probe, the worktree-retirement probe
    below, and the shared-file writer probe in `references/prevention_practices.md` all stop on a
    genuine writer or unknown occupant; change the criterion in one, change it in the others.
-5. **Re-freeze, then make the quarantine move the next operation:**
+5. **Re-freeze, then make the authorized action the next operation:**
 
    ```bash
-   scripts/git_prepare_clone_retirement.sh --verify-current <external-backup-dir>
+   scripts/git_prepare_clone_retirement.sh --verify-current <external-evidence-dir>
    ```
 
    It fails if refs, reflog identities, metadata bytes/types/modes, physical state, linked-worktree
    or submodule inventory, symbolic-ref topology, unreachable objects, promisor/extension-store
-   state, bundle bytes, or source/survivor identity changed. Rebuild the recovery directory on any
-   failure; do not edit the receipt. After a successful final verification, move exactly one clone
-   to the already-frozen destination with the selected no-clobber form. Do not recheck the
-   destination first; the move itself must refuse a race-created destination. This move must be the
-   next operation: another probe would
-   reopen the very race the final verification closes. No unlocked filesystem sequence can remove
+   state or source/survivor identity changed. The default branch additionally rechecks the
+   survivor's frozen refs/metadata, its independence and the complete object-coverage proof;
+   full backups recheck bundle bytes and heads. Prepare fresh evidence after a failure; do not
+   edit the receipt. After successful final verification, remove exactly the authorized clone or
+   move it to the frozen destination with the selected no-clobber form. Do not recheck the
+   destination first; a move itself must refuse a race-created destination. The selected action
+   must be the next operation: another probe would reopen the race the final verification closes.
+   No unlocked filesystem sequence can remove
    the last verify-exit-to-move interval; if a writer or automation may still start in that interval,
    stop instead of claiming safety. Treat postconditions—not `mv`'s exit code—as authority: the old
-   path must be absent and the quarantine path must contain the clone's `.git` directory. Do not
-   target the clone's parent unless a separate inventory proves that parent contains nothing else.
-   Keep the external recovery set after the move. Retire it later only through § Retire task-owned
-   temporary recovery artifacts; moving the clone does not itself clear the archive's payload.
+   path must be absent; a move also requires the quarantine path to contain the clone's `.git`
+   directory. Do not target the clone's parent unless a separate inventory proves that parent
+   contains nothing else.
+   Keep the external evidence/required recovery set through readback. Retire payload later only
+   through § Retire task-owned temporary recovery artifacts; removal alone does not clear it.
 6. **Verify the user-visible result.** The survivor's HEAD/index/worktree must be unchanged; the
-   old active path is absent; the quarantine copy or permanent backup is readable; `git bundle
-   verify` still succeeds; `git bundle list-heads` still lists the frozen identities; and
-   `symrefs.manifest` remains available for topology replay. Report this as scoped clone retirement,
+   old active path is absent; a moved clone is readable at its new path. For survivor-backed
+   preservation, resolve every frozen identity through the retained refs again, check the recorded
+   matching metadata and any unique metadata archive. For full backups, rerun `git bundle verify`
+   and compare `git bundle list-heads` with the frozen identities. Keep `symrefs.manifest`
+   available for topology replay. Report this as scoped clone retirement,
    not as proof that no other checkout exists anywhere.
 
 If the clone must remain active instead of being retired, stop this procedure. For a shared clone,
@@ -783,8 +817,9 @@ that is a different outcome from clone retirement and should not be smuggled int
 ## Preservation before retirement
 
 Use this decision for named branch/worktree retirement, including the convergence procedure above.
-It does not exempt independent clone metadata, submodule repositories, stashes or unique uncommitted
-bytes from their own preservation procedures.
+Apply the preceding clone procedure's complete survivor proof to independent clones; branch-tip
+ancestry alone cannot exempt their metadata, reflogs or unreachable objects. Submodule repositories,
+stashes and unique uncommitted bytes retain their own preservation procedures.
 
 1. Freeze the authorized ref (or detached HEAD), its full 40-hex tip and the retained carrier's
    identity. Refresh the exact remote main, resolve it locally, verify its hosted SHA with a separate
