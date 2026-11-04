@@ -412,7 +412,7 @@
       "description": "Generate evidence-tracked research reports with reusable source and claim records, original-source verification, and evidence-family tracking. Coordinate provider-specific Skills across selected modes, retain original artifacts, and synthesize by decision; select depth and routes by the question.",
       "source": "./deep-research",
       "strict": false,
-      "version": "2.13.0",
+      "version": "2.13.1",
       "category": "documentation",
       "keywords": [
         "research",
@@ -467,7 +467,7 @@
       "description": "Extracts Feishu/Lark Docs, Wiki, Sheets, and Minutes (妙记) transcripts into faithful local Markdown via the lark-cli API — no LLM paraphrasing, browser-DOM fallback when lark-cli can't reach content. Use whenever the source is a Feishu/Lark URL and fidelity matters — 导出飞书文档/合集/妙记转写, 把飞书 wiki 转 markdown, or archiving a collection — even if the user just says \"save this\". Also covers owner-exported .docx → Markdown.",
       "source": "./feishu-doc-scraper",
       "strict": false,
-      "version": "1.11.0",
+      "version": "1.12.0",
       "category": "productivity",
       "keywords": [
         "feishu",

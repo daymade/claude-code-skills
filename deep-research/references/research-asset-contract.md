@@ -88,12 +88,18 @@ consistency; they do not establish this semantic continuity or a reduction in th
 
 For a public or authorized original that can be retained, pass its actual downloaded file to `source`. The command copies bytes to `sources/originals/`, hashes the copy and appends a source event. It never promotes a model report to an original source. When an original cannot be retained, use `--no-snapshot-reason` and preserve the stable URL, date and exact locator. A rejected or unavailable source requires a reason.
 
+When the retained bytes are a tool-returned excerpt, identify them as an excerpt and check that they actually contain the decisive passage and its surrounding scope. A URL, locator or matching file hash does not establish that passage coverage. If the response was clipped, retain a further source capture containing the missing passage and record the new source event before relying on it; preserve the earlier capture.
+
 ```bash
 python3 <skill>/scripts/research_assets.py source <study-dir> --url '<actual-source-url>' --title '<title>' --status approved --source-type official --accessibility public --family '<filing-or-dataset-id>' --published-at YYYY-MM-DD --locator '<page/section/table>' --lane-id <lane-id> --file <downloaded-original>
 python3 <skill>/scripts/research_assets.py source <study-dir> --title '<local-original-title>' --status approved --source-type other --accessibility exclusive-user-provided --family '<document-family>' --locator '<page/section>' --lane-id <lane-id> --file <local-original>
 python3 <skill>/scripts/research_assets.py claim <study-dir> --claim-id C1 --text '<precise claim>' --status supported --source-id <source-id-from-source-command> --locator '<page/section/table>' --boundary '<what this source does not establish>'
 python3 <skill>/scripts/research_assets.py harvest <study-dir>
 ```
+
+`source --published-at` accepts a known date in `YYYY-MM-DD` format. Omit the flag when the publication date is unknown; do not pass `undated`, an empty placeholder or the capture date as a substitute. The source event records capture time separately.
+
+`claim` appends a new claim with a unique `C`-prefixed numeric ID; it is not an update command. Inspect existing `claims.jsonl` before selecting an ID. A duplicate ID is rejected without appending a claim. For a corrected finding, append a new claim describing its relationship to the earlier claim and update the report's claim IDs and source links; keep the earlier record available.
 
 `harvest` records URLs in collected Markdown, text and JSON exports; for HTML, it reads citation anchors and visible text while ignoring script, style and asset attributes such as favicons. Every added URL remains an unverified candidate. For a ZIP or other binary export, preserve the original and separately extract its source list or text report into `sources/`; inspect and record every cited source before synthesis. The tool cannot infer source truth from a ZIP, a model citation or a URL.
 
