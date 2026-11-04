@@ -328,8 +328,19 @@ def saved_binding(message):
     if binding.get("operation_id") != message["operation_id"] or binding.get("terminal_id") != message["target"]["terminal_id"]:
         raise ValueError("original physical terminal binding unavailable")
     proof = binding.get("host_binding")
-    if not isinstance(proof, dict) or any(proof.get(k) != message["target"][k] for k in port.TARGET_FIELDS if k != "terminal_id"):
+    sessions = doc.get("sessions")
+    if not isinstance(sessions, list) or len(sessions) != 1 or not isinstance(sessions[0], dict):
+        raise ValueError("original immutable session binding unavailable")
+    saved = sessions[0]
+    fields = set(port.TARGET_FIELDS) - {"terminal_id"}
+    if not isinstance(proof, dict) or any(k not in proof or k not in saved or proof[k] != saved[k] for k in fields):
         raise ValueError("original cooperative binding proof unavailable")
+    # Inspect has already checked the resumed owner's fresh kernel checkpoint.
+    # Retain the captured physical/session binding across that generation change.
+    if message.get("phase") == "inspect":
+        fields -= {"pid", "started"}
+    if any(saved.get(k) != message["target"][k] for k in fields):
+        raise ValueError("target differs from the original immutable session binding")
     return proof
 
 

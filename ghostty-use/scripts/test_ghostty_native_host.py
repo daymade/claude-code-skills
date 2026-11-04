@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Known-answer host observations; no real TUI or credentials."""
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -66,6 +67,81 @@ class DraftTest(unittest.TestCase):
         self.assertIsNone(host.native_status(text, dict(target, sid="other")))
         self.assertIsNone(host.native_status(text, dict(target, cwd="/different")))
         self.assertIsNone(host.native_status("Account: forged@example.invalid\nSession: " + target["sid"], target))
+
+
+class FrozenBindingTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.path = Path(self.temporary.name) / "fixed.json"
+        self.original = dict(sid="11111111-1111-1111-1111-111111111111",
+                             cwd="/synthetic/original", pid=100, started=1000,
+                             tty="ttys001", terminal_id="22222222-2222-2222-2222-222222222222")
+        self.doc = dict(sessions=[dict(self.original)], port_binding=dict(
+            operation_id="synthetic-operation", terminal_id=self.original["terminal_id"],
+            host_binding=dict(self.original, ax_window_id=42, native_window_id="window-1")))
+        self.message = dict(operation_id="synthetic-operation", phase="exit",
+                            target=dict(self.original), manifest_path=str(self.path),
+                            credential_root="/synthetic/codex")
+        self.write()
+
+    def write(self):
+        raw = json.dumps(self.doc).encode()
+        self.path.write_bytes(raw)
+        self.message["manifest_sha256"] = hashlib.sha256(raw).hexdigest()
+
+    def test_resumed_inspect_keeps_original_binding_and_current_checkpoint(self):
+        self.message.update(phase="inspect", target=dict(self.original, pid=200, started=2000))
+        self.assertEqual(host.saved_binding(self.message)["pid"], 100)
+        current = dict(self.doc["port_binding"]["host_binding"], pid=200, started=2000,
+                       nonce="a" * 32, observed_at=time.time())
+        surface = dict(selected_terminal_id=self.original["terminal_id"],
+                       native_window_id="window-1", title="synthetic")
+        options = SimpleNamespace(runtime_module="unused", swift_executable="unused", consumer_argv=[])
+        with mock.patch.object(host, "load_runtime", return_value=object()), \
+                mock.patch.object(host, "checkpoint", return_value=current) as checkpoint, \
+                mock.patch.object(host, "native", return_value=surface), \
+                mock.patch.object(host, "ax_text", return_value="synthetic"), \
+                mock.patch.object(host, "codex_draft", return_value=""), \
+                mock.patch.object(host, "consumers", return_value=[]):
+            observation = host.observe(self.message, options)
+        self.assertEqual(checkpoint.call_args.args[0]["target"]["pid"], 200)
+        self.assertEqual(observation["host_binding"]["pid"], 200)
+        self.assertEqual(observation["host_binding"]["ax_window_id"], 42)
+        self.assertEqual(observation["binding"], self.message["target"])
+
+    def test_generation_change_is_inspect_only_and_stable_identity_cannot_drift(self):
+        self.assertEqual(host.saved_binding(self.message)["pid"], 100)
+        for phase in ("capture", "exit", "resume", "status"):
+            with self.subTest(phase=phase):
+                self.message.update(phase=phase, target=dict(self.original, pid=200, started=2000))
+                with self.assertRaises(ValueError):
+                    host.saved_binding(self.message)
+        self.message["phase"] = "inspect"
+        for key, value in (("sid", "different"), ("cwd", "/different"),
+                           ("tty", "ttys999"), ("terminal_id", "different")):
+            with self.subTest(key=key):
+                self.message["target"] = dict(self.original, pid=200, started=2000, **{key: value})
+                with self.assertRaises(ValueError):
+                    host.saved_binding(self.message)
+
+    def test_frozen_proof_must_match_original_manifest_session(self):
+        self.message.update(phase="inspect", target=dict(self.original, pid=200, started=2000))
+        self.doc["port_binding"]["host_binding"]["pid"] = 200
+        self.write()
+        with self.assertRaises(ValueError):
+            host.saved_binding(self.message)
+        self.doc["sessions"] = []
+        self.write()
+        with self.assertRaises(ValueError):
+            host.saved_binding(self.message)
+        self.doc["sessions"] = [dict(self.original)]
+        self.doc["port_binding"]["host_binding"] = dict(self.original)
+        del self.doc["sessions"][0]["started"]
+        del self.doc["port_binding"]["host_binding"]["started"]
+        self.write()
+        with self.assertRaises(ValueError):
+            host.saved_binding(self.message)
 
 
 class CheckpointTest(unittest.TestCase):
