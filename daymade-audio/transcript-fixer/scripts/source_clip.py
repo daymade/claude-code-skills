@@ -71,7 +71,7 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def atomic_write(path: Path, data: bytes) -> None:
+def atomic_write(path: Path, data: bytes, *, replace: bool = True) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.is_symlink():
         raise ValueError("refusing symlink output")
@@ -81,7 +81,10 @@ def atomic_write(path: Path, data: bytes) -> None:
             out.write(data)
             out.flush()
             os.fsync(out.fileno())
-        os.replace(temp, path)
+        if replace:
+            os.replace(temp, path)
+        else:
+            os.link(temp, path)  # Exclusive publication; never replace an existing source/spec.
     finally:
         if os.path.exists(temp):
             os.unlink(temp)
@@ -129,7 +132,8 @@ def prepare(spec: dict) -> dict:
 
 class SourceClips:
     def __init__(self, spec_path: str | Path, cache: str | Path):
-        self.spec = json.loads(Path(spec_path).read_text())
+        self.spec_path = Path(spec_path).resolve()
+        self.spec = json.loads(self.spec_path.read_text())
         if (self.spec.get("schema") != SCHEMA or not self.spec.get("fingerprint")
                 or not re.fullmatch(r"[0-9a-f]{64}", self.spec.get("sha256", ""))
                 or not math.isfinite(self.spec.get("duration", 0)) or self.spec["duration"] <= 0):
@@ -150,6 +154,20 @@ class SourceClips:
                     "source": {k: v for k, v in self.spec.items() if k != "verified_at"},
                     "start": start, "end": end,
                     "sample_rate": 16000, "channels": 1, "codec": "pcm_s16le"}
+        target = Path(output).expanduser().absolute()
+        sidecar = Path(str(target)+".source.json")
+        reserved = {self.spec_path}
+        if self.spec["kind"] == "local":
+            reserved.add(Path(self.spec["path"]).resolve())
+        if any(p.is_symlink() or p.resolve() in reserved for p in (target, sidecar)):
+            raise ValueError("output conflicts with a source/spec or symlink")
+        if target.exists() or sidecar.exists():
+            try:
+                previous = json.loads(sidecar.read_text())
+                if not isinstance(previous, dict) or previous.get("identity") != identity or (target.exists() and sha256(target) != previous["clip_sha256"]):
+                    raise ValueError("unbound existing output")
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                raise ValueError("refusing to replace an existing output without its matching clip receipt") from exc
         key = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
         cached, metadata = self.cache / (key+".wav"), self.cache / (key+".json")
         lock = self.cache / (key+".lock")
@@ -163,7 +181,7 @@ class SourceClips:
             if cached.is_file() and metadata.is_file() and not cached.is_symlink() and not metadata.is_symlink():
                 try:
                     proof = json.loads(metadata.read_text())
-                    reused = proof.get("identity") == identity and sha256(cached) == proof.get("clip_sha256")
+                    reused = isinstance(proof, dict) and proof.get("identity") == identity and sha256(cached) == proof.get("clip_sha256")
                 except (OSError, ValueError):
                     reused = False
             if not reused:
@@ -179,9 +197,6 @@ class SourceClips:
                 atomic_write(cached, data)
                 atomic_write(metadata, (json.dumps(proof, ensure_ascii=False, indent=2)+"\n").encode())
             self.check()
-            target = Path(output).expanduser().absolute()
-            if target.is_symlink():
-                raise ValueError("refusing symlink output")
             data = cached.read_bytes()
             if hashlib.sha256(data).hexdigest() != proof["clip_sha256"]:
                 raise ValueError("cache changed before output publication")
@@ -189,7 +204,7 @@ class SourceClips:
             receipt = {**proof, "cache_reused": reused, "output": str(target),
                        "source_sha256": self.spec["sha256"], "source_start": start,
                        "source_end": end, "speed": 1}
-            atomic_write(Path(str(target)+".source.json"), (json.dumps(receipt, ensure_ascii=False, indent=2)+"\n").encode())
+            atomic_write(sidecar, (json.dumps(receipt, ensure_ascii=False, indent=2)+"\n").encode())
             return receipt
         finally:
             lock.unlink()
@@ -223,7 +238,7 @@ def main() -> int:
                 if getattr(args, tool):
                     spec[tool] = getattr(args, tool)
             result = prepare(spec)
-            atomic_write(Path(args.output), (json.dumps(result, ensure_ascii=False, indent=2)+"\n").encode())
+            atomic_write(Path(args.output), (json.dumps(result, ensure_ascii=False, indent=2)+"\n").encode(), replace=False)
         else:
             result = SourceClips(args.source_spec, args.cache_dir).fetch(args.start, args.end, args.output)
         print(json.dumps(result, ensure_ascii=False))

@@ -28,6 +28,7 @@ the adapter does not install or change the environment.
 Preparation streams the whole source once to verify the expected hash, probes
 duration and binds inode, size and change clocks. Source path and SSH identity
 are private runtime metadata; keep the resulting spec outside the Skill bundle.
+The spec output must be a new path; preparation never replaces an existing file.
 Quiesce the task's source producer before preparation. The spec is an operator-owned
 receipt, not an authenticated authorization document; do not hand-edit its hash
 or version to bypass a mismatch. A changed source is prepared again against its
@@ -64,6 +65,9 @@ bound in `MAX_WINDOW` in `source_clip.py`. Remote extraction happens on that
 source; only mono 16 kHz PCM WAV bytes return. The transport checks complete size,
 SHA-256 and duration; `<clip>.source.json` records source hash, window, speed and
 clip hash. A missing/truncated transfer cannot become evidence.
+Source/spec output collisions refuse. An existing clip path can be reused only
+with its matching window receipt and unchanged bytes; choose a new output path
+or evidence directory for a different window. Unknown existing files refuse.
 
 Cache identity includes the source version, host/path, window and audio format.
 Each fetch checks the current source version before and after use and rehashes

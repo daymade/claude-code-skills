@@ -98,7 +98,7 @@ uv run scripts/fix_transcription.py --input <file> --stage <1|2|3> [--output <di
 
 ### Review Queue Item Schema
 
-`--enqueue-review` accepts a JSON array of items (or `{"items": [...]}`). Only `original` is required. **Unknown keys are silently ignored** — a typo'd field name (e.g. `line_hint` instead of `line`) drops the value with no warning, and the item enqueues without that anchor. If the anchor matters, spot-check with `--show-review <id>` after enqueueing.
+`--enqueue-review` accepts a JSON array of items (or `{"items": [...]}`). For a new/unclassified file, only `original` is required; project-bound files also follow [domain admission](queue_domain_repair.md). **Unknown keys are silently ignored** — a typo'd field name (e.g. `line_hint` instead of `line`) drops the value with no warning, and the item enqueues without that anchor. If the anchor matters, spot-check with `--show-review <id>` after enqueueing.
 
 | Canonical field | Alias | Required | Notes |
 |---|---|---|---|

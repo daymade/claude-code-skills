@@ -1,6 +1,5 @@
 """Real ffmpeg windows, cache reuse, source changes and transfer refusals."""
 import hashlib
-import importlib.util
 import json
 from pathlib import Path
 import shutil
@@ -99,3 +98,44 @@ def test_entry_runs_through_symlink_with_spaces(source, tmp_path):
                          "--output", str(tmp_path / "out.wav")], capture_output=True, text=True)
     assert cp.returncode == 0, cp.stderr
     assert json.loads(cp.stdout)["duration"] == 1
+
+
+@pytest.mark.parametrize("which", ["source", "spec", "unrelated"])
+def test_fetch_never_replaces_source_spec_or_unknown_output(source, tmp_path, which):
+    p, spec, _ = source
+    target = {"source": p, "spec": spec, "unrelated": tmp_path/"unrelated.bin"}[which]
+    if which == "unrelated":
+        target.write_bytes(b"unrelated work")
+    before = target.read_bytes()
+    with pytest.raises(ValueError, match="conflicts|existing output"):
+        SourceClips(spec, tmp_path/"cache").fetch(1, 2, target)
+    assert target.read_bytes() == before
+
+
+def test_prepare_cli_exclusively_publishes_and_keeps_source(source, tmp_path):
+    p, _, _ = source
+    before = p.read_bytes()
+    cp = subprocess.run([sys.executable, str(Path(__file__).parents[1]/"source_clip.py"),
+                         "prepare", "--path", str(p), "--sha256", hashlib.sha256(before).hexdigest(),
+                         "--output", str(p)], capture_output=True, text=True)
+    assert cp.returncode == 2
+    assert p.read_bytes() == before
+
+
+def test_existing_output_can_only_reuse_its_own_unchanged_window(source, tmp_path):
+    clips = SourceClips(source[1], tmp_path/"cache")
+    out = tmp_path/"window.wav"
+    first = clips.fetch(1, 2, out)
+    assert clips.fetch(1, 2, out)["clip_sha256"] == first["clip_sha256"]
+    with pytest.raises(ValueError, match="existing output"):
+        clips.fetch(1, 3, out)
+    assert hashlib.sha256(out.read_bytes()).hexdigest() == first["clip_sha256"]
+
+
+def test_null_cache_metadata_is_reacquired(source, tmp_path):
+    clips = SourceClips(source[1], tmp_path/"cache")
+    first = clips.fetch(1, 2, tmp_path/"first.wav")
+    next((tmp_path/"cache").glob("*.json")).write_text("null")
+    second = clips.fetch(1, 2, tmp_path/"second.wav")
+    assert second["cache_reused"] is False
+    assert second["clip_sha256"] == first["clip_sha256"]
