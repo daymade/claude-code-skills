@@ -8,8 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **docs-router**, **photo-to-scanned-pdf** (`daymade-docs` v1.28.1 → v1.29.0): Route printable identity-document photos through recipient-specific side, spread, scale and copy-form checks; reuse suitable photos and preserve missing-source and physical-acceptance boundaries. Change type: additive document preparation branch.
-- **lark-cli-router** (`daymade-claude-code` v4.34.2 → v4.34.3): Bind linked resources to the authorized source account before the first read and retain explicit-profile access and permission boundaries. Change type: bounded account-routing repair.
+- **lark-cli-router** (`daymade-claude-code` v4.35.0 → v4.35.1): Bind linked resources to the authorized source account before the first read and retain explicit-profile access and permission boundaries. Change type: bounded account-routing repair.
 - **feishu-doc-scraper** (v1.12.0 → v1.12.1): Use the current Minutes transcript export route and per-item output readback instead of the retired metadata-only limitation. Change type: factual operating-guide correction.
+- **read-codex-history / read-claude-code-history** (`daymade-claude-code` v4.34.2 → v4.35.0): Add optional Codex `launch_source` metadata to JSON and Markdown inventories from the native state database. Render missing sources as `unknown` and preserve unrecognized values. Change type: backward-compatible inventory metadata.
 
 - **macos-permissions** (`daymade-macos` v1.26.16 → v1.28.0): Add Local Network diagnosis for app-specific LAN failures. Compare requester and launch context, inspect the actual permission, and verify the original operation after authorized repair; preserve unknown causes, existing privacy protections and all TCC/Keychain paths. Change type: additive diagnostic branch.
 - **skill-creator** (`daymade-skill` v1.75.0 → v1.75.1): Bound programmatic retries to one owner/budget adapter, derive unfinished steps from persisted receipts, propagate runner exit status, and preserve evidence and reserve during storage recovery. Change type: bounded retry-lifecycle clarification.

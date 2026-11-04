@@ -153,6 +153,16 @@ def dynamic_select(columns: set[str], names: Iterable[str]) -> str:
     )
 
 
+def codex_launch_source(row: sqlite3.Row) -> str:
+    """Preserve native launch metadata without inferring kind or runtime state."""
+    value = value_or_none(row, "source")
+    if value is None:
+        return "unknown"
+    if isinstance(value, str):
+        return value if value.strip() else "unknown"
+    return str(value)
+
+
 def collect_codex_from_database(
     args: argparse.Namespace, home: Path, database: CodexDatabase, result: ProviderResult
 ) -> None:
@@ -228,6 +238,7 @@ def collect_codex_from_database(
                     path=str(row["rollout_path"] or ""),
                     metadata_source="state-db",
                     timestamp_source="state-db",
+                    launch_source=codex_launch_source(row),
                 )
             )
     finally:

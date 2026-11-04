@@ -143,6 +143,16 @@ Writer-lock output is positive-only: a held lock proves that exact advisory lock
 was held during the snapshot. It does not identify the process or prove liveness;
 an unmarked row does not prove the Session stopped.
 
+Treat Codex `launch_source` as an independent copy of the native state-DB
+`source`, separate from `kind` and Claude's `source_kind`/`source_labels`
+provenance. `kind=main` means only “not a subagent,” not a human-started or
+independent business task. Render NULL or empty sources as `unknown`; preserve
+unrecognized non-empty values verbatim. Interpret `exec` only as non-interactive
+launch: do not infer scheduling, automatic archiving, exit, or default hiding.
+Keep inventory index-only; never open cwd, `run.json`, or rollout content to
+infer launch source. If summarizing a launch-source distribution, count inventory
+rows rather than claiming independent business tasks.
+
 ### Locate a quoted exchange
 
 For “which Session was this?” with a project, date, or title clue, use the existing
