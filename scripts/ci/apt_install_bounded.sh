@@ -282,12 +282,12 @@ read_validated_mirrors() {
     host="${url#*://}"
     host="${host%%/*}"
     rest="/${url#*://*/}"
-    # Known Ubuntu archive hosts only: the official archive/security and their CDN
-    # aliases (azure.archive.ubuntu.com). Anything else is not a mirror list this
-    # helper is willing to rewrite.
+    # Official archive/security, single-label aliases, and cloud-init's documented
+    # EC2 namespace: <region>.ec2.archive.ubuntu.com.
+    # https://github.com/canonical/cloud-init/blob/main/doc/examples/cloud-config-apt.txt
     if [ "$host" != "archive.ubuntu.com" ] \
       && [ "$host" != "security.ubuntu.com" ] \
-      && [[ ! "$host" =~ ^[a-z0-9-]+\.archive\.ubuntu\.com$ ]]; then
+      && [[ ! "$host" =~ ^[a-z0-9-]+(\.ec2)?\.archive\.ubuntu\.com$ ]]; then
       echo "::error::$script_name: unexpected mirror host '$host' in $mirrors_file — not rewriting" >&2
       exit 1
     fi
@@ -536,6 +536,32 @@ self_test() {
   fi
   echo "self-test PASS: stub saw update then install; mirror list now official URL+priority:N"
 
+  # GitHub-hosted EC2 input observed in the failed Linux installation step.
+  dir="$root/health-ec2"; mkdir -p "$dir"; log="$dir/stub.log"
+  make_env "$dir" yes; make_stub "$dir" plain "$log"
+  printf 'http://us-east-2.ec2.archive.ubuntu.com/ubuntu/\tpriority:1\nhttps://archive.ubuntu.com/ubuntu/\tpriority:2\nhttps://security.ubuntu.com/ubuntu/\tpriority:3\n' > "$dir/apt-mirrors.txt"
+  cp "$dir/sources.list.d/ubuntu.sources" "$dir/ubuntu.sources.before"
+  out="$(CI_APT_FIXTURE_MIRRORS_FILE="$dir/apt-mirrors.txt" \
+    CI_APT_FIXTURE_SOURCES_DIR="$dir/sources.list.d" \
+    CI_APT_FIXTURE_APT_GET="$dir/apt-get" \
+    "$0" --deadline 20 --grace 2 ripgrep 2>&1)" && rc=0 || rc=$?
+  expect "observed EC2 mirror list installs through the bounded stub" 0 "$rc" "$out" "bounded apt preparation OK"
+  python3 - "$dir" <<'PY'
+from pathlib import Path
+import sys
+root = Path(sys.argv[1])
+assert (root / 'apt-mirrors.txt').read_text() == (
+    'https://archive.ubuntu.com/ubuntu/\tpriority:1\n'
+    'https://security.ubuntu.com/ubuntu/\tpriority:2\n'
+)
+calls = (root / 'stub.log').read_text().splitlines()
+assert len(calls) == 2, calls
+assert calls[0].endswith(' update'), calls
+assert calls[1].endswith(' install -y ripgrep'), calls
+assert (root / 'sources.list.d/ubuntu.sources').read_bytes() == (root / 'ubuntu.sources.before').read_bytes()
+PY
+  echo "self-test PASS: EC2 input becomes exact official HTTPS list; two ordered APT calls; sources unchanged"
+
   # 1b. health (bare URL grammar): accepted, rewritten in the same bare shape.
   dir="$root/health-bare"; mkdir -p "$dir"; log="$dir/stub.log"
   make_env "$dir" yes; make_stub "$dir" plain "$log"
@@ -586,14 +612,25 @@ self_test() {
   echo "self-test PASS: no ready marker after deadline"
 
   # 4. wrong host shape refuses before any rewrite (real grammar, bad host).
-  dir="$root/badhost"; mkdir -p "$dir"; log="$dir/stub.log"
-  make_env "$dir" yes; make_stub "$dir" plain "$log"
-  printf 'http://example.com/mirror/ubuntu/\tpriority:1\n' > "$dir/apt-mirrors.txt"
-  out="$(CI_APT_FIXTURE_MIRRORS_FILE="$dir/apt-mirrors.txt" \
-    CI_APT_FIXTURE_SOURCES_DIR="$dir/sources.list.d" \
-    CI_APT_FIXTURE_APT_GET="$dir/apt-get" \
-    "$0" ripgrep 2>&1)" && rc=0 || rc=$?
-  expect "unexpected mirror host refuses to rewrite" 1 "$rc" "$out" "unexpected mirror host"
+  local bad_host
+  for bad_host in example.com \
+    us-east-2.ec2.archive.ubuntu.com.example.invalid \
+    us-east-2.ec2.archive.example.invalid \
+    us-east-2.extra.ec2.archive.ubuntu.com \
+    us-east-2.ec2.extra.archive.ubuntu.com ''; do
+    dir="$root/badhost-$bad_host"; mkdir -p "$dir"; log="$dir/stub.log"
+    make_env "$dir" yes; make_stub "$dir" plain "$log"
+    printf 'http://%s/mirror/ubuntu/\tpriority:1\n' "$bad_host" > "$dir/apt-mirrors.txt"
+    cp "$dir/apt-mirrors.txt" "$dir/mirrors.before"
+    out="$(CI_APT_FIXTURE_MIRRORS_FILE="$dir/apt-mirrors.txt" \
+      CI_APT_FIXTURE_SOURCES_DIR="$dir/sources.list.d" \
+      CI_APT_FIXTURE_APT_GET="$dir/apt-get" \
+      "$0" ripgrep 2>&1)" && rc=0 || rc=$?
+    expect "unexpected mirror host refuses to rewrite ($bad_host)" 1 "$rc" "$out" "unexpected mirror host"
+    cmp -s "$dir/apt-mirrors.txt" "$dir/mirrors.before" \
+      || { echo "SELF-TEST FAIL: rejected mirror list changed"; exit 1; }
+    [ ! -e "$log" ] || { echo "SELF-TEST FAIL: rejected host reached APT"; exit 1; }
+  done
 
   # 4b. empty mirror list refuses.
   dir="$root/emptylist"; mkdir -p "$dir"; log="$dir/stub.log"
