@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Selected Git inputs and monitored runs under one explicit disk budget (POSIX)."""
+"""Budget Git inputs and runs; explicitly register and retire consumed outputs (POSIX)."""
 from __future__ import annotations
 
 import argparse
@@ -22,6 +22,7 @@ STATE = ".materialization.json"
 LOCK = ".materialization.lock"
 EXIT = {"budget_exceeded": 20, "free_space_low": 21, "measurement_unknown": 22,
         "child_failed": 23, "interrupted": 130, "invalid_manifest": 2}
+OUTPUT_KINDS = ("rebuildable", "transport", "evidence", "unique")
 
 
 class MaterializationError(Exception):
@@ -301,7 +302,7 @@ def scan(root):
     return sizes
 
 
-def measure(record, root):
+def measure(record, root, *, enforce_limits=True):
     sizes = scan(root)
     highwater = record["path_highwater"]
     for name, size in sizes.items():
@@ -309,7 +310,8 @@ def measure(record, root):
         record["charged_bytes"] += max(0, size - old)
         highwater[name] = max(old, size)
     record["observed_bytes"] = sum(sizes.values())
-    check_limits(record, root)
+    if enforce_limits:
+        check_limits(record, root)
 
 
 def save(root, record):
@@ -338,6 +340,7 @@ def root_record(root, owner):
         if (not entry["path"].startswith("arms/") or not re.fullmatch(r"[0-9a-f]{64}", entry["sha256"])
                 or entry.get("mode") not in ("100644", "100755")):
             raise MaterializationError("invalid persisted input entry")
+    validate_outputs(record)
     return root, record
 
 
@@ -358,7 +361,7 @@ def lock_root(root, owner):
     try:
         fd = os.open(root / LOCK, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
     except FileExistsError as e:
-        raise MaterializationError("root is locked; do not run/finish concurrently") from e
+        raise MaterializationError("root is locked; do not mutate it concurrently") from e
     identity = os.fstat(fd)
     with os.fdopen(fd, "w") as f:
         json.dump({"owner": owner, "pid": os.getpid()}, f)
@@ -563,6 +566,246 @@ def remove_unchanged(root, entry):
         return False
 
 
+def output_contract(data, record):
+    """Validate one caller classification; no discovery or external-path adoption."""
+    if not isinstance(data, dict):
+        raise MaterializationError("output manifest must be an object")
+    if set(data) - {"path", "kind", "consumer", "rebuild_from", "consumer_pid"}:
+        raise MaterializationError("unknown output manifest field")
+    path = relative_path(data.get("path"))
+    parts = PurePosixPath(path).parts
+    if not ((parts[0] == "artifacts" and len(parts) >= 2)
+            or (parts[0] == "arms" and len(parts) >= 3 and parts[1] in record["arms"])):
+        raise MaterializationError("output must be a strict descendant of artifacts or a declared arm")
+    if data.get("kind") not in OUTPUT_KINDS:
+        raise MaterializationError("output kind must be rebuildable, transport, evidence or unique")
+    if not isinstance(data.get("consumer"), str) or not data["consumer"].strip():
+        raise MaterializationError("output consumer must be nonblank")
+    if (data["kind"] in ("rebuildable", "transport") or "rebuild_from" in data) and (
+            not isinstance(data.get("rebuild_from"), str) or not data["rebuild_from"].strip()):
+        raise MaterializationError("rebuildable/transport outputs require nonblank rebuild_from")
+    if "consumer_pid" in data and (type(data["consumer_pid"]) is not int or data["consumer_pid"] <= 0):
+        raise MaterializationError("consumer_pid must be a positive integer when supplied")
+    if (data["kind"] in ("rebuildable", "transport") and parts[0] == "artifacts"
+            and re.fullmatch(r"run-[0-9]+", parts[1])):
+        raise MaterializationError("runner logs are retained evidence, not disposable outputs")
+    for entry in record["inputs"]:
+        if overlaps(path, entry["path"]):
+            raise MaterializationError("output classification overlaps a declared input")
+    return dict(data)
+
+
+def overlaps(left, right):
+    return left == right or left.startswith(right + "/") or right.startswith(left + "/")
+
+
+def file_identity(value):
+    return [value.st_dev, value.st_ino, value.st_mode, value.st_size,
+            value.st_mtime_ns, value.st_ctime_ns, value.st_nlink]
+
+
+def validate_outputs(record):
+    outputs = record.get("outputs", [])
+    if not isinstance(outputs, list):
+        raise MaterializationError("invalid persisted outputs")
+    seen = []
+    for output in outputs:
+        if not isinstance(output, dict):
+            raise MaterializationError("invalid persisted output")
+        declaration = {key: output[key] for key in
+                       ("path", "kind", "consumer", "rebuild_from", "consumer_pid") if key in output}
+        output_contract(declaration, record)
+        if any(overlaps(output["path"], path) for path in seen):
+            raise MaterializationError("overlapping persisted outputs")
+        seen.append(output["path"])
+        if (output.get("state") not in ("registered", "retired", "retained")
+                or not isinstance(output.get("files"), list)
+                or not isinstance(output.get("directories"), list)
+                or not isinstance(output.get("ancestors"), list)
+                or not (output["files"] or output["directories"])):
+            raise MaterializationError("invalid persisted output inventory")
+        names = set()
+        for key in ("files", "directories", "ancestors"):
+            for item in output[key]:
+                if not isinstance(item, dict):
+                    raise MaterializationError("invalid persisted output entry")
+                name = relative_path(item.get("path"))
+                identity = item.get("identity")
+                length = 7 if key == "files" else 2
+                if (not isinstance(identity, list) or len(identity) != length
+                        or any(type(value) is not int for value in identity)):
+                    raise MaterializationError("invalid persisted output identity")
+                if key == "ancestors":
+                    if not output["path"].startswith(name + "/"):
+                        raise MaterializationError("invalid output ancestor")
+                    continue
+                if (name in names or not (name == output["path"] or name.startswith(output["path"] + "/"))):
+                    raise MaterializationError("output entry escapes its declared path")
+                names.add(name)
+                if key == "files" and (not isinstance(item.get("sha256"), str)
+                                        or not re.fullmatch(r"[0-9a-f]{64}", item["sha256"])
+                                        or not stat.S_ISREG(identity[2]) or identity[6] != 1):
+                    raise MaterializationError("invalid persisted output file")
+
+
+def snapshot_output(root, declaration):
+    files, directories, ancestors = [], [], []
+    path = PurePosixPath(declaration["path"])
+    for index in range(1, len(path.parts)):
+        name = PurePosixPath(*path.parts[:index]).as_posix()
+        with safe_directory(root, name) as fd:
+            value = os.fstat(fd)
+            ancestors.append({"path": name, "identity": [value.st_dev, value.st_ino]})
+
+    def visit(parent_fd, name, relative):
+        relative_path(relative)
+        before = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+        if stat.S_ISDIR(before.st_mode):
+            fd = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent_fd)
+            try:
+                current = os.fstat(fd)
+                if (before.st_dev, before.st_ino) != (current.st_dev, current.st_ino):
+                    raise MaterializationError("output directory changed while registering")
+                directories.append({"path": relative, "identity": [current.st_dev, current.st_ino]})
+                for child in sorted(os.listdir(fd)):
+                    visit(fd, child, relative + "/" + child)
+                after = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+                if (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino):
+                    raise MaterializationError("output directory changed while registering")
+            finally:
+                os.close(fd)
+        elif stat.S_ISREG(before.st_mode) and before.st_nlink == 1:
+            fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent_fd)
+            with os.fdopen(fd, "rb") as source:
+                opened = os.fstat(source.fileno())
+                if file_identity(before) != file_identity(opened):
+                    raise MaterializationError("output file changed while opening")
+                digest, size = digest_chunks(iter(lambda: source.read(65536), b""))
+            after = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+            if file_identity(before) != file_identity(opened) or file_identity(before) != file_identity(after):
+                raise MaterializationError("output file changed while registering")
+            files.append({"path": relative, "identity": file_identity(before), "sha256": digest})
+        else:
+            raise MaterializationError("output inventory refuses symlinks, hard links and special files")
+
+    with safe_directory(root, str(path.parent)) as parent_fd:
+        visit(parent_fd, path.name, path.as_posix())
+    return {**declaration, "files": files, "directories": directories, "ancestors": ancestors,
+            "state": "registered", "registered_at": time.time()}
+
+
+def register_output(root, owner, declaration):
+    root, _record = root_record(root, owner)
+    with lock_root(root, owner):
+        root, record = root_record(root, owner)
+        if record["state"] == "preparing" or alive(record.get("child_pgid"), group=True):
+            raise MaterializationError("registration refuses an active child process group")
+        declaration = output_contract(declaration, record)
+        if any(overlaps(declaration["path"], output["path"]) for output in record.get("outputs", [])):
+            raise MaterializationError("output already registered or overlaps a registration; use a new path")
+        output = snapshot_output(root, declaration)
+        # Registration allocates no payload and remains available when cleanup is
+        # urgent. Charge observed storage without admitting a child or resetting limits.
+        record.setdefault("outputs", []).append(output)
+        save(root, record)
+        measure(record, root, enforce_limits=False)
+        save(root, record)
+        return record
+
+
+@contextlib.contextmanager
+def output_parent(root, relative, identities):
+    """Hold physical parent descriptors and verify registered directory identities."""
+    fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        current = []
+        for part in PurePosixPath(relative).parent.parts:
+            current.append(part)
+            new = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+            os.close(fd)
+            fd = new
+            value = os.fstat(fd)
+            if identities.get("/".join(current)) != [value.st_dev, value.st_ino]:
+                raise MaterializationError("registered output parent changed")
+        yield fd
+    finally:
+        os.close(fd)
+
+
+def retire_output_file(root, item, identities):
+    relative = PurePosixPath(item["path"])
+    try:
+        with output_parent(root, relative, identities) as parent_fd:
+            before = os.stat(relative.name, dir_fd=parent_fd, follow_symlinks=False)
+            if file_identity(before) != item["identity"] or not stat.S_ISREG(before.st_mode) or before.st_nlink != 1:
+                return "retained"
+            fd = os.open(relative.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent_fd)
+            with os.fdopen(fd, "rb") as source:
+                opened = os.fstat(source.fileno())
+                if file_identity(opened) != item["identity"]:
+                    return "retained"
+                digest, size = digest_chunks(iter(lambda: source.read(65536), b""))
+            after = os.stat(relative.name, dir_fd=parent_fd, follow_symlinks=False)
+            if (file_identity(opened) != item["identity"] or file_identity(after) != item["identity"]
+                    or digest != item["sha256"] or size != item["identity"][3]):
+                return "retained"
+            os.unlink(relative.name, dir_fd=parent_fd)
+            return "removed"
+    except FileNotFoundError:
+        return "missing"
+    except (OSError, MaterializationError):
+        return "retained"
+
+
+def retire(root, owner, consumer, *, consumed=False):
+    if not isinstance(consumer, str) or not consumer.strip() or consumed is not True:
+        raise MaterializationError("retire requires a nonblank consumer and explicit consumed=True")
+    root, _record = root_record(root, owner)
+    with lock_root(root, owner):
+        root, record = root_record(root, owner)
+        if record["state"] == "preparing" or alive(record.get("child_pgid"), group=True):
+            raise MaterializationError("retirement refuses an active child process group")
+        selected = [output for output in record.get("outputs", []) if output["consumer"] == consumer]
+        if not selected:
+            raise MaterializationError("no outputs registered for this consumer")
+        if any(alive(output.get("consumer_pid")) for output in selected):
+            raise MaterializationError("registered consumer PID is still active; no processes are stopped")
+        result = {"consumer": consumer, "removed": [], "retained": [], "missing": [],
+                  "directories_removed": [], "complete": True, "consumed_at": time.time()}
+        for output in selected:
+            if output["kind"] not in ("rebuildable", "transport"):
+                result["retained"].append(output["path"])
+                output["state"] = "retained"
+                continue
+            identities = {item["path"]: item["identity"] for item in output["ancestors"] + output["directories"]}
+            retained = False
+            for item in output["files"]:
+                disposition = retire_output_file(root, item, identities)
+                result[disposition].append(item["path"])
+                retained |= disposition == "retained"
+            for item in reversed(output["directories"]):
+                relative = PurePosixPath(item["path"])
+                try:
+                    with output_parent(root, relative, identities) as parent_fd:
+                        value = os.stat(relative.name, dir_fd=parent_fd, follow_symlinks=False)
+                        if not stat.S_ISDIR(value.st_mode) or [value.st_dev, value.st_ino] != item["identity"]:
+                            raise MaterializationError("registered output directory changed")
+                        os.rmdir(relative.name, dir_fd=parent_fd)
+                        result["directories_removed"].append(item["path"])
+                except FileNotFoundError:
+                    pass
+                except (OSError, MaterializationError):
+                    retained = True
+                    result["retained"].append(item["path"])
+            output["state"] = "retained" if retained else "retired"
+            result["complete"] &= not retained
+        record["output_retirement"] = result
+        # No capacity config read or free-space gate can block safe retirement.
+        # Keep cumulative charges and the original run/finish state intact.
+        save(root, record)
+        return record
+
+
 def finish(root, owner):
     root, record = root_record(root, owner)
     if alive(record.get("child_pgid"), group=True):
@@ -626,7 +869,8 @@ def recover(root, owner):
 def cleanup_summary(record):
     """Project declared-input cleanup scope and counts; unknown stays unknown.
 
-    Only declared inputs are ever removed. Counts are reported only when the
+    This finish-only projection reports declared inputs; output retirement is
+    separate. Counts are reported only when the
     recorded inventory is complete; a missing, null, or failed inventory stays
     unknown instead of implying an emptied directory. Paths are never echoed.
     """
@@ -664,6 +908,13 @@ def receipt_summary(record):
     cleanup = cleanup_summary(record)
     if cleanup is not None:
         result["cleanup"] = cleanup
+    if "outputs" in record:
+        result["output_count"] = len(record["outputs"])
+    retirement = record.get("output_retirement")
+    if isinstance(retirement, dict):
+        result["output_retirement"] = {"scope": "registered_outputs", "complete": retirement["complete"],
+                                       **{key + "_count": len(retirement[key]) for key in
+                                          ("removed", "retained", "missing", "directories_removed")}}
     return result
 
 
@@ -676,7 +927,7 @@ def _main(argv=None):
     p.add_argument("--capacity-config", help="explicit physical JSON with minimum_free_bytes; no implicit machine policy")
     p.add_argument("--summary", action="store_true",
                    help="print outcome fields and the full receipt path instead of the full JSON")
-    for command in ("run", "finish", "recover"):
+    for command in ("run", "finish", "recover", "register-output", "retire"):
         p = sub.add_parser(command)
         p.add_argument("--root", required=True)
         p.add_argument("--owner", required=True)
@@ -687,6 +938,13 @@ def _main(argv=None):
             p.add_argument("--capacity-config", help="select or retain this task's explicit capacity config")
             p.add_argument("--poll-interval", type=float, default=0.1)
             p.add_argument("argv", nargs=argparse.REMAINDER)
+        elif command == "register-output":
+            p.add_argument("--manifest", required=True,
+                           help="JSON with exact in-root path, kind, consumer and rebuild_from for disposable payloads")
+        elif command == "retire":
+            p.add_argument("--consumer", required=True)
+            p.add_argument("--consumed", action="store_true", required=True,
+                           help="assert all consumers finished; retire only unchanged registered rebuildable/transport files")
     args = parser.parse_args(argv)
     try:
         if args.command == "prepare":
@@ -696,6 +954,11 @@ def _main(argv=None):
             result, code = finish(args.root, args.owner), 0
         elif args.command == "recover":
             result, code = recover(args.root, args.owner), 0
+        elif args.command == "register-output":
+            with open(args.manifest) as f:
+                result, code = register_output(args.root, args.owner, json.load(f)), 0
+        elif args.command == "retire":
+            result, code = retire(args.root, args.owner, args.consumer, consumed=args.consumed), 0
         else:
             command = args.argv[1:] if args.argv[:1] == ["--"] else args.argv
             result, code = run(args.root, args.owner, args.arm, command, args.poll_interval,
