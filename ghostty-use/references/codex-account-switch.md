@@ -94,7 +94,11 @@ Expect commands for missing IDs. An unchanged account exits 2. `WAIT EXIT` lists
 old/unverified live processes and exits 1 without opening. Resolve unresolved live
 TUIs before opening: their unknown IDs could produce duplicates. Check identity,
 original process generation, saved cwd/rollout and CLI support for `--no-daemon`.
-Dry-run changes no progress, window, clipboard or login.
+A fresh process counts as reopened only when its SID and exact saved cwd both
+match, in addition to the PID/birth, start-time and independent-mode checks. A
+missing or different cwd makes it old/unverified and blocks another opening; it
+never counts as restoration of the original work. Dry-run changes no progress,
+window, clipboard or login.
 
 ## Login already changed before capture
 
@@ -314,21 +318,52 @@ parent is also saved. If the main parent is absent, stop before opening and
 report the parent ID; never independently resume the spawned agent.
 
 Bind progress to the fixed manifest and new account outside the Skill bundle.
-Serialize opening, re-probe account/process state before each send, stop on
-explicit send failure, and reconcile within `--reconcile-seconds`; use
+Serialize opening, re-probe account/process state before each send and reconcile
+within `--reconcile-seconds`; use
 [`ghostty_session.py`](../scripts/ghostty_session.py)'s `bounded_seconds()` and
-`main()` definitions for its bounds and default. Do not count processes predating the
-handoff or lacking independent mode. Rerun using persisted progress to open only missing IDs. If the account
-changes again mid-handoff, stop and prepare a new handoff.
+`main()` definitions for its bounds and default. Do not count processes predating
+the handoff, lacking independent mode, or missing the exact saved cwd. If the
+account changes again mid-handoff, stop and prepare a new handoff.
+
+New progress carries `send_protocol: 1` and one write-ahead record per attempted
+SID. Immediately before calling the sender, persist `stage: send_started`; a True
+return becomes `submitted_unverified`, and a False return becomes `unknown`.
+False does not prove non-delivery. An interruption can leave `send_started`, and
+an interrupted outcome write can leave that earlier stage as well. Stop the batch
+on False rather than sending more input.
+
+On a later invocation, every missing selected SID at `send_started`, `unknown` or
+`submitted_unverified` is reconcile-only: do not call the sender, modify its
+receipt or create a replacement attempt. Other selected IDs without a record are
+deferred in that batch. If the original process later appears with the required
+SID, cwd and process evidence, the same manifest can confirm it and exit 0 while
+leaving the receipt unchanged. `--check` performs the same reconciliation without
+opening. A printed `retry only without send record` command is limited to IDs
+with no attempt in the current protocol; `reconcile only send-unknown` uses
+`--check` for attempted or ambiguous IDs.
+
+Legacy progress has no `send_protocol` or per-target send evidence. Its missing
+selected IDs are also reconcile-only; absence of those records must never be
+described as `never sent`. Valid later process evidence can still complete the
+original manifest. Mixing an older restore reader with new progress is unsupported
+because that reader cannot enforce the write-ahead receipts.
+
+A preflight rejection before the first `send_started` creates no attempt, so the
+cwd, rollout, CLI or account prerequisite can be fixed before retrying. Dry-run
+keeps its original readiness behavior when no send evidence exists; with an
+attempted or legacy-ambiguous selected target it prints no `WOULD OPEN` command
+and exits 1 for reconcile-only work.
 
 Expect `reopened: N/M`, old/unverified processes and every missing ID. Exit 0
-means the fixed set reopened in eligible independent process generations under
-the mode-bound file-auth context: changed identity for the normal route, captured
-target identity for `--after-login`. Neither mode proves authenticated continuation.
-Exit 1 means missing/old processes or a further account change;
-exit 2 means invalid input, unavailable evidence or failed prerequisites. Missing
-rows print an exact retry limited to their UUIDs. Progress/result sidecars leave
-the original manifest untouched. Read the report as well as the exit code.
+means the fixed set reopened with matching SIDs and exact saved cwds in eligible
+independent process generations under the mode-bound file-auth context: changed
+identity for the normal route, captured target identity for `--after-login`.
+Neither mode proves authenticated continuation. Exit 1 means missing/old
+processes, a further account change, or reconcile-only send evidence; exit 2 means
+invalid input, unavailable evidence or failed prerequisites. Once `send_started`
+exists, a later retry remains reconcile-only even when the sending invocation
+also reported an error. Progress/result sidecars leave the original manifest
+untouched. Read the report as well as the exit code.
 
 ## Accept actual continuation
 

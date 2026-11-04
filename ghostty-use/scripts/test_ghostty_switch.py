@@ -9,6 +9,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from unittest import mock
@@ -254,21 +255,6 @@ class SwitchTest(unittest.TestCase):
         self.assertEqual(result["authentication"], "not_checked")
         self.assertEqual(self.cli("--check"), 0)
 
-    def test_partial_restore_prints_missing_only_retry_and_can_continue(self):
-        one, two = self.session(), self.session(B, pid=11)
-        self.saved([one, two])
-        restored = self.reopened(one)
-        self.active[2].side_effect = [gs.SessionList(), gs.SessionList(), gs.SessionList([restored]), gs.SessionList([restored])]
-        self.assertEqual(self.cli("--layout", "tabs"), 1)
-        retry = self.output.getvalue().split("retry only missing: ")[-1]
-        self.assertIn(B, retry)
-        self.assertNotIn(A, retry)
-        self.active[3].reset_mock()
-        self.active[2].side_effect = [gs.SessionList([restored]), gs.SessionList([restored]),
-                                    gs.SessionList([restored, self.reopened(two, pid=51)])]
-        self.assertEqual(self.cli("--only", B), 0)
-        self.active[3].assert_called_once()
-        self.assertIn(B, self.active[3].call_args.args[0])
 
     def test_windows_remain_an_explicit_option(self):
         self.saved()
@@ -346,11 +332,6 @@ class SwitchTest(unittest.TestCase):
             self.assertEqual(self.cli(), 2)
         self.active[3].assert_not_called()
 
-    def test_explicit_send_failure_stops_batch(self):
-        self.saved([self.session(), self.session(B, pid=11)])
-        self.active[3].return_value = False
-        self.assertEqual(self.cli(), 1)
-        self.active[3].assert_called_once()
 
     def test_bad_paths_and_cli_without_independent_mode_stop_before_gui(self):
         doc = self.saved()
@@ -478,6 +459,174 @@ class SwitchTest(unittest.TestCase):
                 "--out", str(target)]), 1)
         self.assertIn("--after-login", self.output.getvalue())
         self.assertTrue(json.loads(target.read_text())["after_login"])
+
+
+    def test_reopened_requires_the_exact_saved_cwd(self):
+        doc = self.saved()
+        target = doc["sessions"][0]
+        healthy = self.reopened(target)
+        old, present, missing = sw.state(doc, gs.SessionList([healthy]))
+        self.assertEqual((old, present, missing), ([], [healthy], []))
+        for wrong_cwd in (str(self.root / "different"), None):
+            with self.subTest(wrong_cwd=wrong_cwd):
+                current = dict(healthy)
+                if wrong_cwd is None:
+                    del current["cwd"]
+                else:
+                    current["cwd"] = wrong_cwd
+                old, present, missing = sw.state(doc, gs.SessionList([current]))
+                self.assertEqual((old, present, missing), ([current], [], []))
+
+    def test_wrong_cwd_live_process_blocks_restore_instead_of_duplicating(self):
+        doc = self.saved()
+        wrong = self.reopened(doc["sessions"][0])
+        wrong["cwd"] = str(self.root / "different")
+        self.active[2].return_value = gs.SessionList([wrong])
+        self.assertEqual(self.cli(), 1)
+        self.assertIn("reopened: 0/1", self.output.getvalue())
+        self.assertIn("WAIT EXIT", self.output.getvalue())
+        self.active[3].assert_not_called()
+
+    def test_missing_cwd_live_process_blocks_restore_instead_of_duplicating(self):
+        doc = self.saved()
+        wrong = self.reopened(doc["sessions"][0])
+        del wrong["cwd"]
+        self.active[2].return_value = gs.SessionList([wrong])
+        self.assertEqual(self.cli(), 1)
+        self.assertIn("reopened: 0/1", self.output.getvalue())
+        self.active[3].assert_not_called()
+
+    def test_partial_restore_reconciles_attempted_missing_and_can_observe_delayed_process(self):
+        one, two = self.session(), self.session(B, pid=11)
+        self.saved([one, two])
+        restored = self.reopened(one)
+        self.active[2].side_effect = [gs.SessionList(), gs.SessionList(), gs.SessionList([restored]), gs.SessionList([restored])]
+        self.assertEqual(self.cli("--layout", "tabs"), 1)
+        self.assertEqual(self.active[3].call_count, 2)
+        retry = self.output.getvalue().split("reconcile only send-unknown: ")[-1]
+        self.assertIn(B, retry)
+        self.assertNotIn(A, retry)
+        self.assertIn("--check", retry)
+        self.active[3].reset_mock()
+        self.active[2].side_effect = [gs.SessionList([restored]),
+                                    gs.SessionList([restored, self.reopened(two, pid=51)])]
+        self.assertEqual(self.cli("--only", B), 0)
+        self.active[3].assert_not_called()
+
+    def test_send_false_is_unknown_stops_batch_and_never_auto_replays(self):
+        doc = self.saved([self.session(), self.session(B, pid=11)])
+        progress_path = self.state / "switches/fixed-progress.json"
+
+        def send_false(*_args, **_kwargs):
+            rows = json.loads(progress_path.read_text())["sessions"]
+            self.assertEqual(rows, [{"sid": A, "stage": "send_started"}])
+            return False
+
+        self.active[3].side_effect = send_false
+        self.assertEqual(self.cli(), 1)
+        self.active[3].assert_called_once()
+        self.assertIn("SEND UNKNOWN", self.output.getvalue())
+        progress = json.loads(progress_path.read_text())
+        self.assertEqual(progress["send_protocol"], sw.SEND_PROTOCOL)
+        self.assertEqual(progress["sessions"], [{"sid": A, "stage": "unknown"}])
+        before = progress_path.read_bytes()
+        self.assertEqual(self.cli("--dry-run"), 1)
+        self.assertNotIn("WOULD OPEN", self.output.getvalue())
+        self.assertEqual(self.cli(), 1)
+        self.active[3].assert_called_once()
+        self.assertEqual(progress_path.read_bytes(), before)
+        self.active[2].return_value = gs.SessionList([self.reopened(s) for s in doc["sessions"]])
+        self.assertEqual(self.cli(), 0)
+        self.active[3].assert_called_once()
+        self.assertEqual(progress_path.read_bytes(), before)
+
+    def test_manual_restore_rechecks_unknown_written_during_preflight(self):
+        doc = self.saved()
+        progress_path = self.state / "switches/fixed-progress.json"
+        sw.atomic_manifest(progress_path, dict(manifest=str(self.manifest.resolve()),
+            target_account=sw.account_identity(self.home), after_login=False,
+            restore_started_at=doc["prepared_at"], send_protocol=sw.SEND_PROTOCOL, sessions=[]))
+        entered, release = threading.Event(), threading.Event()
+        outcomes = []
+        self.active[3].return_value = False
+
+        def ready(*_):
+            if threading.current_thread().name == "delayed-restore":
+                entered.set()
+                if not release.wait(5):
+                    raise TimeoutError("parallel restore did not finish")
+            return "inert saved resume command"
+
+        def delayed():
+            outcomes.append(self.cli())
+
+        with mock.patch.object(sw, "ready_command", side_effect=ready):
+            worker = threading.Thread(target=delayed, name="delayed-restore")
+            worker.start()
+            try:
+                self.assertTrue(entered.wait(5))
+                self.assertEqual(self.cli(), 1)
+                self.assertEqual(json.loads(progress_path.read_text())["sessions"],
+                                 [{"sid": A, "stage": "unknown"}])
+            finally:
+                release.set()
+                worker.join(5)
+            self.assertFalse(worker.is_alive())
+        self.assertEqual(outcomes, [1])
+        self.assertEqual(self.active[3].call_count, 1)
+
+    def test_send_started_interruption_is_durable_and_never_auto_replayed(self):
+        doc = self.saved()
+        progress_path = self.state / "switches/fixed-progress.json"
+        self.active[3].side_effect = KeyboardInterrupt()
+        with self.assertRaises(KeyboardInterrupt):
+            self.cli()
+        self.assertEqual(json.loads(progress_path.read_text())["sessions"],
+                         [{"sid": A, "stage": "send_started"}])
+        before = progress_path.read_bytes()
+        self.active[3].reset_mock()
+        self.active[3].side_effect = None
+        self.assertEqual(self.cli(), 1)
+        self.active[3].assert_not_called()
+        self.assertEqual(progress_path.read_bytes(), before)
+        self.active[2].return_value = gs.SessionList([self.reopened(doc["sessions"][0])])
+        self.assertEqual(self.cli(), 0)
+        self.active[3].assert_not_called()
+        self.assertEqual(progress_path.read_bytes(), before)
+
+    def test_legacy_progress_without_send_evidence_is_reconcile_only(self):
+        doc = self.saved()
+        progress_path = self.state / "switches/fixed-progress.json"
+        progress_path.parent.mkdir(parents=True)
+        sw.atomic_manifest(progress_path, dict(manifest=str(self.manifest.resolve()),
+            target_account=sw.account_identity(self.home), after_login=False,
+            restore_started_at=doc["prepared_at"], sessions=[]), replace=False)
+        before = progress_path.read_bytes()
+        self.assertEqual(self.cli(), 1)
+        self.assertIn("SEND EVIDENCE MISSING", self.output.getvalue())
+        self.assertNotIn("never sent", self.output.getvalue().lower())
+        self.active[3].assert_not_called()
+        self.assertEqual(progress_path.read_bytes(), before)
+        self.active[2].return_value = gs.SessionList([self.reopened(doc["sessions"][0])])
+        self.assertEqual(self.cli(), 0)
+        self.active[3].assert_not_called()
+        self.assertEqual(progress_path.read_bytes(), before)
+
+    def test_preflight_rejection_before_first_send_can_be_fixed_and_retried(self):
+        doc = self.saved()
+        target = doc["sessions"][0]
+        restored_cwd = self.root / "created-after-preflight"
+        target["cwd"] = str(restored_cwd)
+        self.manifest.write_text(json.dumps(doc))
+        restored = self.reopened(target)
+        self.active[2].side_effect = [gs.SessionList(), gs.SessionList(),
+                                    gs.SessionList(), gs.SessionList([restored])]
+        self.assertEqual(self.cli(), 2)
+        self.active[3].assert_not_called()
+        self.assertFalse((self.state / "switches/fixed-progress.json").exists())
+        restored_cwd.mkdir()
+        self.assertEqual(self.cli(), 0)
+        self.active[3].assert_called_once()
 
 
 class ControlTest(unittest.TestCase):

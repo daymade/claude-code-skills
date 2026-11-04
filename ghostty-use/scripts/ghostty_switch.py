@@ -18,6 +18,8 @@ from ghostty_storage import MAX_MANIFEST_BYTES, atomic_manifest, read_manifest, 
 import ghostty_watch as watch
 
 KIND = "codex-account-switch"
+SEND_PROTOCOL = 1
+SEND_STAGES = frozenset({"send_started", "unknown", "submitted_unverified"})
 
 
 def account_identity(home):
@@ -277,6 +279,9 @@ def state(doc, live):
               or current["started"] < doc.get("restore_started_at", time.time())):
             old.append(current)
         else:
+            if current.get("cwd") != target["cwd"]:
+                old.append(current)
+                continue
             argv = shlex.split(current["cmdline"])
             if "--no-daemon" not in argv:
                 old.append(current)
@@ -305,6 +310,59 @@ def report(doc, live):
     return old, present, missing
 
 
+def ready_command(session, home, gs):
+    """Validate the saved restore inputs once for manual and targeted transports."""
+    if not Path(session["cwd"]).is_dir():
+        raise ValueError("saved working directory is unavailable: " + session["cwd"])
+    meta = gs._codex_first_meta(session["transcript"])
+    if not meta or meta.get("id") != session["sid"]:
+        raise ValueError("saved rollout is unavailable or has another identity: " + session["sid"])
+    executable = shutil.which(session["resume_argv"][0])
+    if executable is None:
+        raise ValueError("saved Codex executable is unavailable")
+    result = subprocess.run([executable, "resume", "--help"], capture_output=True, text=True, timeout=10)
+    if result.returncode or "--no-daemon" not in result.stdout:
+        raise ValueError("Codex resume must support --no-daemon; update the owning CLI before restore")
+    return command(session, home)
+
+
+def _read_send_evidence(progress, doc):
+    """Return the write-ahead protocol and per-SID stage without guessing legacy meaning."""
+    if progress is None:
+        return False, {}
+    if type(progress.get("send_protocol")) is not int or progress["send_protocol"] != SEND_PROTOCOL:
+        return False, {}
+    known = {s["sid"] for s in doc["sessions"]}
+    stages = {}
+    for row in progress["sessions"]:
+        if not isinstance(row, dict):
+            raise ValueError("invalid per-target send evidence")
+        sid, stage = row.get("sid"), row.get("stage")
+        if sid not in known or sid in stages or stage not in SEND_STAGES:
+            raise ValueError("invalid per-target send evidence")
+        stages[sid] = stage
+    return True, stages
+
+
+def _write_send_stage(path, progress, stages, sid, stage):
+    """Persist one attempt before input; only its immediate outcome may replace send_started."""
+    expected = None if stage == "send_started" else "send_started"
+    if stage not in SEND_STAGES or stages.get(sid) != expected:
+        raise ValueError("invalid send-stage transition; reconcile the original attempt")
+    rows, found = [], False
+    for row in progress["sessions"]:
+        if row["sid"] == sid:
+            rows.append(dict(row, stage=stage))
+            found = True
+        else:
+            rows.append(row)
+    if not found:
+        rows.append({"sid": sid, "stage": stage})
+    atomic_manifest(path, dict(progress, sessions=rows))
+    progress["sessions"] = rows
+    stages[sid] = stage
+
+
 def restore(args, gs):
     path, doc = current_manifest(gs, args)
     selected = gs.select_sessions(doc["sessions"], args.only)
@@ -324,6 +382,7 @@ def restore(args, gs):
         doc["restore_started_at"] = doc["prepared_at"]
     folder = Path(gs.STATE_DIR) / "switches"
     progress_path = folder / (path.stem + "-progress.json")
+    progress = None
     if progress_path.exists():
         progress = read_manifest(progress_path)
         if progress.get("manifest") != str(path) or progress.get("target_account") != account:
@@ -334,12 +393,26 @@ def restore(args, gs):
         if not isinstance(epoch, (float, int)) or epoch < doc["prepared_at"]:
             raise ValueError("handoff progress has an invalid restore start")
         doc["restore_started_at"] = epoch
+    send_protocol, send_stages = _read_send_evidence(progress, doc)
     live = observe(gs)
     old, present, missing = report(doc, live)
-    if args.check:
-        return 1 if old or missing else 0
     # Never run a second copy alongside any old process in the fixed set.
     pending = [s for s in missing if s["sid"] in wanted]
+    send_reasons = {}
+    if progress is not None and not send_protocol:
+        send_reasons = {s["sid"]: "send_evidence_missing" for s in pending}
+    elif send_protocol:
+        send_reasons = {s["sid"]: send_stages[s["sid"]] for s in pending if s["sid"] in send_stages}
+    for s in pending:
+        reason = send_reasons.get(s["sid"])
+        if reason == "send_evidence_missing":
+            print(f"  SEND EVIDENCE MISSING {s['sid']}; legacy progress cannot establish non-delivery; reconcile only")
+        elif reason:
+            print(f"  SEND {reason} {s['sid']}; reconcile only, no automatic resend")
+        elif send_reasons:
+            print(f"  SEND DEFERRED {s['sid']}; reconcile the other selected target before batch opening")
+    if args.check:
+        return 1 if old or missing else 0
     blockers = [p for p in old if not after_login or not args.only or p.get("sid") in wanted]
     if blockers:
         print("Readiness blocked: manually exit listed old/unverified TUIs; this command never terminates them.")
@@ -347,35 +420,41 @@ def restore(args, gs):
     # Unresolved live TUIs could already be the target, so do not open duplicates.
     if live.unresolved:
         raise ValueError("unresolved live Codex TUIs prevent duplicate-safe restore; resolve them before retry")
+    to_open = [] if send_reasons else pending
     commands = {}
-    for s in pending:
-        if not Path(s["cwd"]).is_dir():
-            raise ValueError("saved working directory is unavailable: " + s["cwd"])
-        meta = gs._codex_first_meta(s["transcript"])
-        if not meta or meta.get("id") != s["sid"]:
-            raise ValueError("saved rollout is unavailable or has another identity: " + s["sid"])
-        executable = shutil.which(s["resume_argv"][0])
-        if executable is None:
-            raise ValueError("saved Codex executable is unavailable")
-        result = subprocess.run([executable, "resume", "--help"], capture_output=True, text=True, timeout=10)
-        if result.returncode or "--no-daemon" not in result.stdout:
-            raise ValueError("Codex resume must support --no-daemon; update the owning CLI before restore")
-        commands[s["sid"]] = command(s, doc["codex_home"])
+    for s in to_open:
+        commands[s["sid"]] = ready_command(s, doc["codex_home"], gs)
     if args.dry_run:
-        for s in pending:
+        for s in to_open:
             print(f"WOULD OPEN {args.layout} {s['sid']} -> {commands[s['sid']]}")
-        return 0
+        return 1 if send_reasons else 0
     # Serialize opening without touching the watcher lock or immutable manifest.
     with snapshot_lock(folder / "restore"):
         if account_identity(doc["codex_home"]) != account:
             raise ValueError("account changed during restore preflight")
+        # Another controller may have sent while this one ran readiness checks.
+        # Only the ledger observed under the sender lock grants permission to send.
+        if progress_path.exists():
+            progress = read_manifest(progress_path)
+            if (progress.get("manifest") != str(path) or progress.get("target_account") != account
+                    or progress.get("after_login", False) != after_login):
+                raise ValueError("restore ownership changed during preflight")
+            epoch = progress.get("restore_started_at")
+            if type(epoch) not in (int, float) or epoch < doc["prepared_at"]:
+                raise ValueError("handoff progress has an invalid restore start")
+            doc["restore_started_at"] = epoch
+            send_protocol, send_stages = _read_send_evidence(progress, doc)
+            if not send_protocol or any(s["sid"] in send_stages for s in to_open):
+                to_open = []
         if not progress_path.exists():
             doc.setdefault("restore_started_at", int(time.time()))  # ps lstart has one-second precision
-            atomic_manifest(progress_path, dict(manifest=str(path), target_account=account,
-                            after_login=after_login, restore_started_at=doc["restore_started_at"], sessions=[]), replace=False)
-        if pending:
+            progress = dict(manifest=str(path), target_account=account, after_login=after_login,
+                            restore_started_at=doc["restore_started_at"], send_protocol=SEND_PROTOCOL, sessions=[])
+            atomic_manifest(progress_path, progress, replace=False)
+            send_protocol, send_stages = True, {}
+        if to_open:
             print("Keep keyboard and mouse untouched until opening and reconciliation finish.", flush=True)
-        for i, s in enumerate(pending, 1):
+        for i, s in enumerate(to_open, 1):
             fresh = observe(gs)
             blockers, _, fresh_missing = state(doc, fresh)
             if after_login and args.only:
@@ -386,10 +465,14 @@ def restore(args, gs):
                 continue
             if account_identity(doc["codex_home"]) != account:
                 raise ValueError("account changed during opening; stop and reconcile")
+            _write_send_stage(progress_path, progress, send_stages, s["sid"], "send_started")
+            # An exception leaves send_started durable; its delivery outcome is unknown.
             ok = gs._paste_tab(commands[s["sid"]], layout=args.layout)
-            print(f"  [{i}/{len(pending)}] {'SENT (unverified)' if ok else 'SEND FAILED'} {s['sid']}")
+            _write_send_stage(progress_path, progress, send_stages, s["sid"],
+                              "submitted_unverified" if ok else "unknown")
+            print(f"  [{i}/{len(to_open)}] {'SENT (unverified)' if ok else 'SEND UNKNOWN'} {s['sid']}")
             if not ok:
-                break  # do not keep delivering keystrokes after an explicit denial/failure
+                break  # False cannot prove non-delivery; stop the batch and reconcile.
         deadline = time.monotonic() + args.reconcile_seconds
         while True:
             live = observe(gs)
@@ -405,10 +488,16 @@ def restore(args, gs):
                       old_processes=[s.get("sid") for s in old], after_login=after_login,
                       authentication="not_checked", billing="not_checked")
         atomic_manifest(folder / (path.stem + "-result.json"), dict(result, sessions=[]))
-        if missing:
+        retry_missing = [s for s in missing if send_protocol and s["sid"] not in send_stages]
+        reconcile_missing = [s for s in missing if s not in retry_missing]
+        if reconcile_missing:
+            reconcile = [sys.executable, str(Path(gs.__file__).resolve()), "switch-restore", "--snapshot", str(path),
+                         "--check"] + (["--after-login"] if after_login else []) + ["--only"] + [s["sid"] for s in reconcile_missing]
+            print("reconcile only send-unknown: " + shlex.join(reconcile))
+        if retry_missing:
             retry = [sys.executable, str(Path(gs.__file__).resolve()), "switch-restore", "--snapshot", str(path),
-                     "--layout", args.layout] + (["--after-login"] if after_login else []) + ["--only"] + [s["sid"] for s in missing]
-            print("retry only missing: " + shlex.join(retry))
+                     "--layout", args.layout] + (["--after-login"] if after_login else []) + ["--only"] + [s["sid"] for s in retry_missing]
+            print("retry only without send record: " + shlex.join(retry))
         if not account_unchanged:
             print("Account changed during reconciliation; reopened processes need another handoff.")
         return 1 if old or missing or not account_unchanged else 0
