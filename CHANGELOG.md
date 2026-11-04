@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **git-safety-net** (v1.24.6 → v1.25.0): Use verified survivor-backed clone retirement without a redundant full-history payload; retain explicit self-contained backups and refuse unresolved unique state. Change type: compatible retirement workflow branch.
+- **skill-creator** (`daymade-skill` v1.75.1 → v1.76.0): Register generated outputs by consumer and retire unchanged rebuildable or transport payloads after consumption; preserve evidence, unique work, changed files and active consumers. Change type: compatible output lifecycle capability.
 - **macos-watchdog** (`daymade-macos` v1.28.0 → v1.28.1): Choose observation-failure notification timing from the business observation gap, separately from disruptive repair patience; retain incident deduplication, uncertain-send reconciliation and scheduler-coverage limits. Change type: bounded alert-timing clarification.
 - **read-codex-history / read-claude-code-history** (`daymade-claude-code` v4.34.2 → v4.35.0): Add optional Codex `launch_source` metadata to JSON and Markdown inventories from the native state database. Render missing sources as `unknown` and preserve unrecognized values. Change type: backward-compatible inventory metadata.
 

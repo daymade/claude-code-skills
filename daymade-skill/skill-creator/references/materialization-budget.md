@@ -2,11 +2,11 @@
 name: materialization-budget
 description: >-
   Prepare selected immutable Git inputs, run evaluation commands under one cumulative
-  disk budget, and retain changed work and evidence during cleanup. Read before
-  making isolated input copies for preparation, evaluation arms, or retries.
+  disk budget, and explicitly retire consumed rebuildable outputs while retaining
+  changed work and evidence. Read before isolated input copies or task-output cleanup.
 ---
 
-# Budgeted input copies and evaluation runs
+# Budgeted input copies, runs and output retirement
 
 For read-only work that needs no input copy, read the required objects directly
 with `git show <commit>:<path>`.
@@ -226,7 +226,7 @@ Existing unrelated processes are not selected or stopped.
 
 | Exit | Meaning |
 |---|---|
-| `0` | Prepare/finish/recover completed, or the child exited 0 within observed limits |
+| `0` | Prepare/finish/recover/register-output/retire completed, or the child exited 0 within observed limits |
 | `2` | Invalid/missing manifest, owner/root mismatch, locked root or unsupported input |
 | `20` | Cumulative budget exceeded; evidence remains |
 | `21` | Free space below the explicit reserve |
@@ -242,7 +242,7 @@ and refuses an active child group or active lock. It unlinks only declared
 rebuildable regular inputs whose content still matches the recorded hash/size.
 It refuses symlinks in the input path, checks file identity while hashing and
 requires the original permission mode. Permission-only changes remain work.
-Modified inputs, hard links, unknown files and all `artifacts/` evidence remain,
+Modified inputs, hard links, unknown files and all `artifacts/` files remain,
 with their paths in `cleanup.retained`; inspect those paths before further work.
 `finish` marks the whole root `finished`, not an individual arm. `run` rejects
 that state. Complete planned retries before finishing; preserve a finished receipt
@@ -272,6 +272,108 @@ report the unresolved state. Do not edit the receipt to force cleanup. The recei
 is an ownership record for cooperative task processes, not cryptographic isolation
 from a process deliberately tampering with it.
 
+## Register outputs and retire them after consumption
+
+`finish` cleans inputs; it does not retire task-created outputs. Before handing a
+build, preview or transport payload to its consumer, classify its exact in-root
+path with `register-output`. Use this JSON object for one file or directory:
+
+```json
+{
+  "path": "artifacts/preview",
+  "kind": "rebuildable",
+  "consumer": "preview-reader",
+  "rebuild_from": "source-ref:<full-commit-sha>; documented preview build command"
+}
+```
+
+Choose `kind` from `rebuildable`, `transport`, `evidence` or `unique`.
+Only `rebuildable` and `transport` authorize retirement; both require nonblank
+`rebuild_from` naming the independently retained source and reconstruction route.
+Do not classify the sole copy, a human-edited deliverable or necessary review proof
+as disposable. `evidence` and `unique` remain even after consumption. Unknown and
+unregistered files remain by default. The caller decides the classification and
+checks its existing deletion authorization; the helper verifies the exact snapshot,
+not whether a prose reconstruction claim is true.
+
+Supply a nonblank `consumer` covering every downstream use of that payload. An
+optional positive integer `consumer_pid` also blocks retirement while that PID is
+alive. Without a PID the caller must establish that all readers, preview servers,
+uploaders and downstream jobs have finished before supplying `--consumed`.
+Neither command discovers or stops external processes.
+
+```bash
+uv run --frozen python - <<'PY'
+import html, json, os, pathlib, subprocess
+workspace = pathlib.Path(os.environ['MATERIALIZATION_WORKSPACE'])
+root = workspace / 'task'
+receipt = json.loads((root / '.materialization.json').read_text())
+source = subprocess.check_output([
+    'git', '-C', receipt['source_repo'], 'show',
+    receipt['source_ref'] + ':daymade-skill/skill-creator/SKILL.md'
+], text=True)
+preview = root / 'artifacts/preview'
+preview.mkdir()
+(preview / 'page.html').write_text('<pre>' + html.escape(source) + '</pre>')
+manifest = {
+    'path': 'artifacts/preview', 'kind': 'rebuildable', 'consumer': 'preview-reader',
+    'rebuild_from': 'source-ref:' + receipt['source_ref'] + '; HTML-escape selected SKILL.md'
+}
+(workspace / 'output-manifest.json').write_text(json.dumps(manifest))
+PY
+uv run --frozen python -m scripts.materialize register-output \
+  --summary --root "$materialization_workspace/task" --owner smoke-session \
+  --manifest "$materialization_workspace/output-manifest.json"
+uv run --frozen python - <<'PY'
+import os, pathlib
+page = pathlib.Path(os.environ['MATERIALIZATION_WORKSPACE']) / 'task/artifacts/preview/page.html'
+assert 'Skill Creator' in page.read_text()
+print('preview consumed')
+PY
+# For a real browser preview, finish every reader and stop its own server first.
+uv run --frozen python -m scripts.materialize retire \
+  --summary --root "$materialization_workspace/task" --owner smoke-session \
+  --consumer preview-reader --consumed
+```
+
+This tiny continuation of the earlier smoke reconstructs a preview from the
+independently retained Git source after input cleanup. It creates the manifest
+after the payload exists, consumes the page and retires its containing directory.
+Read back that `task/artifacts/preview` is absent and the receipt/logs remain.
+
+Registration snapshots each physical regular file's hash, permission mode and
+identity. It rejects symlinks, hard links, special files and symlinked ancestors.
+Paths must be strict descendants of `artifacts/` or a declared `arms/<arm>/`;
+declared inputs and disposable `artifacts/run-NNNN/` logs are excluded. A directory
+registration freezes its existing descendants; files added later are unknown and
+remain. Registrations cannot overlap or be reclassified. Use a new output path
+for another build or retry, retaining the original classification and budget.
+
+`retire --consumer <name> --consumed` removes only that consumer's registered,
+unchanged `rebuildable`/`transport` regular files. Changed content, mode, identity,
+timestamps, links or parent identities preserve the affected path. It removes only
+registered empty directory shells with matching identities. It never recursively
+deletes a root or follows an external path. Both commands retain the existing
+owner/root checks and lock, and refuse an active runner child group. They also
+work after `finish`; neither reopens `run` on a finished root.
+
+Read back `output_retirement.complete` and the full receipt's `removed`, `retained`,
+`missing` and `directories_removed` lists. A missing path is reported separately
+from a verified removal. `complete=false` means a disposable registered path still
+needs inspection; exit 0 alone does not mean the directory is empty. Evidence and
+unique registrations are expected retentions. Repeated retirement is safe and
+reports already-absent files as missing.
+
+Registration charges observed storage and receipt growth without lowering any
+high-water mark. It remains available under low space or unavailable capacity
+configuration so payloads can be recorded before safe cleanup. It is not permission
+for another allocation: reconcile `charged_bytes`, `max_total_bytes` and external
+reservations before proceeding. `run` retains its capacity and budget preflight.
+Retirement does not require free space above the reserve or a readable capacity
+configuration, and never resets the task's charge, limit or run/finish outcome.
+Keep this lifecycle in-root; external worktrees, images and caches retain their
+owning cleanup procedures and the whole-task reconciliation above.
+
 ## Verification
 
 From the skill-creator directory:
@@ -284,7 +386,9 @@ The tests create isolated small Git repositories and exercise selected-ref expor
 all-arm/ref-based preflight, missing and blank limits, LFS pointer/local-only modes,
 monitored overage, free/unknown measurements, failed and interrupted runs, stale
 lock recovery, disappearing-child races, root identity, retained high-water charges,
-and conservative cleanup. No fixture loads the source repository's
+conservative input cleanup, explicit output classification and consumer completion,
+modified/unknown/unique retention, symlink/hard-link escape refusal, and retirement
+after finish or a capacity failure. No fixture loads the source repository's
 history or downloads dependencies/media. The subprocess lifecycle follows Python's
 [subprocess contract](https://docs.python.org/3/library/subprocess.html); Git input
 selection is explicit rather than the whole-tree default documented by
