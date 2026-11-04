@@ -99,6 +99,30 @@ class SelectionTests(unittest.TestCase):
     def test_known_empty_diff_still_checks_repository_contracts(self):
         self.assertEqual(self.targets([]), {"tests", "daymade-claude-code/marketplace-dev/tests"})
 
+    def test_youtube_changes_keep_owner_tests_without_unrelated_suites(self):
+        shared = {"tests", "daymade-claude-code/marketplace-dev/tests"}
+        for path in ("youtube-downloader/SKILL.md", "youtube-downloader/scripts/download_video.py",
+                     "youtube-downloader/tests/test_download_video.py"):
+            with self.subTest(path=path):
+                self.assertEqual(self.targets([path]), shared | {"youtube-downloader/tests"})
+
+        # Actual inputs from Linux job 126044347246 previously selected every suite.
+        paths = [".claude-plugin/marketplace.json", "CHANGELOG.md",
+                 "feishu-doc-scraper/SKILL.md",
+                 "feishu-doc-scraper/references/archive-storage-contract.md",
+                 "feishu-doc-scraper/references/original-media-and-reader.md",
+                 "feishu-doc-scraper/scripts/check_archive_storage.py",
+                 "feishu-doc-scraper/tests/test_archive_storage.py",
+                 "feishu-doc-scraper/tests/test_reader_delivery.py",
+                 "youtube-downloader/SKILL.md", "youtube-downloader/references/internal-sop.md"]
+        result = scope.select(paths)
+        self.assertFalse(result["full"])
+        self.assertEqual({target for _, target in result["suites"]},
+                         shared | {"youtube-downloader/tests", "feishu-doc-scraper/tests"})
+        self.assertFalse(result["html_reader"])
+        self.assertTrue(result["feishu_reader"])
+        self.assertFalse(result["report"])
+
     def test_missing_empty_null_and_invalid_refs_retain_full_selection(self):
         good = "a" * 40
         for base in (None, "", "0" * 40, "origin/main", "--help"):
