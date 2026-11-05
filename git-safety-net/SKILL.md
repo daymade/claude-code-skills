@@ -548,8 +548,10 @@ objects as report-only, keep explicitly excluded collaborator resources out of b
 plan and its terminal counts, then retire only the named targets. If any enumerated surface is
 excluded, do not run the full loss audit or an `--all-refs` export; use checkout/ref-scoped checks
 and targeted exports instead. Preserve the original authorized outcome when a batch finishes:
-unreviewed refs and unlanded keeper changes remain unfinished even after its worktrees or backup
-have been handled.
+give every original inventory item an explicit outcome, and leave unreviewed refs and unlanded
+keeper changes unfinished even after its worktrees or backup have been handled. Preservation alone
+is not delivery; apply [the terminal-state proof](references/merge_verification.md#5-prove-the-user-visible-terminal-state)
+before claiming either a retained-recovery or no-leftovers outcome.
 
 **Step 1 — classify each leftover: live WIP, or superseded draft?** Evidence ladder, strongest first:
 
@@ -572,9 +574,13 @@ have been handled.
    the leftover is a superseded draft. Real case: a stash labeled "unfinished dev" held a 1128-line
    renderer; main's version was 1151 lines — the same functions *plus* a later feature parameter.
    Restoring that stash would have been a regression, not a recovery.
-4. **Function/marker-level probe** — grep the base for the leftover's distinctive additions
-   (`def new_helper`, a constant, an error string). All present on the base → superseded.
-   This catches "absorbed into a refactor" cases where file shapes changed too much for rung 2.
+4. **Function/marker-level candidate search** — grep the base for the leftover's distinctive
+   additions (`def new_helper`, a constant, an error string) only to locate candidate current code.
+   Then compare every affected hunk and behavior with the current base and its current consumers.
+   All markers present, a longer new file, an identical function name, no currently configured
+   caller, or a historical merge alone does not prove that the effective current change is
+   delivered. A complete hunk/behavior and current-consumer comparison can still prove legitimate
+   supersession through a refactor; otherwise the affected behavior stays live.
 
 Anything you cannot prove superseded stays alive (same safety bias as Mode C: a false "superseded"
 loses work; a false "still live" costs a branch name). One warning that changes verdicts: **the
@@ -733,8 +739,18 @@ rename or refactor, not a deletion)? A diff that is mostly `-` with a few `+` is
 work lost. Apply the same test to any preserved backup: byte-identical or survivor-superset is safe;
 a line the survivor genuinely lacks anywhere is the one to escalate.
 
-**Recovery, if you regret it:** patches re-apply with `git apply`; the untracked tar extracts
-in place; the bundle restores full history via `git fetch <file>.bundle <branch>:restored/<branch>`.
+**Recovery, if you regret it:** run the exported
+`<external-backup-dir>/stashN-<slug>-recover.sh <repository> <new-recovery-directory>` rather than
+applying the original-index and tracked-worktree patches to one index. The generated script verifies
+both states independently, verifies materialized content and modes, and restores the untracked third
+parent when present; **[references/recovery_playbook.md](references/recovery_playbook.md)** § Ladder
+step 2 names every artifact and recovered path. Restore a bundle's full history with
+`git fetch <file>.bundle <branch>:restored/<branch>`.
+
+For closeout resource postconditions against the first frozen original manifest, follow
+**[references/merge_verification.md](references/merge_verification.md)** § Prove the user-visible
+terminal state and use `scripts/git_verify_closeout.py`. It does not prove that the initial inventory
+was complete, semantic/business delivery, remote publication, or deletion authority.
 
 **Step 5 — close the temporary recovery-artifact lifecycle only when it is separately
 authorized.** First finish Step 4 and prove the maintained survivor contains or intentionally
@@ -761,8 +777,9 @@ never tell a user to run bare `git_verify_branch_merged.sh` unless `command -v` 
 | `scripts/git_verify_branch_merged.sh <branch> [base] [--no-fetch] [--base REF] [--merge-commit SHA]` | Give a content-level MERGED/UNMERGED verdict for one branch. `--merge-commit` adds a rung that proves containment at a historical merge commit when base later changed the same lines and the CURRENT base can no longer prove it; the verdict also names the current-base shape (conflict = routine, clean-but-changes = regression candidate). `--no-fetch`/`--base` support offline and flag-driven batch use | Remote-tracking refs unless `--no-fetch`; trial merges can write unreferenced Git objects in either mode |
 | `scripts/git_classify_refs.sh --base SHA [--pr-map JSON] [--all-namespaces]` | Batch content classification; bind a selected set with `--expected-common-dir PATH --target-manifest TSV` to reject another clone or missing/moved tips and report full OIDs plus coverage. Classification success does not establish convergence. `--pr-map` retains the historical-merge rung. | Trial merges can write unreferenced Git objects; no fetch or changes to refs, index or working files; no ownership or deletion authority |
 | `scripts/git_align_checkout.sh --preview --target SHA` / `--apply --target SHA --source-worktree PATH --backup-manifest FILE` | Preview or materialize a checkout's content up to a target commit without a throwaway snapshot branch and without moving HEAD; `--apply` only overwrites a path once its current content is proven reproducible (target's own history, or a manifest sha256) | `--preview`: nothing. `--apply`: working-tree files only for paths it proves safe — never the real index, never HEAD, never a delete |
-| `scripts/git_export_before_drop.sh [export options]` | Export stashes plus selected branches or every current ref into verified bundles | Writes backup files only (never drops/deletes) |
+| `scripts/git_export_before_drop.sh [export options]` | Export selected branches or every current ref into verified bundles. For each selected stash, export separate base-to-original-index and base-to-tracked-worktree binary patches, a frozen identity manifest, an executable independent recovery script, and the third-parent untracked tar when present | Writes backup files only (never drops/deletes) |
 | `scripts/git_export_before_drop.sh --verify-current BUNDLE` | Fail if any bundled ref moved or disappeared since export | Nothing (read-only) |
+| `scripts/git_verify_closeout.py --repo PATH --expected-common-dir PATH --target-manifest TSV --expected-manifest-sha256 SHA256 [postcondition options]` | Verify only requested resource postconditions against the first frozen original manifest: ref absence or explicit caller retention, exact path/worktree absence, and optional primary-main/cleanliness conditions. JSON keeps business content delivery unassessed; initial-inventory completeness, semantic delivery, publication, and deletion authority remain with the caller | Nothing (read-only, no fetch or writes to refs, objects, index, worktrees, or files) |
 | `scripts/git_prepare_clone_retirement.sh --clone PATH --survivor PATH --out DIR [--full-backup]` | Default: prove every clone object retained by an independent survivor's refs, record exact recovery identities and copy only unique metadata. Refuse gaps rather than silently creating a full bundle; `--full-backup` explicitly retains the self-contained export branch. Run `--verify-current DIR` after standalone occupancy and immediately before the authorized removal/move. | Writes only the new external evidence directory and any necessary metadata/export; disables lazy fetch/fsmonitor; never moves/deletes or changes refs |
 
 These helpers run from the repository root. They use read-only enumeration/configuration commands such as
