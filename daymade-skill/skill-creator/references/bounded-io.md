@@ -1,10 +1,41 @@
 # Bounded file reading and command capture
 
 Use these standalone tools for ordinary file reads and already-authorized command
-capture. They use Python 3's standard library and do not load or create a Skill.
+capture. They require Python 3.10+ and use only its standard library; they do not
+load or create a Skill.
 The maintained implementations are the repository's
 [reader](https://github.com/daymade/claude-code-skills/blob/main/scripts/bounded_file_read.py)
 and [capture tool](https://github.com/daymade/claude-code-skills/blob/main/scripts/capture_command.py).
+
+## Select the available distribution
+
+**Standalone Skill Creator package:** use the loaded Skill directory directly.
+Its compatibility entries and generated vendor are shipped in the package; no
+repository checkout, external installation, or additional dependency is required.
+Use these package-local commands for the plan, selected read and capture steps:
+
+```bash
+python3 "<skill-dir>/scripts/skill_read_plan.py" "<absolute-source-file>" \
+  --max-chunk-bytes 2000 --max-output-bytes 6000
+python3 "<skill-dir>/scripts/skill_read_plan.py" "<absolute-source-file>" \
+  --lines 1:1 --expect-sha256 <sha256> --max-output-bytes 6000
+python3 "<skill-dir>/scripts/capture_command.py" \
+  --cwd "<absolute-existing-business-directory>" \
+  --output-dir "<absolute-new-private-output-directory>" \
+  -- <already-authorized-executable> <arg>...
+```
+
+Replace `<skill-dir>` with the absolute loaded package root and quote paths with
+spaces. Use the hash from the plan for the selected read; the range is an example,
+not whole-file coverage. Missing or changed hashes still fail before content is
+returned. In the rest of this contract, substitute the package-local reader for
+`bounded-file-read` and package-local capture entry for `bounded-command-capture`.
+If this package is incomplete, report that distribution gap rather than fetching
+or guessing another repository to make the command appear available.
+
+**Repository checkout or an installed generic command:** use the standalone
+commands below. This branch is for ordinary business reads and does not require
+loading Skill Creator.
 
 Install the optional source-backed commands with:
 

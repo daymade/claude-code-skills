@@ -210,3 +210,13 @@ The generated bundled contract and implementations keep a standalone Skill
 package usable. Existing `creator.py skill_read_plan`, direct
 `scripts/skill_read_plan.py`, and `creator.py capture_command` calls remain
 supported compatibility entries; prefer the generic commands for business work.
+
+### Codex Code Mode receipt
+
+Follow the standalone [Code Mode receipt procedure](bounded-io.md#codex-code-mode-receipt).
+This compatibility anchor retains existing callers; the complete contract lives there.
+
+### Planned ranges and whole-file coverage
+
+Follow the standalone [hash-bound range procedure](bounded-io.md#planned-ranges-and-whole-file-coverage).
+This compatibility anchor retains existing callers without duplicating that contract.

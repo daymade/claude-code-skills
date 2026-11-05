@@ -146,12 +146,12 @@ For its audit, release, source-contract or materialization commands from another
 working directory, use the [fixed command entry](daymade-skill/skill-creator/references/fixed-command-entry.md).
 For security scans, use its [absolute owner-script recipe](daymade-skill/skill-creator/references/publishing-and-packaging.md#step-6-security-review).
 
-Before a command that may exceed the response budget, enter Skill Creator's
-[large-output capture recipe](daymade-skill/skill-creator/references/stateful-script-verification.md#large-command-output).
+Before a command that may exceed the response budget, enter the standalone
+[large-output capture recipe](references/bounded-io.md#large-command-output).
 For a large file or saved tool response, use its
-[complete-file reading workflow](daymade-skill/skill-creator/references/stateful-script-verification.md#complete-file-reads).
+[complete-file reading workflow](references/bounded-io.md#complete-file-reads).
 For Codex Code Mode source reads or provisional loading receipts, enter its
-[Code Mode receipt procedure](daymade-skill/skill-creator/references/stateful-script-verification.md#codex-code-mode-receipt).
+[Code Mode receipt procedure](references/bounded-io.md#codex-code-mode-receipt).
 Keep invocation, selection and incomplete-read semantics in those owners.
 
 For plugin/Skill naming, source registration or release labels, use
