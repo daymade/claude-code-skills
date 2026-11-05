@@ -609,8 +609,8 @@ For Claude history discovery without a known Session, use
 [read-claude-code-history's indexed search entry](daymade-claude-code/read-claude-code-history/SKILL.md#indexed-content-search).
 Keep executable examples and coverage requirements in that owner.
 
-For Codex session inventory, use
-[the inventory route](daymade-claude-code/read-codex-history/SKILL.md#route-by-the-requested-result).
+For Codex session inventory, launch-source interpretation or task clustering, use
+[Recent inventory](daymade-claude-code/read-codex-history/SKILL.md#recent-inventory).
 Edit shared reader code in `daymade-claude-code/_conversation_core/`, then run
 `python3 daymade-claude-code/sync_core.py sync` and `check` before shipping;
 bundled `scripts/_core/` copies are generated projections.
