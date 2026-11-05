@@ -610,6 +610,17 @@ def verify(args: argparse.Namespace, report: dict[str, Any]) -> int:
             )
             require_git_success(observed, f"Observe ref {row.ref}")
             current = parse_exact_ref(observed.stdout, row.ref)
+            if current is None:
+                symbolic = run_git(
+                    repo, ["symbolic-ref", "--quiet", "--no-recurse", row.ref]
+                )
+                if symbolic.returncode != 1 or symbolic.stderr.strip():
+                    require_git_success(symbolic, f"Observe symbolic ref {row.ref}")
+                    # Dangling/looping symbolic refs can be silently omitted by enumeration.
+                    raise GitFailure(
+                        "git_ref_unresolved",
+                        f"Existing symbolic ref {row.ref} cannot be resolved to an object",
+                    )
         except GitFailure as exc:
             counts["refs_unknown"] += 1
             add_error(report, exc.code, exc.message)

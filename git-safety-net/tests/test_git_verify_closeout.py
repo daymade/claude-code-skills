@@ -548,6 +548,45 @@ class VerifyCloseoutTests(unittest.TestCase):
         self.assertEqual(self.run_verify(manifest, digest).returncode, 0)
         self.assert_boundaries(report)
 
+    def test_unresolved_symbolic_refs_are_unknown_never_absent(self) -> None:
+        for kind in ("direct", "chain", "cycle"):
+            with self.subTest(kind=kind):
+                ref = f"refs/heads/synthetic-symbolic-{kind}"
+                middle = f"refs/heads/synthetic-middle-{kind}"
+                missing = "refs/heads/synthetic-missing-target"
+                self.update_ref(ref, self.main_sha)
+                manifest, digest = self.write_manifest([(ref, self.main_sha)], name=f"{kind}.tsv")
+                if kind != "direct":
+                    self.in_primary("symbolic-ref", middle, ref if kind == "cycle" else missing)
+                self.in_primary("symbolic-ref", ref, missing if kind == "direct" else middle)
+                self.assertEqual(
+                    self.in_primary("symbolic-ref", "--quiet", "--no-recurse", ref).returncode, 0
+                )
+                completed = self.run_verify(manifest, digest)
+                report = self.payload(completed)
+                self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+                self.assertEqual(report["refs"][0]["condition"], "unknown")
+                self.assertEqual(report["counts"]["refs_absent"], 0)
+                self.assertFalse(report["all_requested_postconditions_hold"])
+                self.assert_boundaries(report)
+                self.in_primary("symbolic-ref", "--delete", ref)
+                if kind != "direct":
+                    self.in_primary("symbolic-ref", "--delete", middle)
+                self.assertEqual(self.run_verify(manifest, digest).returncode, 0)
+
+    def test_resolved_symbolic_ref_preserves_presence_and_keep_contract(self) -> None:
+        ref = "refs/heads/synthetic-resolved-symbolic"
+        self.in_primary("symbolic-ref", ref, "refs/heads/main")
+        manifest, digest = self.write_manifest([(ref, self.main_sha)])
+        present = self.run_verify(manifest, digest)
+        self.assertEqual(present.returncode, 1, present.stdout + present.stderr)
+        self.assertEqual(self.payload(present)["refs"][0]["condition"], "still_present")
+        retained = self.run_verify(manifest, digest, "--keep-ref", ref)
+        self.assertEqual(retained.returncode, 0, retained.stdout + retained.stderr)
+        self.assertEqual(self.payload(retained)["refs"][0]["condition"], "caller_retained")
+        self.in_primary("symbolic-ref", "--delete", ref)
+        self.assertEqual(self.run_verify(manifest, digest).returncode, 0)
+
     def test_require_clean_disables_fsmonitor_and_still_detects_dirty_files(self) -> None:
         marker = self.root / "fsmonitor marker"
         hook = self.root / "writing fsmonitor.sh"
