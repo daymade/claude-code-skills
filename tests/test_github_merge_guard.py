@@ -1,5 +1,7 @@
 """Synthetic replays of real merge outcomes; no credentials or writes to GitHub."""
 import importlib.util
+from contextlib import redirect_stderr
+import io
 import json
 import os
 from pathlib import Path
@@ -273,6 +275,92 @@ class MergeGuardTests(unittest.TestCase):
             self.assertEqual(checked.checked_invocation("operator", "github.com", self.command(), run=run), 0)
         self.assertEqual(len(writes), 1, "this control must reach the dangerous action")
 
+    def main_output(self, run, command=None, *, acknowledgement=None):
+        invoke = checked.checked_invocation
+        argv = [str(SCRIPT), "--expected-login", "operator"]
+        if acknowledgement:
+            argv.extend(["--ack-merge-bypass", acknowledgement])
+        argv.extend(["--", *(self.command() if command is None else command)])
+        stderr = io.StringIO()
+        with patch.object(sys, "argv", argv), redirect_stderr(stderr), patch.object(
+                checked, "checked_invocation", side_effect=lambda *args, **kwargs: invoke(*args, run=run, **kwargs)):
+            result = checked.main()
+        return result, stderr.getvalue()
+
+    def test_cli_reasons_distinguish_merge_failures_without_changing_rejection(self):
+        cases = (({"mergeable": "UNKNOWN"}, "mergeability_unknown"),
+                 ({"mergeable": "CONFLICTING"}, "mergeability_conflicting"),
+                 ({"headRefOid": "5" * 40}, "head_mismatch"),
+                 ({"url": "https://github.com/other/project/pull/42"}, "target_mismatch"),
+                 ({"state": "MERGED"}, "pr_not_open"),
+                 ({"isDraft": True}, "pr_draft"),
+                 ({"reviewDecision": "REVIEW_REQUIRED"}, "approvals_unmet"),
+                 ({"reviewDecision": "CHANGES_REQUESTED"}, "approvals_unmet"),
+                 ({"mergeStateStatus": "BLOCKED"}, "merge_requirements_blocked"),
+                 ({"mergeStateStatus": "BEHIND"}, "base_behind"),
+                 ({"mergeStateStatus": "UNKNOWN"}, "merge_state_unknown"))
+        for changes, code in cases:
+            with self.subTest(code=code, changes=changes):
+                run, calls, writes = self.runner(self.state(**changes))
+                status, stderr = self.main_output(run)
+                self.assertEqual(status, 2)
+                self.assertIn(f"checked-gh: {code}:", stderr)
+                self.assertIn("no automatic retry", stderr)
+                self.assertEqual(writes, [])
+                self.assertEqual(len(calls), 3)
+                self.assertNotIn("synthetic-fixture-token", stderr)
+
+    def test_missing_and_empty_preflight_fields_have_controlled_diagnostics(self):
+        for key in self.state():
+            missing = self.state(); del missing[key]
+            cases = [missing]
+            if key != "reviewDecision":
+                cases.extend([self.state(**{key: ""}), self.state(**{key: None})])
+            for pr in cases:
+                with self.subTest(key=key, pr=pr):
+                    run, calls, writes = self.runner(pr)
+                    status, stderr = self.main_output(run)
+                    expected = "pr_draft" if key == "isDraft" and key in pr else "preflight_invalid"
+                    self.assertEqual(status, 2)
+                    self.assertIn(f"checked-gh: {expected}:", stderr)
+                    self.assertEqual(writes, [])
+                    self.assertEqual(len(calls), 3)
+
+    def test_cli_reasons_distinguish_pending_failed_and_invalid_required_checks(self):
+        # These are the existing separately acknowledged --admin path's CI reads.
+        acknowledgement = f"example/project#42@{SHA}"
+        for bucket, code in (("pending", "checks_pending"), ("fail", "checks_failed"),
+                             ("cancel", "checks_failed"), (None, "checks_invalid"),
+                             ("", "checks_invalid"), ([], "checks_invalid")):
+            for rc in (0, 8):
+                checks = [{"name": "synthetic-sensitive-check-name", "bucket": bucket}]
+                run, calls, writes = self.runner(checks=checks, checks_rc=rc)
+                status, stderr = self.main_output(run, self.command("--admin"), acknowledgement=acknowledgement)
+                expected = code if rc == 0 or code in {"checks_pending", "checks_failed"} else "checks_command_failed"
+                with self.subTest(bucket=bucket, rc=rc):
+                    self.assertEqual(status, 2)
+                    self.assertIn(f"checked-gh: {expected}:", stderr)
+                    self.assertEqual(writes, [])
+                    self.assertEqual(len(calls), 4)
+                    self.assertNotIn("synthetic-sensitive-check-name", stderr)
+        run, calls, writes = self.runner(checks=[{"name": "verify"}])
+        status, stderr = self.main_output(run, self.command("--admin"), acknowledgement=acknowledgement)
+        self.assertEqual(status, 2)
+        self.assertIn("checked-gh: checks_invalid:", stderr)
+        self.assertEqual(writes, [])
+        self.assertEqual(len(calls), 4)
+
+    def test_cli_keeps_unknown_errors_and_secrets_out_of_diagnostics(self):
+        for error, code in ((ValueError("synthetic-sensitive-value"), "invalid_input"),
+                            (OSError("synthetic-sensitive-path"), "io_unavailable"),
+                            (subprocess.TimeoutExpired(["gh", "synthetic-sensitive-operand"], 30), "command_timeout")):
+            with patch.object(sys, "argv", [str(SCRIPT), "--expected-login", "operator"]), patch.object(
+                    checked, "checked_invocation", side_effect=error), redirect_stderr(io.StringIO()) as stderr:
+                self.assertEqual(checked.main(), 2)
+            self.assertIn(f"checked-gh: {code}:", stderr.getvalue())
+            self.assertNotIn("synthetic-sensitive", stderr.getvalue())
+            self.assertNotIn("Traceback", stderr.getvalue())
+
     def test_distribution_entry_with_spaces_rejects_before_write_and_keeps_healthy_work(self):
         with tempfile.TemporaryDirectory(prefix="merge guard entry ") as tmp:
             root = Path(tmp); binary = root / "gh"; entry = root / "checked entry.py"
@@ -293,6 +381,8 @@ else: (root/"mutation").write_text("one merge")
             (root / "state.json").write_text(json.dumps(self.state(reviewDecision="REVIEW_REQUIRED", mergeStateStatus="BLOCKED")))
             rejected = subprocess.run(args, env=env, capture_output=True, text=True)
             self.assertEqual(rejected.returncode, 2)
+            self.assertIn("checked-gh: approvals_unmet:", rejected.stderr)
+            self.assertIn("no automatic retry", rejected.stderr)
             self.assertFalse((root / "mutation").exists())
             calls = [json.loads(x) for x in (root / "calls.jsonl").read_text().splitlines()]
             self.assertEqual(len(calls), 3)
