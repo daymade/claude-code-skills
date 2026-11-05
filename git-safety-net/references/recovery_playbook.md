@@ -211,15 +211,44 @@ consequences that bite in real recoveries:
   git rev-parse -q --verify 'stash@{0}^3' && git ls-tree -r --name-only 'stash@{0}^3'
   ```
 
-- **Exporting**: a `.patch` backup of the stash loses the untracked half. Export both parts —
-  patch for the tracked diff, `git archive` for the third-parent tree:
+- **Exporting**: a single `.patch` backup loses the untracked half and cannot independently restore
+  the original index and tracked worktree. Use the additive helper for each authorized stash:
 
   ```bash
-  git stash show -p --binary 'stash@{0}' > stash0.patch
-  git archive 'stash@{0}^3' -o stash0-untracked.tar     # only if ^3 exists
+  scripts/git_export_before_drop.sh --stash 0 --out <external-backup-dir>
   ```
 
-  `scripts/git_export_before_drop.sh` does both automatically for every stash it exports.
+  Repeat `--stash N` for explicit selections, or use `--all-stashes` only when every stash is inside
+  the authorized export set. The helper freezes the full stash commit OID before reading content and
+  writes:
+
+  - `stashN-<slug>.patch` — binary base-to-original-tracked-worktree diff;
+  - `stashN-<slug>-index.patch` — binary base-to-original-index diff, including modes and renames;
+  - `stashN-<slug>.manifest` — frozen commit/tree identities and artifact names;
+  - executable `stashN-<slug>-recover.sh` — independent, exact-tree-verified recovery; and
+  - `stashN-untracked.tar` only when a third parent exists, including a valid empty third-parent
+    tree. Empty patch files are also valid preserved states.
+
+  Recover into a new destination against a repository that still contains the manifest's base
+  commit:
+
+  ```bash
+  <external-backup-dir>/stashN-<slug>-recover.sh <repository> <new-recovery-directory>
+  ```
+
+  The script creates `original-index/index` plus `original-index/worktree`, then a separate
+  `original-worktree/index`, `original-worktree/files`, and
+  `original-worktree/worktree-content.index`. When applicable it also creates
+  `original-untracked/index` plus `original-untracked/files`. It verifies each recovered tree
+  against the immutable source tree OID and separately verifies materialized worktree/untracked
+  content and modes. Never apply the original-index and tracked-worktree patches successively to
+  one index.
+
+  Restore legacy patch/tar-only exports by applying the tracked patch with `git apply` against its
+  matching base and extracting the third-parent tar into a fresh verification directory. Treat that
+  as tracked-worktree/untracked recovery only; recover the original index from a surviving stash or
+  full bundle when available, rather than claiming that the tracked patch preserved it.
+
   (Real case: a "finish later" stash carried 10 untracked files — 929 insertions including a
   545-line test file — that a patch-only backup would have dropped without a word.)
 

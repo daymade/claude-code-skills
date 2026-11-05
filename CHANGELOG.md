@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **git-safety-net** (v1.25.0 → v1.26.0): Export and independently recover the stash index, tracked worktree and optional untracked tree, preserving canonical patches across diff settings and working directories. Add read-only closeout checks bound to the original ref inventory; require behavior and consumer evidence for supersession and distinguish recovery preservation from completed delivery.
+
 - **skill-creator** (`daymade-skill` v1.76.0 → v1.77.0): Move bounded file reading and command capture to standalone tools, retain portable generated compatibility entries in Skill Creator, and check distribution drift in CI. Change type: lossless ownership relocation with preserved interfaces.
 - **github-ops** (v1.15.3 → v1.15.4): Choose local copy destinations by development, durable preservation or temporary rescue purpose; reassess disputed historical layouts while preserving complete history and relocation authorization.
 - **debugging-network-issues** (v1.11.8 → v1.11.9): Distinguish request latency from bulk throughput and prioritize same-request critical-path evidence and end-to-end benefit before local tuning. Preserve existing throughput, timeout and intermittent-failure workflows. Change type: bounded diagnostic routing correction.

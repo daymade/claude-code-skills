@@ -308,12 +308,27 @@ restoring it would be a regression, not a recovery. Judge supersession by escala
    had labeled "unfinished development — handle later" held a 1128-line renderer; the base's
    was 1151 lines — every function present *plus* a later-added `base_url` image-rendering
    parameter. The scary label was stale; the stash was an early draft of already-landed work.
-3. **Distinctive-marker probe** — grep the base for the leftover's unique additions (new function
-   names, constants, error strings). All present → the work was absorbed (perhaps into a
-   refactor that moved it to a different file — search repo-wide, not just the original path).
+3. **Distinctive-marker candidate search** — grep the base for the leftover's unique additions (new
+   function names, constants, error strings) only to locate candidate current code; search repo-wide,
+   not just the original path. Then compare every affected hunk and behavior with the current base
+   and its current consumers. All markers present, a longer new file, an identical function name,
+   no currently configured caller, or a historical merge alone does not prove that the effective
+   current change is delivered.
+
+   - **Synthetic negative:** the base still defines `validate_record`, but the leftover's
+     required-column rejection and timestamp hardening are absent from its body and every helper.
+     The name and other markers match, yet those two behaviors remain live and block supersession.
+   - **Synthetic positive:** a refactor moves every validation/hardening hunk into a shared helper;
+     hunk-level comparison accounts for each behavior, current behavior checks pass, and every
+     current consumer replacing the leftover's path still reaches the equivalent helper. This
+     complete behavior-plus-consumer comparison can prove supersession. If no current consumer can
+     be identified, that comparison remains unresolved rather than becoming evidence of delivery.
+
    Real case: a backup branch's hardening (a required-columns check + a `COALESCE` timestamp
    fix) had been absorbed verbatim into a new shared `_core/` module the refactor created;
-   the original file was gone but every marker line lived on at the new path.
+   the original file was gone but every marker line lived on at the new path. The relocation found
+   the candidate; comparing those hunks and the replacement consumers supplied the supersession
+   evidence.
 
 4. **Ask the base why it removed this — grep for the leftover's own name/path.** Rungs 1–3 all ask
    "is this content somewhere on the base?" and go quiet when the honest answer is *no*. But "the
@@ -466,9 +481,12 @@ active and ownership cannot transfer, hosting/API and existing immutable-object 
 what is already known, but the inability to refresh authority is a reported gap, not permission to
 fetch concurrently.
 
-For a selected or delegated classification batch, the task owner freezes the named canonical
-repository's common directory and exact ref/OID pairs alongside that snapshot. Pass both to the
-reviewer; the receiver must not rebuild the expected identity or target list from its own cwd.
+For a selected or delegated classification batch and its subsequent closeout, the task owner freezes
+the named canonical repository's common directory and every original ref/OID pair alongside that
+snapshot. Keep intentionally retained refs as explicit original rows rather than dropping them from
+the inventory. Pass the identity and manifest to the reviewer; the receiver must not rebuild the
+expected identity or target list from its own cwd. Freeze the original manifest bytes' SHA-256 at
+this same preparation, and never reconstruct a smaller final subset and call it the original.
 Two independent clones may share the same remote and base but hold different local refs.
 
 ```bash
@@ -481,14 +499,20 @@ for ref in refs/heads/feature-a refs/heads/feature-b; do
   oid=$(git -C "$REPO" rev-parse --verify "$ref") || exit 2
   printf '%s\t%s\n' "$ref" "$oid" || exit 2
 done > "$TASK_DIR/targets.tsv" || exit 2
+test -s "$TASK_DIR/targets.tsv" || exit 2
+python3 -c 'import hashlib, pathlib, sys; print(hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest())' \
+  "$TASK_DIR/targets.tsv" > "$TASK_DIR/targets.tsv.sha256" || exit 2
 (cd "$REPO" && bash "$SKILL_DIR/scripts/git_classify_refs.sh" --base "$BASE" \
   --expected-common-dir "$COMMON_DIR" --target-manifest "$TASK_DIR/targets.tsv")
 )
 ```
 
 The task owner runs this recipe with absolute input paths. Its checked prerequisites stop the
-subshell before classification when repository/base resolution or manifest creation fails;
-an old manifest must not become a successful substitute. Trial merges can write unreferenced
+subshell before classification when repository/base resolution or manifest/hash creation fails;
+an old manifest or hash must not become a successful substitute. The `.sha256` file binds the exact
+first frozen bytes: closeout passes that recorded value rather than recomputing a hash from a later
+manifest. If new evidence requires a different inventory, restart preparation and preserve the prior
+evidence instead of silently replacing the original. Trial merges can write unreferenced
 Git objects, so this is not a repository-read-only probe: refs, index and working files stay
 unchanged, but existing sole-writer coordination still applies.
 
@@ -583,6 +607,12 @@ changes as a binary diff, copy or tar the exact dirty/untracked paths outside th
 extract to a fresh verification directory and byte-compare every declared path. Do not use stash,
 a temporary clone, or a worktree as the backup mechanism.
 
+For stashes already authorized as retirement targets, use the exporter's `--stash` / `--all-stashes`
+route and its generated recovery script. **[recovery_playbook.md](recovery_playbook.md)** § Ladder
+step 2 names the exact original-index, original-worktree, and original-untracked artifacts and
+recovered layout. Never apply the original-index and tracked-worktree patches successively to one
+index. This export is recovery preservation, not delivery evidence.
+
 If the new base now tracks a path that was untracked WIP at the first snapshot, it will collide
 with checkout materialization. Move that exact path to the verified external backup, update the
 clean base, then restore the saved bytes; it should naturally become a tracked modification. Never
@@ -611,7 +641,11 @@ stale local remote-tracking refs.
 ### 5. Prove the user-visible terminal state
 
 If every local/hosted branch, associated PR head, and linked worktree path in the convergence set is
-explicitly change-authorized, the task is complete only when all are independently true:
+explicitly change-authorized, the task is complete only when all are independently true. Before any
+terminal claim, reconcile every original inventory row and frozen path to an explicit outcome:
+content delivered and current-consumer behavior verified, intentionally superseded through the
+ladder, intentionally caller-retained, inspect-only/excluded and untouched, or unresolved. A
+preserved export is recovery evidence, not delivery; every unresolved item remains unfinished.
 
 - the hosting service lists only the intended maintained branch;
 - local `refs/heads/` contains only `main`, and `HEAD`, local `main`, and the refreshed
@@ -623,6 +657,38 @@ explicitly change-authorized, the task is complete only when all are independent
   a different tracked/untracked classification;
 - until separately authorized artifact retirement completes, the recovery bundle still verifies
   and lists the retired exact tips.
+
+After establishing the semantic and publication evidence above, bind the requested resource readback
+to the first frozen manifest and its preparation-time hash:
+
+```bash
+# Resolve scripts/... against the Skill bundle root. Repeat --absent-worktree per authorized path.
+EXPECTED_MANIFEST_SHA256=$(< "$TASK_DIR/targets.tsv.sha256")
+scripts/git_verify_closeout.py \
+  --repo "$REPO" \
+  --expected-common-dir "$COMMON_DIR" \
+  --target-manifest "$TASK_DIR/targets.tsv" \
+  --expected-manifest-sha256 "$EXPECTED_MANIFEST_SHA256" \
+  --absent-worktree "<authorized-retired-worktree-path>"
+```
+
+Add `--keep-ref <full-ref>` only for an original-manifest ref intentionally retained by the current
+outcome. It reports `caller_retained` plus original/current identity; it is not semantic-delivery
+proof and grants no authority over another person's active WIP. Add `--absent-path <path>` only for
+an exact artifact whose removal was separately authorized and is expected to have happened. When
+the caller owns whole-primary closeout, `--expected-main <full-sha>` checks the primary's attached
+`HEAD` and `refs/heads/main`, not floating `origin/main`; add `--require-clean` only when a clean
+primary, including untracked files, is part of that authorized outcome.
+
+Exit 0 means every requested resource postcondition holds, exit 1 reports observed unresolved,
+drift, presence, dirtiness, or mismatch, and exit 2 reports invalid input, Git failure, or unknown
+state. Treat Git diagnostics as unknown even when Git exits 0. Rely on the helper's per-command
+filesystem-monitor override to avoid invoking repository callbacks. Every JSON result retains
+`resource_postconditions_only=true` and
+`business_content_delivery=not_assessed`. The helper does not prove that the initial inventory was
+complete, semantic/business delivery, remote publication, or deletion authority. It rejects a
+manifest whose bytes differ from the first recorded hash; never supply a new hash for a reduced
+final subset and call that subset the original.
 
 Tags, stashes, and dangling commits do not block a branch/worktree convergence claim unless the
 Outcome contract separately names them as retirement targets; preserve or report them under their
@@ -677,9 +743,16 @@ fi
 printf 'ABSENT %s\n' "$ARTIFACT_PATH"
 ```
 
-The lifecycle has two valid terminal states: a verified recovery set remains available, or every
-separately authorized temporary artifact has been retired and independently proven absent. Never
-report the second state when backup-only or unresolved work remains.
+Choose the terminal claim from the user's current authorized outcome rather than treating these as
+interchangeable states. **Retain recovery:** a verified recovery set may remain by design once every
+original item has an explicit delivery, supersession, or retention outcome and the retained paths
+are named. **No leftovers in the authorized set:** that recovery set's continued presence is not a
+lawful terminal state. Every original retirement target must be delivered or proven intentionally
+superseded, no unresolved or backup-only payload may remain, and every separately authorized
+temporary artifact must be retired and independently proven absent. Name maintained or
+caller-retained refs explicitly instead of counting them as delivered. Inspect-only or excluded
+active collaborator WIP stays untouched and separately reported; neither outcome expands authority
+over it.
 
 ## Independent clone retirement — preserve refs, metadata, and borrowed objects
 
