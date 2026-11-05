@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-cleaner** (`daymade-macos` v1.29.1 → v1.30.0): Add selected external-disk cold relocation with metadata pilots, reusable content evidence, original-entry rollback and explicitly scoped reconnection checks.
 - **prior-work-retrieval** (`daymade-claude-code` v5.0.0 → v5.0.1): Keep guarded reuse of supplied exact-candidate review results out of history retrieval; retain mixed historical requests and existing retrieval obligations.
 - **ghostty-use** (v1.10.0 → v1.11.0): Resolve UUID-less terminal sessions in automatic snapshots and record timestamped coverage, unchanged rounds, failures and timeouts. Preserve change-only archives, partial-backup retention and the configured schedule. Reuse one history-index lookup per manual snapshot. Change type: compatible snapshot reliability repair.
 
