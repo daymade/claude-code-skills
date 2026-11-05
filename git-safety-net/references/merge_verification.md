@@ -682,7 +682,9 @@ primary, including untracked files, is part of that authorized outcome.
 
 Exit 0 means every requested resource postcondition holds, exit 1 reports observed unresolved,
 drift, presence, dirtiness, or mismatch, and exit 2 reports invalid input, Git failure, or unknown
-state. Every JSON result retains `resource_postconditions_only=true` and
+state. Treat Git diagnostics as unknown even when Git exits 0. Rely on the helper's per-command
+filesystem-monitor override to avoid invoking repository callbacks. Every JSON result retains
+`resource_postconditions_only=true` and
 `business_content_delivery=not_assessed`. The helper does not prove that the initial inventory was
 complete, semantic/business delivery, remote publication, or deletion authority. It rejects a
 manifest whose bytes differ from the first recorded hash; never supply a new hash for a reduced

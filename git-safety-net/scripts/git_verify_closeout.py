@@ -98,7 +98,7 @@ def build_parser() -> argparse.ArgumentParser:
             "any target ref is observed.\n\n"
             "Every manifest ref must be absent by default. A ref at its original tip is "
             "still_present/unresolved (exit 1); a ref at another tip is drift (exit 1). "
-            "Git failures and unknown observations are exit 2, never absence. --keep-ref "
+            "Git failures, diagnostics and unknown observations are exit 2, never absence. --keep-ref "
             "is only an explicit absence waiver for an original-manifest member; it "
             "reports original/current identity and is not semantic-delivery proof.\n\n"
             "Relative --absent-path and --absent-worktree values resolve against the "
@@ -107,7 +107,8 @@ def build_parser() -> argparse.ArgumentParser:
             "and exact canonical registration absence.\n\n"
             "--expected-main and --require-clean apply to the primary checkout (the "
             "first git worktree list record), not to floating origin/main. Use them only "
-            "when the caller owns whole-primary closeout.\n\n"
+            "when the caller owns whole-primary closeout. Configured filesystem-monitor "
+            "callbacks are disabled for these observations.\n\n"
             "Exit meanings: 0 = every requested resource postcondition holds; "
             "1 = observed unresolved, drift, present, dirty, or mismatched conditions; "
             "2 = invalid input, Git error, or unknown state. All outcomes preserve "
@@ -264,7 +265,9 @@ def bounded_error_text(data: bytes) -> str:
 
 
 def run_git(repo: str, arguments: Sequence[str]) -> GitResult:
-    command = ["git", "--no-optional-locks", "-C", repo, *arguments]
+    command = [
+        "git", "--no-optional-locks", "-c", "core.fsmonitor=false", "-C", repo, *arguments
+    ]
     try:
         completed = subprocess.run(
             command,
@@ -295,6 +298,12 @@ def require_git_success(result: GitResult, operation: str) -> GitResult:
             "git_command_failed",
             f"{operation} failed with Git exit {result.returncode}: {bounded_error_text(result.stderr)}",
         )
+    if result.stderr.strip():
+        # Enumeration can exit 0 while warning that an existing broken ref was skipped.
+        raise GitFailure(
+            "git_diagnostic",
+            f"{operation} reported diagnostics: {bounded_error_text(result.stderr)}",
+        )
     return result
 
 
@@ -320,8 +329,10 @@ def canonical_existing_directory(raw_path: str, label: str) -> str:
 
 
 def absolute_observation_path(raw_path: str) -> str:
-    # Deliberately do not resolve symlinks: lstat must observe a dangling symlink itself.
-    return os.path.abspath(os.path.expanduser(raw_path))
+    # Preserve traversal: alias/../target is not necessarily its lexical sibling.
+    # Do not resolve the final component: lstat must observe a dangling symlink itself.
+    expanded = os.path.expanduser(raw_path)
+    return expanded if os.path.isabs(expanded) else os.path.join(os.getcwd(), expanded)
 
 
 def comparison_path(raw_path: str) -> str:

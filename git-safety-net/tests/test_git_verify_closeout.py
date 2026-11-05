@@ -526,6 +526,84 @@ class VerifyCloseoutTests(unittest.TestCase):
         self.assertEqual(report["refs"][0]["condition"], "unknown")
         self.assert_boundaries(report)
 
+    def test_broken_existing_ref_is_unknown_even_when_git_exits_zero(self) -> None:
+        refname = "refs/heads/synthetic-broken"
+        manifest, digest = self.write_manifest([(refname, self.main_sha)])
+        healthy = self.run_verify(manifest, digest)
+        self.assertEqual(healthy.returncode, 0, healthy.stdout + healthy.stderr)
+        ref_path = self.primary / ".git" / refname
+        ref_path.write_text("broken-ref-value\n", encoding="utf-8")
+        enumeration = self.in_primary("for-each-ref", refname)
+        self.assertEqual(enumeration.returncode, 0)
+        self.assertTrue(enumeration.stderr, "fixture must reproduce successful diagnostic enumeration")
+        completed = self.run_verify(manifest, digest)
+        report = self.payload(completed)
+        self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+        self.assertEqual(report["refs"][0]["condition"], "unknown")
+        self.assertEqual(report["counts"]["refs_absent"], 0)
+        self.assertTrue(report["errors"])
+        self.assertFalse(report["all_requested_postconditions_hold"])
+        self.assertEqual(ref_path.read_text(), "broken-ref-value\n")
+        ref_path.unlink()
+        self.assertEqual(self.run_verify(manifest, digest).returncode, 0)
+        self.assert_boundaries(report)
+
+    def test_require_clean_disables_fsmonitor_and_still_detects_dirty_files(self) -> None:
+        marker = self.root / "fsmonitor marker"
+        hook = self.root / "writing fsmonitor.sh"
+        hook.write_text(
+            "#!/bin/sh\n"
+            f"printf x > {shlex.quote(str(marker))}\n"
+            "printf 'token\\0'\n",
+            encoding="utf-8",
+        )
+        hook.chmod(0o755)
+        self.in_primary("config", "core.fsmonitor", shlex.quote(str(hook)))
+        # Establish that ordinary status really invokes this configured callback.
+        self.in_primary("status", "--porcelain=v1")
+        self.assertTrue(marker.exists())
+        marker.unlink()
+        manifest, digest = self.write_manifest([("refs/heads/synthetic-monitor", self.main_sha)])
+        clean = self.run_verify(manifest, digest, "--require-clean")
+        self.assertEqual(clean.returncode, 0, clean.stdout + clean.stderr)
+        self.assertEqual(self.payload(clean)["cleanliness"]["condition"], "clean")
+        self.assertFalse(marker.exists())
+        for kind in ("tracked", "untracked"):
+            with self.subTest(kind=kind):
+                target = self.primary / ("tracked.txt" if kind == "tracked" else "new.txt")
+                target.write_text("changed synthetic data\n", encoding="utf-8")
+                completed = self.run_verify(manifest, digest, "--require-clean")
+                report = self.payload(completed)
+                self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+                self.assertEqual(report["cleanliness"]["condition"], "dirty")
+                self.assertFalse(marker.exists())
+                self.assert_boundaries(report)
+                if kind == "tracked":
+                    target.write_text("synthetic base\n", encoding="utf-8")
+                else:
+                    target.unlink()
+
+    def test_symlink_parent_traversal_observes_the_requested_path(self) -> None:
+        outside = self.root / "outside"
+        (outside / "nested").mkdir(parents=True)
+        payload = outside / "payload"
+        payload.write_text("retained synthetic payload\n", encoding="utf-8")
+        alias = self.root / "alias"
+        alias.symlink_to(outside / "nested", target_is_directory=True)
+        manifest, digest = self.write_manifest([("refs/heads/synthetic-traversal", self.main_sha)])
+        for raw in (str(alias) + "/../payload", "alias/../payload"):
+            for option in ("--absent-path", "--absent-worktree"):
+                with self.subTest(raw=raw, option=option):
+                    completed = self.run_verify(manifest, digest, option, raw)
+                    report = self.payload(completed)
+                    self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+                    rows = report["absent_paths"] if option == "--absent-path" else report["absent_worktrees"]
+                    observed = rows[0]
+                    self.assertTrue(observed.get("present", observed.get("path_present")))
+                    self.assert_boundaries(report)
+        payload.unlink()
+        self.assertEqual(self.run_verify(manifest, digest, "--absent-path", "alias/../payload").returncode, 0)
+
     def test_require_clean_does_not_mutate_primary_or_shared_index(self) -> None:
         self.in_primary("update-index", "--split-index")
         git_dir = (self.primary / ".git").resolve()
