@@ -313,7 +313,7 @@ buys nothing past the gate — the missing piece is named evidence, not
 confidence. `--add` has no evidence field, so `--note` doubles as its
 authority channel.
 
-Two sibling `--add` gates shipped with it. An OPEN review source or candidate
+Two sibling `--add` gates shipped with it. An OPEN review source or any appended candidate
 containing the literal FROM refuses the add, including a longer phrase containing
 it: the replacement would rewrite an undecided question. Resolve those rows first.
 A different source merely proposing the same TO remains pending and does not block

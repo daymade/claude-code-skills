@@ -7,7 +7,10 @@ commit. These tests pin the incident pairs as POSITIVE cases (must refuse) so
 the gate cannot silently widen back into discretion.
 """
 import argparse
+import os
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -175,6 +178,7 @@ def isolated_config(tmp_path, monkeypatch):
     config_dir = tmp_path / "config"
     config_dir.mkdir()
     monkeypatch.setenv("TRANSCRIPT_FIXER_CONFIG_DIR", str(config_dir))
+    monkeypatch.setenv("TRANSCRIPT_FIXER_DB_PATH", str(config_dir / "corrections.db"))
     reset_config()
     yield config_dir
     reset_config()
@@ -235,6 +239,40 @@ class TestAddPendingConflictGuard:
         assert exc.value.code == 2
         assert _get_review_queue().get(item_id).status == "pending"
         assert not _get_service().repository.get_all_corrections(active_only=False)
+
+    @pytest.mark.parametrize("first_candidate,attached_candidate,expected_rc", [
+        ("FirstCandidate", "prefixZ9SourceTokensuffix", 2),
+        ("prefixZ9SourceTokensuffix", "secondZ9SourceToken", 2),
+        ("FirstCandidate", "Z9TargetToken", 0),
+        ("FirstCandidate", None, 0),
+    ])
+    def test_attached_candidates_checked_by_real_enqueue_and_cli(
+        self, isolated_config, first_candidate, attached_candidate, expected_rc
+    ):
+        queue = _get_review_queue()
+        # Queue anchors cannot be OS-temp files. This disposable workspace
+        # anchor exercises the actual enqueue/consolidation route, not a
+        # hand-written review_candidates row or a mocked temp-path gate.
+        with tempfile.TemporaryDirectory(prefix="dictionary-candidate-", dir=Path(__file__).parent) as folder:
+            anchor = Path(folder) / "anchor.md"
+            content = "Synthetic anchor: UnrelatedSource has a disputed reading.\n"
+            anchor.write_text(content, encoding="utf-8")
+            common = dict(original="UnrelatedSource", file=str(anchor.resolve()), line=1,
+                          context=content.strip(), domain="demo", kind="wording", source="manual")
+            item_id = queue.enqueue([{**common, "suggested": first_candidate}])["added"][0]
+            attached = queue.enqueue([{**common, "suggested": attached_candidate}])
+            assert attached["merged_candidates"] == [{"id": item_id}]
+            before = queue.get(item_id).to_dict()
+            assert len(before["candidates"]) == 2
+            conflicts = queue.pending_dictionary_conflicts("Z9SourceToken")
+            assert [item.id for item in conflicts] == ([item_id] if expected_rc else [])
+            command = [sys.executable, str(Path(__file__).resolve().parents[1] / "fix_transcription.py"),
+                       "--add", "Z9SourceToken", "Z9TargetToken", "--domain", "demo"]
+            result = subprocess.run(command, env=dict(os.environ), capture_output=True, text=True)
+            assert result.returncode == expected_rc, result.stderr
+            assert queue.get(item_id).to_dict() == before
+            rules = _get_service().repository.get_all_corrections(active_only=False)
+            assert len(rules) == (0 if expected_rc else 1)
 
     @pytest.mark.parametrize("bad", [None, "", "   "])
     def test_missing_or_empty_source_refuses_before_write(self, isolated_config, bad):

@@ -1054,8 +1054,9 @@ class ReviewQueue:
     def pending_dictionary_conflicts(self, from_text: str) -> list[ReviewItem]:
         """Open questions whose source or candidate the literal FROM would replace.
 
-        Sharing only the destination word does not make an unrelated question
-        affected. Use literal substring matching, as Stage 1 does, so a rule
+        Check appended proposals under the occurrence parent as well as the main
+        suggestion. Sharing only the destination word does not make an unrelated
+        question affected. Use literal substring matching, as Stage 1 does, so a rule
         cannot silently rewrite a longer pending source/candidate either.
         """
         if not isinstance(from_text, str) or not from_text.strip():
@@ -1065,9 +1066,16 @@ class ReviewQueue:
                 """SELECT * FROM review_items
                     WHERE status = ?
                       AND (instr(COALESCE(original_text, ''), ?) > 0
-                           OR instr(COALESCE(suggested_text, ''), ?) > 0)
+                           OR instr(COALESCE(suggested_text, ''), ?) > 0
+                           OR EXISTS (
+                               SELECT 1 FROM review_candidates AS candidate
+                               WHERE candidate.item_id = COALESCE(
+                                   review_items.occurrence_parent, review_items.id)
+                                 AND instr(COALESCE(json_extract(
+                                     candidate.payload_json, '$.suggested_text'), ''), ?) > 0
+                           ))
                     ORDER BY id ASC""",
-                [PENDING, from_text, from_text],
+                [PENDING, from_text, from_text, from_text],
             ).fetchall()
         return [self._row_to_item(row) for row in rows]
 
