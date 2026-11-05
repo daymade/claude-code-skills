@@ -18,6 +18,62 @@ import sys
 from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 
+# Only these controlled messages reach stderr; never render raw exceptions,
+# hosted response bodies, credentials or user-supplied operands on rejection.
+_REJECTIONS = {
+    "invalid_input": "Check the explicit actor, host, target and command arguments.",
+    "host_mismatch": "Use operands on the explicitly checked host.",
+    "target_required": "Supply the explicit target; PR merges also need one PR and a complete reviewed head.",
+    "raw_merge_rejected": "Use guarded pr merge with --match-head-commit; keep the same target.",
+    "preflight_unavailable": "Read the PR through the same channel and resolve access or service failure.",
+    "preflight_invalid": "Read the PR again; required preflight fields are missing or invalid.",
+    "target_mismatch": "The resolved PR differs from the explicit repository; verify the target.",
+    "pr_not_open": "The PR is not open; read its current state before proceeding.",
+    "pr_draft": "The PR is draft or its draft state is unverified; read its current state.",
+    "head_mismatch": "The PR head differs from the reviewed commit; reconcile and review the new head.",
+    "mergeability_conflicting": "GitHub reports conflicts; inspect the current head and base.",
+    "mergeability_unknown": "GitHub has not confirmed mergeability; obtain a fresh read before any new attempt.",
+    "merge_state_unknown": "GitHub's merge state is unrecognized; inspect the current PR requirements.",
+    "bypass_ack_required": "An exact --ack-merge-bypass and separate authorization are required for --admin.",
+    "bypass_mode_invalid": "Use bypass acknowledgement only for its explicit --admin merge, without --auto.",
+    "checks_unavailable": "Required-check evidence is unavailable; read the checks through the same channel.",
+    "checks_pending": "Required checks are pending; wait for their final results and read them again.",
+    "checks_failed": "Required checks failed or were cancelled; inspect their results before proceeding.",
+    "checks_invalid": "Required-check evidence is malformed or unknown; verify the reported checks.",
+    "checks_command_failed": "The required-check command failed; resolve that failure before proceeding.",
+    "checks_absence_unverified": "No-check evidence is unverified; inspect active rulesets and legacy protection.",
+    "approvals_unmet": "Effective approval requirements are unmet; inspect reviewDecision and current policy.",
+    "merge_requirements_blocked": "Hosted merge requirements are blocked; inspect the current PR requirements.",
+    "base_behind": "The PR is behind its base; reconcile the branch under the authorized workflow.",
+    "credential_unavailable": "This channel's credential is unavailable; resolve its approved credential route.",
+    "identity_unavailable": "Authenticated user lookup failed; resolve this channel's read-only identity check.",
+    "actor_mismatch": "The actor is missing or differs from --expected-login; verify the authorized identity.",
+    "io_unavailable": "A required local command or file is unavailable; inspect the local execution environment.",
+    "command_timeout": "A command timed out; inspect its state before considering another invocation.",
+}
+
+
+class GuardError(ValueError):
+    """A rejection whose public diagnostic is selected from a fixed catalogue."""
+    def __init__(self, code):
+        self.code = code
+        super().__init__(_REJECTIONS[code])
+
+
+def _report_rejection(code):
+    print(f"checked-gh: {code}: {_REJECTIONS[code].removesuffix('.')}; no automatic retry", file=sys.stderr)
+
+
+def _check_rejection(rows, fallback):
+    """Classify a rejected response without changing its admission decision."""
+    if isinstance(rows, list) and rows and all(isinstance(row, dict) for row in rows):
+        if any(row.get("bucket") in ("fail", "cancel") for row in rows):
+            return GuardError("checks_failed")
+        if any(row.get("bucket") == "pending" for row in rows):
+            return GuardError("checks_pending")
+    return GuardError(fallback)
+
+
 def _values(command, names, data_indices):
     values = []
     for i, arg in enumerate(command):
@@ -62,7 +118,7 @@ def _reject_raw_merge(command, data_indices):
         url = urlsplit(endpoint)
         path = unquote(url.path).strip("/")
         if re.search(r"(?:^|/)pulls/\d+/merge$", path) and method not in {"GET", "HEAD"}:
-            raise ValueError("raw PR merge writes can use implicit bypass; use guarded pr merge with --match-head-commit")
+            raise GuardError("raw_merge_rejected")
         if path.split("/")[-1:] != ["graphql"]:
             continue
         queries = list(parse_qs(url.query).get("query", []))
@@ -81,7 +137,7 @@ def _reject_raw_merge(command, data_indices):
             # The operation name can itself be mergePullRequest; it is not a field.
             code = re.sub(r"\b(query|mutation|subscription)\s+mergePullRequest\b", r"\1", code)
             if re.search(r"\bmergePullRequest\s*\(", code):
-                raise ValueError("raw GraphQL PR merges are not guarded; use guarded pr merge with --match-head-commit")
+                raise GuardError("raw_merge_rejected")
 
 
 def _no_required_checks(repo, base, env, run):
@@ -113,7 +169,7 @@ def _merge_preflight(command, data_indices, host, env, run, acknowledgement):
                       if i not in data_indices and not command[i].startswith("-")), None)
     if command[:1] != ["pr"] or operation is None or command[operation] != "merge":
         if acknowledgement:
-            raise ValueError("merge bypass acknowledgement requires an explicit pr merge --admin operation")
+            raise GuardError("bypass_mode_invalid")
         return
     flags = set()
     for i, arg in enumerate(command):
@@ -129,49 +185,53 @@ def _merge_preflight(command, data_indices, host, env, run, acknowledgement):
             flags.add(arg)
     if "--disable-auto" in flags or "--help" in flags or "-h" in flags:
         if acknowledgement or "--admin" in flags:
-            raise ValueError("bypass acknowledgement does not apply to this operation")
+            raise GuardError("bypass_mode_invalid")
         return
     repos = _values(command, ("--repo", "-R"), data_indices)
     heads = _values(command, ("--match-head-commit",), data_indices)
     selectors = [arg for i, arg in enumerate(command[operation + 1:], operation + 1)
                  if i not in data_indices and not arg.startswith("-")]
     if len(repos) != 1 or len(heads) != 1 or len(selectors) != 1:
-        raise ValueError("merge requires one explicit PR, repository and full --match-head-commit")
+        raise GuardError("target_required")
     expected = heads[0]
     if not re.fullmatch(r"[0-9a-fA-F]{40}", expected) or expected == "0" * 40:
-        raise ValueError("merge head must be a complete nonzero 40-hex commit")
+        raise GuardError("target_required")
     result = run(["gh", "pr", "view", selectors[0], "-R", repos[0], "--json",
                   "number,url,state,isDraft,headRefOid,baseRefName,mergeable,mergeStateStatus,reviewDecision"],
                  env=env, capture_output=True, text=True, timeout=30)
     if result.returncode != 0:
-        raise ValueError("merge preflight unavailable; no merge ran")
+        raise GuardError("preflight_unavailable")
     try:
         pr = json.loads(result.stdout)
     except (ValueError, TypeError):
-        raise ValueError("merge preflight returned invalid JSON") from None
+        raise GuardError("preflight_invalid") from None
     required = {"number", "url", "state", "isDraft", "headRefOid", "baseRefName", "mergeable", "mergeStateStatus", "reviewDecision"}
     if not isinstance(pr, dict) or not required <= pr.keys():
-        raise ValueError("merge preflight fields are missing; no merge ran")
+        raise GuardError("preflight_invalid")
     if (type(pr["number"]) is not int or pr["number"] < 1
             or any(not isinstance(pr[key], str) or not pr[key] for key in
                    ("url", "state", "headRefOid", "baseRefName", "mergeable", "mergeStateStatus"))):
-        raise ValueError("merge preflight fields are empty or invalid; no merge ran")
+        raise GuardError("preflight_invalid")
     target = urlsplit(pr["url"])
     repo = repos[0].removeprefix(host + "/")
     if target.hostname != host or target.path.strip("/").casefold() != f"{repo}/pull/{pr['number']}".casefold():
-        raise ValueError("resolved PR differs from the explicit repository")
-    if pr["state"] != "OPEN" or pr["isDraft"] is not False or pr["headRefOid"] != expected.lower():
-        raise ValueError("PR is not open, non-draft and at the reviewed head")
+        raise GuardError("target_mismatch")
+    if pr["state"] != "OPEN":
+        raise GuardError("pr_not_open")
+    if pr["isDraft"] is not False:
+        raise GuardError("pr_draft")
+    if pr["headRefOid"] != expected.lower():
+        raise GuardError("head_mismatch")
     if pr["mergeable"] != "MERGEABLE":
-        raise ValueError("mergeability is conflicting or unknown; no merge ran")
+        raise GuardError("mergeability_conflicting" if pr["mergeable"] == "CONFLICTING" else "mergeability_unknown")
     if pr["mergeStateStatus"] not in {"CLEAN", "UNSTABLE", "BLOCKED", "BEHIND"}:
-        raise ValueError("hosted merge state is unknown; no merge ran")
+        raise GuardError("merge_state_unknown")
     if "--admin" in flags:
         target_ack = f"{repo}#{pr['number']}@{expected.lower()}"
         if not isinstance(acknowledgement, str) or acknowledgement.casefold() != target_ack.casefold():
-            raise ValueError("--admin needs --ack-merge-bypass bound to OWNER/REPO#PR@FULL_SHA and separate user authorization")
+            raise GuardError("bypass_ack_required")
         if "--auto" in flags:
-            raise ValueError("explicit bypass and auto-merge cannot be combined")
+            raise GuardError("bypass_mode_invalid")
         checks = run(["gh", "pr", "checks", str(pr["number"]), "-R", repos[0],
                       "--required", "--json", "name,bucket"], env=env,
                      capture_output=True, text=True, timeout=30)
@@ -185,27 +245,27 @@ def _merge_preflight(command, data_indices, host, env, run, acknowledgement):
                 rows = []
                 no_checks_message = True
             else:
-                raise ValueError("required-check evidence is unavailable; no bypass ran") from None
+                raise GuardError("checks_unavailable") from None
         if checks.returncode != 0 and not no_checks_message:
-            raise ValueError("required-check command failed; no bypass ran")
+            raise _check_rejection(rows, "checks_command_failed")
         if rows == []:
             if not _no_required_checks(repo, pr["baseRefName"], env, run):
-                raise ValueError("absence of required CI is unverified; no bypass ran")
+                raise GuardError("checks_absence_unverified")
         elif (checks.returncode != 0 or not isinstance(rows, list)
               or any(not isinstance(row, dict) or not row.get("name")
-                     or row.get("bucket") not in {"pass", "skipping"} for row in rows)):
-            raise ValueError("required checks failed, are pending or unknown; no bypass ran")
+                     or row.get("bucket") not in ("pass", "skipping") for row in rows)):
+            raise _check_rejection(rows, "checks_invalid")
         # This acknowledgement is not authorization or an independent-review attestation.
         return
     if acknowledgement:
-        raise ValueError("bypass acknowledgement requires an explicit --admin flag")
+        raise GuardError("bypass_mode_invalid")
     if "--auto" in flags:
         # Explicit scheduling is delegated to gh; it does not authorize bypass.
         return
     if pr["reviewDecision"] not in (None, "", "APPROVED"):
-        raise ValueError("effective approval requirements remain unmet; no merge ran")
+        raise GuardError("approvals_unmet")
     if pr["mergeStateStatus"] not in {"CLEAN", "UNSTABLE"}:
-        raise ValueError("hosted merge requirements are blocked or unknown; no merge ran")
+        raise GuardError("base_behind" if pr["mergeStateStatus"] == "BEHIND" else "merge_requirements_blocked")
 
 
 def checked_invocation(expected_login: str, host: str, command: list[str],
@@ -231,14 +291,14 @@ def checked_invocation(expected_login: str, host: str, command: list[str],
         if value.startswith(("https://", "http://")):
             url = urlsplit(value)
             if url.hostname != host:
-                raise ValueError("repository hostname differs from the checked host")
+                raise GuardError("host_mismatch")
             value = url.path.strip("/")
         parts = value.split("/")
         if len(parts) == 3:
             if parts.pop(0) != host:
-                raise ValueError("repository hostname differs from the checked host")
+                raise GuardError("host_mismatch")
         if len(parts) != 2 or not all(parts):
-            raise ValueError("an explicit OWNER/REPO target is required")
+            raise GuardError("target_required")
         return host + "/" + "/".join(parts)
     for index, arg in enumerate(command):
         if index in data_indices:
@@ -250,14 +310,14 @@ def checked_invocation(expected_login: str, host: str, command: list[str],
                 raise ValueError("option needs a value")
             data_indices.add(index + 1)
         if arg.startswith("--hostname=") and arg.split("=", 1)[1] != host:
-            raise ValueError("command hostname differs from the checked host")
+            raise GuardError("host_mismatch")
         if arg == "--hostname" and (index + 1 == len(command) or command[index + 1] != host):
-            raise ValueError("command hostname differs from the checked host")
+            raise GuardError("host_mismatch")
         url_hosts = {host}
         if command[:1] == ["api"] and host == "github.com":
             url_hosts.add("api.github.com")
         if arg.startswith(("https://", "http://")) and urlsplit(arg).hostname not in url_hosts:
-            raise ValueError("URL operand differs from the checked host")
+            raise GuardError("host_mismatch")
         if command[:1] in (["secret"], ["variable"]):
             if arg in {"--org", "-o"}:
                 if index + 1 == len(command) or not command[index + 1].strip():
@@ -284,16 +344,16 @@ def checked_invocation(expected_login: str, host: str, command: list[str],
     repository_commands = {"pr", "issue", "workflow", "run", "release", "secret",
                            "variable", "label", "cache", "ruleset", "attestation"}
     if command and command[0] in repository_commands and not repo_bound and not account_scope:
-        raise ValueError("repository operations require explicit -R OWNER/REPO")
+        raise GuardError("target_required")
     if command[:1] == ["repo"]:
         if len(command) < 3 or command[2].startswith("-"):
-            raise ValueError("repo operations require an explicit OWNER/REPO operand")
+            raise GuardError("target_required")
         command[2] = qualified_repo(command[2])
     _reject_raw_merge(command, data_indices)
     captured = run(["gh", "auth", "token", "--hostname", host],
                    capture_output=True, text=True, timeout=30)
     if captured.returncode != 0 or not captured.stdout.strip():
-        print("checked-gh: cannot resolve this channel's credential; no operation ran", file=sys.stderr)
+        _report_rejection("credential_unavailable")
         return 2
     env = {key: value for key, value in os.environ.items()
            if key not in {"GH_REPO", "GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN",
@@ -304,14 +364,14 @@ def checked_invocation(expected_login: str, host: str, command: list[str],
     identity = run(["gh", "api", "--hostname", host, "user"], env=env,
                    capture_output=True, text=True, timeout=30)
     if identity.returncode != 0:
-        print("checked-gh: authenticated user lookup failed; no operation ran", file=sys.stderr)
+        _report_rejection("identity_unavailable")
         return 2
     try:
         actual = json.loads(identity.stdout).get("login")
     except (ValueError, AttributeError):
         actual = None
     if not isinstance(actual, str) or actual.casefold() != expected_login.casefold():
-        print(f"checked-gh: expected {expected_login}, observed {actual!r}; no operation ran", file=sys.stderr)
+        _report_rejection("actor_mismatch")
         return 1
     print(json.dumps({"channel": "gh", "host": host, "login": actual,
                       "identity": "verified_for_this_invocation"}), file=sys.stderr)
@@ -324,7 +384,8 @@ def checked_invocation(expected_login: str, host: str, command: list[str],
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     epilog="Rejections print a fixed reason code and safe next step; no automatic retry.")
     parser.add_argument("--expected-login", required=True)
     parser.add_argument("--host", default="github.com")
     parser.add_argument("--ack-merge-bypass", help="separately authorized --admin target: OWNER/REPO#PR@FULL_SHA")
@@ -334,8 +395,17 @@ def main() -> int:
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
     try:
         return checked_invocation(args.expected_login, args.host, command, merge_bypass=args.ack_merge_bypass)
-    except (ValueError, OSError, subprocess.TimeoutExpired) as exc:
-        print(f"checked-gh: {type(exc).__name__}; no automatic retry", file=sys.stderr)
+    except GuardError as exc:
+        _report_rejection(exc.code)
+        return 2
+    except ValueError:
+        _report_rejection("invalid_input")
+        return 2
+    except OSError:
+        _report_rejection("io_unavailable")
+        return 2
+    except subprocess.TimeoutExpired:
+        _report_rejection("command_timeout")
         return 2
 
 

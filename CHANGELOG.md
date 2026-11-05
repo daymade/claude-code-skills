@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **skill-creator** (`daymade-skill` v1.76.0 → v1.77.0): Move bounded file reading and command capture to standalone tools, retain portable generated compatibility entries in Skill Creator, and check distribution drift in CI. Change type: lossless ownership relocation with preserved interfaces.
+- **ghostty-use** (v1.11.0 → v1.11.1): Proactively route incomplete recovery snapshots to bounded candidate selection, preserve older retained IDs and the latest user closures, and align identity-verification guidance with the shared resolver. Change types: bounded recovery-entry repair and factual correction.
+- **github-ops** (v1.15.2 → v1.15.3): Report controlled refusal codes and safe next steps for checked GitHub writes while preserving actor, target, exact-head and merge-policy checks. Change type: compatible diagnostic repair.
 - **transcript-fixer** (`daymade-audio` v1.57.1 → v1.57.2): Scope dictionary-add review conflicts to the literal source and longer pending source/candidate matches. Preserve unrelated pending suggestions that share only the destination, along with person-name and corpus-evidence gates.
 
 - **macos-cleaner** (`daymade-macos` v1.29.1 → v1.30.0): Add selected external-disk cold relocation with metadata pilots, reusable content evidence, original-entry rollback and explicitly scoped reconnection checks.
