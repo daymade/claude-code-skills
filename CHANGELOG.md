@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **read-claude-code-history** (`daymade-claude-code` v5.1.0): Verify an exact session artifact against its current source before reuse; distinguish fresh, stale and unknown snapshots without scanning unrelated history.
 - **local-codex** (`daymade-codex` v2.4.4 → v2.4.5): Check saved-login sources and the bound owner's adoption capability before authorization; report the observed account, original operation receipt and useful continuation separately while preserving formal browser ownership.
+- **transcript-fixer** (`daymade-audio` v1.57.1 → v1.57.2): Scope dictionary-add review conflicts to the literal source and longer pending source/candidate matches. Preserve unrelated pending suggestions that share only the destination, along with person-name and corpus-evidence gates.
 
 - **macos-cleaner** (`daymade-macos` v1.29.1 → v1.30.0): Add selected external-disk cold relocation with metadata pilots, reusable content evidence, original-entry rollback and explicitly scoped reconnection checks.
 - **prior-work-retrieval** (`daymade-claude-code` v5.0.0 → v5.0.1): Keep guarded reuse of supplied exact-candidate review results out of history retrieval; retain mixed historical requests and existing retrieval obligations.

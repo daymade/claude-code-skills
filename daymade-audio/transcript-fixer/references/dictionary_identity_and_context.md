@@ -313,9 +313,11 @@ buys nothing past the gate — the missing piece is named evidence, not
 confidence. `--add` has no evidence field, so `--note` doubles as its
 authority channel.
 
-Two sibling `--add` gates shipped with it. An OPEN review row touching either
-text refuses the add (a dictionary rule written over an undecided question
-short-circuits it — resolve the row first). And a real-word FROM (common word
+Two sibling `--add` gates shipped with it. An OPEN review source or any appended candidate
+containing the literal FROM refuses the add, including a longer phrase containing
+it: the replacement would rewrite an undecided question. Resolve those rows first.
+A different source merely proposing the same TO remains pending and does not block
+the new rule. And a real-word FROM (common word
 / ≤2 chars / substring of common words / jieba-decomposable phrase) refuses
 without `--check-corpus --corpus <dir>` on the record — 真实词只能作 context
 rule（`--add-context-rule`）或先 `--probe` 标定, because the add-time
@@ -324,7 +326,7 @@ is real in this corpus".
 
 **Unlock order for a ruled family.** A user ruling makes the canonical form
 authoritative, but the resolve gate reads machine-readable claims only, and
-`--add` is refused while OPEN rows touch the pair. The working sequence:
+`--add` is refused while its FROM would rewrite an OPEN source or candidate. The working sequence:
 `--add-context-rule <variant> <canonical>` first — anchored context rules have
 no person-gate and no OPEN-row block — which puts the canonical form into the
 "context rules" lookup class in the table above; then resolve each OPEN row

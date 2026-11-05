@@ -986,20 +986,22 @@ def cmd_add_correction(args: argparse.Namespace) -> None:
     _reject_all_on_write(getattr(args, "domain", None), "--add")
     domain_to_write = domains[0] if domains else "general"
 
-    # Guard 1 (fail-closed): an OPEN review item already asks about either
-    # text. Writing a dictionary rule over an undecided question short-
-    # circuits the review — resolve the row first, then add the rule.
-    pending_conflicts = _get_review_queue().pending_text_conflicts(
-        [args.from_text, args.to_text]
-    )
+    # Guard 1 (fail-closed): refuse when this literal FROM would replace an
+    # OPEN source or candidate, including a substring of a longer question.
+    # An unrelated row sharing only TO is not affected by the new rule.
+    try:
+        pending_conflicts = _get_review_queue().pending_dictionary_conflicts(args.from_text)
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(2)
     if pending_conflicts:
         rows = "\n".join(
             f"  #{c.id} [{c.kind}/{c.source}] {c.original_text!r} → {c.suggested_text!r}"
             for c in pending_conflicts
         )
         print(
-            f"Error: review queue has {len(pending_conflicts)} OPEN item(s) touching "
-            f"'{args.from_text}'/'{args.to_text}' — a dictionary rule written over an "
+            f"Error: review queue has {len(pending_conflicts)} OPEN item(s) affected by "
+            f"FROM {args.from_text!r} — a dictionary rule written over an "
             f"undecided question short-circuits it. Resolve the row(s) first "
             f"(--show-review / --resolve-review), then --add:\n{rows}",
             file=sys.stderr,
