@@ -91,7 +91,7 @@ Investigation Progress:
 - [ ] Step 0:   Scope the symptom (exact error, exact times, who, who-not, what changed)
 - [ ] Step 0.5: Verify the premise — does direct evidence show the symptom is actually happening?
 - [ ] Step 0.6: **For large POST bodies: distinguish upload-timeout from processing-timeout** (see recipe below)
-- [ ] Step 0.7: **If nothing errors and it is just slow: measure a rate, then two-channel it** (see recipe below)
+- [ ] Step 0.7: **For bulk throughput collapse: measure a rate, then two-channel it** (see recipe below)
 - [ ] Step 1:   Gather direct evidence at every hop before hypothesizing
 - [ ] Step 2:   Frame ≥3 hypotheses; for each, name (a) what falsifies it, (b) which layer boundary the intervention would target
 - [ ] Step 3:   Design a decisive experiment (for network: layered isolation)
