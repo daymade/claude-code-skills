@@ -81,7 +81,7 @@ For competitor source-carrier/edition binding, claims, citations and existing-pr
 [citation readback checklist](competitors-analysis/references/analysis_checklist.md#citation-readback-and-counterevidence).
 For changes since a prior analysis, load its
 [Update classification](competitors-analysis/references/analysis_checklist.md#a-newly-discovered-path-is-not-necessarily-a-new-feature).
-For user-selected collection destinations, load the
+For user-selected competitor-analysis collection destinations, load the
 [collection destination route](competitors-analysis/references/collection_destination.md).
 For running an original application demo, follow that Skill's
 [original-app demo recipe](competitors-analysis/references/original-app-demo.md).
@@ -847,6 +847,10 @@ classification batches, read its
 
 For GitHub-hosted state — PRs, issues, Actions, repository or organization settings, permissions,
 and API/UI mutations — enter [github-ops](github-ops/SKILL.md).
+Before cloning repositories or making source-preservation or rescue copies, follow its
+[copy-purpose destination route](github-ops/references/repository_operations.md#match-copy-purpose-to-the-local-destination).
+For repository copies across GitHub accounts, use its
+[multi-account copy and sync procedure](github-ops/references/multi_account_repository_sync.md).
 For reauthentication during an authorized operation, use its
 [named-write authentication procedure](github-ops/SKILL.md#8-authenticate-only-for-the-named-write).
 For upstream contributions and desktop E2E acceptance, enter
