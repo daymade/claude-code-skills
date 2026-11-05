@@ -7,6 +7,7 @@
 - Mock upstream pattern
 - Result matrix and interpretation
 - Timing boundaries and timeout identity
+- Latency investigation priorities
 - Failure modes and probe self-verification
 - Intermittent failures: return to the original condition
 - Extended variants (4+ paths, client-side variation)
@@ -122,6 +123,41 @@ After a repair, observe the original caller's natural operation as well as the
 synthetic probe. Retain intermediate states, retries and the eventual result;
 successful final responses do not erase earlier timeouts. Report alert delivery
 and request recovery separately: fewer notifications do not establish recovery.
+
+## Latency investigation priorities
+
+Use this sequence when a page or API is slow and its limiting layer is unknown.
+Keep bulk-transfer rate experiments in the throughput workflow.
+
+1. Bind the user operation, complete-content boundary and existing latency budget.
+   Keep first-observed and subsequent requests separate; neither label proves
+   database, operating-system or connection-cache coldness.
+2. Correlate browser, gateway, application and upstream observations for the same
+   request. Record actual release, data scope, role, parameters and route. Do not
+   combine unrelated requests or compare different datasets as a speedup ratio.
+3. Partition the critical path: add disjoint serial intervals, take the observed
+   critical path for concurrent work, and keep nested spans inside their parents.
+   Leave unobserved time unassigned. Durations from different hosts do not establish
+   one-way network timing without clock and boundary evidence.
+4. Estimate the end-to-end benefit before tuning a component. For a fixed critical
+   path with other intervals unchanged, removing a serial component saves at most
+   its exclusive time. Treat queueing and other indirect effects as separate
+   hypotheses to measure. A hot SQL node, fewer scans or cache hits alone does not
+   establish a meaningful improvement to the user's wait.
+5. Choose the next probe by the decision it can change and its likely benefit,
+   using existing evidence first. If most time is unassigned, obtain the missing
+   boundary observation before more local tuning. When a candidate's measured
+   benefit is too small to address the remaining wait, stop that candidate rather
+   than add rounds until it looks convincing. Do not infer a resource bottleneck
+   from local-versus-cloud timing alone; inspect the relevant resource and waits.
+6. For an intervention, preserve request inputs and complete results, permissions,
+   ordering and the original budget. Use the bounded return-to-original comparison
+   below for intermittent symptoms. Reuse passed checks whose inputs are unchanged;
+   then verify the affected operation through the original consumer. A warm success
+   or extended diagnostic deadline does not pass a failing first-request budget.
+
+For established problem-statement, workload and time-division methods, see
+[Performance Analysis Methodology](https://www.brendangregg.com/methodology.html).
 
 ## Failure modes and probe self-verification
 

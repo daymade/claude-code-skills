@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **debugging-network-issues** (v1.11.8 → v1.11.9): Distinguish request latency from bulk throughput and prioritize same-request critical-path evidence and end-to-end benefit before local tuning. Preserve existing throughput, timeout and intermittent-failure workflows. Change type: bounded diagnostic routing correction.
 - **read-claude-code-history** (`daymade-claude-code` v5.1.0): Verify an exact session artifact against its current source before reuse; distinguish fresh, stale and unknown snapshots without scanning unrelated history.
 - **local-codex** (`daymade-codex` v2.4.4 → v2.4.5): Check saved-login sources and the bound owner's adoption capability before authorization; report the observed account, original operation receipt and useful continuation separately while preserving formal browser ownership.
 - **ghostty-use** (v1.11.0 → v1.11.1): Proactively route incomplete recovery snapshots to bounded candidate selection, preserve older retained IDs and the latest user closures, and align identity-verification guidance with the shared resolver. Change types: bounded recovery-entry repair and factual correction.
