@@ -38,6 +38,7 @@ import os
 import re
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -241,6 +242,108 @@ def _file_digest(path: Path) -> str:
     except OSError as error:
         raise SessionEvidenceError(f"cannot read Claude Session copy {path}: {error}") from error
     return digest.hexdigest()
+
+
+SNAPSHOT_MARKER = "<!-- claude-session-source-snapshot "
+
+
+def _source_fingerprint(path: Path) -> Dict:
+    """Hash one selected transcript, rejecting changes during the hash."""
+    before = path.stat()
+    digest = _file_digest(path)
+    after = path.stat()
+    keys = ("st_dev", "st_ino", "st_size", "st_mtime_ns", "st_ctime_ns")
+    if any(getattr(before, key) != getattr(after, key) for key in keys):
+        raise SessionEvidenceError("selected transcript changed during fingerprinting; refresh the evidence")
+    return {"sha256": digest, "bytes": after.st_size}
+
+
+def _load_saved_snapshot(artifact: Path, session_id: str) -> tuple[Dict, str]:
+    """Read reader metadata, never infer a snapshot from a matching title/ID."""
+    raw = artifact.read_bytes()
+    artifact_hash = hashlib.sha256(raw).hexdigest()
+    text = raw.decode("utf-8")
+    if text.lstrip().startswith("{"):
+        payload = json.loads(text)
+        if not isinstance(payload, dict) or payload.get("kind") != "claude_original_tool_evidence":
+            raise SessionEvidenceError("artifact is not original Claude tool evidence")
+    else:
+        # The reader writes metadata immediately after its heading. Do not
+        # accept a marker quoted later in a transcript as an artifact receipt.
+        header = text[:65536].splitlines()[:3]
+        if (len(header) != 3 or header[0] != "# Claude Code Session Evidence Briefing"
+                or header[1] != "" or not header[2].startswith(SNAPSHOT_MARKER)
+                or not header[2].endswith(" -->")):
+            raise SessionEvidenceError("briefing has no unique source snapshot; refresh it with this reader")
+        payload = json.loads(header[2][len(SNAPSHOT_MARKER):-4])
+        if not isinstance(payload, dict) or payload.get("kind") != "claude_session_source_snapshot":
+            raise SessionEvidenceError("briefing source snapshot has an unsupported shape")
+    if payload.get("session_id") != session_id:
+        raise SessionEvidenceError("artifact Session ID does not match exact --session")
+    source = payload.get("source")
+    if not isinstance(source, dict):
+        raise SessionEvidenceError("artifact source snapshot is missing")
+    if (not isinstance(source.get("path"), str) or not source["path"].strip()
+            or not Path(source["path"]).is_absolute()
+            or not isinstance(source.get("sha256"), str)
+            or not re.fullmatch(r"[0-9a-f]{64}", source["sha256"])
+            or type(source.get("bytes")) is not int or source["bytes"] <= 0
+            or type(source.get("physical_lines")) is not int or source["physical_lines"] <= 0
+            or source.get("observed_session_ids") != [session_id]):
+        raise SessionEvidenceError("artifact source identity/fingerprint is incomplete; refresh the evidence")
+    if "subagent_path" in source and (not isinstance(source["subagent_path"], str) or not source["subagent_path"]):
+        raise SessionEvidenceError("artifact subagent selector is invalid")
+    if source.get("subagent_files_read") == 1 and not source.get("subagent_path"):
+        raise SessionEvidenceError("artifact subagent selector is missing")
+    return source, artifact_hash
+
+
+def check_saved_snapshot(session_id: str, artifact: Path, manifest_path: Optional[str] = None) -> Dict:
+    """Compare a saved source fingerprint with exact current copies only.
+
+    Freshness covers the selected main/subagent transcript, not its unread
+    content, the user's current question, or a briefing's workspace sections.
+    """
+    result = {
+        "kind": "claude_session_snapshot_check", "session_id": session_id,
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "artifact": str(artifact), "status": "unknown", "reason": "snapshot_unavailable",
+        "scope": "selected transcript only; question, coverage and workspace state not checked",
+    }
+    try:
+        saved, artifact_hash = _load_saved_snapshot(artifact, session_id)
+        result["artifact_sha256"] = artifact_hash
+        result["saved_source"] = {key: saved[key] for key in ("path", "sha256", "bytes", "physical_lines")}
+        # No renamed-file fallback: a reuse check must never turn into a raw
+        # history scan. A missing canonical source needs a fresh exact read.
+        refs, warnings = discover_exact_session_refs(session_id, manifest_path, canonical_only=True)
+        if warnings:
+            result.update(reason="source_coverage_incomplete", diagnostics=warnings)
+            return result
+        exact = [ref for ref in refs if ref.get("session_id") == session_id]
+        if len(exact) != 1:
+            result["reason"] = "exact_source_unavailable" if not exact else "exact_source_ambiguous"
+            return result
+        current, _labels, copies = select_session_copy(exact[0])
+        if saved.get("subagent_path"):
+            leaf = select_subagent_file(current, saved["subagent_path"])
+            leaves = []
+            for parent in copies:
+                candidate = parent.parent / parent.stem / "subagents" / saved["subagent_path"]
+                if candidate.exists():
+                    leaves.append({"path": select_subagent_file(parent, saved["subagent_path"])})
+            current, _labels, copies = select_session_copy({"path": leaf, "copies": leaves})
+        if _resolved_path_key(Path(saved["path"])) not in {_resolved_path_key(path) for path in copies}:
+            result["reason"] = "artifact_source_unbound"
+            return result
+        fingerprint = _source_fingerprint(current)
+        result["current_source"] = {"path": str(current), **fingerprint}
+        unchanged = all(fingerprint[key] == saved[key] for key in ("sha256", "bytes"))
+        result.update(status="fresh" if unchanged else "stale",
+                      reason="source_unchanged" if unchanged else "source_changed_refresh_required")
+    except (SessionEvidenceError, HistorySourceConfigError, OSError, UnicodeError, ValueError) as error:
+        result["diagnostic"] = str(error)
+    return result
 
 
 def _is_byte_prefix(shorter: Path, longer: Path) -> bool:
@@ -1658,6 +1761,18 @@ def build_briefing(
 
     # Header
     sections.append("# Claude Code Session Evidence Briefing\n")
+    if parsed.get("source_snapshot_hash"):
+        snapshot = {
+            "kind": "claude_session_source_snapshot",
+            "session_id": parsed["selected_session_id"],
+            "source": {
+                "path": str(session_file), "sha256": parsed["source_snapshot_hash"],
+                "bytes": parsed["file_size"], "physical_lines": parsed["total_lines"],
+                "observed_session_ids": sorted(parsed["observed_session_ids"]),
+                "scope": "selected main transcript only; subagent and workspace sections not covered",
+            },
+        }
+        sections.append(SNAPSHOT_MARKER + json.dumps(snapshot, ensure_ascii=False, separators=(",", ":")) + " -->\n")
 
     # Session metadata
     if session_entry:
@@ -1875,6 +1990,10 @@ def main():
         ),
     )
     parser.add_argument(
+        "--check-snapshot", metavar="ARTIFACT",
+        help="With exact --session: check saved briefing/tool JSON source freshness; JSON + exit 0 fresh, 1 stale, 2 unknown",
+    )
+    parser.add_argument(
         "--find-command-sha256",
         metavar="HEX",
         help=(
@@ -1919,6 +2038,16 @@ def main():
                         help="Tool evidence UTF-8 JSON byte bound including newline (default: 64000; --full removes it)")
     args = parser.parse_args()
     tool_filters = bool(args.tool or args.contains or args.ordinal or args.from_time or args.to_time)
+    if args.check_snapshot is not None:
+        if (not args.session or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", args.session)
+                or args.project is not None or args.query or args.list or args.full
+                or args.tool_evidence or tool_filters or args.subagent_path is not None
+                or args.find_command_sha256 or args.agent_prompts or args.agent_description_prefix
+                or args.exclude_current):
+            parser.error("--check-snapshot needs exact --session and optional --history-sources only")
+        result = check_saved_snapshot(args.session, Path(args.check_snapshot), args.history_sources)
+        sys.stdout.write(_evidence_json(result))
+        sys.exit({"fresh": 0, "stale": 1, "unknown": 2}[result["status"]])
     if args.subagent_path is not None and not args.tool_evidence:
         parser.error("--subagent-path needs --tool-evidence")
     if args.subagent_path == "":
@@ -2180,6 +2309,7 @@ def main():
           file=sys.stderr)
 
     try:
+        source_fingerprint = _source_fingerprint(session_file)
         parsed = parse_session_structure(session_file)
         validate_selected_session_identity(
             parsed.get("observed_session_ids") or set(), session_id
@@ -2191,6 +2321,7 @@ def main():
         )
         sys.exit(1)
     parsed["selected_session_id"] = session_id
+    parsed["source_snapshot_hash"] = source_fingerprint["sha256"]
     parsed["source_labels"] = source_labels
     parsed["copy_paths"] = copy_paths
     cwd_summary = scan_claude_session(session_file)
@@ -2215,6 +2346,13 @@ def main():
         session_file,
         full=args.full,
     )
+
+    try:
+        if _source_fingerprint(session_file) != source_fingerprint:
+            raise SessionEvidenceError("selected transcript changed during the read; refresh the evidence")
+    except (SessionEvidenceError, OSError) as error:
+        print(f"Error: cannot freeze Claude Session source snapshot: {error}", file=sys.stderr)
+        sys.exit(1)
 
     print(briefing)
 
