@@ -85,7 +85,7 @@ jobs:
         run: python3 -m pip install --quiet pyyaml markdown-it-py
 
       - name: Deleted-target Markdown link regressions
-        run: python3 -m unittest discover -s tests -p test_deleted_markdown_links.py
+        run: python3 -m unittest discover -s scripts/ci -p test_deleted_markdown_links.py
 
       - name: Reject stale links to deleted targets in the final tree
         if: github.event_name == 'pull_request' || github.event_name == 'push'

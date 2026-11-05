@@ -12,7 +12,7 @@ import unittest
 from pathlib import Path
 
 
-CHECKER = Path(__file__).resolve().parents[1] / "scripts/ci/check_deleted_markdown_links.py"
+CHECKER = Path(__file__).resolve().with_name("check_deleted_markdown_links.py")
 
 
 class DeletedMarkdownLinksTests(unittest.TestCase):
