@@ -211,19 +211,18 @@ CURRENT_LEASE_RETURN = re.compile(
 # proving its inputs unchanged. Both full candidate identities and that guard are
 # contextual prerequisites; only the narrow reuse clause is excised below.
 PREVIOUS_REVIEWED_CANDIDATE = re.compile(
-    r"\b(?:Previous[ \t]+reviewed[ \t]+candidate|"
+    r"(?:\A|(?<=[.\n]))[ \t]*(?:Previous[ \t]+reviewed[ \t]+candidate|"
     r"Already[ \t]+independently[ \t]+passed[ \t]+candidate)"
     r"[ \t]*[:：]?[ \t]*`?(?P<sha>[0-9a-f]{40})`?(?![0-9a-f])",
     re.IGNORECASE,
 )
 CURRENT_REVIEWED_CANDIDATE = re.compile(
-    r"\b(?:Exact[ \t]+new[ \t]+candidate|New[ \t]+exact[ \t]+candidate)"
+    r"(?:\A|(?<=[.\n]))[ \t]*(?:Exact[ \t]+new[ \t]+candidate|New[ \t]+exact[ \t]+candidate)"
     r"[ \t]*[:：]?[ \t]*`?(?P<sha>[0-9a-f]{40})`?(?![0-9a-f])",
     re.IGNORECASE,
 )
 CURRENT_REVIEW_UNCHANGED_GUARD = re.compile(
-    r"\bonly[ \t]+after[ \t]+confirming[ \t]+unchanged[ \t]+relevant[ \t]+inputs\b"
-    r"|(?:\A|(?<=[.\n]))[ \t]*Verify[ \t]+all[ \t]+previously[ \t]+reviewed\b"
+    r"(?:\A|(?<=[.\n]))[ \t]*Verify[ \t]+all[ \t]+previously[ \t]+reviewed\b"
     r"[^\n.]{0,240}\bremain[ \t]+byte-identical[ \t]+to[ \t]+the[ \t]+passed[ \t]+candidate\b",
     re.IGNORECASE,
 )
@@ -231,7 +230,7 @@ CURRENT_CANDIDATE_REVIEW_REUSE = re.compile(
     r"(?:\A|(?<=[.\n]))[ \t]*Reuse[ \t]+"
     r"(?:independently[ \t]+observed[ \t]+)?previous[ \t]+passed[ \t]+"
     r"(?:axes|evidence|checks?|results)"
-    r"(?:[ \t]+only[ \t]+after[ \t]+confirming[ \t]+unchanged[ \t]+relevant[ \t]+inputs)?"
+    r"(?P<guard>[ \t]+only[ \t]+after[ \t]+confirming[ \t]+unchanged[ \t]+relevant[ \t]+inputs)?"
     r"(?=[ \t]*(?:$|[.\n;]))",
     re.IGNORECASE,
 )
@@ -423,10 +422,13 @@ def _strip_current_candidate_review_reuse(text: str) -> str:
     previous = PREVIOUS_REVIEWED_CANDIDATE.search(text)
     current = CURRENT_REVIEWED_CANDIDATE.search(text)
     if (previous is None or current is None
-            or previous.group("sha").lower() == current.group("sha").lower()
-            or not CURRENT_REVIEW_UNCHANGED_GUARD.search(text)):
+            or previous.group("sha").lower() == current.group("sha").lower()):
         return text
-    return CURRENT_CANDIDATE_REVIEW_REUSE.sub(" ", text)
+    verified_inputs = CURRENT_REVIEW_UNCHANGED_GUARD.search(text) is not None
+    return CURRENT_CANDIDATE_REVIEW_REUSE.sub(
+        lambda match: " " if verified_inputs or match.group("guard") else match.group(0),
+        text,
+    )
 
 
 def _classify_prompt(

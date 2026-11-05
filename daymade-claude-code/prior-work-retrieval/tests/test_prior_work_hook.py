@@ -396,8 +396,21 @@ class PriorWorkHookTests(unittest.TestCase):
             "negated_unchanged_guard": final_binding.replace(
                 "Verify all previously reviewed", "Do not verify all previously reviewed"
             ),
+            "negated_embedded_guard": (
+                f"Previous reviewed candidate {previous}. Exact new candidate {current}.\n"
+                "Do not enforce the condition only after confirming unchanged relevant inputs.\n"
+                "Reuse previous passed checks."
+            ),
+            "negated_previous_binding": (
+                f"Do not use Previous reviewed candidate {previous}. "
+                f"Exact new candidate {current}.\n"
+                "Reuse previous passed checks only after confirming unchanged relevant inputs."
+            ),
+            "negated_current_binding": valid.replace(
+                "Exact new candidate", "Do not use Exact new candidate"
+            ),
         }
-        self.assertEqual(len(cases), 9)
+        self.assertEqual(len(cases), 12)
         for label, prompt in cases.items():
             with self.subTest(label=label):
                 self.assertEqual(
