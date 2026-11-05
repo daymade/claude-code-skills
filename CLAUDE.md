@@ -512,17 +512,17 @@ Context-veto CLI regressions live in
 ### Feishu Recording Lookup
 
 To find an existing Feishu recording by date, enter
-[lark-cli-router's recording lookup](daymade-claude-code/lark-cli-router/SKILL.md#find-an-existing-recording-by-date).
+[lark-cli-router's recording lookup](lark-cli-router/SKILL.md#find-an-existing-recording-by-date).
 
 ### Feishu Document Layout
 
 For updates that preserve manual formatting or change table/page width, enter
-[lark-cli-router's layout workflow](daymade-claude-code/lark-cli-router/SKILL.md#preserve-document-layout).
+[lark-cli-router's layout workflow](lark-cli-router/SKILL.md#preserve-document-layout).
 
 ### Feishu External Collaboration
 
 For external customer groups paired with Wiki pages, enter
-[lark-cli-router's external collaboration workflow](daymade-claude-code/lark-cli-router/SKILL.md#external-customer-collaboration).
+[lark-cli-router's external collaboration workflow](lark-cli-router/SKILL.md#external-customer-collaboration).
 It owns group reuse/creation, descendant-scoped grants and their verification.
 
 ### Feishu Document Capture
