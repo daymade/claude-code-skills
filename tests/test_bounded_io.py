@@ -137,9 +137,9 @@ print(json.dumps({'status': 'loaded', 'entry': wrapper.name}))
             # sibling Skill. This is the package portability boundary.
             isolated = directory / "standalone Skill"
             shutil.copytree(SKILL / "scripts", isolated / "scripts")
+            # Creator's uv dispatch has its own runtime fixture in test_creator_entry.py.
             commands = [[str(bindir / "bounded-file-read")],
-                        [sys.executable, str(isolated / "scripts/skill_read_plan.py")],
-                        [sys.executable, str(isolated / "scripts/creator.py"), "skill_read_plan"]]
+                        [sys.executable, str(isolated / "scripts/skill_read_plan.py")]]
             for command in commands:
                 with self.subTest(command=command):
                     result = subprocess.run(command + [str(source), "--lines", "1:1",
