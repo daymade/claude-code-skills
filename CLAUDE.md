@@ -600,10 +600,10 @@ Workflow subagent, use
 [read-claude-code-history's narrow evidence entry](daymade-claude-code/read-claude-code-history/SKILL.md#original-tool-callresult-evidence).
 Keep selectors, pairing, source scope and incomplete-output handling in that owner.
 
-For a Claude session briefing or expansion of folded runtime Skill bodies, enter
+For a Claude/Kimi session briefing, saved-export reuse or expansion of folded runtime Skill bodies, enter
 [Exact Session evidence](daymade-claude-code/read-claude-code-history/SKILL.md#exact-session-evidence).
-Large or unmeasured briefing output follows that reader's
-[file-backed reading procedure](daymade-claude-code/read-claude-code-history/references/large-session-briefing.md).
+Capture, bounded reading and snapshot freshness follow that reader's
+[file-backed reading and reuse procedure](daymade-claude-code/read-claude-code-history/references/large-session-briefing.md).
 
 For Claude history discovery without a known Session, use
 [read-claude-code-history's indexed search entry](daymade-claude-code/read-claude-code-history/SKILL.md#indexed-content-search).
@@ -688,7 +688,7 @@ For selected-site Cookie copying between local profiles of the same macOS Chrome
 enter [cookie-copy](cookie-copy/SKILL.md). For its quota-query caller, follow
 [Tibo's Cookie Copy handoff](tibo-reset-codex/references/browser-session-migration.md).
 
-For an existing Codex session failing after login changes, start at
+Before switching an existing Codex session, or recovering one after login changes, start at
 [Local Codex existing-owner recovery](daymade-codex/local-codex/references/oauth-guide.md#existing-native-owner-recovery).
 For a remote Codex sign-in prompt or choosing existing-login reuse versus new authorization, start at
 [Local Codex authentication recovery](daymade-codex/local-codex/references/oauth-guide.md#remote-account-switch-and-expired-login-recovery).
