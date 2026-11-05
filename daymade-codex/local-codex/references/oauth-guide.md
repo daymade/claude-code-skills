@@ -118,6 +118,10 @@ Minions-managed account binding remains with Account Manager.
 | The store and live owner agree, but authentication fails | Use the existing refresh-owning provider's supported recovery; do not infer that another account must be adopted. |
 | No usable expected login is available | Choose the verified [same-owner OAuth](#existing-native-owner-oauth-adoption) or [independent-grant/TRANSFER](#remote-account-switch-and-expired-login-recovery) route. |
 
+### Pre-clear challenges without transferring the formal AM space
+
+If Cloudflare is expected to block a shared-owner OAuth flow, use a neutral `https://auth.openai.com/` page with no OAuth parameters before the formal POST. The user may complete the human challenge there and stop without logging in. Once Account Manager creates the formal login TaskSpace, its browser consumer owns that space through success-page observation and finish/verify. Do not call `handOff`, `claimTaskSpace`, or drive it from another agent: transferring ownership makes the consumer's snapshots fail. If the callback subsequently changes the live account without a matching native completion in the original journal, keep that operation `unknown`; a Signed in page or current-account readback does not settle it, and neither authorizes another login or an automatic restart.
+
 ### Adopt a saved login in a shared daemon
 
 1. Verify the bound build's `app-server daemon restart --help` and its session
