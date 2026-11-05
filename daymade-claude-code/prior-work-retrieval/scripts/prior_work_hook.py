@@ -207,6 +207,33 @@ CURRENT_LEASE_RETURN = re.compile(
     r"(?:正常[ \t]*)?归还(?=[ \t]*(?:$|[\n，,。；;]))",
     re.IGNORECASE,
 )
+# A bounded exact-candidate recheck may reuse the supplied passed evidence after
+# proving its inputs unchanged. Both full candidate identities and that guard are
+# contextual prerequisites; only the narrow reuse clause is excised below.
+PREVIOUS_REVIEWED_CANDIDATE = re.compile(
+    r"(?:\A|(?<=[.\n]))[ \t]*(?:Previous[ \t]+reviewed[ \t]+candidate|"
+    r"Already[ \t]+independently[ \t]+passed[ \t]+candidate)"
+    r"[ \t]*[:：]?[ \t]*`?(?P<sha>[0-9a-f]{40})`?(?![0-9a-f])",
+    re.IGNORECASE,
+)
+CURRENT_REVIEWED_CANDIDATE = re.compile(
+    r"(?:\A|(?<=[.\n]))[ \t]*(?:Exact[ \t]+new[ \t]+candidate|New[ \t]+exact[ \t]+candidate)"
+    r"[ \t]*[:：]?[ \t]*`?(?P<sha>[0-9a-f]{40})`?(?![0-9a-f])",
+    re.IGNORECASE,
+)
+CURRENT_REVIEW_UNCHANGED_GUARD = re.compile(
+    r"(?:\A|(?<=[.\n]))[ \t]*Verify[ \t]+all[ \t]+previously[ \t]+reviewed\b"
+    r"[^\n.]{0,240}\bremain[ \t]+byte-identical[ \t]+to[ \t]+the[ \t]+passed[ \t]+candidate\b",
+    re.IGNORECASE,
+)
+CURRENT_CANDIDATE_REVIEW_REUSE = re.compile(
+    r"(?:\A|(?<=[.\n]))[ \t]*Reuse[ \t]+"
+    r"(?:independently[ \t]+observed[ \t]+)?previous[ \t]+passed[ \t]+"
+    r"(?:axes|evidence|checks?|results)"
+    r"(?P<guard>[ \t]+only[ \t]+after[ \t]+confirming[ \t]+unchanged[ \t]+relevant[ \t]+inputs)?"
+    r"(?=[ \t]*(?:$|[.\n;]))",
+    re.IGNORECASE,
+)
 _CONTEXT_RECALL_VERB = r"(?:获取|找回|检索|查找|回查|回看|恢复)"
 _CONVERSATION_HISTORY = r"(?:对话|会话|聊天)(?:的)?历史(?:记录)?(?:里|中)"
 CONVERSATION_CONTEXT_RECALL = re.compile(
@@ -391,6 +418,19 @@ def _manifest() -> dict[str, Any]:
     return prior_work.load_manifest(prior_work.default_manifest_path().resolve())
 
 
+def _strip_current_candidate_review_reuse(text: str) -> str:
+    previous = PREVIOUS_REVIEWED_CANDIDATE.search(text)
+    current = CURRENT_REVIEWED_CANDIDATE.search(text)
+    if (previous is None or current is None
+            or previous.group("sha").lower() == current.group("sha").lower()):
+        return text
+    verified_inputs = CURRENT_REVIEW_UNCHANGED_GUARD.search(text) is not None
+    return CURRENT_CANDIDATE_REVIEW_REUSE.sub(
+        lambda match: " " if verified_inputs or match.group("guard") else match.group(0),
+        text,
+    )
+
+
 def _classify_prompt(
     prompt: str, receipt_valid: bool, *, current_execution: bool
 ) -> str:
@@ -419,6 +459,7 @@ def _classify_prompt(
         scannable = CURRENT_EXECUTION_CONTINUITY.sub(" ", scannable)
         scannable = CURRENT_EXECUTION_DEADLINE.sub(" ", scannable)
         scannable = CURRENT_LEASE_RETURN.sub(" ", scannable)
+        scannable = _strip_current_candidate_review_reuse(scannable)
     if (PRIOR_WORK_STRONG_SIGNAL.search(scannable)
             or _explicit_conversation_context(scannable)):
         return "required_prior_signal"
