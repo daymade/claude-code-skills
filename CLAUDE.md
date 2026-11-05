@@ -1089,6 +1089,8 @@ For changes to scripts, importable API contracts, configuration, or operating pr
 [docs-cleaner](daymade-docs/docs-cleaner/SKILL.md) for scoped documentation delivery:
 resolve implementation intent and authorization before updating the owning SOP,
 and validate the delivered command examples. Keep detailed governance in that Skill.
+For tracked path moves or deletions, follow the
+[final-tree reference check](references/ci-operations.md#deleted-target-markdown-links).
 For outbound link-check diagnostics, follow its
 [reader-host interpretation](daymade-docs/docs-cleaner/SKILL.md#updating-references-to-a-file-you-moved-or-deleted).
 After moving a procedure or renaming an anchor, use its
