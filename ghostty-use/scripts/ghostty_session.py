@@ -61,6 +61,7 @@ BIRTH_LEEWAY_SECONDS = 0.5     # clock tolerance only; a transcript never predat
                                # TUI (float birthtime vs second-truncated lstart), so a
                                # larger window would only admit fresh corpse files
 FIRST_WRITE_WINDOW_SECONDS = 1200  # first message may lag the tab opening
+MAX_IDENTITY_HEAD_BYTES = 256 << 10
 
 
 class SessionList(list):
@@ -70,14 +71,15 @@ class SessionList(list):
     from resumable sessions, alongside the process-backed terminal inventory.
     """
 
-    def __init__(self, entries=(), unresolved=(), terminal_inventory=(), other_terminals=()):
+    def __init__(self, entries=(), unresolved=(), terminal_inventory=(), other_terminals=(), observation=None):
         super().__init__(entries)
         self.unresolved = list(unresolved)
         self.terminal_inventory = list(terminal_inventory)
         self.other_terminals = list(other_terminals)
+        self.observation = observation or {}
 
 
-def list_sessions(resolve_uuidless=True):
+def list_sessions(resolve_uuidless=True, *, deadline=None):
     """One entry per live claude/codex session.
 
     Anchor is a parsed resume UUID. A fork's argv UUID belongs to its parent.
@@ -88,14 +90,15 @@ def list_sessions(resolve_uuidless=True):
     disjointly — one transcript per TUI, closest verified birth first — and
     anything ambiguous or left over lands in .unresolved rather than being
     attributed to the wrong session or dropped silently (theft/collision probe
-    reproduced 2026-10-07). The watcher's bounded process-graph scan keeps its
-    own argv-only path; this resolution reads a bounded set of per-cwd buckets,
-    never a history scan.
+    reproduced 2026-10-07). Manual and automatic callers share this resolution:
+    it reads a bounded set of per-cwd/day buckets, never a history scan.
     """
     from ghostty_watch import observe, cli_identity, OPAQUE_REASON
     try:
-        observed = observe(include_terminals=True)
-    except (ValueError, OSError, subprocess.TimeoutExpired) as error:
+        observed = observe(include_terminals=True, **({'deadline': deadline} if deadline is not None else {}))
+    except subprocess.TimeoutExpired as error:
+        raise RecoveryError('observation deadline expired during live inventory: ' + str(error)) from error
+    except (ValueError, OSError) as error:
         raise RecoveryError("live Ghostty inventory failed: " + str(error)) from error
     seen = {}
     for row in observed['sessions']:
@@ -108,10 +111,17 @@ def list_sessions(resolve_uuidless=True):
         if row.get('reason') == OPAQUE_REASON or identity is None or identity[2] is None:
             unresolved.append(proc)
         elif resolve_uuidless:
-            fresh.append(dict(proc, started=_proc_start(row['pid'])))
+            counters = observed.setdefault('counters', {})
+            counters['process_start_calls'] = counters.get('process_start_calls', 0) + 1
+            counters['commands'] = counters.get('commands', 0) + 1
+            started = _proc_start(row['pid'], **({'deadline': deadline} if deadline is not None else {}))
+            if started is None:
+                unresolved.append(dict(proc, reason='process start time unavailable'))
+            else:
+                fresh.append(dict(proc, started=started))
         else:
             unresolved.append(proc)
-    for proc in _assign_transcripts(fresh, seen):
+    for proc in _assign_transcripts(fresh, seen, **({'deadline': deadline} if deadline is not None else {})):
         if "sid" in proc:
             seen[proc["sid"]] = {
                 "tty": proc["tty"], "tool": proc["tool"],
@@ -123,10 +133,10 @@ def list_sessions(resolve_uuidless=True):
             unresolved.append({k: v for k, v in proc.items() if k != 'started'})
     return SessionList(sorted(seen.values(), key=lambda e: e["tty"]), unresolved=unresolved,
                        terminal_inventory=observed['terminal_inventory'],
-                       other_terminals=observed['other_terminals'])
+                       other_terminals=observed['other_terminals'], observation=observed)
 
 
-def _assign_transcripts(procs, seen):
+def _assign_transcripts(procs, seen, *, deadline=None):
     """Joint disjoint assignment for UUID-less TUIs grouped by (tool, cwd).
 
     Every verified candidate is offered (a TUI whose closest file is taken falls
@@ -142,6 +152,8 @@ def _assign_transcripts(procs, seen):
     for (tool, cwd), members in sorted(groups.items()):
         offers = []  # (dist, pid, sid, path), verified candidates only
         for proc in members:
+            if deadline is not None and time.monotonic() >= deadline:
+                raise RecoveryError('observation deadline expired during identity resolution')
             by_dist = {}
             for dist, sid, path in _transcript_candidates(tool, cwd, proc["started"]):
                 by_dist.setdefault(dist, []).append((sid, path))
@@ -163,7 +175,7 @@ def _assign_transcripts(procs, seen):
             out.append(dict(by_pid[pid], sid=sid, transcript=path))
         for proc in members:
             if proc["pid"] not in group_assigned:
-                out.append(proc)
+                out.append(dict(proc, reason='no verified unambiguous transcript identity'))
     return out
 
 
@@ -176,15 +188,21 @@ def _proc_cwd(pid):
     return ""
 
 
-def _proc_start(pid):
+def _proc_start(pid, *, deadline=None):
     """Process start as epoch seconds (ps lstart is local ctime text), None if unknown.
 
     lstart field order is locale/platform-dependent: US layouts print
     "Tue Oct  6 17:27:03 2026", this host prints "Tue  6 Oct 17:27:03 2026"
     (measured 2026-10-07) — accept both rather than silently giving up.
     """
+    options = {}
+    if deadline is not None:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise RecoveryError('observation deadline expired before process start lookup')
+        options['timeout'] = remaining
     out = subprocess.run(["ps", "-o", "lstart=", "-p", str(pid)],
-                         capture_output=True, text=True).stdout.strip()
+                         capture_output=True, text=True, **options).stdout.strip()
     if not out:
         return None
     norm = " ".join(out.split())
@@ -227,22 +245,43 @@ def _claude_project_dir(cwd):
     return None
 
 
-def _head_cwd(path, max_lines=40):
+def _head_cwd(path, max_lines=40, *, expected_sid=None):
     """First cwd recorded in a transcript, None when not visible in the head.
 
     40 lines covers the worst real case on this host (first cwd at line 9 of
     2924 transcripts sampled, 2026-10-07); a transcript that still shows no cwd
-    fails identity verification rather than passing unchecked.
+    fails identity verification rather than passing unchecked. When expected_sid
+    is supplied, require that internal sessionId and reject every conflicting or
+    invalid sessionId in the bounded head, including records after the first cwd.
     """
     try:
         with open(path, errors="replace") as fh:
-            for _, line in zip(range(max_lines), fh):
+            remaining = MAX_IDENTITY_HEAD_BYTES
+            head_cwd, verified_sid = None, False
+            for _ in range(max_lines):
+                line = fh.readline(remaining + 1)
+                remaining -= len(line.encode('utf-8'))
+                if remaining < 0:
+                    return None
+                if not line:
+                    break
                 try:
                     rec = json.loads(line)
                 except Exception:
                     continue
-                if isinstance(rec, dict) and rec.get("cwd"):
-                    return rec["cwd"]
+                if not isinstance(rec, dict):
+                    continue
+                if expected_sid is not None and 'sessionId' in rec:
+                    internal_sid = rec['sessionId']
+                    if (not isinstance(internal_sid, str) or not UUID_RE.fullmatch(internal_sid)
+                            or internal_sid != expected_sid):
+                        return None
+                    verified_sid = True
+                if head_cwd is None and isinstance(rec.get('cwd'), str) and rec['cwd']:
+                    head_cwd = rec['cwd']
+                if expected_sid is None and head_cwd is not None:
+                    return head_cwd
+            return head_cwd if expected_sid is None or verified_sid else None
     except OSError:
         pass
     return None
@@ -266,7 +305,7 @@ def _claude_candidates(cwd, started):
             continue
         if mtime < started - BIRTH_LEEWAY_SECONDS:
             continue  # file stopped being written before this process started
-        file_cwd = _head_cwd(path)
+        file_cwd = _head_cwd(path, expected_sid=sid)
         if file_cwd is None or file_cwd.lower() != cwd.lower():
             continue  # no verifiable identity, or a different cwd's file
         candidates.append((abs(birth - started), sid, path))
@@ -311,7 +350,10 @@ def _codex_candidates(cwd, started):
 def _codex_first_meta(path):
     try:
         with open(path, errors="replace") as fh:
-            rec = json.loads(fh.readline())
+            line = fh.readline(MAX_IDENTITY_HEAD_BYTES + 1)
+            if len(line.encode('utf-8')) > MAX_IDENTITY_HEAD_BYTES:
+                return None
+            rec = json.loads(line)
     except (OSError, ValueError):
         return None
     if isinstance(rec, dict) and rec.get("type") == "session_meta":
@@ -469,9 +511,28 @@ def _indexed_conversations(reader):
     return result.conversations
 
 
-def _codex_file(sid):
-    reader, _ = history_reader()
-    conv = next((c for c in _indexed_conversations(reader) if c.session_id == sid), None)
+class CodexLookup:
+    """One reader and index lookup per snapshot, including unavailable results."""
+
+    def __init__(self):
+        self.reader = self.conversations = self.error = None
+
+    def load(self):
+        if self.error is not None:
+            raise RecoveryError(self.error)
+        if self.conversations is None:
+            try:
+                self.reader, _ = history_reader()
+                self.conversations = {c.session_id: c for c in _indexed_conversations(self.reader)}
+            except (RecoveryError, ValueError, OSError, RuntimeError) as error:
+                self.error = str(error)
+                raise RecoveryError(self.error) from error
+        return self.reader, self.conversations
+
+
+def _codex_file(sid, lookup=None):
+    reader, conversations = (lookup or CodexLookup()).load()
+    conv = conversations.get(sid)
     if conv is None:
         raise RecoveryError(f"Codex session {sid} is absent from the state index")
     return resolve_indexed_rollout(reader, conv)
@@ -504,12 +565,13 @@ def verified_codex_tail(reader, path, sid):
     return meta, last_ts
 
 
-def codex_liveness(sid):
+def codex_liveness(sid, lookup=None):
     try:
-        f = _codex_file(sid)
+        lookup = lookup or CodexLookup()
+        f = _codex_file(sid, lookup)
         if not f:
             return None, "no-file"
-        reader, _ = history_reader()
+        reader, _ = lookup.load()
         _, last_ts = verified_codex_tail(reader, f, sid)
         return last_ts, "ok"
     except (RecoveryError, ValueError, OSError, RuntimeError) as error:
@@ -540,7 +602,7 @@ def classify(last_ts, err):
 
 # ---------- snapshot ----------
 
-def _entry_liveness(e):
+def _entry_liveness(e, codex_lookup=None):
     """Resolved entries already know their verified transcript path — read it
     directly instead of rediscovering it through the pool glob or Codex index."""
     path = e.get("transcript")
@@ -550,12 +612,15 @@ def _entry_liveness(e):
         # The file exists (identity-verified at resolution); a missing timestamp
         # means "no events yet" (stale), matching the index path's verdict.
         return _tail_last_ts(path), "ok"
-    return (claude_liveness if e["tool"] == "claude" else codex_liveness)(e["sid"])
+    if e['tool'] == 'claude':
+        return claude_liveness(e['sid'])
+    return codex_liveness(e['sid'], **({'lookup': codex_lookup} if codex_lookup is not None else {}))
 
 
 def snapshot_sessions(sessions):
+    codex_lookup = CodexLookup()
     for e in sessions:
-        last_ts, err = _entry_liveness(e)
+        last_ts, err = _entry_liveness(e, codex_lookup)
         e["last_interaction"] = last_ts
         e["error"] = err
         e["status"] = classify(last_ts, err)

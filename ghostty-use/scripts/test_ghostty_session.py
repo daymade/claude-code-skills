@@ -178,6 +178,35 @@ class CodexLivenessTest(unittest.TestCase):
             ts, err = gs.codex_liveness("88888888-8888-8888-8888-888888888888")
         self.assertEqual(err, "identity-unavailable")
 
+    def test_snapshot_batch_loads_reader_and_index_once(self):
+        home = fresh_home()
+        paths = []
+        for sid in (S_CODEX, S_HEALTHY):
+            path = make_codex_file(home, sid, [
+                {'type': 'session_meta', 'payload': {'id': sid}}, {'timestamp': iso(2)}])
+            paths.append((sid, path))
+        make_index(home, paths)
+        entries = [{'tool': 'codex', 'sid': sid} for sid, _ in paths]
+        with mock.patch.object(gs, 'HOME', home), \
+                mock.patch.dict(os.environ, {'CODEX_HOME': str(Path(home) / '.codex')}), \
+                mock.patch.object(gs, 'history_reader', wraps=gs.history_reader) as reader, \
+                mock.patch.object(gs, '_indexed_conversations', wraps=gs._indexed_conversations) as index:
+            gs.snapshot_sessions(entries)
+        self.assertEqual([row['error'] for row in entries], ['ok', 'ok'])
+        self.assertEqual(reader.call_count, 1)
+        self.assertEqual(index.call_count, 1)
+
+    def test_batch_missing_dependency_is_unknown_once_without_raw_fallback(self):
+        entries = [{'tool': 'codex', 'sid': sid} for sid in (S_CODEX, S_HEALTHY)]
+        with mock.patch.object(gs, 'history_reader', side_effect=gs.RecoveryError('dependency unavailable')) as reader, \
+                mock.patch.object(gs, '_indexed_conversations') as index, \
+                mock.patch.object(gs.glob, 'glob', side_effect=AssertionError('raw fallback forbidden')), \
+                redirect_stderr(io.StringIO()):
+            gs.snapshot_sessions(entries)
+        self.assertEqual(reader.call_count, 1)
+        index.assert_not_called()
+        self.assertEqual([row['error'] for row in entries], ['identity-unavailable', 'identity-unavailable'])
+
 
 class ClassifyTest(unittest.TestCase):
     def test_active_within_threshold(self):
@@ -637,7 +666,8 @@ class TranscriptAnchorTest(unittest.TestCase):
 
     def _claude(self, sid, cwd=...):
         path = os.path.join(self.bucket, sid + ".jsonl")
-        rows = [{"type": "user", "cwd": self.cwd if cwd is ... else cwd, "timestamp": iso(1)}]
+        rows = [{"type": "user", "cwd": self.cwd if cwd is ... else cwd,
+                 "sessionId": sid, "timestamp": iso(1)}]
         with open(path, "w") as fh:
             fh.write("\n".join(json.dumps(x) for x in rows) + "\n")
         return path
@@ -666,6 +696,35 @@ class TranscriptAnchorTest(unittest.TestCase):
             dead: (self.started - 10, self.started - 5)})
         self.assertEqual(cands, [(20.0, S_HEALTHY, live)])
 
+    def test_claude_candidate_requires_valid_matching_internal_identity(self):
+        path = self._claude(S_HEALTHY)
+        births = {path: (self.started + 1, self.started + 1)}
+        for label, internal in (('matching', S_HEALTHY), ('mismatched', S_DEAD),
+                                ('missing', ...), ('null', None), ('empty', ''),
+                                ('blank', '   '), ('invalid', 'not-a-session-id'),
+                                ('wrong-type', 123)):
+            with self.subTest(identity=label):
+                record = {'type': 'user', 'cwd': self.cwd}
+                if internal is not ...:
+                    record['sessionId'] = internal
+                Path(path).write_text(json.dumps(record) + '\n')
+                expected = [(1.0, S_HEALTHY, path)] if label == 'matching' else []
+                self.assertEqual(self._cands('claude', births), expected)
+
+    def test_claude_identity_after_first_cwd_is_checked_for_conflicts(self):
+        path = self._claude(S_HEALTHY)
+        births = {path: (self.started + 1, self.started + 1)}
+        records = [{'type': 'meta', 'cwd': self.cwd},
+                   {'type': 'user', 'sessionId': S_HEALTHY},
+                   {'type': 'assistant', 'sessionId': S_HEALTHY}]
+        Path(path).write_text(''.join(json.dumps(record) + '\n' for record in records))
+        self.assertEqual(self._cands('claude', births), [(1.0, S_HEALTHY, path)])
+        for internal in (S_DEAD, None, ''):
+            with self.subTest(later_identity=internal):
+                Path(path).write_text(''.join(json.dumps(record) + '\n' for record in records)
+                                      + json.dumps({'sessionId': internal}) + '\n')
+                self.assertEqual(self._cands('claude', births), [])
+
     def test_claude_rejects_file_born_before_start(self):
         dead = self._claude(S_DEAD)
         self.assertEqual(self._cands("claude", {dead: (self.started - 10, self.started - 5)}), [])
@@ -687,7 +746,8 @@ class TranscriptAnchorTest(unittest.TestCase):
 
     def test_claude_head_cwd_beyond_five_lines_is_verified(self):
         path = os.path.join(self.bucket, S_HEALTHY + ".jsonl")
-        rows = [{"type": "meta", "n": n} for n in range(8)] + [{"type": "user", "cwd": self.cwd, "timestamp": iso(1)}]
+        rows = [{"type": "meta", "n": n} for n in range(8)] + [
+            {"type": "user", "cwd": self.cwd, "sessionId": S_HEALTHY, "timestamp": iso(1)}]
         with open(path, "w") as fh:
             fh.write("\n".join(json.dumps(x) for x in rows) + "\n")
         cands = self._cands("claude", {path: (self.started + 20, self.started + 25)})
@@ -699,7 +759,7 @@ class TranscriptAnchorTest(unittest.TestCase):
         os.makedirs(bucket, exist_ok=True)
         path = os.path.join(bucket, S_HEALTHY + ".jsonl")
         with open(path, "w") as fh:
-            fh.write(json.dumps({"type": "user", "cwd": cwd, "timestamp": iso(1)}) + "\n")
+            fh.write(json.dumps({"type": "user", "cwd": cwd, "sessionId": S_HEALTHY, "timestamp": iso(1)}) + "\n")
         with mock.patch.object(gs, "HOME", self.home), \
              mock.patch.object(gs, "_stat_birth_mtime", side_effect=lambda p: (self.started + 20, self.started + 25)):
             self.assertEqual(gs._transcript_candidates("claude", cwd, self.started),
@@ -974,6 +1034,30 @@ class ListSessionsAnchorTest(unittest.TestCase):
         with mock.patch.object(gs.subprocess, "run",
                                return_value=subprocess.CompletedProcess([], 0, stdout="???\n")):
             self.assertIsNone(gs._proc_start(1))
+
+    def test_missing_start_time_stays_unknown_and_deadline_is_forwarded(self):
+        import ghostty_watch as watch
+        observed = {'sessions': [], 'unresolved': [{
+            'tool': 'codex', 'pid': 90, 'tty': 'ttys001', 'cwd': '/tmp/demo',
+            'cmdline': 'codex --model synthetic', 'reason': 'CLI UUID absent from argv'}],
+            'terminal_inventory': [], 'other_terminals': [], 'ghostty_processes': 1, 'counters': {}}
+        deadline = gs.time.monotonic() + 10
+        with mock.patch.object(watch, 'observe', return_value=observed) as observer, \
+                mock.patch.object(gs, '_proc_start', return_value=None) as start, \
+                mock.patch.object(gs, '_transcript_candidates', side_effect=AssertionError('unknown start cannot select history')):
+            result = gs.list_sessions(deadline=deadline)
+        observer.assert_called_once_with(include_terminals=True, deadline=deadline)
+        start.assert_called_once_with(90, deadline=deadline)
+        self.assertEqual(len(result), 0)
+        self.assertEqual(result.unresolved[0]['reason'], 'process start time unavailable')
+
+    def test_identity_head_byte_limit_rejects_oversized_records(self):
+        with tempfile.TemporaryDirectory(prefix='ghostty-head-limit-') as temporary:
+            path = Path(temporary) / 'synthetic.jsonl'
+            path.write_text(json.dumps({'type': 'session_meta', 'payload': {
+                'id': S_CODEX, 'cwd': '/tmp/demo', 'padding': 'x' * gs.MAX_IDENTITY_HEAD_BYTES}}) + '\n')
+            self.assertIsNone(gs._codex_first_meta(path))
+            self.assertIsNone(gs._head_cwd(path))
 
 
 if __name__ == "__main__":

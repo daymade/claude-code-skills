@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -314,15 +315,27 @@ class SnapshotTest(unittest.TestCase):
     def archive_count(self):
         return len(list((self.state / 'snapshots').glob('snapshot-*.json')))
 
-    def test_cold_and_warm_no_snapshot_or_routine_write(self):
+    def test_cold_and_warm_no_snapshot_write_but_timestamped_heartbeat(self):
         result = self.run_cycle()
         self.assertEqual(result['state'], 'changed')
         self.assertEqual(self.archive_count(), 1)
-        before = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in self.state.rglob('*') if path.is_file()}
+        before = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in self.latest.parent.glob('*') if path.is_file()}
+        first = watch.cycle_status(self.state)
         with mock.patch.object(watch, 'atomic_manifest', side_effect=AssertionError('unchanged writer forbidden')), mock.patch.object(gs, 'snapshot_sessions', side_effect=AssertionError('body read forbidden')):
             self.assertEqual(self.run_cycle()['state'], 'unchanged')
-        after = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in self.state.rglob('*') if path.is_file()}
+        after = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in self.latest.parent.glob('*') if path.is_file()}
         self.assertEqual(before, after)
+        heartbeat = watch.cycle_status(self.state)
+        self.assertEqual(heartbeat['state'], 'unchanged')
+        self.assertNotEqual(heartbeat['attempt_id'], first['attempt_id'])
+        self.assertGreaterEqual(heartbeat['attempted_at'], first['attempted_at'])
+        self.assertEqual(heartbeat['last_snapshot_change_at'], first['last_snapshot_change_at'])
+        self.assertFalse(heartbeat['snapshot_changed'])
+        self.assertEqual(heartbeat['identified'], 1)
+        for key in ('attempted_at', 'completed_at', 'last_successful_observation_at'):
+            self.assertIsNotNone(datetime.fromisoformat(heartbeat[key]).tzinfo)
+        lines = (self.state / 'watcher/cycles.jsonl').read_text().splitlines()
+        self.assertEqual([json.loads(line)['state'] for line in lines], ['changed', 'unchanged'])
         self.assertEqual(self.latest.stat().st_mode & 0o777, 0o600)
 
     def test_first_auto_cycle_upgrades_same_manual_set_once(self):
@@ -379,6 +392,7 @@ class SnapshotTest(unittest.TestCase):
 
     def test_partial_observation_saves_known_and_preserves_prior_missing(self):
         self.run_cycle([session(S1), session(S2)])
+        successful_at = watch.cycle_status(self.state)['last_successful_observation_at']
         result = self.run_cycle([session(S1), session(S3)], [unknown()])
         self.assertEqual(result['state'], 'changed')
         self.assertEqual(result['retained_unverified'], 1)
@@ -386,10 +400,54 @@ class SnapshotTest(unittest.TestCase):
         self.assertEqual({row['sid'] for row in doc['sessions']}, {S1, S2, S3})
         self.assertEqual(doc['coverage'], 'partial')
         self.assertEqual(len(doc['unresolved']), 1)
+        heartbeat = watch.cycle_status(self.state)
+        self.assertEqual(heartbeat['state'], 'partial')
+        self.assertEqual(heartbeat['identified'], 2)
+        self.assertEqual(heartbeat['sessions'], 3)
+        self.assertEqual(heartbeat['last_successful_observation_at'], successful_at)
+        self.assertIn('unresolved', heartbeat['error'])
         self.assertEqual(self.run_cycle([session(S1), session(S3)], [unknown(pid=800, tty='ttys099')])['state'], 'unchanged')
         # A later complete nonempty observation can record genuine removals.
         self.run_cycle([session(S1), session(S3)])
         self.assertEqual({row['sid'] for row in json.loads(self.latest.read_text())['sessions']}, {S1, S3})
+
+    def test_retained_membership_upgrade_is_a_snapshot_change(self):
+        self.run_cycle([session(S1), session(S2)])
+        self.run_cycle([session(S1)], [unknown()])
+        result = self.run_cycle([session(S1), session(S2)], [unknown()])
+        self.assertEqual(result['state'], 'changed')
+        self.assertEqual(result['retained_unverified'], 0)
+        self.assertFalse(any(row.get('membership') == 'retained-unverified'
+                             for row in json.loads(self.latest.read_text())['sessions']))
+
+    def test_native_process_timeout_keeps_timeout_classification(self):
+        with mock.patch.object(watch, 'observe', side_effect=subprocess.TimeoutExpired('synthetic ps', 15)):
+            with self.assertRaisesRegex(gs.RecoveryError, 'deadline expired'):
+                watch.cycle(self.state)
+        self.assertEqual(watch.cycle_status(self.state)['state'], 'timeout')
+
+    def test_failure_timeout_and_stand_down_keep_positive_bounded_telemetry(self):
+        self.run_cycle()
+        before = self.latest.read_bytes()
+        successful_at = watch.cycle_status(self.state)['last_successful_observation_at']
+        for error, expected in ((OSError('synthetic denied'), 'failure'),
+                                (subprocess.TimeoutExpired('synthetic ps', 15), 'timeout')):
+            with self.assertRaises(type(error)):
+                watch.cycle(self.state, mock.Mock(side_effect=error))
+            record = watch.cycle_status(self.state)
+            self.assertEqual(record['state'], expected)
+            self.assertEqual(record['last_successful_observation_at'], successful_at)
+            self.assertIsNone(record['identified'])
+            self.assertTrue(record['error'])
+            self.assertEqual(self.latest.read_bytes(), before)
+        absent = dict(observation([]), ghostty_processes=0)
+        watch.cycle(self.state, lambda deadline: absent)
+        self.assertEqual(watch.cycle_status(self.state)['state'], 'stand-down')
+        log = self.state / 'watcher/cycles.jsonl'
+        log.write_bytes(b'x' * (watch.MAX_LOG_BYTES + 100))
+        self.run_cycle()
+        self.assertLessEqual(log.stat().st_size, watch.MAX_LOG_BYTES)
+        self.assertEqual(json.loads(log.read_text().splitlines()[-1])['state'], 'unchanged')
 
     def test_opaque_partial_cycle_roundtrip_ignores_pid_tty_and_retains_known(self):
         self.run_cycle([session(S1), session(S2)])
@@ -533,6 +591,64 @@ class SnapshotTest(unittest.TestCase):
             self.assertEqual([r['counters']['commands'] for r in (cold, warm, delta)], [2, 2, 2])
 
 
+class AutomaticNativeIdentityTest(unittest.TestCase):
+    def test_scheduled_path_resolves_real_shaped_metadata_and_keeps_ambiguity_unknown(self):
+        with tempfile.TemporaryDirectory(prefix='ghostty-native-identity-') as temporary:
+            home = Path(temporary)
+            state = home / 'state'
+            cwd = '/tmp/demo'
+            started = datetime(2026, 11, 5, 8, 0).timestamp()
+            day = datetime.fromtimestamp(started).strftime('%Y/%m/%d')
+            codex_bucket = home / '.codex/sessions' / day
+            codex_bucket.mkdir(parents=True)
+            name = 'rollout-' + datetime.fromtimestamp(started).strftime('%Y-%m-%dT%H-%M-%S') + '-'
+            codex_file = codex_bucket / (name + S2 + '.jsonl')
+            codex_file.write_text(json.dumps({'type': 'session_meta', 'payload': {'id': S2, 'cwd': cwd}}) + '\n')
+            claude_bucket = home / '.claude/projects/-tmp-demo'
+            claude_bucket.mkdir(parents=True)
+            claude_file = claude_bucket / (S3 + '.jsonl')
+            claude_file.write_text(json.dumps({'cwd': cwd, 'sessionId': S3}) + '\n')
+            graph = ('1 0 ?? /Applications/Ghostty.app/Contents/MacOS/ghostty\n'
+                     '2 1 ttys001 /bin/zsh\n10 2 ttys001 codex resume ' + S1 + '\n'
+                     '20 2 ttys002 node /opt/bin/codex --model synthetic\n'
+                     '21 20 ttys002 /opt/vendor/codex --model synthetic\n'
+                     '30 2 ttys003 claude --model synthetic')
+            def run(command, deadline, counters):
+                counters['commands'] += 1
+                if command[0] == '/bin/ps':
+                    return graph
+                return ''.join('p' + pid + '\nn' + cwd + '\n' for pid in command[3].split(','))
+            with mock.patch.object(watch, 'run_bounded', side_effect=run), \
+                    mock.patch.object(gs, 'HOME', str(home)), \
+                    mock.patch.object(gs, '_codex_home', return_value=home / '.codex'), \
+                    mock.patch.object(gs, '_proc_start', return_value=started), \
+                    mock.patch.object(gs, '_stat_birth_mtime', return_value=(started + 1, started + 1)), \
+                    mock.patch.object(gs, 'history_reader', side_effect=AssertionError('automatic index lookup forbidden')), \
+                    mock.patch.object(gs, 'snapshot_sessions', side_effect=AssertionError('automatic liveness forbidden')):
+                result = watch.cycle(state)
+                self.assertEqual(result['identified'], 3)
+                self.assertEqual(result['counters']['uuidless_resolved'], 2)
+                doc = json.loads((state / 'snapshots/latest.json').read_text())
+                self.assertEqual({row['sid'] for row in doc['sessions']}, {S1, S2, S3})
+                self.assertEqual(doc['terminal_surface_count'], 3)
+                self.assertEqual(watch.cycle(state)['state'], 'unchanged')
+                # A second equal-distance valid transcript makes identity unknown,
+                # rather than choosing its ID or classifying retained S2 as live.
+                duplicate = codex_bucket / (name + '44444444-0000-7000-8000-000000000004.jsonl')
+                duplicate.write_text(json.dumps({'type': 'session_meta', 'payload': {
+                    'id': '44444444-0000-7000-8000-000000000004', 'cwd': cwd}}) + '\n')
+                partial = watch.cycle(state)
+                self.assertEqual((partial['identified'], partial['unresolved'], partial['retained_unverified']), (2, 1, 1))
+                self.assertEqual(watch.cycle_status(state)['state'], 'partial')
+                # Broken/missing candidate evidence stays unknown without an index
+                # or raw history fallback. Previous recoverable backup is retained.
+                duplicate.unlink()
+                codex_file.write_text('{"type":"session_meta","payload":{"id":"mismatch"}}\n')
+                claude_file.unlink()
+                broken = watch.cycle(state)
+                self.assertEqual((broken['identified'], broken['unresolved']), (1, 2))
+
+
 class InstallSupervisorTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='ghostty-install-test-')
@@ -574,6 +690,9 @@ class InstallSupervisorTest(unittest.TestCase):
             before = self.target.read_bytes()
             second = watch.install(self.state, apply=True)
             self.assertTrue(first['installed']); self.assertTrue(second['installed'])
+            for filename in ('ghostty_watch.py', 'ghostty_session.py', 'ghostty_storage.py'):
+                self.assertEqual((self.state / 'watcher/scripts' / filename).read_bytes(),
+                                 (Path(watch.__file__).parent / filename).read_bytes())
             self.assertEqual(before, self.target.read_bytes())
             self.assertEqual(sum('bootstrap' in call for call in calls), 1)
             self.assertEqual(sum('venv' in call for call in calls), 1)
@@ -670,6 +789,27 @@ class InstallSupervisorTest(unittest.TestCase):
         self.assertEqual(launch.call_args.args[0][0], str(interpreter))
         self.assertTrue(launch.call_args.kwargs['start_new_session'])
         kill.assert_called_once_with(999, watch.signal.SIGKILL)
+        telemetry = watch.cycle_status(self.state)
+        self.assertEqual(telemetry['state'], 'timeout')
+        self.assertTrue(telemetry['attempted_at'])
+        self.assertTrue(telemetry['completed_at'])
+
+    def test_worker_failure_and_missing_runtime_are_timestamped(self):
+        with self.assertRaisesRegex(ValueError, 'runtime missing'):
+            watch.supervise(self.state)
+        self.assertEqual(watch.cycle_status(self.state)['state'], 'failure')
+        interpreter = watch.owned_interpreter(self.state)
+        interpreter.parent.mkdir(parents=True)
+        interpreter.write_text('synthetic')
+        script = watch.owned_script(self.state)
+        script.parent.mkdir(parents=True, exist_ok=True)
+        script.write_text('synthetic')
+        process = mock.Mock(pid=999, returncode=1)
+        process.communicate.return_value = ('', 'synthetic startup failure')
+        with mock.patch.object(watch.subprocess, 'Popen', return_value=process):
+            with self.assertRaisesRegex(ValueError, 'startup failure'):
+                watch.supervise(self.state)
+        self.assertIn('startup failure', watch.cycle_status(self.state)['error'])
 
 
 if __name__ == '__main__':

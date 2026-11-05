@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Observe Ghostty descendants on a calendar; save complete manifests only on change.
 
-Runtime reads one bounded process graph, selected process cwd and one small prior
-manifest/profile map. No history index, transcript, GUI, or restore API is used.
+Runtime shares the manual inventory's bounded process/cwd/start identity resolver.
+Only candidate transcript metadata is read; no liveness, GUI or restore API is used.
+Every attempt leaves timestamped telemetry, independently of snapshot changes.
 """
 import argparse
 import ctypes
@@ -381,13 +382,98 @@ def canonical_unresolved(rows):
     return sorted(values, key=lambda row: json.dumps(row, sort_keys=True))
 
 
-def cycle(state, observer=observe):
+def observe_resolved(deadline=None):
+    live = gs.list_sessions(deadline=deadline or time.monotonic() + DEADLINE_SECONDS)
+    result = dict(live.observation, sessions=list(live), unresolved=live.unresolved)
+    result['counters'] = dict(result['counters'], identity_resolution='bounded-cwd-start-metadata',
+                              uuidless_resolved=sum(row.get('anchor') == 'transcript' for row in live))
+    return result
+
+
+def cycle_status(state):
+    path = Path(state) / 'watcher' / 'last-cycle.json'
+    if not path.exists():
+        return {'state': 'unknown', 'error': 'no recorded observation attempt'}
+    with path.open('rb') as handle:
+        raw = handle.read(65537)
+    if len(raw) > 65536:
+        raise ValueError('cycle telemetry exceeds byte limit')
+    result = json.loads(raw)
+    if not isinstance(result, dict):
+        raise ValueError('cycle telemetry must be an object')
+    return result
+
+
+def begin_attempt(state, *, attempt_id=None, attempted_at=None):
+    prior = cycle_status(state)
+    attempt = {key: prior.get(key) for key in ('last_successful_observation_at',
+               'last_observed_at', 'last_snapshot_change_at')}
+    attempt.update(attempt_id=attempt_id or uuid.uuid4().hex,
+                   attempted_at=attempted_at or datetime.now(timezone.utc).isoformat(),
+                   state='running', completed_at=None, error=None)
+    atomic_bytes(Path(state) / 'watcher' / 'last-cycle.json',
+                 (json.dumps(attempt, ensure_ascii=False) + '\n').encode())
+    return attempt
+
+
+def finish_attempt(state, attempt, result=None, *, error=None, timeout=False):
+    completed = datetime.now(timezone.utc).isoformat()
+    record = dict(attempt, completed_at=completed)
+    if error is not None:
+        record.update(state='timeout' if timeout else 'failure', error=str(error)[:2048],
+                      coverage='unknown', snapshot_changed=False, sessions=None, identified=None,
+                      unresolved=None, counters=None)
+    else:
+        record.update(result)
+        record.update(snapshot_changed=result['state'] == 'changed', snapshot_state=result['state'],
+                      error=None, last_observed_at=completed)
+        if result.get('unresolved', 0):
+            record.update(state='partial', coverage='partial',
+                          error=f"{result['unresolved']} live TUI identities unresolved")
+        else:
+            record.update(last_successful_observation_at=completed,
+                          coverage=result.get('coverage', 'complete'))
+        if result['state'] == 'changed':
+            record['last_snapshot_change_at'] = completed
+    line = (json.dumps(record, ensure_ascii=False, sort_keys=True) + '\n').encode()
+    directory = Path(state) / 'watcher'
+    log = directory / 'cycles.jsonl'
+    previous = b''
+    if log.exists():
+        with log.open('rb') as handle:
+            handle.seek(max(0, log.stat().st_size - MAX_LOG_BYTES))
+            previous = handle.read(MAX_LOG_BYTES)
+        if len(previous) + len(line) > MAX_LOG_BYTES:
+            previous = previous[-(MAX_LOG_BYTES - len(line)):]
+            previous = previous.partition(b'\n')[2]
+    atomic_bytes(log, previous + line)
+    atomic_bytes(directory / 'last-cycle.json', line)
+    return record
+
+
+def cycle(state, observer=None, *, attempt=None):
+    attempt = attempt or begin_attempt(state)
+    started = time.monotonic()
+    try:
+        result = _cycle(state, observer or observe_resolved)
+    except (ValueError, OSError, subprocess.SubprocessError) as error:
+        attempt['duration_seconds'] = time.monotonic() - started
+        finish_attempt(state, attempt, error=error, timeout=isinstance(error, subprocess.TimeoutExpired)
+                       or 'deadline expired' in str(error))
+        raise
+    result['duration_seconds'] = time.monotonic() - started
+    finish_attempt(state, attempt, result)
+    return result
+
+
+def _cycle(state, observer):
     state = Path(state)
     started = time.monotonic()
     with snapshot_lock(state):
         result = observer(started + DEADLINE_SECONDS)
         if result['ghostty_processes'] == 0:
-            return {'state': 'stand-down', 'sessions': 0, 'duration_seconds': time.monotonic() - started,
+            return {'state': 'stand-down', 'sessions': 0, 'identified': 0, 'unresolved': 0,
+                    'coverage': 'Ghostty absent', 'duration_seconds': time.monotonic() - started,
                     'counters': result['counters']}
         if not result['sessions']:
             raise ValueError('coverage unknown: no identified Ghostty sessions; prior backup retained')
@@ -416,9 +502,17 @@ def cycle(state, observer=observe):
                     retained += 1
         rows = canonical(observed, mapping)
         unknown = canonical_unresolved(result['unresolved'])
-        summary = {'sessions': len(rows), 'unresolved': len(unknown), 'retained_unverified': retained,
+        summary = {'sessions': len(rows), 'identified': len(result['sessions']),
+                   'unresolved': len(unknown), 'retained_unverified': retained,
+                   'identity_errors': sorted({str(row.get('reason', 'identity unknown'))[:256]
+                                              for row in result['unresolved']})[:32],
                    'duration_seconds': time.monotonic() - started, 'counters': result['counters']}
-        if previous is not None and previous.get('kind') == AUTO_KIND and rows == old_rows and unknown == old_unknown:
+        retained_ids = {(row['tool'], row['sid']) for row in observed
+                        if row.get('membership') == 'retained-unverified'}
+        old_retained_ids = {(row['tool'], row['sid']) for row in (previous or {}).get('sessions', [])
+                            if row.get('membership') == 'retained-unverified'}
+        if (previous is not None and previous.get('kind') == AUTO_KIND and rows == old_rows
+                and unknown == old_unknown and retained_ids == old_retained_ids):
             return dict(summary, state='unchanged')
         if time.monotonic() - started >= DEADLINE_SECONDS:
             raise ValueError('observation deadline expired before snapshot publish')
@@ -434,6 +528,12 @@ def cycle(state, observer=observe):
                'coverage': 'partial' if unknown else 'identified Ghostty descendants',
                'unresolved': result['unresolved'], 'retained_unverified': retained,
                'canonical_inventory': rows, 'canonical_unresolved': unknown, 'sessions': sessions}
+        for field in ('terminal_inventory', 'other_terminals'):
+            if field in result:
+                doc[field] = result[field]
+        if 'terminal_inventory' in result:
+            doc['terminal_surface_count'] = len(result['terminal_inventory'])
+            doc['window_tab_mapping'] = 'unknown'
         archive = latest.parent / ('snapshot-auto-' + datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f') + '-' + uuid.uuid4().hex[:8] + '.json')
         atomic_manifest(archive, doc, replace=False)
         atomic_manifest(latest, doc)
@@ -630,14 +730,16 @@ def status(state):
                                      'identified_at_capture': len(doc['sessions']) - doc.get('retained_unverified', 0),
                                      'coverage': doc.get('coverage', 'manual'),
                                      'unresolved': len(doc.get('unresolved', [])), 'retained_unverified': doc.get('retained_unverified', 0)}
-    result['meaning'] = 'snapshot time is last change, not last successful observation; inspect launchd exit state'
+    result['last_cycle'] = cycle_status(state)
+    result['meaning'] = ('last_cycle.attempted_at is the last attempt; last_successful_observation_at '
+                         'is complete coverage; last_snapshot_change_at is the last saved change')
     return result
 
 
 def report_error(state, message):
     path = Path(state) / 'watcher' / 'err.log'
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    line = 'Ghostty snapshot observation unknown: ' + str(message)[:2048]
+    line = datetime.now(timezone.utc).isoformat() + ' Ghostty snapshot observation unknown: ' + str(message)[:2048]
     fd = os.open(path, os.O_CREAT | os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW, 0o600)
     try:
         os.fchmod(fd, 0o600)
@@ -654,11 +756,25 @@ def report_error(state, message):
 
 
 def supervise(state):
+    attempt = begin_attempt(state)
+    started = time.monotonic()
+    try:
+        return _supervise(state, attempt)
+    except (ValueError, OSError, subprocess.SubprocessError) as error:
+        recorded = cycle_status(state)
+        if recorded.get('attempt_id') != attempt['attempt_id'] or recorded.get('state') == 'running':
+            attempt['duration_seconds'] = time.monotonic() - started
+            finish_attempt(state, attempt, error=error, timeout='deadline expired' in str(error))
+        raise
+
+
+def _supervise(state, attempt):
     interpreter = owned_interpreter(state)
     script = owned_script(state)
     if not interpreter.is_file() or not script.is_file():
         raise ValueError('owned watcher runtime missing; run install --apply')
-    command = [str(interpreter), str(script), '_cycle', '--state-dir', str(state)]
+    command = [str(interpreter), str(script), '_cycle', '--state-dir', str(state),
+               '--attempt-id', attempt['attempt_id'], '--attempted-at', attempt['attempted_at']]
     process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
                                text=True, start_new_session=True)
     try:
@@ -669,6 +785,11 @@ def supervise(state):
         raise ValueError('supervisor deadline expired; prior backup retained')
     if process.returncode:
         raise ValueError(error.strip() or f'observation worker exit {process.returncode}')
+    recorded = cycle_status(state)
+    if (recorded.get('attempt_id') != attempt['attempt_id']
+            or recorded.get('state') not in ('changed', 'unchanged', 'stand-down', 'partial')
+            or not recorded.get('completed_at')):
+        raise ValueError('observation worker exited without completed cycle telemetry')
     return 0
 
 
@@ -681,17 +802,21 @@ def main(argv=None):
         if command == 'install':
             item.add_argument('--apply', action='store_true')
             item.add_argument('--every-minutes', type=int, choices=(1, 2, 3, 5, 10, 15, 20, 30, 60), default=DEFAULT_EVERY_MINUTES)
+        if command == '_cycle':
+            item.add_argument('--attempt-id')
+            item.add_argument('--attempted-at')
     args = parser.parse_args(argv)
     state = Path(args.state_dir).expanduser().absolute()
     try:
         if args.command == 'run':
             return supervise(state)
         if args.command == '_cycle':
-            cycle(state)
-            return 0  # no stdout or routine writes on successful unchanged rounds
+            attempt = begin_attempt(state, attempt_id=args.attempt_id, attempted_at=args.attempted_at)
+            cycle(state, attempt=attempt)
+            return 0
         if args.command == 'probe':
             started = time.monotonic()
-            result = observe()
+            result = observe_resolved()
             result['duration_seconds'] = time.monotonic() - started
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 1 if result['unresolved'] or not result['sessions'] else 0
