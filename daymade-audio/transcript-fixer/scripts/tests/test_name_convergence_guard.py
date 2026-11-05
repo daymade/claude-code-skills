@@ -212,11 +212,43 @@ class TestAddPendingConflictGuard:
         # Fail-closed means NOTHING written.
         assert not _get_service().repository.get_all_corrections(active_only=False)
 
-    def test_open_item_about_to_text_refuses_add(self, isolated_config, capsys):
-        _enqueue_pending("别的问题", "丁姐")
+    def test_shared_destination_does_not_block_unrelated_source(self, isolated_config):
+        item_id = _enqueue_pending("别的问题", "正确词")
+        queue = _get_review_queue()
+        before = queue.get(item_id)
+        cmd_add_correction(_args(from_text="孤例词", to_text="正确词", domain="demo"))
+        assert queue.get(item_id) == before
+        assert _get_service().repository.get_all_corrections(active_only=False)
+
+    @pytest.mark.parametrize("original,suggested", [
+        ("孤例词", "正确词"),
+        ("前缀孤例词后缀", "正确词"),
+        ("另一原词", "孤例词"),
+        ("另一原词", "前缀孤例词后缀"),
+    ])
+    def test_source_substrings_and_candidate_sources_refuse_add(
+        self, isolated_config, original, suggested
+    ):
+        item_id = _enqueue_pending(original, suggested)
         with pytest.raises(SystemExit) as exc:
-            cmd_add_correction(_args(from_text="萍姐", to_text="丁姐"))
+            cmd_add_correction(_args(from_text="孤例词", to_text="正确词", domain="demo"))
         assert exc.value.code == 2
+        assert _get_review_queue().get(item_id).status == "pending"
+        assert not _get_service().repository.get_all_corrections(active_only=False)
+
+    @pytest.mark.parametrize("bad", [None, "", "   "])
+    def test_missing_or_empty_source_refuses_before_write(self, isolated_config, bad):
+        with pytest.raises(SystemExit) as exc:
+            cmd_add_correction(_args(from_text=bad, to_text="正确词", domain="demo"))
+        assert exc.value.code == 2
+        assert not _get_service().repository.get_all_corrections(active_only=False)
+
+    def test_dictionary_conflicts_are_literal_not_sql_wildcards(self, isolated_config):
+        item_id = _enqueue_pending("另一个问题", "正确词")
+        assert _get_review_queue().pending_dictionary_conflicts("%") == []
+        literal = _enqueue_pending("含%原词", None, kind="wording")
+        assert [x.id for x in _get_review_queue().pending_dictionary_conflicts("%")] == [literal]
+        assert _get_review_queue().get(item_id).status == "pending"
 
     def test_decided_item_does_not_block(self, isolated_config, roster_with_target):
         item_id = _enqueue_pending("孤例词", "正确词")

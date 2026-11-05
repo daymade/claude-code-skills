@@ -1051,6 +1051,26 @@ class ReviewQueue:
             ).fetchone()
         return self._row_to_item(row) if row else None
 
+    def pending_dictionary_conflicts(self, from_text: str) -> list[ReviewItem]:
+        """Open questions whose source or candidate the literal FROM would replace.
+
+        Sharing only the destination word does not make an unrelated question
+        affected. Use literal substring matching, as Stage 1 does, so a rule
+        cannot silently rewrite a longer pending source/candidate either.
+        """
+        if not isinstance(from_text, str) or not from_text.strip():
+            raise ValueError("dictionary FROM must be nonempty text")
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT * FROM review_items
+                    WHERE status = ?
+                      AND (instr(COALESCE(original_text, ''), ?) > 0
+                           OR instr(COALESCE(suggested_text, ''), ?) > 0)
+                    ORDER BY id ASC""",
+                [PENDING, from_text, from_text],
+            ).fetchall()
+        return [self._row_to_item(row) for row in rows]
+
     def pending_text_conflicts(self, texts: list[str]) -> list[ReviewItem]:
         """Open (pending) items whose original or suggested text IS one of
         `texts` (exact match). A dictionary rule written over an open review

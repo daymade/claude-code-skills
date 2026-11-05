@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **transcript-fixer** (`daymade-audio` v1.57.1 → v1.57.2): Scope dictionary-add review conflicts to the literal source and longer pending source/candidate matches. Preserve unrelated pending suggestions that share only the destination, along with person-name and corpus-evidence gates.
+
 - **feishu-doc-scraper** (v1.12.2 → v1.12.3): Point account-binding and transcript-recovery guidance at the independently published Lark router.
 
 - **Marketplace** (v3.26.0 → v3.27.0): Extract **lark-cli-router** unchanged into its own v1.0.0 plugin. **daymade-claude-code** v5.0.0 no longer includes Feishu/Lark operations. To retain them, install `lark-cli-router@daymade-skills` separately and use `lark-cli-router:lark-cli-router` instead of `daymade-claude-code:lark-cli-router`.
