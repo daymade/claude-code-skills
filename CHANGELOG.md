@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **docs-cleaner** (`daymade-docs` v1.29.1 → v1.29.2) and **skill-creator** (`daymade-skill` v1.76.0 → v1.76.1): Recheck inbound references across the final integrated tree after moves or deletions, including consumers outside the original diff; retain manual checks beyond the deleted-target Markdown gate.
+
 - **read-claude-code-history** (`daymade-claude-code` v5.1.0): Verify an exact session artifact against its current source before reuse; distinguish fresh, stale and unknown snapshots without scanning unrelated history.
 - **local-codex** (`daymade-codex` v2.4.4 → v2.4.5): Check saved-login sources and the bound owner's adoption capability before authorization; report the observed account, original operation receipt and useful continuation separately while preserving formal browser ownership.
 - **ghostty-use** (v1.11.0 → v1.11.1): Proactively route incomplete recovery snapshots to bounded candidate selection, preserve older retained IDs and the latest user closures, and align identity-verification guidance with the shared resolver. Change types: bounded recovery-entry repair and factual correction.

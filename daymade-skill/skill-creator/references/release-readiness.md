@@ -37,6 +37,11 @@ parallel work. An unrelated base advance alone does not require a new PR head or
 another CI run. Keep the final-tree comparison, version checks and exact-candidate
 review binding; do not reopen unrelated Skills merely because main advanced.
 
+After integration changes a move/deletion candidate, repeat inbound-reference verification
+on the entire final tree, including consumers outside the original diff. Follow
+[Docs Cleaner's reference-maintenance procedure](https://github.com/daymade/claude-code-skills/blob/main/daymade-docs/docs-cleaner/SKILL.md#updating-references-to-a-file-you-moved-or-deleted)
+before binding review; retain its checks for forms outside the repository's checker.
+
 If a stale marketplace guard blocks the change, integrate main first. Rebuild any
 remaining manifest conflict from that immutable base plus only the owned changes;
 assert the base values and preserve the trailing newline. On a contended shared
