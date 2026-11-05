@@ -2,29 +2,22 @@
 
 How to export the **text transcript** of a Feishu Minutes recording. Verified end-to-end 2026-05; re-verified against lark-cli 1.0.80 on 2026-08-01, which is when the `+detail` route below replaced the raw-API-only advice this file used to give.
 
-## Contents
-
-- Start here: `minutes +detail` exports transcripts, and it batches
-- The raw endpoint (SRT, or transcripts without speaker/timestamp)
-- Output paths: the one restriction both routes share
-- Verify the output — with `command grep`, not a bare `grep`
-- The scope and the `99991679` error
-- Granting the scope via device-flow (and the timeout trap)
-- Permission is per-minute, not per-tenant
-- Never re-ASR
-
 ## Start here: `minutes +detail` exports transcripts, and it batches
+
+Before reading, load `lark-cli-router` and follow its [source account binding](https://github.com/daymade/claude-code-skills/blob/main/daymade-claude-code/lark-cli-router/references/source-account-binding.md).
+Use the selected profile and identity throughout; an active organization alone
+does not identify the account that can read the source.
 
 ```bash
 export LARK_CLI_NO_PROXY=1
-cd <target-dir> && lark-cli minutes +detail --profile <profile> \
+cd <target-dir> && lark-cli minutes +detail --profile <profile> --as user \
   --minute-tokens <tokenA>,<tokenB>,<tokenC> \
   --transcript --output-dir ./out --overwrite
 ```
 
 Each token writes **speaker labels + millisecond timestamps** into its own directory under `./out`. The command prints per-token progress and ends with `done: N total, N succeeded, N failed`, so a partial failure is visible instead of silent. Batch limit is **50 tokens per call** (enforced client-side: 51 → exit 2).
 
-Three things about that command that are not obvious:
+For this command:
 
 - **`--profile` — get the value from `lark-cli profile list`, don't guess.** It reports each profile's name, which one is `active`, and a `tokenStatus` that can be `valid` / `expired` / `needs_refresh`. Picking an expired one fails at auth, not at permissions, so it looks nothing like the `2091005` case below.
 - **Read the output path from the response, don't reconstruct it.** Each result carries `artifacts.transcript_file` with the real relative path. The naming pattern is `artifact-<title>-<token>/transcript.txt`, but `<title>` is the *server-side* minute title — it can be arbitrary CJK, and in practice frequently contains **spaces**, which is enough on its own to break an unquoted downstream path. You do not know it before the call. Any grep/move/index built on a hand-built path silently finds nothing.
@@ -33,11 +26,9 @@ Three things about that command that are not obvious:
   ```
 - **`--overwrite` is what makes a re-run work.** Without it, a token whose file already exists errors (`file already exists: … (use --overwrite to overwrite)`). Since the whole argument for this route is that failures are visible and therefore retryable, the retry has to actually be runnable — otherwise a second pass reports failures that are really just "already downloaded", and the permission section below then reads as license to skip them.
 
-> An earlier version of this file stated that `lark-cli minutes` could not export transcripts and sent readers straight to the raw API. That was wrong — `+detail` has carried `--transcript` for many releases. If you are pulling more than one or two transcripts, this is the route; the raw endpoint below costs you the batching, the progress reporting, and the failure count.
-
 ## The raw endpoint (SRT, or transcripts without speaker/timestamp)
 
-Reach for the raw endpoint in three cases; otherwise use `+detail`.
+Use the raw endpoint for the cases below; otherwise use `+detail`.
 
 1. **You need SRT subtitles.** `+detail` writes plain text only; `file_format` is a raw-endpoint parameter (verified: returns standard `00:00:14,920 --> 00:00:16,040` cue blocks).
 2. **You want the transcript *without* speaker labels or timestamps.** `+detail` emits both unconditionally. Here they are opt-in flags — so a clean prose body for a Markdown knowledge base is only reachable this way.
@@ -80,7 +71,7 @@ cd <target-dir> && lark-cli api GET /open-apis/minutes/v1/minutes/<minute_token>
 
 So **to land transcripts somewhere else, `cd` there and run lark-cli in the same command**: `cd <target> && lark-cli …`. Two separate steps is the trap, not a style preference — in agent harnesses (Claude Code's Bash tool among them) the working directory **resets between tool calls**, so a `cd` in one call and the fetch in the next writes `./out` relative to wherever the session started. And because `./out` is a perfectly legal relative path there too, you get exit 0, `done: N succeeded, 0 failed`, and N files in the wrong repository. Building an absolute path out of a variable is the other reflex to unlearn — that one at least fails loudly.
 
-Two consequences worth stating outright, because both have produced silent data loss:
+Preserve output identity and failure signals:
 
 - **Omitting `-o` on the raw route is not a neutral default.** The body lands in the current directory under a name lark-cli derives itself — measured for a `txt` transcript: `download.txt`, reused for every subsequent fetch, so pulling several tokens in a row overwrites the same file and leaves only the last one. (The extension appears to follow the content type, so a different `file_format` may land elsewhere; the operative point is that you do not choose the name and it repeats.) `+detail` does not have this failure mode — it derives a per-token directory. Verifying that N tokens are reachable by running the command N times without `-o` leaves you with one file and the false impression that all N worked.
 - **The refusal itself is honest — exit code 2, message on stderr, empty stdout.** What destroys that signal is the calling script: `lark-cli … > "$log" 2>&1` without testing `$?` folds both the error text and the failure code into a file nobody reads, so N rejected fetches look exactly like N successful ones until you notice every output is missing. If you wrap lark-cli in a loop, either check `$?` per iteration or assert the output file is non-empty — otherwise you have built a silent-failure channel on top of a tool that was telling you the truth.
@@ -111,7 +102,13 @@ Without the export scope the call returns:
 
 The scope you need is **`minutes:minutes.transcript:export`**.
 
+Only treat this as a missing grant after source account binding and a scope error
+from that selected identity. A default-profile refusal does not authorize a new
+login or grant. Preserve the actual error for the router's permission workflow.
+
 ## Granting the scope via device-flow (and the timeout trap)
+
+Use this branch only when a new grant is authorized; keep the selected profile.
 
 ```bash
 lark-cli auth login --profile <profile> --scope "minutes:minutes.transcript:export" --no-wait --json
@@ -127,7 +124,7 @@ lark-cli auth login --profile <profile> --scope "minutes:minutes.transcript:expo
 
 ## Permission is per-minute, not per-tenant
 
-One Minutes returning `permission deny` (e.g. code `2091005`) does **not** mean other Minutes in the same tenant are denied. Check each minute_token independently. Before chasing a denied one, check whether its content is already covered by another document you can access (a meeting's AI summary doc often duplicates the transcript) — if so, skip it instead of escalating the permission request.
+One Minutes returning `permission deny` (e.g. code `2091005`) does **not** mean other Minutes in the same tenant are denied. Check each requested minute_token independently and retain each result. An accessible AI summary can satisfy a summary request, but it does not establish that the requested native transcript was captured; keep that transcript gap explicit.
 
 **Before you conclude a minute is out of reach, confirm you tried it under the right `--profile`.** Minutes are shared per-account, so a `2091005` frequently means "this identity cannot see it" rather than "nobody can" — measured: a document readable under one profile returned a permission error under two others on the same machine. Skipping on the strength of a default-profile failure discards minutes you could have fetched, and it does so quietly, because this section otherwise reads as permission to move on.
 
