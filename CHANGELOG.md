@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-cleaner** (`daymade-macos` v1.29.1 → v1.30.0): Add selected external-disk cold relocation with metadata pilots, reusable content evidence, original-entry rollback and explicitly scoped reconnection checks.
+
 - **feishu-doc-scraper** (v1.12.2 → v1.12.3): Point account-binding and transcript-recovery guidance at the independently published Lark router.
 
 - **Marketplace** (v3.26.0 → v3.27.0): Extract **lark-cli-router** unchanged into its own v1.0.0 plugin. **daymade-claude-code** v5.0.0 no longer includes Feishu/Lark operations. To retain them, install `lark-cli-router@daymade-skills` separately and use `lark-cli-router:lark-cli-router` instead of `daymade-claude-code:lark-cli-router`.
