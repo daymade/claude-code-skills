@@ -116,6 +116,8 @@ jobs:
 
       - name: Fixed skill-creator command entry
         run: |
+          python3 scripts/sync_bounded_io.py --check
+          python3 -m unittest discover -s tests -p test_bounded_io.py
           python3 -m unittest discover -s daymade-skill/skill-creator/tests -p test_creator_entry.py
           python3 -m unittest discover -s daymade-skill/skill-creator/tests -p test_capture_command.py
 
