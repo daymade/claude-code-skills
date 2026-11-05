@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **docs-cleaner** (`daymade-docs` v1.29.1 → v1.29.2) and **skill-creator** (`daymade-skill` v1.77.0 → v1.77.1): Recheck inbound references across the final integrated tree after moves or deletions, including consumers outside the original diff; retain manual checks beyond the deleted-target Markdown gate.
 - **git-safety-net** (v1.25.0 → v1.26.0): Export and independently recover the stash index, tracked worktree and optional untracked tree, preserving canonical patches across diff settings and working directories. Add read-only closeout checks bound to the original ref inventory; require behavior and consumer evidence for supersession and distinguish recovery preservation from completed delivery.
 
 - **skill-creator** (`daymade-skill` v1.76.0 → v1.77.0): Move bounded file reading and command capture to standalone tools, retain portable generated compatibility entries in Skill Creator, and check distribution drift in CI. Change type: lossless ownership relocation with preserved interfaces.

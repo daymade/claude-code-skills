@@ -611,6 +611,13 @@ For a split entry or renamed section, the
 control and repaired-entry check. Read bare prose section references against the actual
 heading; link-checker success does not validate prose that it never parsed as a link.
 
+For a Git-backed move or deletion, bind the baseline and final integrated candidate.
+Repeat inbound verification across that final tree after integration, including consumers
+outside the author's original diff. Use the repository's deleted-target checker when
+available; keep the checks below for reference forms it does not cover. Keep literal
+examples and immutable-revision links separate from live links, including live-branch
+links in historical notes.
+
 Searching the bare filename finds some inbound links and misses the rest, then reports
 "verified". A file is referenced in more shapes than one:
 
