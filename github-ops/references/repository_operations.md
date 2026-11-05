@@ -28,6 +28,19 @@ directory is not sufficient authority for a consequential hosted change.
 Cloning is read-only on GitHub but writes locally. Resolve a destination that does not already
 exist; do not let a clone overlay another checkout or untracked work.
 
+### Match copy purpose to the local destination
+
+| Purpose | Destination decision |
+|---|---|
+| Development checkout | Honor an explicit valid current placement or existing development checkout; do not relocate it because unrelated reference copies use another layout. |
+| Durable third-party reference or preservation source | Consult current explicit user placement and the authoritative project/source inventory before choosing a path. Reuse a relevant existing topical reference layout such as `<workspace>/<topic>/<repo>`; historical presence proves an old location, not current suitability. |
+| Temporary rescue transport | Capture the still-accessible source in a fresh task-owned temporary location while durable placement is unresolved. Keep this transport distinct from the final reference or development destination. |
+
+Re-evaluate an inherited flat layout when the user disputes its placement rather than defending it
+from historical siblings. Do not move other existing repositories without explicit authorization.
+For complete-history preservation, retain the full requested refs and history; do not import
+`competitors-analysis`'s shallow-clone or research scope.
+
 ```bash
 destination='./repo-copy'
 test ! -e "$destination" || {

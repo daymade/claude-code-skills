@@ -67,8 +67,9 @@ not establish repository permission. Stop before writes on an unknown or wrong a
 
 Use existing Git and `gh`; the command templates below use a POSIX shell.
 Resolve `COPY_LOGIN`, `COPY_OWNER`, `SOURCE_OWNER`, `REPO`, `DEFAULT_BRANCH`,
-`<github-ops-dir>` and `<destination>` from the task. Discover the default branch
-from the source rather than assuming `main`. Quote substituted shell arguments.
+`<github-ops-dir>` and `<destination>` from the task. Choose the local path with
+[the copy-purpose destination entry](repository_operations.md#match-copy-purpose-to-the-local-destination).
+Discover the default branch from the source rather than assuming `main`. Quote substituted shell arguments.
 
 For a local-only request, clone through the upstream alias and stop after a
 successful fetch/readback; do not create a hosted copy. For a hosted copy,
