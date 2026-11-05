@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **debugging-network-issues** (v1.11.8 → v1.11.9): Distinguish request latency from bulk throughput and prioritize same-request critical-path evidence and end-to-end benefit before local tuning. Preserve existing throughput, timeout and intermittent-failure workflows. Change type: bounded diagnostic routing correction.
+- **transcript-fixer** (`daymade-audio` v1.57.1 → v1.57.2): Scope dictionary-add review conflicts to the literal source and longer pending source/candidate matches. Preserve unrelated pending suggestions that share only the destination, along with person-name and corpus-evidence gates.
 
 - **macos-cleaner** (`daymade-macos` v1.29.1 → v1.30.0): Add selected external-disk cold relocation with metadata pilots, reusable content evidence, original-entry rollback and explicitly scoped reconnection checks.
 - **prior-work-retrieval** (`daymade-claude-code` v5.0.0 → v5.0.1): Keep guarded reuse of supplied exact-candidate review results out of history retrieval; retain mixed historical requests and existing retrieval obligations.
