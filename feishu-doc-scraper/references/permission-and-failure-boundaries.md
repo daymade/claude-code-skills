@@ -2,24 +2,19 @@
 
 The single most valuable part of this skill: a record of what does **not** work, so the next run does not re-pay the cost of discovering it. Every entry was verified, not guessed.
 
-## Contents
-
-- Error codes you will hit
-- Dead-end table (do NOT attempt)
-- Why "empty JSON" from lark-cli is a lie
-- Login-wall detection
-- Wrong-tool traps
-
 ## Error codes you will hit
+
+First load `lark-cli-router` and follow its [source account binding](https://github.com/daymade/claude-code-skills/blob/main/daymade-claude-code/lark-cli-router/references/source-account-binding.md).
+The responses below apply after selecting the source's authorized profile and identity.
 
 | Code | Where | Meaning | Correct response |
 |---|---|---|---|
 | `131006` | `wiki spaces get_node` / `docs +fetch` | `node permission denied, user needs read permission` — the current token cannot read this wiki node | Hard server-side boundary. Stop. Path B: ask the permission holder to export `.docx` out-of-band. Do **not** try lark-cli/curl/browser bypasses. |
-| `99991679` | `api …/minutes/.../transcript` | missing scope `minutes:minutes.transcript:export` | Grant the scope via device-flow (feishu-minutes-transcript.md). |
-| `2091005` | minutes transcript | that specific minute is permission-denied | Per-minute, not per-tenant. Check if content is covered elsewhere before escalating. |
+| `99991679` | minutes transcript | export scope missing for the selected identity | Follow [Minutes scope handling](feishu-minutes-transcript.md#the-scope-and-the-99991679-error); a new grant is a separate authorized action. |
+| `2091005` | minutes transcript | the selected identity cannot read that minute | Retain the per-minute gap; an accessible AI summary does not establish transcript capture. Follow [per-minute permissions](feishu-minutes-transcript.md#permission-is-per-minute-not-per-tenant). |
 | `0` | any | success | proceed |
 
-`131006` is a *Feishu-side* decision. It was verified that an anonymous browser redirects to `accounts.feishu.cn/...login`, and that even a logged-in user without a share still has to *request* access. There is no client-side trick. The only path is the document owner exporting it.
+`131006` is a *Feishu-side* decision for the bound identity. Honor it and use the owner-export route; a different transport does not grant access.
 
 ## Dead-end table (do NOT attempt)
 
@@ -48,7 +43,7 @@ permission refusals instead of retrying them through a different transport.
 | Chrome DevTools CDP on `:9222` | `curl :9222/json/list` → `[]` or 404 | CDP endpoints empty even with the flag (profile/policy) |
 | `minimax-docx` to convert docx→md | wrong direction | it is a docx *authoring/editing* tool, not an extractor |
 
-**Conclusion for the tested docx image CLI methods through 1.0.32:** those seven
+**Conclusion for the tested docx image CLI methods through 1.0.32:** the listed
 approaches failed. Do not repeat them. This does not establish whether a current,
 authorized browser can expose the original. When body capture succeeds but media
 export or preview fails, use [the operation-specific original-preview branch](original-media-and-reader.md).
