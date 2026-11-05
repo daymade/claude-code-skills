@@ -530,7 +530,7 @@
       "description": "Operates GitHub via gh CLI and REST/GraphQL — PRs, issues, Actions, self-hosted Runner inventory/capacity, repos, collaborators, org permissions, 2FA — with explicit target, authorization, and independent readback. Use when a write reports success but state didn't change, or choosing gh/REST/GraphQL/UI-only. Not for local Git recovery (use git-safety-net), maintainer PR review (use github-review-pr), or upstream contribution (use github-contributor).",
       "source": "./github-ops",
       "strict": false,
-      "version": "1.15.4",
+      "version": "1.15.5",
       "category": "developer-tools",
       "keywords": [
         "github",
@@ -1353,7 +1353,7 @@
       "description": "Snapshots/restores Ghostty Claude Code/Codex tabs across reboots. Use before Mac updates (保存终端会话/重启前备份终端), after restart to reopen original session IDs (恢复之前的窗口/restore my ghostty tabs), audit survivors, or periodic change-only snapshots (定期增量快照/没变化不记录). Also for unmanaged/legacy Codex account switches (额度耗尽换号/换号后恢复全部 Codex); Minions native_runtime uses Account Manager. Not for --resume, screenshots or tmux.",
       "source": "./ghostty-use",
       "strict": false,
-      "version": "1.11.1",
+      "version": "1.11.2",
       "category": "developer-tools",
       "keywords": [
         "ghostty",

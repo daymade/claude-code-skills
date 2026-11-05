@@ -662,8 +662,10 @@ switches start at its
 [account-owner selection](ghostty-use/references/codex-account-switch.md#choose-the-account-owner-first).
 For blocked/delegated reopening, follow its
 [original-set route](ghostty-use/references/codex-account-switch.md#reopen-the-original-recorded-set-not-a-blank-session).
-When a snapshot looks too large or recovery is limited to an activity window, use
-[time-window selection](ghostty-use/references/session_liveness.md#select-recovery-candidates-by-a-time-window).
+Before selecting a recovery set or assessing completeness, follow the
+[recovery entry decision tree](ghostty-use/SKILL.md#entry-decision-tree).
+For observer freshness, follow
+[observation-health verification](ghostty-use/references/automatic-snapshots.md#verify-observation-health).
 Before a restore or retry, follow its
 [current-set reconciliation](ghostty-use/references/restore_mechanics.md#reconcile-the-current-wanted-set).
 After process reconciliation, follow
@@ -865,7 +867,7 @@ When individual approvals disagree with effective merge requirements, use
 [the landing diagnosis](github-review-pr/references/remediation_and_landing.md#merge-with-the-reviewed-head-guard).
 For archive/ingestion repair publication, enter
 [the repair and publication preflight](github-review-pr/references/remediation_and_landing.md#prepare-an-isolated-repair-environment).
-For direct, queued or separately authorized bypass merges and landed-rule readback,
+For direct, queued or separately authorized bypass merges, refusal diagnosis and landed-rule readback,
 follow the [checked-merge workflow](github-ops/references/pr_operations.md#merging-prs).
 For hosted-state writes through `gh`, follow its
 [identity, host and target binding](github-ops/SKILL.md#2-bind-identity-host-and-target)

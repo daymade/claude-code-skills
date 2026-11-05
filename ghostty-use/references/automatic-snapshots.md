@@ -90,6 +90,8 @@ processes. UUID-less identities use the manual inventory's bounded cwd/start-tim
 resolver and internal session-ID verification; ambiguous matches remain unresolved.
 Do not replace this with an unrestricted history search or index refresh.
 
+## Verify observation health
+
 After install, the deploying agent verifies a completed native round, not only
 registration. Read `status` before and after a scheduled round: the launchd run
 count must advance and the last exit must be zero. Read a newly changed snapshot
@@ -100,7 +102,8 @@ error without advancing `last_successful_observation_at`. Partial observations
 advance `last_observed_at` and report unresolved/retained counts; they do not claim
 complete coverage. `attempted_at`, `completed_at` and `last_snapshot_change_at`
 distinguish the latest attempt, completion and saved inventory change. The event
-log is bounded to 1 MiB. A foreground `probe` alone does not certify
+log follows the [watcher's retention policy](../scripts/ghostty_watch.py).
+A foreground `probe` alone does not certify
 background permissions, sleep/wake continuity or power savings.
 
 ## What counts as a change
@@ -138,8 +141,10 @@ the newest rollout or an unrelated history row. A Node wrapper and its native
 vendor child count as one TUI. Noninteractive CLI workers are excluded.
 
 Identity parsing consumes known option values before recognizing selectors.
-Unknown option arity, Claude positional prompts, forked IDs, and prompts following
-a Codex resume ID remain unresolved. `ps` flattens argv and loses quoting: a quoted
+Unknown option arity, Claude positional prompts, fork selectors and prompts
+following a Codex resume ID do not establish the current ID from argv. Parseable
+unresolved TUIs use the shared bounded metadata resolver; retain `unresolved`
+when verification cannot settle the identity. `ps` flattens argv and loses quoting: a quoted
 Codex prompt beginning `resume <UUID>` is indistinguishable from a real resume
 subcommand. This recognition assumes a prompt-free selector invocation; use
 explicit indexed identity verification when that boundary is uncertain.

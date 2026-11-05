@@ -368,17 +368,13 @@ It rejects raw REST `PUT .../pulls/NUMBER/merge` and GraphQL `mergePullRequest`
 writes; normal API reads and unrelated mutations remain supported. A rejected
 merge is not permission to change API, retarget the PR or create a refresh commit.
 
-The helper prints a fixed rejection code and a safe next step. For example,
-`mergeability_unknown` calls for a fresh read, `mergeability_conflicting` reports
-conflicts, `head_mismatch` requires reconciling the reviewed head, and
-`approvals_unmet` points to effective review requirements. The acknowledged bypass
-path distinguishes `checks_pending`, `checks_failed` and unavailable or invalid
-check evidence. Normal merges retain GitHub's effective hosted-state checks;
-a blocked state alone does not identify which CI check failed. Actor/target
-mismatches remain binding failures. Resolve the reported cause through read-only
-inspection before a new invocation; the diagnostic does not authorize retry,
-bypass, a different actor or a different channel. Unknown exceptions are reported
-without their raw text, response bodies or credentials.
+Use the helper's fixed rejection code and safe next step. The
+[checked-invocation implementation](../scripts/checked_gh.py) owns the reason
+catalogue, refusal conditions and output redaction; do not maintain a second
+code-to-message table here. Resolve the reported cause through read-only
+inspection before a new invocation. Read the original check results before
+attributing a blocked merge to CI. A diagnostic does not authorize retry, bypass,
+a different actor or a different channel.
 
 Treat an individual `APPROVED` review as evidence, not proof that GitHub counted
 all required approvals. Diagnose effective `reviewDecision`, dismissal events and

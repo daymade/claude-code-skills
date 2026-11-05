@@ -116,28 +116,11 @@ recorded cwd and raw process evidence are not automatically replayed.
 
 ## Snapshot schema (output contract)
 
-`~/.ghostty-session/snapshots/snapshot-<ts>.json` + `latest.json` pointer.
-Manual manifest excerpt; the [writer](../scripts/ghostty_session.py) defines the
-complete output, including classification settings and generated coverage fields:
-
-```json
-{
-  "captured_at": "ISO-8601 local",
-  "scope": "Ghostty process descendants",
-  "window_tab_mapping": "unknown",
-  "terminal_inventory": [{"tty": "ttys001", "pid": 123, "cwd": "<working dir>", "cmdline": "<process evidence>", "kind": "ai"}],
-  "other_terminals": [],
-  "unresolved": [],
-  "sessions": [
-    {"tty": "ttys001", "tool": "claude|codex", "sid": "<uuid>",
-     "cwd": "<working dir>", "cmdline": "<captured argv>",
-     "profile": "<settings-name or direct>",
-     "last_interaction": "<UTC ISO or null>", "error": "ok|login-expired|api-error|no-file|identity-unavailable",
-     "status": "active|stale|dead-channel|no-artifact|unknown|active+api-error|stale+api-error",
-     "age_hours": 0.5}
-  ]
-}
-```
+Use the [manual/reconstruction writer](../scripts/ghostty_session.py)
+(`write_snapshot`, `cmd_reconstruct`, `classify`) and
+[automatic writer](../scripts/ghostty_watch.py) for current fields, labels and
+storage paths. Inspect the selected manifest itself; do not maintain a parallel
+JSON schema excerpt or aggregate field catalogue in this SOP.
 
 Users may hand-edit a snapshot (drop rows, edit cwd) before restore — it is
 user data, not a locked contract.
@@ -151,8 +134,6 @@ Older manifests without these additive fields remain readable; their omitted
 capture scope and ordinary-terminal coverage remain unknown. Reconstruction
 preserves supplied capture metadata without treating it as newly observed.
 
-Reconstructed manifests retain this sessions format and add `kind`, `coverage`,
-`source_snapshot`, bounded `discovery` metadata, and per-row `membership`.
 Old snapshots need no migration. Reconstruction writes a separate new file,
 leaving the latest pre-reboot snapshot intact; use `restore --snapshot <file> --all`
 to open the full chosen set, rather than letting active-only selection omit
