@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **read-claude-code-history** (`daymade-claude-code` v5.0.0 → v5.1.0): Verify an exact session artifact against its current source before reuse; distinguish fresh, stale and unknown snapshots without scanning unrelated history.
+- **local-codex** (`daymade-codex` v2.4.4 → v2.4.5): Check saved-login sources and the bound owner's adoption capability before authorization; report the observed account, original operation receipt and useful continuation separately while preserving formal browser ownership.
+
 - **ghostty-use** (v1.10.0 → v1.11.0): Resolve UUID-less terminal sessions in automatic snapshots and record timestamped coverage, unchanged rounds, failures and timeouts. Preserve change-only archives, partial-backup retention and the configured schedule. Reuse one history-index lookup per manual snapshot. Change type: compatible snapshot reliability repair.
 
 - **feishu-doc-scraper** (v1.12.2 → v1.12.3): Point account-binding and transcript-recovery guidance at the independently published Lark router.
