@@ -26,7 +26,8 @@ Before applying the general methodology below, check whether the symptom points 
 | Client-side proxy / VPN / TUN misrouting: one specific site fails with `ERR_CONNECTION_CLOSED` or `SSL_ERROR_SYSCALL`, other sites work, DNS returns fake/TUN IPs, and adding a PROXY rule did not help | **this skill** — read [references/case-proxy-tun-cname-override.md](references/case-proxy-tun-cname-override.md) first |
 | TLS certificate-verification errors (`UNKNOWN_CERTIFICATE_VERIFICATION_ERROR`, a cert for the wrong site) or mid-handshake EOFs on **every** DIRECT-routed/domestic domain at once, while proxied domains work — and any proxy health watchdog still reports green                                        | **tunnel-doctor** (TUN DIRECT split-brain step) |
 | The proxy is reachable and the OS/Tailscale route is healthy, but bulk transfers are slow and changing the active exit/node changes the measured rate | **tunnel-doctor** — proxy node / exit / chain capacity branch |
-| **Nothing errors — it is just slow.** Every request returns 200, latency and health checks look fine, but transfers crawl, bulk jobs overrun their estimates, or files arrive truncated | **this skill** — go straight to [Step 0.7](#step-07-throughput-collapse--when-nothing-errors-and-everything-is-slow); the error-driven steps have nothing to bite on |
+| A page or API completes slowly, including small responses that return 200; the slow layer is unknown | Read [latency investigation priorities](references/layered-isolation-experiment.md#latency-investigation-priorities) before selecting a lower-level probe |
+| Bulk transfers crawl, jobs overrun their estimates, or files arrive truncated while latency and health checks look fine | **this skill** — go straight to [Step 0.7](#step-07-throughput-collapse--when-nothing-errors-and-everything-is-slow); preserve the throughput comparison |
 | A whole group of smart-home / IoT devices is offline at once — often weeks after a router/AP swap or Wi-Fi settings change; the hub is "right there" but its children are all dead, plus some direct-Wi-Fi devices | **this skill** — read [references/case-iot-router-migration-wpa3.md](references/case-iot-router-migration-wpa3.md) first |
 
 If none match — or you tried a domain skill and the evidence points elsewhere — continue below. The methodology generalizes to any multi-layer system.
@@ -113,7 +114,7 @@ A tight scope is the difference between a 20-minute investigation and a 5-hour o
 
 Distinguish symptom from diagnosis. "Slow" is not a symptom. "Request took 130.898s then returned HTTP/2 INTERNAL_ERROR" is.
 
-**But do not let that sentence route a real incident into the bin.** It demands quantification, not an error code — and a whole failure family quantifies as a *rate* with no error code anywhere: every request returns 200, nothing resets, and the system is still unusable. "Slow" becomes a symptom the moment you write it as **bytes per second over a stated payload size** ("8.4 MB in 95 s = 0.09 MB/s, HTTP 200 throughout"). Once you have that number, Step 0.7 has a decisive experiment for it. What stays out of scope is the *unmeasured* complaint — "users say it feels slow" — which is Step 0.5's problem, not this one.
+**Quantify the user's wait even when nothing errors.** For a page or API, record elapsed time to the named user-visible completion and use [latency investigation priorities](references/layered-isolation-experiment.md#latency-investigation-priorities). For a bulk transfer, record bytes per second over a stated payload size ("8.4 MB in 95 s = 0.09 MB/s, HTTP 200 throughout") and use Step 0.7. An unmeasured complaint starts at Step 0.5; HTTP 200 does not establish acceptable latency, throughput or complete content.
 
 ### Step 0.5: Verify the premise
 
