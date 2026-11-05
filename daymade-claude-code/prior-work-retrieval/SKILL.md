@@ -348,6 +348,12 @@ without replacing unrelated hooks:
     retrieval. Exclude only a complete list of execution
     objects; keep `沿用` when the same list also names a historical asset.
     Historical reuse requests elsewhere in the prompt still count.
+  - **Current exact-candidate recheck.** When a recheck binds distinct full
+    40-hex current and previously reviewed candidates, exclude only the local
+    reuse of supplied passed checks, axes or evidence after confirming the
+    relevant inputs unchanged. Missing bindings, ambiguous reuse and unguarded
+    results remain armed; classify all remaining text normally so a mixed
+    historical retrieval request still creates a requirement.
 
 Run `scripts/prior_work.py audit` to see whether the gate is behaving: it
 reports the trigger mix, the empty-gate rate (armed requirements that never
