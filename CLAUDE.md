@@ -530,7 +530,7 @@ It owns group reuse/creation, descendant-scoped grants and their verification.
 ### Feishu Document Capture
 
 Before the first linked-resource read, follow
-[source account binding](daymade-claude-code/lark-cli-router/references/source-account-binding.md).
+[source account binding](lark-cli-router/references/source-account-binding.md).
 For Feishu document reads and archives, enter
 [feishu-doc-scraper](feishu-doc-scraper/SKILL.md). Its
 [API extraction SOP](feishu-doc-scraper/references/lark-cli-api-extraction.md)
