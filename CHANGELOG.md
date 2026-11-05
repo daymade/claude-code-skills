@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **feishu-doc-scraper** (v1.12.1 → v1.12.2): Align document and Minutes permission recovery with source account binding; preserve native-transcript gaps and remove manually maintained heading summaries. Change type: operating-guide consistency repair.
+- **local-codex** (`daymade-codex` v2.4.3 → v2.4.4): Pre-clear Cloudflare on a neutral OpenAI page before formal shared-owner OAuth and preserve the formal TaskSpace owner through callback completion; keep late account changes and original-operation outcomes separate. Change type: bounded recovery-guide correction.
 - **ghostty-use** (v1.9.8 → v1.10.0): Add the configured Account Manager legacy-terminal JSON bridge, targeted native host and bound-window reader; preserve manual restore, unresolved inventory and uncertain-input reconciliation. Read Darwin argv by its kernel argument count without treating initial prompts or environment data as options. Change type: recovered compatible terminal integration.
 - **lark-cli-router** (`daymade-claude-code` v4.36.0 → v4.37.0): Add external customer group and Wiki collaboration guidance, including reuse of manually created groups, explicit external-group creation, descendant-scoped group grants, and separate configuration/access acceptance. Change type: additive collaboration workflow.
 
