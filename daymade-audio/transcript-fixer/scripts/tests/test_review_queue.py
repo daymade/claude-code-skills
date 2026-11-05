@@ -379,6 +379,142 @@ def queue(db_path: Path, dict_calls: list, fake_tempdir: Path) -> ReviewQueue:
     return ReviewQueue(db_path, dict_add_fn=dict_add)
 
 
+def _identical_repoint_case(queue, tmp_path):
+    source = tmp_path / "source file.md"
+    target = tmp_path / "published file.md"
+    other = tmp_path / "other context.md"
+    other.write_text("## Notes\n", encoding="utf-8")
+    original = "旧词先保留，另一处保留错字。"
+    source.write_text(original + "\r\n", encoding="utf-8")
+    item_id = queue.enqueue([{
+        "file": str(source), "line": 1, "original": "旧词", "suggested": "新词",
+        "context": original, "context_offset": 0, "kind": "homophone",
+        "actions": [
+            {"type": "file_edit", "path": str(source), "old": "旧词", "new": "新词",
+             "expect_line": 1},
+            {"type": "append_note", "path": str(other), "anchor": "## Notes", "text": "- Note"},
+        ],
+    }])["added"][0]
+    source.write_bytes("归档说明\r\n旧词先保留，另一处已经校对。\r\n".encode())
+    target.write_bytes(source.read_bytes())
+    queue.get(item_id)  # Complete any additive schema setup before snapshots.
+    return item_id, source, target, other
+
+
+def _queue_row(db_path, item_id):
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        return dict(conn.execute("SELECT * FROM review_items WHERE id=?", (item_id,)).fetchone())
+
+
+def test_identical_repoint_preserves_stale_anchor_and_verdict(queue, db_path, tmp_path):
+    item_id, source, target, other = _identical_repoint_case(queue, tmp_path)
+    before = _queue_row(db_path, item_id)
+    with sqlite3.connect(db_path) as conn:
+        evidence = {table: conn.execute(f"SELECT * FROM {table} ORDER BY 1,2").fetchall()
+                    for table in ("review_anchors", "review_candidates")}
+    payloads = {p: p.read_bytes() for p in (source, target, other)}
+    result = queue.reanchor(item_id, reanchor_to=str(target))
+    expected = dict(before, file_path=str(target))
+    actions = json.loads(before["actions_json"])
+    actions[0]["path"] = str(target)
+    expected["actions_json"] = json.dumps(actions, ensure_ascii=False)
+    assert _queue_row(db_path, item_id) == expected
+    assert result["file_repointed"] and result["anchor_refreshed"] is False
+    with sqlite3.connect(db_path) as conn:
+        for table, rows in evidence.items():
+            assert conn.execute(f"SELECT * FROM {table} ORDER BY 1,2").fetchall() == rows
+    assert [x.id for x in queue.list_items(file_path=str(target))] == [item_id]
+    with pytest.raises(ReAnchorNeeded):
+        queue.resolve(item_id, "accepted")
+    assert _queue_row(db_path, item_id) == expected
+    assert all(p.read_bytes() == b for p, b in payloads.items())
+
+
+@pytest.mark.parametrize("variant", ["missing_source", "empty_source", "different_bytes", "empty_target",
+                                    "symlink_target", "missing_target", "empty_argument",
+                                    "no_argument", "blank_source_binding", "null_source_binding"])
+def test_identical_repoint_missing_or_drifted_evidence_keeps_strict_guard(
+        queue, db_path, tmp_path, variant):
+    item_id, source, target, _ = _identical_repoint_case(queue, tmp_path)
+    destination = str(target)
+    if variant == "missing_source":
+        source.unlink()
+    elif variant == "empty_source":
+        source.write_bytes(b"")
+    elif variant == "different_bytes":
+        target.write_bytes(target.read_bytes() + b"extra\n")
+    elif variant == "empty_target":
+        target.write_bytes(b"")
+    elif variant == "symlink_target":
+        link = tmp_path / "linked.md"
+        link.symlink_to(target)
+        destination = str(link)
+    elif variant == "missing_target":
+        destination = str(tmp_path / "missing.md")
+    elif variant == "empty_argument":
+        destination = ""
+    elif variant == "no_argument":
+        destination = None
+    elif variant in {"blank_source_binding", "null_source_binding"}:
+        with sqlite3.connect(db_path) as conn:
+            conn.execute("UPDATE review_items SET file_path=? WHERE id=?",
+                         ("" if variant == "blank_source_binding" else None, item_id))
+    before = db_path.read_bytes()
+    payloads = {p: p.read_bytes() for p in (source, target) if p.is_file()}
+    with pytest.raises(ReviewQueueError):
+        queue.reanchor(item_id, reanchor_to=destination)
+    assert db_path.read_bytes() == before
+    assert all(p.read_bytes() == b for p, b in payloads.items())
+
+
+@pytest.mark.parametrize("changed_field", ["file_path", "status"])
+def test_identical_repoint_rechecks_binding_before_write(queue, db_path, tmp_path, monkeypatch,
+                                                       changed_field):
+    item_id, source, target, _ = _identical_repoint_case(queue, tmp_path)
+    other = tmp_path / "another source.md"
+    other.write_bytes(source.read_bytes())
+    get = queue.get
+    def changed_get(identity):
+        item = get(identity)
+        with sqlite3.connect(db_path) as conn:
+            if changed_field == "file_path":
+                conn.execute("UPDATE review_items SET file_path=? WHERE id=?", (str(other), identity))
+            else:
+                conn.execute("UPDATE review_items SET status='kept_original' WHERE id=?", (identity,))
+        return item
+    monkeypatch.setattr(queue, "get", changed_get)
+    with pytest.raises(ReviewQueueError, match="changed file or status"):
+        queue.reanchor(item_id, reanchor_to=str(target))
+    assert _queue_row(db_path, item_id)[changed_field] == (
+        str(other) if changed_field == "file_path" else "kept_original")
+
+
+def test_identical_repoint_rechecks_bytes_before_write(queue, db_path, tmp_path, monkeypatch):
+    item_id, _, target, _ = _identical_repoint_case(queue, tmp_path)
+    repoint = queue._repoint_identical_file
+    def changed_repoint(*args):
+        target.write_bytes(target.read_bytes() + b"concurrent change\n")
+        return repoint(*args)
+    monkeypatch.setattr(queue, "_repoint_identical_file", changed_repoint)
+    before = db_path.read_bytes()
+    with pytest.raises(ReviewQueueError, match="source or target changed"):
+        queue.reanchor(item_id, reanchor_to=str(target))
+    assert db_path.read_bytes() == before
+
+
+def test_nonidentical_healthy_explicit_reanchor_still_repairs(queue, tmp_path):
+    source = tmp_path / "old.md"
+    target = tmp_path / "new.md"
+    source.write_text("旧词只在这里。\n", encoding="utf-8")
+    item_id = queue.enqueue([{"file": str(source), "line": 1, "original": "旧词",
+                              "suggested": "新词", "context": "旧词只在这里。"}])["added"][0]
+    target.write_text("新增标题\n旧词只在这里。\n", encoding="utf-8")
+    result = queue.reanchor(item_id, reanchor_to=str(target))
+    assert result["file_repointed"] and result["line_number"] == 2
+    assert "anchor_refreshed" not in result
+
+
 @pytest.fixture
 def transcript(tmp_path: Path) -> Path:
     """A realistic transcript: CJK, speaker lines, trailing space, quotes."""

@@ -376,10 +376,16 @@ mere distance, refreshes line + verbatim context) and **file gone** (searches
 the recorded parent dir plus every `--reanchor-root` for `*.md` containing
 `original`; exactly one candidate re-points the anchor, zero changes nothing,
 and multiple asks for `--reanchor-to FILE` — the explicit-target form, which
-is itself refused if `original` is not in it). After a successful re-anchor,
+is itself refused if `original` is not in it). After an occurrence anchor is refreshed,
 the guard's context check passes and `A`/`W`/CLI resolve proceed normally
 (explicit action packs get their `file_edit` path rewritten to the new file).
 The refusal messages themselves name this command.
+
+With explicit `--reanchor-to`, an existing old file and a target with identical
+whole bytes permit a path-only move. The queue keeps IDs, status, anchors,
+candidates and verdicts; only the file binding and actions pointing to that same
+old file move. `anchor_refreshed: false` reports this case. Stale anchors remain
+unresolved and retain the normal resolve-time checks; no transcript is edited.
 
 **Promote each `decision_note`; the queue only stores it.** The dashboard's
 备注 field and the CLI's `--note` record the reviewer's reason, but neither
