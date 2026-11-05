@@ -111,16 +111,36 @@ account with the account reported by that same live owner. Cached identity locat
 the saved login; it does not prove server access, remaining quota or session adoption.
 Minions-managed account binding remains with Account Manager.
 
+Before starting a switch, ask that owner for the exact target's supported
+saved-login route and eligible registered sources. A browser's SSO session, a
+saved Codex grant and the running owner's adopted account are different facts.
+Check source identity/validity and target adoption capability separately. A
+missing adoption capability does not invalidate a saved login; a registered
+source does not prove this owner can adopt it. Prefer supported saved-login
+adoption. When unavailable, retain the precise capability or source failure and
+choose only an already authorized recovery route; do not silently fall through
+to new browser authorization or copy credentials outside the existing owner.
+
 | Observed state | Next action |
 |---|---|
 | The live owner already uses the expected account and authorized work succeeds | Keep the login and continue the task; do not restart or log in again. |
 | An already authorized expected login is saved, but the shared daemon still reports the previous account | Consider the saved-login adoption below, with explicit authority for its process-wide effect. |
+| An eligible saved login exists, but this owner cannot adopt it through its supported interface | Report the target capability gap separately from source validity; retain the login and use only an authorized recovery route. |
 | The store and live owner agree, but authentication fails | Use the existing refresh-owning provider's supported recovery; do not infer that another account must be adopted. |
 | No usable expected login is available | Choose the verified [same-owner OAuth](#existing-native-owner-oauth-adoption) or [independent-grant/TRANSFER](#remote-account-switch-and-expired-login-recovery) route. |
 
+Report the exact session's observed account, the original operation's receipt
+and subsequent useful work separately. The expected live account can be observed
+while the operation remains `unknown`; neither fact substitutes for the other.
+A matching account alone does not prove later requests used it or every task
+resumed. Read back the original request through its owner; do not start another
+login or restart merely to repair its receipt. If no replayable completion exists,
+retain that gap instead of promoting a current-account observation to operation
+success. Preserve the original SIDs and pending work throughout recovery.
+
 ### Pre-clear challenges without transferring the formal AM space
 
-If Cloudflare is expected to block a shared-owner OAuth flow, use a neutral `https://auth.openai.com/` page with no OAuth parameters before the formal POST. The user may complete the human challenge there and stop without logging in. Once Account Manager creates the formal login TaskSpace, its browser consumer owns that space through success-page observation and finish/verify. Do not call `handOff`, `claimTaskSpace`, or drive it from another agent: transferring ownership makes the consumer's snapshots fail. If the callback subsequently changes the live account without a matching native completion in the original journal, keep that operation `unknown`; a Signed in page or current-account readback does not settle it, and neither authorizes another login or an automatic restart.
+If Cloudflare is expected to block a shared-owner OAuth flow, use a neutral `https://auth.openai.com/` page with no OAuth parameters before the formal POST. The user may complete the human challenge there and stop without logging in. Once Account Manager creates the formal login TaskSpace, its browser consumer owns that space through success-page observation and finish/verify. Do not call `handOff`, `claimTaskSpace`, or drive it from another agent: transferring ownership makes the consumer's snapshots fail. A Signed in page still requires the independent account, original-receipt and continuation checks above.
 
 ### Adopt a saved login in a shared daemon
 
