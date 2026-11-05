@@ -744,7 +744,8 @@ a line the survivor genuinely lacks anywhere is the one to escalate.
 applying the original-index and tracked-worktree patches to one index. The generated script verifies
 both states independently, verifies materialized content and modes, and restores the untracked third
 parent when present. A selected third-parent export or recovery requires Python 3.10+; bundle-only
-and no-third-parent paths do not. The untracked tar preserves the frozen tree's stored blob bytes,
+and no-third-parent paths do not. Ignore Git replacement refs when exporting and recovering frozen
+objects. The untracked tar preserves the frozen tree's stored blob bytes,
 Git modes and symlink targets without archive-attribute/filter/working-tree-encoding conversion;
 it does not recreate pre-filter physical bytes that Git never stored. Recovery embeds its raw-byte
 reconstruction helper and needs only the base commit plus export artifacts, not original untracked

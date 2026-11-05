@@ -60,6 +60,9 @@
 
 set -euo pipefail
 
+# Bind frozen identities to stored objects, including in generated recovery scripts.
+export GIT_NO_REPLACE_OBJECTS=1
+
 die() { echo "error: $*" >&2; exit 2; }
 
 require_oid() {
@@ -294,6 +297,7 @@ UNTRACKED_ARCHIVE_NAME="$tarball_name"
 STASH_INDEX="$i"
 EOF
   cat >> "$recovery" <<'RECOVERY'
+export GIT_NO_REPLACE_OBJECTS=1
 die() { echo "error: $*" >&2; exit 2; }
 [ "$#" -eq 2 ] || die "usage: $0 /path/to/repository /new/recovery/directory"
 REPO="$1"

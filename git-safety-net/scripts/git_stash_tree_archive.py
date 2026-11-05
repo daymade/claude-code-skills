@@ -33,11 +33,18 @@ class Entry:
     path: bytes
 
 
+def git_environment() -> dict[str, str]:
+    environment = os.environ.copy()
+    environment["GIT_NO_REPLACE_OBJECTS"] = "1"
+    return environment
+
+
 def run_git(repo: str, *arguments: str) -> subprocess.CompletedProcess[bytes]:
     return subprocess.run(
         ["git", "-C", repo, *arguments],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        env=git_environment(),
         check=False,
     )
 
@@ -118,6 +125,7 @@ def stream_blob(repo: str, oid: str) -> Iterator[tuple[int, BinaryIO]]:
         ["git", "-C", repo, "cat-file", "blob", oid],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        env=git_environment(),
     )
     assert process.stdout is not None
     assert process.stderr is not None

@@ -232,7 +232,8 @@ consequences that bite in real recoveries:
   A selected third-parent export requires Python 3.10+ and the bundled
   `scripts/git_stash_tree_archive.py`; bundle-only exports and stashes without a third parent do not
   require Python. The helper reads the frozen U tree with `git ls-tree -r -z --full-tree` and raw
-  `git cat-file` blobs rather than checkout or `git archive`. It preserves exactly the stored regular
+  `git cat-file` blobs rather than checkout or `git archive`. Export and recovery disable Git
+  replacement refs so frozen object IDs retain their original meaning. Preserve exactly the stored regular
   bytes, Git `100644`/`100755` modes and `120000` symlink targets, independently reads the tar back
   against the U tree, and publishes the final tar only after that verification. Consequently
   `export-ignore`, `export-subst`, nested/info/global archive attributes, clean filters and

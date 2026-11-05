@@ -991,6 +991,79 @@ sys.stderr.buffer.write(result.stderr)
             output, manifest, destination=self.root / "tamper-healthy-control"
         )
 
+    def test_replace_refs_do_not_redirect_frozen_objects_or_recovery(self) -> None:
+        base = self.create_base()
+        payload = b"original stored untracked payload\n"
+        self.write_file("payload.txt", payload)
+        self.git("stash", "push", "-u", "-m", "replacement refs")
+        identity = self.stash_identity(self.git("rev-parse", "refs/stash").stdout.strip())
+        original_blob = self.git(
+            "rev-parse", f"{identity['untracked_tree']}:payload.txt"
+        ).stdout.strip()
+        replacement_blob = self.git(
+            "hash-object", "-w", "--stdin", input_text="replacement payload\n"
+        ).stdout.strip()
+        replacement_tree = self.git(
+            "mktree", input_text=f"100644 blob {replacement_blob}\tpayload.txt\n"
+        ).stdout.strip()
+        replacement_u = self.git(
+            "commit-tree", replacement_tree, input_text="replacement U\n"
+        ).stdout.strip()
+        replacement_stash = self.git(
+            "commit-tree", identity["worktree_tree"],
+            "-p", base, "-p", identity["index_commit"], "-p", replacement_u,
+            input_text="replacement stash\n",
+        ).stdout.strip()
+        for kind, original, replacement in (
+            ("blob", original_blob, replacement_blob),
+            ("tree", identity["untracked_tree"], replacement_tree),
+            ("u-commit", identity["untracked_commit"], replacement_u),
+            ("stash-commit", identity["stash_commit"], replacement_stash),
+        ):
+            with self.subTest(kind=kind):
+                self.git("replace", original, replacement)
+                try:
+                    # Control: this source really redirects ordinary Git reads.
+                    redirected = self.git_bytes(
+                        "cat-file", "blob", f"{identity['stash_commit']}^3:payload.txt"
+                    ).stdout
+                    self.assertEqual(b"replacement payload\n", redirected)
+                    output = self.root / f"replace-{kind}"
+                    exported = self.run_script("--stash", "0", "--out", str(output))
+                    self.assertEqual(0, exported.returncode, exported.stdout + exported.stderr)
+                    _, manifest = self.single_manifest(output)
+                    for key, value in identity.items():
+                        self.assertEqual(value, manifest[key], key)
+                    with tarfile.open(output / manifest["untracked_archive"], "r:") as archive:
+                        self.assertEqual(payload, archive.extractfile("payload.txt").read())
+                    direct = self.root / f"direct-replace-{kind}.tar"
+                    completed = subprocess.run(
+                        [str(REAL_PYTHON), str(TREE_ARCHIVE), "--repo", str(self.repo),
+                         "--tree", identity["untracked_tree"], "--output", str(direct)],
+                        env=self.env, capture_output=True, check=False,
+                    )
+                    self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
+                    with tarfile.open(direct, "r:") as archive:
+                        self.assertEqual(payload, archive.extractfile("payload.txt").read())
+                    receiver = self.create_base_only_repository(base, f"base-only-replace-{kind}")
+                    missing = self.run_git(receiver, "cat-file", "-e", original_blob, check=False)
+                    self.assertNotEqual(0, missing.returncode)
+                    empty = self.run_git(receiver, "mktree", input_text="").stdout.strip()
+                    replaced_base = self.run_git(
+                        receiver, "commit-tree", empty, input_text="replacement base\n"
+                    ).stdout.strip()
+                    self.run_git(receiver, "replace", base, replaced_base)
+                    recovered = self.root / f"recovered-replace-{kind}"
+                    completed = subprocess.run(
+                        [str(output / manifest["recovery_script"]), str(receiver), str(recovered)],
+                        env=self.env, capture_output=True, check=False,
+                    )
+                    self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
+                    self.assertEqual(payload, (recovered / "original-untracked/files/payload.txt").read_bytes())
+                    self.assertIn(b"RECOVERED", completed.stdout)
+                finally:
+                    self.git("replace", "-d", original)
+
     def test_unsupported_gitlink_is_rejected_without_a_final_tar(self) -> None:
         tree = self.git(
             "mktree", input_text=f"160000 commit {self.initial}\tsubmodule\n"
