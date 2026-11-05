@@ -1,5 +1,7 @@
 """Offline bidirectional actor checks; no credentials or network are used."""
 import importlib.util
+from contextlib import redirect_stderr
+import io
 import json
 import os
 import unittest
@@ -37,6 +39,21 @@ class CheckedGhTests(unittest.TestCase):
                 run, calls = self.runner(login=login)
                 self.assertEqual(checked.checked_invocation("owner", "github.com", ["pr", "edit", "1", "-R", "org/repo"], run=run), 1)
                 self.assertEqual(len(calls), 2)
+
+    def test_actor_and_credential_diagnostics_use_fixed_codes_without_echoing_values(self):
+        for kwargs, status, code, count in (({"login": "synthetic-sensitive-login"}, 1, "actor_mismatch", 2),
+                                            ({"login": None}, 1, "actor_mismatch", 2),
+                                            ({"login": ""}, 1, "actor_mismatch", 2),
+                                            ({"token": ""}, 2, "credential_unavailable", 1),
+                                            ({"user_rc": 1}, 2, "identity_unavailable", 2)):
+            run, calls = self.runner(**kwargs)
+            with redirect_stderr(io.StringIO()) as stderr:
+                observed = checked.checked_invocation("owner", "github.com", ["pr", "edit", "1", "-R", "org/repo"], run=run)
+            self.assertEqual(observed, status)
+            self.assertEqual(len(calls), count)
+            self.assertIn(f"checked-gh: {code}:", stderr.getvalue())
+            self.assertNotIn("synthetic-sensitive", stderr.getvalue())
+            self.assertNotIn("synthetic-fixture-token", stderr.getvalue())
 
     def test_empty_token_or_failed_auth_never_checks_or_writes(self):
         for token, rc in (("", 0), ("token", 1)):
