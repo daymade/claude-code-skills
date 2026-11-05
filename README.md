@@ -14,6 +14,9 @@
 
 Professional Claude Code skills marketplace for development, research, content, and residential floor plan searches.
 
+For ordinary file reads and command-output capture, use the standalone
+[bounded I/O tools](references/bounded-io.md). These commands do not enter Skill development.
+
 ---
 
 ## 🌟 Essential Skill: skill-creator
