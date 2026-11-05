@@ -314,6 +314,185 @@ class PriorWorkHookTests(unittest.TestCase):
             with self.subTest(prompt=prompt):
                 self.assertEqual(hook.classify_prompt(prompt, False), "none")
 
+    @staticmethod
+    def exact_candidate_recheck_prompt(
+        previous: str = "a" * 40,
+        current: str = "b" * 40,
+        base: str = "c" * 40,
+    ) -> str:
+        return (
+            "Read-only fresh-context bounded independent release recheck. "
+            "Do not edit or delegate.\n"
+            f"Repo /workspace/review-target. Base {base}. "
+            f"Previous reviewed candidate {previous}. Exact new candidate {current}.\n"
+            "Recheck ONLY previous failed axis and preservation against the original base. "
+            "Reuse independently observed previous passed axes only after confirming "
+            "unchanged relevant inputs. Do not rerun unchanged tests."
+        )
+
+    def test_exact_candidate_recheck_reuses_supplied_passed_results_without_arming(self):
+        # Synthetic identities and paths preserve the real failure grammar without
+        # copying a private task or report into the public fixture.
+        previous = "a" * 40
+        current = "b" * 40
+        base = "c" * 40
+        final_binding = (
+            "Final read-only binding check of one inherited documentation route.\n"
+            "Repo /workspace/review-target.\n"
+            f"Already independently passed candidate {previous}.\n"
+            f"New exact candidate {current}; current base {base}.\n"
+            "Verify all previously reviewed owned source directories and release metadata "
+            "remain byte-identical to the passed candidate. "
+            "Reuse previous passed evidence; do not audit it again."
+        )
+        prompts = [self.exact_candidate_recheck_prompt(), final_binding]
+        self.assertEqual(len(prompts), 2)
+        for index, prompt in enumerate(prompts):
+            session_id = f"session-exact-candidate-{index}"
+            with self.subTest(prompt=prompt[:60]):
+                self.assertEqual(hook.classify_prompt(prompt, False), "none")
+                self.assertIsNone(hook.handle_user_prompt({
+                    "hook_event_name": "UserPromptSubmit",
+                    "session_id": session_id,
+                    "prompt": prompt,
+                }))
+                self.assertIsNone(prior_work.load_requirement(
+                    hook._manifest(), session_id
+                ))
+                self.assertIsNone(hook.handle_stop({
+                    "hook_event_name": "Stop",
+                    "session_id": session_id,
+                    "stop_hook_active": False,
+                }))
+
+    def test_exact_candidate_recheck_exclusion_requires_every_guard(self):
+        previous = "a" * 40
+        current = "b" * 40
+        valid = self.exact_candidate_recheck_prompt()
+        final_binding = (
+            f"Already independently passed candidate {previous}. "
+            f"New exact candidate {current}. "
+            "Verify all previously reviewed owned source directories remain "
+            "byte-identical to the passed candidate. Reuse previous passed evidence."
+        )
+        cases = {
+            "missing_previous": valid.replace(
+                f"Previous reviewed candidate {previous}. ", ""
+            ),
+            "missing_current": valid.replace(f"Exact new candidate {current}.", ""),
+            "abbreviated_previous": valid.replace(previous, previous[:12]),
+            "abbreviated_current": valid.replace(current, current[:12]),
+            "same_candidate": self.exact_candidate_recheck_prompt(current=previous),
+            "missing_unchanged_guard": valid.replace(
+                " only after confirming unchanged relevant inputs", ""
+            ),
+            "vague_reuse": valid.replace(
+                "independently observed previous passed axes", "previous work"
+            ),
+            "unverified_reuse": valid.replace(
+                "only after confirming unchanged relevant inputs",
+                "before confirming unchanged relevant inputs",
+            ),
+            "negated_unchanged_guard": final_binding.replace(
+                "Verify all previously reviewed", "Do not verify all previously reviewed"
+            ),
+        }
+        self.assertEqual(len(cases), 9)
+        for label, prompt in cases.items():
+            with self.subTest(label=label):
+                self.assertEqual(
+                    hook.classify_prompt(prompt, False), "required_prior_signal"
+                )
+
+    def test_exact_candidate_recheck_exclusion_preserves_mixed_history_requests(self):
+        valid = self.exact_candidate_recheck_prompt()
+        cases = [
+            valid + "\nReuse previous work from another project.\n",
+            valid + "\nRead conversation history for the previous implementation.\n",
+            valid.replace(
+                "previous passed axes only after confirming",
+                "previous passed axes and search previous work only after confirming",
+            ),
+            valid + "\nRead-only lookup of prior work for an older acceptance report.\n",
+        ]
+        self.assertEqual(len(cases), 4)
+        for prompt in cases:
+            with self.subTest(prompt=prompt[-90:]):
+                self.assertEqual(
+                    hook.classify_prompt(prompt, False), "required_prior_signal"
+                )
+
+    def test_exact_candidate_recheck_does_not_release_existing_obligation(self):
+        session_id = "session-exact-candidate-existing-requirement"
+        hook.handle_user_prompt({
+            "hook_event_name": "UserPromptSubmit",
+            "session_id": session_id,
+            "prompt": "请检索我们之前的脚本并复用。",
+        })
+        before = prior_work.load_requirement(hook._manifest(), session_id)
+        missing = object()
+        for prompt in [self.exact_candidate_recheck_prompt(), missing, None, "", " "]:
+            event = {
+                "hook_event_name": "UserPromptSubmit",
+                "session_id": session_id,
+            }
+            if prompt is not missing:
+                event["prompt"] = prompt
+            with self.subTest(prompt=repr(prompt)[:50]):
+                self.assertIsNone(hook.handle_user_prompt(event))
+                self.assertEqual(
+                    prior_work.load_requirement(hook._manifest(), session_id), before
+                )
+        for stop_hook_active in [missing, None, False]:
+            event = {"hook_event_name": "Stop", "session_id": session_id}
+            if stop_hook_active is not missing:
+                event["stop_hook_active"] = stop_hook_active
+            with self.subTest(stop_hook_active=stop_hook_active):
+                self.assertEqual(hook.handle_stop(event)["decision"], "block")
+        self.assertIsNone(hook.handle_stop({
+            "hook_event_name": "Stop",
+            "session_id": session_id,
+            "stop_hook_active": True,
+        }))
+        write = {
+            "hook_event_name": "PreToolUse",
+            "session_id": session_id,
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": str(self.root / "still-gated.py"),
+                "content": "x" * 300,
+            },
+        }
+        self.assertIsNotNone(hook.handle_pre_tool(write))
+
+    def test_exact_candidate_recheck_preserves_missing_session_identity_contract(self):
+        healthy = self.exact_candidate_recheck_prompt()
+        mixed = healthy + "\nReuse previous work from another project.\n"
+        for session_id in [None, ""]:
+            for prompt, expected in [(healthy, False), (mixed, True)]:
+                event = {
+                    "hook_event_name": "UserPromptSubmit",
+                    "session_id": session_id,
+                    "prompt": prompt,
+                }
+                with self.subTest(session_id=session_id, mixed=expected):
+                    result = hook.handle_user_prompt(event)
+                    self.assertEqual(result is not None, expected)
+                    if expected:
+                        self.assertIn(
+                            "no session_id",
+                            result["hookSpecificOutput"]["additionalContext"],
+                        )
+        for prompt, expected in [(healthy, False), (mixed, True)]:
+            event = {"hook_event_name": "UserPromptSubmit", "prompt": prompt}
+            with self.subTest(session_id="missing", mixed=expected):
+                result = hook.handle_user_prompt(event)
+                self.assertEqual(result is not None, expected)
+                if expected:
+                    self.assertIn(
+                        "no session_id", result["hookSpecificOutput"]["additionalContext"]
+                    )
+
     def test_explicit_existing_assets_still_trigger(self) -> None:
         for prompt in [
             "已有代码和 SOP，先复用再改",
