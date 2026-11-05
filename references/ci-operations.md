@@ -60,6 +60,41 @@ Do not loop reruns while the cause remains unknown or replace a required check w
 unrelated local green run. Local reproduction must use the workflow's relevant environment
 and declared dependencies; preserve prior valid results when their inputs have not changed.
 
+## Deleted-target Markdown links
+
+Use [the checker](../scripts/ci/check_deleted_markdown_links.py) after moving or
+removing tracked paths. Bind the baseline and final integrated candidate, then
+inspect every Markdown consumer in that candidate, including files outside the
+original diff:
+
+```bash
+base="$(git rev-parse '<base-ref>^{commit}')"
+candidate="$(git rev-parse '<final-candidate-ref>^{commit}')"
+python3 scripts/ci/check_deleted_markdown_links.py \
+  --base "$base" --candidate "$candidate"
+```
+
+Install `markdown-it-py` as declared in `ci.yml`. Read Git objects rather than
+working-tree repairs. Exit `0` means no covered stale link was found (including an
+explicit no-deletions skip), `1` reports stale consumers, and `2` means verification
+was incomplete or input was invalid. `--json` exposes the exact commits, removed
+path count, examined Markdown count and issues. Issue line numbers identify the
+containing Markdown block.
+
+The existing skills job runs the regression suite and compares a pull request's
+immutable event base with its checked-out final merge candidate. Main pushes use
+the event's previous commit and the checked-out candidate. Missing or unavailable
+identities fail; never substitute a guessed baseline. Manual `workflow_dispatch`
+runs retain the tests and explicitly leave this scan unrun because no comparison
+baseline is supplied; use the command above for a selected comparison.
+
+Check relative Markdown links/images and this repository's GitHub `blob/main` or
+`tree/main` URLs to paths that existed in the baseline and are absent in the final
+tree. Ignore code examples, plain mentions, other repositories, immutable-revision
+URLs and unrelated inherited broken links. Keep bare paths, Wiki links, raw HTML
+and other uncovered forms under
+[Docs Cleaner's reference-maintenance procedure](../daymade-docs/docs-cleaner/SKILL.md#updating-references-to-a-file-you-moved-or-deleted).
+
 ## Temporary-Git fixture lifecycle
 
 Reuse `init_repo` in [test_git_mainline_guard.py](../tests/test_git_mainline_guard.py)

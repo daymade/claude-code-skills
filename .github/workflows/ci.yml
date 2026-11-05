@@ -81,8 +81,32 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install validator dependency
-        run: python3 -m pip install --quiet pyyaml
+      - name: Install validator dependencies
+        run: python3 -m pip install --quiet pyyaml markdown-it-py
+
+      - name: Deleted-target Markdown link regressions
+        run: python3 -m unittest discover -s tests -p test_deleted_markdown_links.py
+
+      - name: Reject stale links to deleted targets in the final tree
+        if: github.event_name == 'pull_request' || github.event_name == 'push'
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          case "$EVENT_NAME" in
+            pull_request) baseline="$PR_BASE_SHA" ;;
+            push) baseline="$PUSH_BEFORE" ;;
+            *) exit 2 ;;
+          esac
+          candidate="$(git rev-parse HEAD)"
+          python3 scripts/ci/check_deleted_markdown_links.py \
+            --base "$baseline" --candidate "$candidate"
+
+      - name: Declare manual-run deleted-target scan coverage
+        if: github.event_name == 'workflow_dispatch'
+        run: echo '::notice::Deleted-target scan unrun because this event supplies no baseline. Regression tests still run; use the documented exact-commit command for a selected comparison.'
 
       - name: Configured local Skill repository search
         run: python3 -m unittest discover -s daymade-skill/skills-search/tests -v
