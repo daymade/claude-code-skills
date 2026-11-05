@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-creator** (`daymade-skill` v1.76.0 → v1.77.0): Move bounded file reading and command capture to standalone tools, retain portable generated compatibility entries in Skill Creator, and check distribution drift in CI. Change type: lossless ownership relocation with preserved interfaces.
+
 - **feishu-doc-scraper** (v1.12.2 → v1.12.3): Point account-binding and transcript-recovery guidance at the independently published Lark router.
 
 - **Marketplace** (v3.26.0 → v3.27.0): Extract **lark-cli-router** unchanged into its own v1.0.0 plugin. **daymade-claude-code** v5.0.0 no longer includes Feishu/Lark operations. To retain them, install `lark-cli-router@daymade-skills` separately and use `lark-cli-router:lark-cli-router` instead of `daymade-claude-code:lark-cli-router`.
