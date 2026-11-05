@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **feishu-doc-scraper** (v1.12.2 → v1.12.3): Point account-binding and transcript-recovery guidance at the independently published Lark router.
+
+- **Marketplace** (v3.26.0 → v3.27.0): Extract **lark-cli-router** unchanged into its own v1.0.0 plugin. **daymade-claude-code** v5.0.0 no longer includes Feishu/Lark operations. To retain them, install `lark-cli-router@daymade-skills` separately and use `lark-cli-router:lark-cli-router` instead of `daymade-claude-code:lark-cli-router`.
+
 - **feishu-doc-scraper** (v1.12.1 → v1.12.2): Align document and Minutes permission recovery with source account binding; preserve native-transcript gaps and remove manually maintained heading summaries. Change type: operating-guide consistency repair.
 - **local-codex** (`daymade-codex` v2.4.3 → v2.4.4): Pre-clear Cloudflare on a neutral OpenAI page before formal shared-owner OAuth and preserve the formal TaskSpace owner through callback completion; keep late account changes and original-operation outcomes separate. Change type: bounded recovery-guide correction.
 - **ghostty-use** (v1.9.8 → v1.10.0): Add the configured Account Manager legacy-terminal JSON bridge, targeted native host and bound-window reader; preserve manual restore, unresolved inventory and uncertain-input reconciliation. Read Darwin argv by its kernel argument count without treating initial prompts or environment data as options. Change type: recovered compatible terminal integration.

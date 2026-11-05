@@ -4,7 +4,7 @@ The single most valuable part of this skill: a record of what does **not** work,
 
 ## Error codes you will hit
 
-First load `lark-cli-router` and follow its [source account binding](https://github.com/daymade/claude-code-skills/blob/main/daymade-claude-code/lark-cli-router/references/source-account-binding.md).
+First load `lark-cli-router` and follow its [source account binding](https://github.com/daymade/claude-code-skills/blob/main/lark-cli-router/references/source-account-binding.md).
 The responses below apply after selecting the source's authorized profile and identity.
 
 | Code | Where | Meaning | Correct response |
