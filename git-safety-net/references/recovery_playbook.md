@@ -229,8 +229,22 @@ consequences that bite in real recoveries:
   - `stashN-untracked.tar` only when a third parent exists, including a valid empty third-parent
     tree. Empty patch files are also valid preserved states.
 
+  A selected third-parent export requires Python 3.10+ and the bundled
+  `scripts/git_stash_tree_archive.py`; bundle-only exports and stashes without a third parent do not
+  require Python. The helper reads the frozen U tree with `git ls-tree -r -z --full-tree` and raw
+  `git cat-file` blobs rather than checkout or `git archive`. Export and recovery disable Git
+  replacement refs so frozen object IDs retain their original meaning. Preserve exactly the stored regular
+  bytes, Git `100644`/`100755` modes and `120000` symlink targets, independently reads the tar back
+  against the U tree, and publishes the final tar only after that verification. Consequently
+  `export-ignore`, `export-subst`, nested/info/global archive attributes, clean filters and
+  working-tree encoding cannot drop or rewrite the exported stored bytes. Unsupported entry types,
+  unsafe paths and read/verification failures return nonzero without a new final tar. This preserves
+  bytes Git actually stored; it does not recover pre-filter physical working-tree bytes that Git
+  never stored. Non-UTF-8 filesystem-name recovery is unsupported and untested on macOS, which can
+  reject such names; report the extraction failure rather than claiming success.
+
   Recover into a new destination against a repository that still contains the manifest's base
-  commit:
+  commit. A recovery with a third parent requires Python 3.10+; no-third-parent recovery does not:
 
   ```bash
   <external-backup-dir>/stashN-<slug>-recover.sh <repository> <new-recovery-directory>
@@ -241,8 +255,14 @@ consequences that bite in real recoveries:
   `original-worktree/worktree-content.index`. When applicable it also creates
   `original-untracked/index` plus `original-untracked/files`. It verifies each recovered tree
   against the immutable source tree OID and separately verifies materialized worktree/untracked
-  content and modes. Never apply the original-index and tracked-worktree patches successively to
-  one index.
+  content and modes. For U, the embedded Python helper safely extracts only regular files/symlinks,
+  observes actual leaves with `lstat`, hashes raw regular bytes or `readlink` bytes using
+  `git hash-object -w --no-filters`, then builds a separate temporary index through
+  `git update-index -z --index-info` and `git write-tree`. It uses observed blob IDs rather than
+  manifest-supplied blob IDs and never runs `git add`, so recovery does not reapply clean filters or
+  working-tree encoding. The original U commit/blobs and an installed Skill helper are not needed;
+  missing, extra, corrupted or unsupported recovered content fails instead of reporting success.
+  Never apply the original-index and tracked-worktree patches successively to one index.
 
   Restore legacy patch/tar-only exports by applying the tracked patch with `git apply` against its
   matching base and extracting the third-parent tar into a fresh verification directory. Treat that

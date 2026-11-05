@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **git-safety-net** (v1.26.0 → v1.27.0): Preserve frozen stash untracked-tree bytes, Git modes and symlink targets without archive attributes or content conversion; reconstruct recovered state from actual raw bytes. Require Python 3.10+ only for selected untracked-tree export/recovery while preserving bundle-only and no-third-parent paths.
+
 - **docs-cleaner** (`daymade-docs` v1.29.1 → v1.29.2) and **skill-creator** (`daymade-skill` v1.77.0 → v1.77.1): Recheck inbound references across the final integrated tree after moves or deletions, including consumers outside the original diff; retain manual checks beyond the deleted-target Markdown gate.
 - **ghostty-use** (v1.11.1 → v1.11.2): Align the project recovery entry and observer-health route with the maintained SOP; correct fork-resolution guidance and retire parallel schema, limit and historical incident summaries in favor of the shared implementation. Change type: documentation alignment and lossless runtime-definition deduplication.
 - **github-ops** (v1.15.4 → v1.15.5): Keep refusal diagnosis reachable from the project entry and use the checked CLI's reason catalogue as the single definition. Change type: documentation deduplication.
