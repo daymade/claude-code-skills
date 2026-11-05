@@ -211,7 +211,7 @@ These skills are bundle-only under `daymade-codex`.
 claude plugin install daymade-claude-code@daymade-skills
 ```
 
-This suite bundles the skills that extend Claude Code itself — cross-project prior-work retrieval across code, docs, Skills, meetings, WeChat archives, and conversation history; fast local conversation discovery across Claude Code and Codex; session recovery; CLAUDE.md tuning; version-synced Lark CLI routing; troubleshooting; statusline configuration; export repair; marketplace development and suite consolidation; terminal screenshot rendering; usage analysis; and multi-provider model switching:
+This suite bundles the skills that extend Claude Code itself — cross-project prior-work retrieval across code, docs, Skills, meetings, WeChat archives, and conversation history; fast local conversation discovery across Claude Code and Codex; session recovery; CLAUDE.md tuning; troubleshooting; statusline configuration; export repair; marketplace development and suite consolidation; terminal screenshot rendering; usage analysis; and multi-provider model switching:
 
 ```text
 /daymade-claude-code:claude-code-ops-router
@@ -232,7 +232,6 @@ This suite bundles the skills that extend Claude Code itself — cross-project p
 /daymade-claude-code:claude-migrate-memory-to-doc
 /daymade-claude-code:claude-code-hooks
 /daymade-claude-code:prior-work-retrieval
-/daymade-claude-code:lark-cli-router
 /daymade-claude-code:claude-code-ping-start-5h-quota
 /daymade-claude-code:agent-web-search-setup
 /daymade-claude-code:tech-selection
@@ -3474,8 +3473,8 @@ don't rebuild the workflow until you have checked our existing Skills and histor
 
 ### **lark-cli-router** - One Version-Synced Lark Router
 
-> **Install**: `claude plugin install daymade-claude-code@daymade-skills`
-> (suite-only — invoked as `daymade-claude-code:lark-cli-router`)
+> **Install**: `claude plugin install lark-cli-router@daymade-skills`
+> Invoke as `lark-cli-router:lark-cli-router`. Previously bundled in `daymade-claude-code`; install this plugin separately when upgrading to that suite’s v5.0.0.
 
 Route Feishu/Lark/Doubao requests to the matching guide embedded in the installed
 `lark-cli`, instead of loading every Lark domain Skill into the model catalog.

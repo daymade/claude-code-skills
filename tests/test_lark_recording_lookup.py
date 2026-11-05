@@ -16,8 +16,8 @@ import unittest
 from unittest import mock
 
 
-SCRIPT = (Path(__file__).resolve().parents[1] / "daymade-claude-code" /
-          "lark-cli-router" / "scripts" / "find_recording_candidates.py")
+SCRIPT = (Path(__file__).resolve().parents[1] / "lark-cli-router" /
+          "scripts" / "find_recording_candidates.py")
 SPEC = importlib.util.spec_from_file_location("lark_recording_lookup", SCRIPT)
 LOOKUP = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(LOOKUP)

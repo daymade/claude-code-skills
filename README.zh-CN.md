@@ -208,7 +208,7 @@ codex plugin add daymade-codex@daymade-skills
 claude plugin install daymade-claude-code@daymade-skills
 ```
 
-一次安装即可获得扩展 Claude Code 本体的全部 power-user 技能——跨代码、项目文档、Skill/SOP、会议、微信归档与对话历史的已有工作检索；跨 Claude Code/Codex 的快速本地对话发现；会话恢复；CLAUDE.md 调优；随 lark-cli 版本同步的飞书路由；故障诊断；statusline 配置；导出修复；marketplace 开发与 suite 收敛；终端截图渲染；用量分析；以及多 Provider 模型切换：
+一次安装即可获得扩展 Claude Code 本体的全部 power-user 技能——跨代码、项目文档、Skill/SOP、会议、微信归档与对话历史的已有工作检索；跨 Claude Code/Codex 的快速本地对话发现；会话恢复；CLAUDE.md 调优；故障诊断；statusline 配置；导出修复；marketplace 开发与 suite 收敛；终端截图渲染；用量分析；以及多 Provider 模型切换：
 
 ```text
 /daymade-claude-code:claude-code-ops-router
@@ -229,7 +229,6 @@ claude plugin install daymade-claude-code@daymade-skills
 /daymade-claude-code:claude-migrate-memory-to-doc
 /daymade-claude-code:claude-code-hooks
 /daymade-claude-code:prior-work-retrieval
-/daymade-claude-code:lark-cli-router
 /daymade-claude-code:claude-code-ping-start-5h-quota
 /daymade-claude-code:agent-web-search-setup
 /daymade-claude-code:tech-selection
@@ -3435,8 +3434,8 @@ README、文件、实现、行为或验证，不会触发检索。真正运行�
 
 ### **lark-cli-router** - 单一、随版本同步的飞书路由
 
-> **安装**：`claude plugin install daymade-claude-code@daymade-skills`
->（仅作为套件成员发布，调用方式 `daymade-claude-code:lark-cli-router`）
+> **安装**：`claude plugin install lark-cli-router@daymade-skills`
+> 调用方式：`lark-cli-router:lark-cli-router`。此前随 `daymade-claude-code` 发布；升级该套件至 v5.0.0 时，请单独安装本插件。
 
 把飞书／Lark／豆包请求路由到当前 `lark-cli` 内嵌的对应指南，无需把每个
 飞书领域 Skill 都放进模型目录。腾讯 IMA 继续独立使用 `ima-skill`。

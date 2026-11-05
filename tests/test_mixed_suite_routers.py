@@ -30,7 +30,7 @@ SPECS = {
         "hot": {
             "local-conversation-history", "read-claude-code-history",
             "read-codex-history", "continue-claude-code-work", "continue-codex-work",
-            "prior-work-retrieval", "claude-code-hooks", "lark-cli-router",
+            "prior-work-retrieval", "claude-code-hooks",
             "tech-selection", "terminal-screenshot", "agent-web-search-setup",
             "read-claude-web-conversation", "claude-md-progressive-disclosurer",
         },
