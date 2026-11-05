@@ -6,12 +6,13 @@ description: >-
   UUID coverage, unchanged-write behavior or observation failures.
 ---
 
-# Periodic snapshots that save only changes
+# Periodic snapshots with per-round health
 
 Use the [watcher implementation](../scripts/ghostty_watch.py) for scheduled observation.
 It defines the requested default cadence, resource limits, installer runtime and
 owned paths; the loaded launchd job is the authority for the active schedule. It never launches
-Ghostty, opens tabs, restores sessions or reads conversation history. Manual
+Ghostty, opens tabs or restores sessions. It resolves UUID-less TUIs through bounded
+identity metadata; it does not grade conversation-body activity. Manual
 `snapshot` remains available for content-based liveness grading.
 
 ## Install and verify
@@ -84,16 +85,22 @@ observations can postpone capture further.
 The supervisor bounds each observation and kills its process group on timeout.
 Failed observations exit nonzero. With Ghostty absent, stand down quietly and retain
 the backup. With Ghostty present but observation empty or failed, report unknown
-and retain the backup. A process graph and batched cwd query observe candidate CLI
-processes without enumerating history trees or refreshing an index.
+and retain the backup. A process graph and batched cwd query select candidate CLI
+processes. UUID-less identities use the manual inventory's bounded cwd/start-time
+resolver and internal session-ID verification; ambiguous matches remain unresolved.
+Do not replace this with an unrestricted history search or index refresh.
 
 After install, the deploying agent verifies a completed native round, not only
 registration. Read `status` before and after a scheduled round: the launchd run
 count must advance and the last exit must be zero. Read a newly changed snapshot
-independently when one is expected. An unchanged successful round intentionally
-creates no report, snapshot, heartbeat or routine log entry; its evidence is
-launchd completion state. Snapshot time is the last saved change, not proof that
-the observer is currently running. A foreground `probe` alone does not certify
+independently when one is expected. Read `status.last_cycle` (persisted in
+`watcher/last-cycle.json`) and `watcher/cycles.jsonl` as well: an unchanged successful round updates observation health without
+creating another snapshot archive. Failed rounds must report their own time and
+error without advancing `last_successful_observation_at`. Partial observations
+advance `last_observed_at` and report unresolved/retained counts; they do not claim
+complete coverage. `attempted_at`, `completed_at` and `last_snapshot_change_at`
+distinguish the latest attempt, completion and saved inventory change. The event
+log is bounded to 1 MiB. A foreground `probe` alone does not certify
 background permissions, sleep/wake continuity or power savings.
 
 ## What counts as a change
@@ -110,10 +117,11 @@ deltas. Atomic private files and a shared nonblocking writer lock protect manual
 and scheduled snapshots. Old archives are never deleted or pruned. A shrinking
 nonempty complete inventory records removals; an empty inventory after reboot,
 an OS-query failure, corrupt prior state, lock contention or timeout retains the
-last useful backup. Failure detail goes to bounded stderr/error logs only.
+last useful backup. Each completed round records its result and coverage; failure
+detail also goes to bounded, timestamped stderr/error logs.
 
 The first scheduled observation upgrades a matching manual latest snapshot to
-an automatic manifest once. Later equal observations write nothing. The default
+an automatic manifest once. Later equal observations write health only. The default
 `latest.json` route points at the newest saved manifest; manual snapshot archives
 remain available. Automatic snapshots declare liveness `not-observed`, with
 `unknown` session status. `restore` selects their whole recorded set by default,
@@ -123,8 +131,9 @@ active-only default. `--all`, `--only` and duplicate-free retries still work.
 ## Partial UUID coverage
 
 Only Ghostty descendants are observed; unrelated Terminal sessions are excluded.
-Some native Codex TUIs do not expose a session UUID in argv. Record those as
-`unresolved`, with their captured flags, profile and cwd; never guess an ID from
+Some native Codex TUIs do not expose a session UUID in argv. Resolve them with the
+shared bounded inventory resolver before recording remaining ambiguities as
+`unresolved`, with their captured flags, profile and cwd. Never guess an ID from
 the newest rollout or an unrelated history row. A Node wrapper and its native
 vendor child count as one TUI. Noninteractive CLI workers are excluded.
 
@@ -146,26 +155,25 @@ A nonempty known set can still produce a useful partial backup. While unresolved
 TUIs exist, preserve previously recorded IDs that are now absent as
 `retained-unverified`; do not interpret an ambiguous observation as a removal.
 Repeated identical known/unresolved inventories ignore PID and TTY changes and
-save nothing. A later complete, nonempty observation can record genuine removals.
+save no new snapshot archive while still updating health. A later complete,
+nonempty observation can record genuine removals.
 `status` shows recorded total, identified-at-capture count, unresolved count and
 retained count from the saved
 manifest. These are backup coverage, not proof that every recorded tab is live.
 When presenting a large backup, show these separate coverage counts before its
 recorded total is treated as an active-session count. For an activity cutoff,
 follow [time-window selection](session_liveness.md#select-recovery-candidates-by-a-time-window)
-through the history readers; do not add transcript reads to the observer.
+through the history readers; do not add conversation-body activity scans to the observer.
 
 After reboot, restore recorded IDs using the ordinary route. Unresolved rows are
 not resumable sessions; use explicit indexed reconstruction and identity
 verification if their session IDs must be recovered. Partial snapshots may retain
 already-closed sessions conservatively; follow
 [current-set reconciliation](restore_mechanics.md#reconcile-the-current-wanted-set)
-before selecting or retrying them. Window grouping and UUID-less tab identity remain
-unavailable in automatic manifests. Manual snapshot/check/restore resolve
-UUID-less TUIs from transcript storage (session file born after process start,
-same cwd, identity verified); the watcher deliberately keeps its argv-only,
-transcript-free scan to stay bounded — install-round manifests therefore keep
-their explicitly partial coverage. Calendar observation also cannot capture a
+before selecting or retrying them. Window grouping remains unknown. Automatic and
+manual inventories share UUID-less identity resolution (session file born after
+process start, same cwd, identity verified); unresolved or ambiguous identities
+remain explicit partial coverage. Calendar observation also cannot capture a
 change that occurs and vanishes between scheduled rounds.
 
 ## Recover observation failures
@@ -178,4 +186,5 @@ valid latest manifest before reinstalling/enabling the observer.
 
 The shared atomic writer is `scripts/ghostty_storage.py`; both snapshot paths use
 it. Synthetic tests in `scripts/test_ghostty_watch.py` exercise cold, unchanged,
-changed, partial and failed observations without GUI actions, with transcript-read rejection against synthetic history trees.
+changed, partial and failed observations without GUI actions, including bounded
+identity resolution, unchanged-round health, and timestamped failure evidence.
