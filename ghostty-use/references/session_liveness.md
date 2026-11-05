@@ -71,15 +71,22 @@ major app update rather than trusting the dates.
 
 ## Select recovery candidates by a time window
 
-Use this recipe when a user questions a snapshot's size or asks which sessions
-were active after a time. The executing agent uses the installed history readers;
-the snapshot watcher remains transcript-free. This is a read-only selection step,
-not authorization to reopen or continue any candidate.
+Enter this recipe before choosing a recovery set when the snapshot is absent,
+outdated or partial (unresolved TUIs or retained-unverified rows), without waiting
+for a count challenge. Also use it when a user questions a snapshot's size or asks
+which sessions were active after a time. The executing agent uses the installed
+history readers; the automatic watcher reads only bounded identity metadata,
+not conversation-body activity (see [automatic snapshots](automatic-snapshots.md)).
+This is a read-only selection step, not authorization to reopen or continue every
+candidate.
 
 1. Bind the date, timezone and end of the requested window before querying. For
    reboot recovery, stop at the reboot boundary so the current recovery conversation
    cannot enter the old set. State an inferred date explicitly; do not silently
    replace the user's window with the default `active` threshold.
+   If no activity cutoff was requested, use the recovery context to bound lookup,
+   not to declare older tabs closed. Inspect known snapshot/retained IDs separately
+   from time-window additions; early last activity does not exclude those IDs.
 2. Report automatic backup coverage separately: recorded IDs, identified at
    capture, retained-unverified IDs, and unresolved TUIs. A retained row is neither
    confirmed live nor confirmed closed. Snapshot capture time is the last saved
@@ -147,10 +154,12 @@ not authorization to reopen or continue any candidate.
    keeps the capitalization seen at creation (match case-insensitively) and
    encodes every non-[A-Za-z0-9-] character as `-` (pinned on 347 real buckets
    plus a live `foo_bar` probe: `/`, `.`, space, CJK and `_` all fold). The
-   file must pass internal identity verification (Claude head `cwd` within 40
-   lines — the worst real file first records it at line 9; Codex
-   `session_meta` id+cwd); a file with no verifiable cwd fails closed rather
-   than passing on the bucket alone. A node wrapper and its vendor child on
+   file must pass internal identity verification: Claude needs a verified `cwd`
+   and an internal `sessionId` matching the filename, with missing, invalid or
+   conflicting IDs rejected within the bounded head; Codex needs `session_meta`
+   id+cwd. The shared resolver in [ghostty_session.py](../scripts/ghostty_session.py)
+   owns the head limits (40 lines / 256 KiB). A file with no verifiable cwd fails
+   closed rather than passing on the bucket alone. A node wrapper and its vendor child on
    one pty count as one TUI — as competitors they once tied every offer and
    excluded all three live codex sessions (2026-10-07 live regression caught
    by re-running the snapshot after the assignment rewrite). When several

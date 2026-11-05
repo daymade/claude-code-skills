@@ -192,7 +192,7 @@
       "description": "Claude Code operations suite that bundles cross-project prior-work retrieval across code, docs, Skills, meetings, WeChat archives, and conversation history; provider-separated Claude Code and Codex history readers; identity- and lineage-gated continuation workflows; plugin/skill troubleshooting; CLAUDE.md progressive disclosure optimization; statusline configuration; exported .txt repair; full claude.ai conversation extraction with tool-call rendering and file download; plugin marketplace development and suite consolidation; writing/testing/debugging Claude Code hooks; multi-provider profile isolation; personal-memory migration into tool-agnostic AGENTS.md reference docs; one-shot local timers that ping Claude right after subscription quota reset to start a fresh 5-hour usage window; working web search installed on an agent whose relayed model backend cannot execute the built-in one; and terminal-output-to-PNG rendering for visual CLI verification under one shared namespace. Install once to get the full Claude Code power-user toolkit.",
       "source": "./daymade-claude-code",
       "strict": false,
-      "version": "5.0.1",
+      "version": "5.1.0",
       "category": "suite",
       "keywords": [
         "suite",
@@ -245,7 +245,7 @@
       "description": "OpenAI Codex operations and design exploration suite bundling model-aware long-context workstation setup, local Codex delegation, generated-image review, static visual-direction selection, and runnable HTML interaction Design Boards under one shared namespace.",
       "source": "./daymade-codex",
       "strict": false,
-      "version": "2.4.4",
+      "version": "2.4.5",
       "category": "suite",
       "keywords": [
         "suite",
@@ -377,7 +377,7 @@
       "description": "Audio processing suite covering the full speech pipeline: ASR transcription (Qwen3, StepFun) with batch-mode guards against music-only repetition-loop hallucinations, speaker diarization and CAM++ voiceprint identification for multi-speaker recordings, transcript error correction, structured meeting minutes generation, and TTS voice synthesis (StepFun). Install once for the complete audio workflow.",
       "source": "./daymade-audio",
       "strict": false,
-      "version": "1.57.1",
+      "version": "1.57.2",
       "category": "suite",
       "keywords": [
         "suite",
@@ -1353,7 +1353,7 @@
       "description": "Snapshots/restores Ghostty Claude Code/Codex tabs across reboots. Use before Mac updates (保存终端会话/重启前备份终端), after restart to reopen original session IDs (恢复之前的窗口/restore my ghostty tabs), audit survivors, or periodic change-only snapshots (定期增量快照/没变化不记录). Also for unmanaged/legacy Codex account switches (额度耗尽换号/换号后恢复全部 Codex); Minions native_runtime uses Account Manager. Not for --resume, screenshots or tmux.",
       "source": "./ghostty-use",
       "strict": false,
-      "version": "1.11.0",
+      "version": "1.11.1",
       "category": "developer-tools",
       "keywords": [
         "ghostty",

@@ -73,6 +73,24 @@ large. These inspect the saved Markdown, not the raw history store.
 
 ## Reuse and recover
 
+Before using a saved briefing or original tool-evidence JSON as current evidence,
+check its selected transcript through the same reader:
+
+```bash
+python3 "<absolute-skill-dir>/scripts/read_claude_session.py" \
+  --session "<SESSION_ID>" --check-snapshot "<absolute-saved-artifact>"
+```
+
+Read both the JSON status and exit code: `fresh`/0 means the exact selected
+transcript's SHA-256 and size are unchanged; `stale`/1 requires a fresh exact
+read; `unknown`/2 cannot establish reuse. Old briefings without source metadata,
+missing sources, divergent copies and incomplete source discovery remain unknown.
+The check fingerprints exact canonical Session files only; it does not fall back
+to scanning raw history. Retain the returned artifact hash with its coordinates.
+It checks the main transcript, or the exact subagent selected by tool evidence;
+it does not certify question coverage, unread ranges, other subagents, generated
+memory or current workspace state. Re-read those separately when they matter.
+
 Reuse an existing verified briefing or extract when its exact source snapshot,
 artifact hash, original coverage and the current question still match. Reuse
 does not expand coverage: retain its unread ranges, attachment gaps and uncertain
