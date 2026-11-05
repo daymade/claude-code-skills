@@ -141,10 +141,10 @@ the newest rollout or an unrelated history row. A Node wrapper and its native
 vendor child count as one TUI. Noninteractive CLI workers are excluded.
 
 Identity parsing consumes known option values before recognizing selectors.
-Unknown option arity, Claude positional prompts and prompts following a Codex
-resume ID remain unresolved. Eligible UUID-less and forked TUIs use the shared
-bounded resolver; retain `unresolved` when verification cannot
-settle the identity. `ps` flattens argv and loses quoting: a quoted
+Unknown option arity, Claude positional prompts, fork selectors and prompts
+following a Codex resume ID do not establish the current ID from argv. Parseable
+unresolved TUIs use the shared bounded metadata resolver; retain `unresolved`
+when verification cannot settle the identity. `ps` flattens argv and loses quoting: a quoted
 Codex prompt beginning `resume <UUID>` is indistinguishable from a real resume
 subcommand. This recognition assumes a prompt-free selector invocation; use
 explicit indexed identity verification when that boundary is uncertain.
