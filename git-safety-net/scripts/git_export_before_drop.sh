@@ -12,9 +12,12 @@
 #                                          including mode and rename data
 #             -> stashN-<msg>.manifest     frozen commit/tree identities and artifacts
 #             -> stashN-<msg>-recover.sh   independent index/worktree restoration with
-#                                          exact immutable tree-OID verification
+#                                          exact immutable tree-OID verification; untracked
+#                                          recovery embeds its raw-byte reconstruction helper
 #             -> stashN-untracked.tar      optional THIRD parent from `git stash -u`
-#                                          / `-a`; an empty third-parent tree is valid
+#                                          / `-a`; an empty third-parent tree is valid. The tar
+#                                          retains stored blob bytes/modes/link targets without
+#                                          archive attributes, filters, or working-tree encoding
 #   branches  -> branches.bundle           selected refs AND ALL reachable ancestors
 #   all refs  -> all-refs.bundle           every current ref, including stash,
 #                                          hidden backup refs, and linked-worktree
@@ -43,8 +46,11 @@
 #   stash:     ./stashN-<msg>-recover.sh /path/to/repository /new/recovery/directory
 #              The generated script uses separate temporary indexes/worktrees for
 #              base->index and base->worktree recovery. It never applies both patches
-#              successively to one index, extracts any untracked archive separately,
-#              and compares every restored tree with its immutable source tree OID.
+#              successively to one index, reconstructs any untracked archive separately
+#              with hash-object --no-filters plus a temporary index, and compares every
+#              restored tree with its immutable source tree OID. A selected untracked
+#              export or recovery requires Python 3.10+; bundle-only and stash exports
+#              without a third parent do not require Python.
 #   bundle:    git fetch <file>.bundle <branch>:restored/<branch>
 #
 # Note on stash numbering: indices shift as stashes are dropped or added. The exporter
@@ -84,6 +90,8 @@ tree_for_commit() {
 git rev-parse --git-dir >/dev/null 2>&1 || die "not inside a git repository"
 
 REPO_ROOT=$(git rev-parse --show-toplevel)
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd) || die "cannot locate exporter helpers"
+TREE_ARCHIVE_HELPER="$SCRIPT_DIR/git_stash_tree_archive.py"
 REPO_NAME=$(basename "$REPO_ROOT")
 OUT=""
 ALL_STASHES=0
@@ -256,10 +264,17 @@ for position in "${!STASH_LIST[@]}"; do
 
   tarball_name="-"
   if [ "$HAS_UNTRACKED" = 1 ]; then
+    command -v python3 >/dev/null 2>&1 || \
+      die "Python 3.10+ is required to export stash $i untracked tree $untracked_tree"
+    python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' \
+      >/dev/null 2>&1 || die "Python 3.10+ is required to export stash $i untracked tree $untracked_tree"
+    [ -f "$TREE_ARCHIVE_HELPER" ] || \
+      die "missing bundled untracked-tree exporter: $TREE_ARCHIVE_HELPER"
     tarball_name="stash$i-untracked.tar"
-    git -C "$REPO_ROOT" archive --format=tar "$untracked_oid" > "$OUT/$tarball_name" || \
-      die "cannot archive untracked parent $untracked_oid for stash $i"
-    echo "exported: $OUT/$tarball_name (untracked third parent, including a valid empty tree)"
+    python3 "$TREE_ARCHIVE_HELPER" \
+      --repo "$REPO_ROOT" --tree "$untracked_tree" --output "$OUT/$tarball_name" || \
+      die "cannot export raw untracked tree $untracked_tree for stash $i"
+    echo "exported: $OUT/$tarball_name (verified stored untracked bytes/modes/links; valid empty tree included)"
   fi
 
   recovery="$OUT/$recovery_name"
@@ -291,6 +306,12 @@ DESTINATION=$(CDPATH= cd -- "$DESTINATION" && pwd) || die "cannot resolve recove
 git -C "$REPO" rev-parse --git-dir >/dev/null 2>&1 || die "not a Git repository: $REPO"
 REPO_GIT_DIR=$(git -C "$REPO" rev-parse --absolute-git-dir) || die "cannot resolve repository Git directory"
 git -C "$REPO" cat-file -e "${BASE_COMMIT}^{commit}" || die "base commit is unavailable: $BASE_COMMIT"
+if [ "$HAS_UNTRACKED" = 1 ]; then
+  command -v python3 >/dev/null 2>&1 || \
+    die "Python 3.10+ is required to recover the original-untracked tree"
+  python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' \
+    >/dev/null 2>&1 || die "Python 3.10+ is required to recover the original-untracked tree"
+fi
 
 # ORIGINAL INDEX: use a dedicated index and worktree. Never apply the worktree
 # patch here. The base and patch alone reconstruct the original index state.
@@ -348,21 +369,154 @@ ACTUAL_WORKTREE_CONTENT_TREE=$(GIT_INDEX_FILE="$WORKTREE_CONTENT_INDEX" GIT_WORK
   die "materialized worktree mismatch: expected=$WORKTREE_TREE actual=$ACTUAL_WORKTREE_CONTENT_TREE"
 printf 'VERIFIED original tracked worktree tree=%s\n' "$ACTUAL_WORKTREE_CONTENT_TREE"
 
-# UNTRACKED THIRD PARENT: extract into independent state. An absent third parent
-# and a present third parent whose tree is empty are both valid, distinct cases.
+# UNTRACKED THIRD PARENT: reconstruct from actual extracted leaves without clean
+# filters, working-tree encoding, or the original U objects. The embedded Python
+# helper preserves raw bytes/readlink targets and writes only a separate temp index.
+# An absent third parent and a present third parent whose tree is empty stay distinct.
 if [ "$HAS_UNTRACKED" = 1 ]; then
   UNTRACKED_ROOT="$DESTINATION/original-untracked"
   UNTRACKED_INDEX="$UNTRACKED_ROOT/index"
   UNTRACKED_FILES="$UNTRACKED_ROOT/files"
   mkdir -p "$UNTRACKED_FILES"
-  tar -xf "$SCRIPT_DIR/$UNTRACKED_ARCHIVE_NAME" -C "$UNTRACKED_FILES" || \
-    die "cannot extract original-untracked archive"
-  GIT_INDEX_FILE="$UNTRACKED_INDEX" GIT_WORK_TREE="$UNTRACKED_FILES" \
-    git -C "$REPO" read-tree --empty || die "cannot create untracked verification index"
-  GIT_INDEX_FILE="$UNTRACKED_INDEX" GIT_WORK_TREE="$UNTRACKED_FILES" \
-    git -C "$REPO" add -A -f || die "cannot hash recovered untracked content"
-  ACTUAL_UNTRACKED_TREE=$(GIT_INDEX_FILE="$UNTRACKED_INDEX" GIT_WORK_TREE="$UNTRACKED_FILES" \
-    git -C "$REPO" write-tree) || die "cannot write recovered untracked tree"
+  ACTUAL_UNTRACKED_TREE=$(python3 - \
+    "$REPO" "$SCRIPT_DIR/$UNTRACKED_ARCHIVE_NAME" "$UNTRACKED_FILES" "$UNTRACKED_INDEX" \
+    <<'PYTHON_UNTRACKED'
+import os
+import re
+import stat
+import subprocess
+import sys
+import tarfile
+
+repo, archive_path, root, index_path = sys.argv[1:]
+root_bytes = os.fsencode(root)
+
+
+def fail(message):
+    raise SystemExit("error: original-untracked recovery: " + str(message))
+
+
+def safe_path(path):
+    if not path or path.startswith(b"/") or b"\0" in path:
+        fail(f"unsafe archive path: {path!r}")
+    if any(part in (b"", b".", b"..") for part in path.split(b"/")):
+        fail(f"unsafe archive path: {path!r}")
+
+
+def run_git(arguments, env=None, input_bytes=None):
+    result = subprocess.run(
+        ["git", "-C", repo, *arguments],
+        input=input_bytes,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=env,
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = result.stderr.decode("utf-8", "replace").strip()
+        fail(f"git {arguments[0]} failed: {detail}")
+    return result.stdout
+
+
+def extract_archive():
+    with tarfile.open(
+        archive_path, "r:", encoding="utf-8", errors="surrogateescape"
+    ) as archive:
+        members = archive.getmembers()
+        names = set()
+        for member in members:
+            name = os.fsencode(member.name)
+            safe_path(name)
+            if not (member.isreg() or member.issym()):
+                fail(f"unsupported archive entry: {member.name!r}")
+            if name in names:
+                fail(f"duplicate archive entry: {member.name!r}")
+            names.add(name)
+        for name in names:
+            parts = name.split(b"/")
+            for length in range(1, len(parts)):
+                if b"/".join(parts[:length]) in names:
+                    fail(f"archive leaf/directory collision below {name!r}")
+        for member in members:
+            name = os.fsencode(member.name)
+            destination = os.path.join(root_bytes, *name.split(b"/"))
+            os.makedirs(os.path.dirname(destination), exist_ok=True)
+            if member.issym():
+                target = os.fsencode(member.linkname)
+                if b"\0" in target:
+                    fail(f"symlink target contains NUL: {member.name!r}")
+                os.symlink(target, destination)
+                continue
+            source = archive.extractfile(member)
+            if source is None:
+                fail(f"missing payload: {member.name!r}")
+            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+            flags |= getattr(os, "O_NOFOLLOW", 0)
+            descriptor = os.open(destination, flags, 0o600)
+            with source, os.fdopen(descriptor, "wb") as output:
+                while True:
+                    chunk = source.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    output.write(chunk)
+            mode = 0o755 if member.mode & 0o111 else 0o644
+            os.chmod(destination, mode)
+
+
+def inventory_leaves():
+    entries = []
+
+    def walk(directory, prefix):
+        with os.scandir(directory) as children:
+            for child in children:
+                name = child.name
+                relative = name if not prefix else prefix + b"/" + name
+                safe_path(relative)
+                full = os.path.join(directory, name)
+                metadata = os.lstat(full)
+                if stat.S_ISDIR(metadata.st_mode):
+                    walk(full, relative)
+                elif stat.S_ISREG(metadata.st_mode):
+                    mode = b"100755" if metadata.st_mode & 0o111 else b"100644"
+                    entries.append((mode, relative, full, None))
+                elif stat.S_ISLNK(metadata.st_mode):
+                    entries.append((b"120000", relative, full, os.readlink(full)))
+                else:
+                    fail(f"unsupported recovered file kind: {relative!r}")
+
+    walk(root_bytes, b"")
+    entries.sort(key=lambda entry: entry[1])
+    return entries
+
+
+def main():
+    extract_archive()
+    entries = inventory_leaves()
+    records = []
+    for mode, relative, full, link_target in entries:
+        if mode == b"120000":
+            oid = run_git(["hash-object", "-w", "--no-filters", "--stdin"], input_bytes=link_target).strip()
+        else:
+            oid = run_git(["hash-object", "-w", "--no-filters", "--", full]).strip()
+        if not re.fullmatch(rb"(?:[0-9a-f]{40}|[0-9a-f]{64})", oid):
+            fail(f"invalid observed blob OID for {relative!r}: {oid!r}")
+        records.append(mode + b" " + oid + b"\t" + relative + b"\0")
+    env = os.environ.copy()
+    env["GIT_INDEX_FILE"] = index_path
+    run_git(["read-tree", "--empty"], env=env)
+    run_git(["update-index", "-z", "--index-info"], env=env, input_bytes=b"".join(records))
+    tree = run_git(["write-tree"], env=env).strip()
+    if not re.fullmatch(rb"(?:[0-9a-f]{40}|[0-9a-f]{64})", tree):
+        fail(f"invalid recovered tree OID: {tree!r}")
+    sys.stdout.write(tree.decode("ascii") + "\n")
+
+
+try:
+    main()
+except (OSError, tarfile.TarError) as error:
+    fail(error)
+PYTHON_UNTRACKED
+  ) || die "cannot reconstruct original-untracked tree from raw archive content"
   [ "$ACTUAL_UNTRACKED_TREE" = "$UNTRACKED_TREE" ] || \
     die "original-untracked tree mismatch: expected=$UNTRACKED_TREE actual=$ACTUAL_UNTRACKED_TREE"
   printf 'VERIFIED original untracked tree=%s\n' "$ACTUAL_UNTRACKED_TREE"

@@ -3,9 +3,12 @@
 
 from __future__ import annotations
 
+import io
 import os
 import shutil
+import stat
 import subprocess
+import tarfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -19,6 +22,8 @@ SCRIPT = Path(
     )
 )
 REAL_GIT = shutil.which("git")
+REAL_PYTHON = shutil.which("python3")
+TREE_ARCHIVE = SKILL_DIR / "scripts" / "git_stash_tree_archive.py"
 
 
 class ExportBeforeDropTests(unittest.TestCase):
@@ -113,6 +118,25 @@ class ExportBeforeDropTests(unittest.TestCase):
             input_text=input_text,
             check=check,
             extra_env=extra_env,
+        )
+
+    def git_bytes(
+        self,
+        *arguments: str,
+        repo: Path | None = None,
+        input_bytes: bytes | None = None,
+        check: bool = True,
+        extra_env: dict[str, str] | None = None,
+    ) -> subprocess.CompletedProcess[bytes]:
+        env = self.env.copy()
+        if extra_env:
+            env.update(extra_env)
+        return subprocess.run(
+            [str(REAL_GIT), "-C", str(repo or self.repo), *arguments],
+            input=input_bytes,
+            capture_output=True,
+            check=check,
+            env=env,
         )
 
     def run_script(
@@ -229,21 +253,140 @@ class ExportBeforeDropTests(unittest.TestCase):
         self.assertTrue(entry, f"missing {path} in {tree}")
         return entry.split(None, 1)[0]
 
-    def write_tree_with_index(self, index: Path, worktree: Path | None = None) -> str:
+    def write_tree_with_index(
+        self, index: Path, worktree: Path | None = None, repo: Path | None = None
+    ) -> str:
         extra_env = {"GIT_INDEX_FILE": str(index)}
         if worktree is not None:
             extra_env["GIT_WORK_TREE"] = str(worktree)
-        return self.git("write-tree", extra_env=extra_env).stdout.strip()
+        return self.run_git(
+            repo or self.repo, "write-tree", extra_env=extra_env
+        ).stdout.strip()
 
-    def assert_recovery(self, output: Path, manifest: dict[str, str]) -> Path:
+    def tree_entries(
+        self, tree: str, repo: Path | None = None
+    ) -> list[tuple[str, str, bytes]]:
+        listing = self.git_bytes(
+            "ls-tree", "-r", "-z", "--full-tree", tree, repo=repo
+        ).stdout
+        entries: list[tuple[str, str, bytes]] = []
+        for record in listing.split(b"\0"):
+            if not record:
+                continue
+            metadata, path = record.split(b"\t", 1)
+            mode, object_type, oid = metadata.split()
+            self.assertEqual(b"blob", object_type)
+            entries.append((mode.decode("ascii"), oid.decode("ascii"), path))
+        return entries
+
+    def blob(self, oid: str, repo: Path | None = None) -> bytes:
+        return self.git_bytes("cat-file", "blob", oid, repo=repo).stdout
+
+    def assert_archive_matches_tree(self, archive_path: Path, tree: str) -> None:
+        expected = self.tree_entries(tree)
+        with tarfile.open(archive_path, "r:") as archive:
+            members = archive.getmembers()
+            self.assertEqual(len(expected), len(members))
+            by_name: dict[bytes, tarfile.TarInfo] = {}
+            for member in members:
+                encoded_name = os.fsencode(member.name)
+                self.assertNotIn(encoded_name, by_name)
+                by_name[encoded_name] = member
+            self.assertEqual({path for _, _, path in expected}, set(by_name))
+            for mode, oid, path in expected:
+                member = by_name[path]
+                payload = self.blob(oid)
+                if mode == "120000":
+                    self.assertTrue(member.issym(), path)
+                    self.assertEqual(payload, os.fsencode(member.linkname))
+                    continue
+                self.assertTrue(member.isreg(), path)
+                self.assertEqual(0o755 if mode == "100755" else 0o644, member.mode)
+                extracted = archive.extractfile(member)
+                self.assertIsNotNone(extracted, path)
+                assert extracted is not None
+                self.assertEqual(payload, extracted.read(), path)
+
+    def assert_extracted_files_match_tree(self, tree: str, root: Path) -> None:
+        actual: dict[bytes, tuple[str, bytes]] = {}
+
+        def walk(directory: bytes, prefix: bytes) -> None:
+            with os.scandir(directory) as children:
+                for child in children:
+                    path = os.path.join(directory, child.name)
+                    relative = child.name if not prefix else prefix + b"/" + child.name
+                    metadata = os.lstat(path)
+                    if stat.S_ISDIR(metadata.st_mode):
+                        walk(path, relative)
+                    elif stat.S_ISREG(metadata.st_mode):
+                        mode = "100755" if metadata.st_mode & 0o111 else "100644"
+                        with open(path, "rb") as source:
+                            actual[relative] = (mode, source.read())
+                    elif stat.S_ISLNK(metadata.st_mode):
+                        actual[relative] = ("120000", os.readlink(path))
+                    else:
+                        self.fail(f"unsupported recovered fixture kind: {relative!r}")
+
+        walk(os.fsencode(root), b"")
+        expected = {
+            path: (mode, self.blob(oid)) for mode, oid, path in self.tree_entries(tree)
+        }
+        self.assertEqual(set(expected), set(actual))
+        for path, expected_value in expected.items():
+            self.assertEqual(expected_value, actual[path], path)
+
+    def create_base_only_repository(self, base: str, name: str = "base-only") -> Path:
+        target = self.root / name
+        self.run_git(self.root, "init", "-q", "-b", "main", str(target))
+        self.run_git(target, "fetch", "-q", str(self.repo), base)
+        self.run_git(target, "update-ref", "refs/heads/main", base)
+        self.run_git(target, "symbolic-ref", "HEAD", "refs/heads/main")
+        self.assertFalse((target / ".git" / "objects" / "info" / "alternates").exists())
+        return target
+
+    def assert_untracked_objects_absent(
+        self, repo: Path, identity: dict[str, str]
+    ) -> None:
+        commit = self.run_git(
+            repo,
+            "cat-file",
+            "-e",
+            f"{identity['untracked_commit']}^{{commit}}",
+            check=False,
+        )
+        self.assertNotEqual(0, commit.returncode, commit.stdout + commit.stderr)
+        for _, oid, path in self.tree_entries(identity["untracked_tree"]):
+            missing = self.run_git(repo, "cat-file", "-e", oid, check=False)
+            self.assertNotEqual(0, missing.returncode, f"original U blob exists: {path!r}")
+
+    def fake_missing_python(self) -> dict[str, str]:
+        wrapper_dir = self.root / "missing-python-bin"
+        wrapper_dir.mkdir(exist_ok=True)
+        wrapper = wrapper_dir / "python3"
+        wrapper.write_text("#!/bin/sh\necho 'python3 unavailable' >&2\nexit 127\n", encoding="utf-8")
+        wrapper.chmod(0o755)
+        return {"PATH": str(wrapper_dir) + os.pathsep + self.env["PATH"]}
+
+    def assert_recovery(
+        self,
+        output: Path,
+        manifest: dict[str, str],
+        repo: Path | None = None,
+        destination: Path | None = None,
+        extra_env: dict[str, str] | None = None,
+    ) -> Path:
         recovery = output / manifest["recovery_script"]
         self.assertTrue(recovery.is_file(), recovery)
         self.assertTrue(os.access(recovery, os.X_OK), recovery)
-        destination = self.root / f"recovery-{manifest['stash_index']}"
+        recovery_repo = repo or self.repo
+        destination = destination or self.root / f"recovery-{manifest['stash_index']}"
+        env = self.env.copy()
+        if extra_env:
+            env.update(extra_env)
         completed = subprocess.run(
-            [str(recovery), str(self.repo), str(destination)],
+            [str(recovery), str(recovery_repo), str(destination)],
             cwd=self.root,
-            env=self.env,
+            env=env,
             text=True,
             encoding="utf-8",
             capture_output=True,
@@ -255,16 +398,19 @@ class ExportBeforeDropTests(unittest.TestCase):
         restored_index_tree = self.write_tree_with_index(
             destination / "original-index" / "index",
             destination / "original-index" / "worktree",
+            repo=recovery_repo,
         )
         self.assertEqual(manifest["index_tree"], restored_index_tree)
         restored_worktree_tree = self.write_tree_with_index(
             destination / "original-worktree" / "index",
             destination / "original-worktree" / "files",
+            repo=recovery_repo,
         )
         self.assertEqual(manifest["worktree_tree"], restored_worktree_tree)
         restored_worktree_content_tree = self.write_tree_with_index(
             destination / "original-worktree" / "worktree-content.index",
             destination / "original-worktree" / "files",
+            repo=recovery_repo,
         )
         self.assertEqual(manifest["worktree_tree"], restored_worktree_content_tree)
 
@@ -273,7 +419,9 @@ class ExportBeforeDropTests(unittest.TestCase):
             (manifest["worktree_tree"], restored_worktree_content_tree),
         ):
             expected_listing = self.git("ls-tree", "-r", expected_tree).stdout
-            restored_listing = self.git("ls-tree", "-r", restored_tree).stdout
+            restored_listing = self.run_git(
+                recovery_repo, "ls-tree", "-r", restored_tree
+            ).stdout
             self.assertEqual(expected_listing, restored_listing)
 
         if manifest["untracked_commit"] == "-":
@@ -283,8 +431,12 @@ class ExportBeforeDropTests(unittest.TestCase):
             restored_untracked_tree = self.write_tree_with_index(
                 destination / "original-untracked" / "index",
                 destination / "original-untracked" / "files",
+                repo=recovery_repo,
             )
             self.assertEqual(manifest["untracked_tree"], restored_untracked_tree)
+            self.assert_extracted_files_match_tree(
+                manifest["untracked_tree"], destination / "original-untracked" / "files"
+            )
         return destination
 
     def install_git_wrapper(self) -> dict[str, str]:
@@ -299,8 +451,10 @@ import sys
 from pathlib import Path
 
 real_git = os.environ["REAL_GIT_UNDER_TEST"]
+arguments = sys.argv[1:]
+subcommand_index = 2 if len(arguments) > 2 and arguments[0] == "-C" else 0
 failure = os.environ.get("FAIL_GIT_SUBCOMMAND")
-if failure and len(sys.argv) > 1 and sys.argv[1] == failure:
+if failure and len(arguments) > subcommand_index and arguments[subcommand_index] == failure:
     sys.stderr.write("injected git failure: " + failure + "\\n")
     raise SystemExit(73)
 
@@ -593,9 +747,385 @@ sys.stderr.buffer.write(result.stderr)
             self.assertEqual(expected, manifest[key], key)
         self.assert_recovery(output, manifest)
 
+    def test_tree_and_nested_archive_attributes_preserve_frozen_u_bytes(self) -> None:
+        base = self.create_base()
+        self.write_file(
+            ".gitattributes",
+            b"root-ignored.txt export-ignore\nroot-subst.txt export-subst\n",
+        )
+        self.write_file("root-ignored.txt", b"\x00root ignored\xff")
+        self.write_file("root-subst.txt", b"root frozen $Format:%H$\n")
+        self.write_file(
+            "nested/.gitattributes", b"ignored.txt export-ignore\nsubst.txt export-subst\n"
+        )
+        self.write_file("nested/ignored.txt", b"nested ignored\n")
+        self.write_file("nested/subst.txt", b"nested frozen $Format:%H$\n")
+        self.git("stash", "push", "-u", "-m", "tree archive attributes")
+        identity = self.stash_identity(self.git("rev-parse", "refs/stash").stdout.strip())
+        output = self.root / "tree-attributes"
+
+        exported = self.run_script("--stash", "0", "--out", str(output))
+
+        self.assertEqual(exported.returncode, 0, exported.stdout + exported.stderr)
+        _, manifest = self.single_manifest(output)
+        archive_path = output / manifest["untracked_archive"]
+        self.assert_archive_matches_tree(archive_path, identity["untracked_tree"])
+
+        # Known-bad control: git archive applies the attributes this fixture sets.
+        old_archive_bytes = self.git_bytes(
+            "archive", "--format=tar", identity["untracked_commit"]
+        ).stdout
+        with tarfile.open(fileobj=io.BytesIO(old_archive_bytes), mode="r:") as old_archive:
+            old_names = {os.fsencode(member.name) for member in old_archive.getmembers()}
+            self.assertNotIn(b"root-ignored.txt", old_names)
+            self.assertNotIn(b"nested/ignored.txt", old_names)
+            old_subst = old_archive.extractfile("root-subst.txt")
+            self.assertIsNotNone(old_subst)
+            assert old_subst is not None
+            self.assertNotEqual(b"root frozen $Format:%H$\n", old_subst.read())
+
+        restored_repo = self.create_base_only_repository(base, "base-only-tree-attributes")
+        self.assert_untracked_objects_absent(restored_repo, identity)
+        destination = self.assert_recovery(output, manifest, repo=restored_repo)
+        restored_root = destination / "original-untracked" / "files"
+        self.assertEqual(b"\x00root ignored\xff", (restored_root / "root-ignored.txt").read_bytes())
+        self.assertEqual(b"root frozen $Format:%H$\n", (restored_root / "root-subst.txt").read_bytes())
+        self.assertEqual(b"nested ignored\n", (restored_root / "nested" / "ignored.txt").read_bytes())
+
+    def test_info_and_global_archive_attributes_preserve_frozen_u_bytes(self) -> None:
+        base = self.create_base()
+        info_attributes = self.repo / ".git" / "info" / "attributes"
+        info_attributes.parent.mkdir(parents=True, exist_ok=True)
+        info_attributes.write_bytes(
+            b"info-ignored.txt export-ignore\ninfo-subst.txt export-subst\n"
+        )
+        global_attributes = self.root / "global-attributes"
+        global_attributes.write_bytes(
+            b"global-ignored.txt export-ignore\nglobal-subst.txt export-subst\n"
+        )
+        global_config = self.root / "global-gitconfig"
+        global_config.write_text(
+            f"[core]\n\tattributesFile = {global_attributes}\n", encoding="utf-8"
+        )
+        self.env["GIT_CONFIG_GLOBAL"] = str(global_config)
+        for prefix in ("info", "global"):
+            self.write_file(f"{prefix}-ignored.txt", f"{prefix} ignored\n".encode())
+            self.write_file(f"{prefix}-subst.txt", f"{prefix} $Format:%H$\n".encode())
+        self.git("stash", "push", "-u", "-m", "info and global archive attributes")
+        identity = self.stash_identity(self.git("rev-parse", "refs/stash").stdout.strip())
+        output = self.root / "info-global-attributes"
+
+        exported = self.run_script("--stash", "0", "--out", str(output))
+
+        self.assertEqual(exported.returncode, 0, exported.stdout + exported.stderr)
+        _, manifest = self.single_manifest(output)
+        self.assert_archive_matches_tree(
+            output / manifest["untracked_archive"], identity["untracked_tree"]
+        )
+        old_archive_bytes = self.git_bytes(
+            "archive", "--format=tar", identity["untracked_commit"]
+        ).stdout
+        with tarfile.open(fileobj=io.BytesIO(old_archive_bytes), mode="r:") as old_archive:
+            old_names = {os.fsencode(member.name) for member in old_archive.getmembers()}
+            self.assertNotIn(b"info-ignored.txt", old_names)
+            self.assertNotIn(b"global-ignored.txt", old_names)
+            for name in ("info-subst.txt", "global-subst.txt"):
+                member = old_archive.extractfile(name)
+                self.assertIsNotNone(member)
+                assert member is not None
+                self.assertNotIn(b"$Format:%H$", member.read())
+
+        restored_repo = self.create_base_only_repository(base, "base-only-info-global")
+        self.assert_untracked_objects_absent(restored_repo, identity)
+        self.assert_recovery(output, manifest, repo=restored_repo)
+
+    def test_non_idempotent_clean_filter_is_not_reapplied_during_u_recovery(self) -> None:
+        base = self.create_base()
+        self.git("config", "filter.fixture.clean", "sed -e s/^/clean:/")
+        self.git("config", "filter.fixture.smudge", "cat")
+        self.write_file(".gitattributes", b"filtered.txt filter=fixture\n")
+        self.write_file("filtered.txt", b"alpha\n")
+        self.git("stash", "push", "-u", "-m", "non-idempotent clean filter")
+        identity = self.stash_identity(self.git("rev-parse", "refs/stash").stdout.strip())
+        entries = {
+            path: oid for _, oid, path in self.tree_entries(identity["untracked_tree"])
+        }
+        self.assertEqual(b"clean:alpha\n", self.blob(entries[b"filtered.txt"]))
+        output = self.root / "clean-filter"
+
+        exported = self.run_script("--stash", "0", "--out", str(output))
+
+        self.assertEqual(exported.returncode, 0, exported.stdout + exported.stderr)
+        _, manifest = self.single_manifest(output)
+        self.assert_archive_matches_tree(
+            output / manifest["untracked_archive"], identity["untracked_tree"]
+        )
+        restored_repo = self.create_base_only_repository(base, "base-only-clean-filter")
+        self.run_git(restored_repo, "config", "filter.fixture.clean", "sed -e s/^/clean:/")
+        self.run_git(restored_repo, "config", "filter.fixture.smudge", "cat")
+        self.assert_untracked_objects_absent(restored_repo, identity)
+        destination = self.assert_recovery(output, manifest, repo=restored_repo)
+        recovered = destination / "original-untracked" / "files" / "filtered.txt"
+        self.assertEqual(b"clean:alpha\n", recovered.read_bytes())
+
+    def test_working_tree_encoding_preserves_stored_u_bytes(self) -> None:
+        base = self.create_base()
+        self.write_file(".gitattributes", b"encoded.txt working-tree-encoding=UTF-16LE\n")
+        stored = "encoded payload 雪\n".encode("utf-8")
+        self.write_file("encoded.txt", stored.decode("utf-8").encode("utf-16-le"))
+        stashed = self.git(
+            "stash", "push", "-u", "-m", "working tree encoding", check=False
+        )
+        if stashed.returncode != 0:
+            self.skipTest(f"git working-tree-encoding fixture unsupported: {stashed.stderr.strip()}")
+        identity = self.stash_identity(self.git("rev-parse", "refs/stash").stdout.strip())
+        entries = {
+            path: oid for _, oid, path in self.tree_entries(identity["untracked_tree"])
+        }
+        self.assertEqual(stored, self.blob(entries[b"encoded.txt"]))
+        output = self.root / "working-tree-encoding"
+
+        exported = self.run_script("--stash", "0", "--out", str(output))
+
+        self.assertEqual(exported.returncode, 0, exported.stdout + exported.stderr)
+        _, manifest = self.single_manifest(output)
+        self.assert_archive_matches_tree(
+            output / manifest["untracked_archive"], identity["untracked_tree"]
+        )
+        restored_repo = self.create_base_only_repository(base, "base-only-encoding")
+        self.assert_untracked_objects_absent(restored_repo, identity)
+        destination = self.assert_recovery(output, manifest, repo=restored_repo)
+        recovered = destination / "original-untracked" / "files" / "encoded.txt"
+        self.assertEqual(stored, recovered.read_bytes())
+
+    def test_untracked_names_modes_binary_and_symlink_survive_base_only_recovery(self) -> None:
+        base = self.create_base()
+        fixtures = {
+            "empty.bin": b"",
+            "binary.dat": b"\x00\xff\x10binary\x00",
+            "large-binary.dat": bytes(range(256)) * 8192 + b"tail",
+            "space and 'quote'.txt": b"spaces\n",
+            "line\nbreak.txt": b"newline name\n",
+            "-leading-dash.txt": b"leading dash\n",
+            "目录/雪.txt": "Unicode 雪\n".encode("utf-8"),
+        }
+        for name, payload in fixtures.items():
+            self.write_file(name, payload)
+        self.write_file("executable.sh", b"#!/bin/sh\nprintf 'executable\\n'\n", 0o755)
+        long_path = "long/" + "x" * 120 + "/" + "雪" * 60 + "/payload.txt"
+        self.write_file(long_path, b"long path\n")
+        os.symlink("目录/雪.txt", self.repo / "symbolic link")
+        self.git("stash", "push", "-u", "-m", "untracked healthy kinds and names")
+        identity = self.stash_identity(self.git("rev-parse", "refs/stash").stdout.strip())
+        output = self.root / "healthy-untracked"
+
+        exported = self.run_script("--stash", "0", "--out", str(output))
+
+        self.assertEqual(exported.returncode, 0, exported.stdout + exported.stderr)
+        _, manifest = self.single_manifest(output)
+        self.assert_archive_matches_tree(
+            output / manifest["untracked_archive"], identity["untracked_tree"]
+        )
+        restored_repo = self.create_base_only_repository(base, "base-only-healthy-untracked")
+        self.assert_untracked_objects_absent(restored_repo, identity)
+        destination = self.assert_recovery(output, manifest, repo=restored_repo)
+        restored_root = destination / "original-untracked" / "files"
+        self.assertEqual("目录/雪.txt", os.readlink(restored_root / "symbolic link"))
+        self.assertTrue(os.access(restored_root / "executable.sh", os.X_OK))
+        self.assertEqual(b"newline name\n", (restored_root / "line\nbreak.txt").read_bytes())
+        self.assertEqual(b"long path\n", (restored_root / long_path).read_bytes())
+
+    def test_missing_extra_and_corrupted_untracked_archive_content_fail(self) -> None:
+        self.create_rich_stash()
+        output = self.root / "tampered-untracked"
+        exported = self.run_script("--stash", "0", "--out", str(output))
+        self.assertEqual(exported.returncode, 0, exported.stdout + exported.stderr)
+        _, manifest = self.single_manifest(output)
+        archive_path = output / manifest["untracked_archive"]
+        original = archive_path.read_bytes()
+        recovery = output / manifest["recovery_script"]
+
+        for mutation in ("missing", "extra", "corrupted"):
+            with self.subTest(mutation=mutation):
+                with tarfile.open(archive_path, "r:") as source:
+                    rows = [
+                        (member, source.extractfile(member).read() if member.isreg() else None)
+                        for member in source.getmembers()
+                    ]
+                if mutation == "missing":
+                    rows = [row for row in rows if row[0].name != "untracked.txt"]
+                elif mutation == "corrupted":
+                    rows = [
+                        (member, b"corrupted payload\n" if member.name == "untracked.txt" else data)
+                        for member, data in rows
+                    ]
+                else:
+                    extra = tarfile.TarInfo("extra.txt")
+                    extra.mode = 0o644
+                    extra.size = len(b"extra payload\n")
+                    rows.append((extra, b"extra payload\n"))
+                rewritten = output / "rewritten.tar"
+                with tarfile.open(rewritten, "w", format=tarfile.GNU_FORMAT) as target:
+                    for member, data in rows:
+                        if data is not None:
+                            member.size = len(data)
+                            target.addfile(member, io.BytesIO(data))
+                        else:
+                            target.addfile(member)
+                os.replace(rewritten, archive_path)
+                try:
+                    completed = subprocess.run(
+                        [str(recovery), str(self.repo), str(self.root / f"tampered-{mutation}")],
+                        cwd=self.root,
+                        env=self.env,
+                        text=True,
+                        capture_output=True,
+                        check=False,
+                    )
+                    self.assertNotEqual(0, completed.returncode, completed.stdout + completed.stderr)
+                    self.assertNotIn("RECOVERED", completed.stdout)
+                    self.assertIn("original-untracked", completed.stderr)
+                finally:
+                    archive_path.write_bytes(original)
+        self.assert_recovery(
+            output, manifest, destination=self.root / "tamper-healthy-control"
+        )
+
+    def test_unsupported_gitlink_is_rejected_without_a_final_tar(self) -> None:
+        tree = self.git(
+            "mktree", input_text=f"160000 commit {self.initial}\tsubmodule\n"
+        ).stdout.strip()
+        output = self.root / "unsupported.tar"
+
+        completed = subprocess.run(
+            [str(REAL_PYTHON), str(TREE_ARCHIVE), "--repo", str(self.repo), "--tree", tree, "--output", str(output)],
+            cwd=self.root,
+            env=self.env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertNotEqual(0, completed.returncode, completed.stdout + completed.stderr)
+        self.assertIn("unsupported tree entry", completed.stderr)
+        self.assertFalse(output.exists())
+
+    def test_malformed_unsafe_tree_path_is_rejected_without_a_final_tar(self) -> None:
+        blob = self.git("hash-object", "-w", "--stdin", input_text="payload\n").stdout.strip()
+        raw_tree = b"100644 ../escape\0" + bytes.fromhex(blob)
+        tree = self.git_bytes(
+            "hash-object", "-t", "tree", "-w", "--literally", "--stdin", input_bytes=raw_tree
+        ).stdout.decode("ascii").strip()
+        output = self.root / "unsafe.tar"
+
+        completed = subprocess.run(
+            [str(REAL_PYTHON), str(TREE_ARCHIVE), "--repo", str(self.repo), "--tree", tree, "--output", str(output)],
+            cwd=self.root,
+            env=self.env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertNotEqual(0, completed.returncode, completed.stdout + completed.stderr)
+        self.assertIn("unsafe or malformed tree path", completed.stderr)
+        self.assertFalse(output.exists())
+
+    def test_blob_read_failure_is_fatal_and_leaves_no_final_tar(self) -> None:
+        identity = self.create_rich_stash()
+        wrapper_env = self.install_git_wrapper()
+        wrapper_env["FAIL_GIT_SUBCOMMAND"] = "cat-file"
+        output = self.root / "read-failure.tar"
+
+        completed = subprocess.run(
+            [str(REAL_PYTHON), str(TREE_ARCHIVE), "--repo", str(self.repo), "--tree", identity["untracked_tree"], "--output", str(output)],
+            cwd=self.root,
+            env={**self.env, **wrapper_env},
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertNotEqual(0, completed.returncode, completed.stdout + completed.stderr)
+        self.assertIn("injected git failure: cat-file", completed.stderr)
+        self.assertFalse(output.exists())
+        self.assertEqual([], list(self.root.glob(".read-failure.tar.*.tmp")))
+
+    def test_missing_python_fails_selected_u_export_and_recovery(self) -> None:
+        self.create_rich_stash()
+        missing_python = self.fake_missing_python()
+        failed_output = self.root / "missing-python-export"
+
+        exported = self.run_script(
+            "--stash", "0", "--out", str(failed_output), extra_env=missing_python
+        )
+
+        self.assertNotEqual(0, exported.returncode, exported.stdout + exported.stderr)
+        self.assertIn("Python 3.10+", exported.stderr)
+        self.assertEqual([], list(failed_output.glob("*.tar")))
+        self.assertEqual([], list(failed_output.glob("*.manifest")))
+
+        output = self.root / "missing-python-recovery-artifacts"
+        exported = self.run_script("--stash", "0", "--out", str(output))
+        self.assertEqual(exported.returncode, 0, exported.stdout + exported.stderr)
+        _, manifest = self.single_manifest(output)
+        recovery = output / manifest["recovery_script"]
+        completed = subprocess.run(
+            [str(recovery), str(self.repo), str(self.root / "missing-python-recovery")],
+            cwd=self.root,
+            env={**self.env, **missing_python},
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertNotEqual(0, completed.returncode, completed.stdout + completed.stderr)
+        self.assertIn("Python 3.10+", completed.stderr)
+        self.assertNotIn("RECOVERED", completed.stdout)
+
+    def test_bundle_and_no_u_stash_paths_do_not_require_python(self) -> None:
+        self.create_base()
+        self.write_file("tracked.txt", b"no third parent\n")
+        self.git("stash", "push", "-m", "no python required")
+        missing_python = self.fake_missing_python()
+        output = self.root / "no-python-no-u"
+
+        exported = self.run_script(
+            "--stash", "0", "--out", str(output), extra_env=missing_python
+        )
+
+        self.assertEqual(exported.returncode, 0, exported.stdout + exported.stderr)
+        _, manifest = self.single_manifest(output)
+        self.assertEqual("-", manifest["untracked_archive"])
+        self.assert_recovery(output, manifest, extra_env=missing_python)
+        bundle_output = self.root / "no-python-bundle"
+        bundled = self.run_script(
+            "--branch", "main", "--out", str(bundle_output), extra_env=missing_python
+        )
+        self.assertEqual(bundled.returncode, 0, bundled.stdout + bundled.stderr)
+        verified = self.run_script(
+            "--verify-current",
+            str(bundle_output / "branches.bundle"),
+            extra_env=missing_python,
+        )
+        self.assertEqual(verified.returncode, 0, verified.stdout + verified.stderr)
+
     def test_script_is_executable(self) -> None:
         self.assertTrue(SCRIPT.is_file(), SCRIPT)
         self.assertTrue(os.access(SCRIPT, os.X_OK), SCRIPT)
+        self.assertTrue(TREE_ARCHIVE.is_file(), TREE_ARCHIVE)
+        self.assertTrue(os.access(TREE_ARCHIVE, os.X_OK), TREE_ARCHIVE)
+        help_result = subprocess.run(
+            [str(REAL_PYTHON), str(TREE_ARCHIVE), "--help"],
+            cwd=self.root,
+            env=self.env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(help_result.returncode, 0, help_result.stdout + help_result.stderr)
+        normalized_help = " ".join(help_result.stdout.split())
+        self.assertIn("Python 3.10+", normalized_help)
+        self.assertIn("stored blob bytes", normalized_help)
 
 
 if __name__ == "__main__":
