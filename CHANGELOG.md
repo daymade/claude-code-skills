@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.21.35 → v1.21.36): Verify complete multiline request/log rows against horizontal and vertical clipping, preserve exact identifiers and count meaning, and follow the row's original-record action through matching content.
+- **data-visualization-discipline** (v1.1.9 → v1.1.10): Distinguish valid historical-window samples from expired native sampling, preserve per-source clock ownership, and retain current-snapshot and missing-clock controls.
+
 - **pdf-creator** (`daymade-docs` v1.29.2 → v1.29.3): Find Chrome and Microsoft Edge in Windows installation directories; preserve Unicode through pandoc and Poppler; skip optional typography lint when `pdfinfo` or `pdftotext` is missing. Fixes #1157.
 - **claude-switch-models-setup** (`daymade-claude-code` v5.1.1 → v5.1.2): Recommend MiniMax-M3.1-Flash for new global/China profiles with adaptive thinking and max effort; retain explicit M3 alternatives, legacy requests and export-bound credentials. Verify real launcher requests and distinguish source-only maintainer tests from installed bundles. Fixes #1107.
 - **tunnel-doctor** (v1.17.13 → v1.17.14): Replace the snap-to-apt remote installer with signed repository preparation and apt installation; require alternate access and successful package download before removing snap. Limit named refusal codes to their observed scope. Fixes #1379.

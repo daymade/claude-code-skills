@@ -302,7 +302,8 @@ Before judging wheel-driven pan/zoom sensitivity, load the same reference's
 with received input rather than the harness request.
 
 Load [references/history-derived-checklist.md](references/history-derived-checklist.md)
-for the core visual/responsive defect catalog and standards-backed checks.
+for the core visual/responsive defect catalog and standards-backed checks,
+including complete multiline request, log and audit-table rows.
 For composition or density audits, including AI-generated UI or copy complaints,
 execute its **Information necessity before layout** check and select the matched
 **Established methods** before fixing line breaks. Before declaring rendered UI ready for

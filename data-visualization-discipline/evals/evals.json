@@ -31,6 +31,22 @@
       "Keeps summaries and the confirmed-waiting filter consistent: A, B and C are confirmed waiting, D and E have unresolved current attention, F is confirmed clear, and the total unanswered-question count remains unknown",
       "Keeps the 300-second freshness policy local to this fixture's supplied project contract and leaves rendered/browser behavior unverified"
     ]
+  },
+  {
+    "id": 3,
+    "name": "historical-window-native-clock-and-snapshot-control",
+    "prompt": "Review a synthetic monitoring presentation before drawing. All times are UTC on one date. The supplied project contract supports historical range reads, evaluates them at min(selected end, received time), and uses an explicit 120-second sample deadline. Native clock rows must match resource, source, all native labels and the metric sample's query-point time. Selected range is 10:00 to 10:30; received time is 18:00. A has value 72, query point 10:29:55 and matching native sample 10:29:30. B has value 84 and the same fresh query point, but its matching native sample is 10:20. C has value 65 and no matching native clock; a different volume has a clock at 10:29:50. D is a separate provider supporting current snapshots only; its own 120-second contract compares received time 18:00 with native sample 10:29:30. E selects a future end 19:00, is received at 18:00 and has native sample 18:01. State the reader-facing values, reasons and next evidence needed. Reopen the same fixed historical response one day later without new observations. Do not access production, replace missing values with zero, change source timestamps or invent a universal TTL.",
+    "expected_output": "Keeps A valid for its selected historical window even after the page clock advances, without calling the service healthy now. B retains value 84 with expired-native-sampling reason despite its fresh query point. C retains value 65 and the missing matching-clock cause, without borrowing another volume's clock. D remains stale under its current-snapshot contract. E cannot use the future selected end to accept a sample later than actual receipt. Exact times and values remain unchanged; rendering is not claimed.",
+    "files": [],
+    "assertions": [
+      "Distinguishes selected end, query-point time, native sampling time, received time and current page clock; keeps the supplied algorithm and deadline local to this fixture",
+      "Accepts A for the fixed historical window after one-day wall-clock advancement without declaring current service health",
+      "Rejects B's expired native sampling while preserving value 84; the new query point does not renew its native sample",
+      "Preserves C's value and missing matching-clock cause; does not borrow the different volume's clock or synthesize zero",
+      "Uses D's current-snapshot contract rather than applying the historical clock to every provider",
+      "Does not treat E's future sample as healthy by evaluating against a future selected end",
+      "Names the needed matching source evidence and leaves browser/rendered behavior unverified"
+    ]
   }
   ]
 }
