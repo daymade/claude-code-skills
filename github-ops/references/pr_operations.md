@@ -339,6 +339,14 @@ lock on the base branch.
 
 ### Merging PRs
 
+For missing checks or a fork run awaiting approval, first follow
+[the run-state diagnosis](workflow_operations.md#resolve-missing-checks-and-fork-approval).
+Before a squash merge, follow the existing
+[reviewed-head and commit-message procedure](https://github.com/daymade/claude-code-skills/blob/main/github-review-pr/references/remediation_and_landing.md#merge-with-the-reviewed-head-guard).
+Review GitHub's proposed message; supply concise explicit metadata when required
+there, using a body file for multiline text. Keep merge-queue limitations with
+that owner rather than assuming direct-merge metadata flags control the queue.
+
 Before merging, observe the checks required by the task/repository at the exact
 candidate; use `gh pr checks NUMBER -R OWNER/REPO --watch` and inspect its exit
 status, then perform [fresh-base verification](#fresh-base-verification) and reread
@@ -511,8 +519,9 @@ A late sibling PR can make your still-open PR `dirty` even when it already deliv
 business behavior. Compare immutable head trees, implementation blobs, and the named acceptance
 tests:
 
-- **Equivalent or main is a strict superset:** close your PR as superseded and delete its head
-  branch. Do not resolve conflicts merely so "your" PR also merges.
+- **Equivalent or main is a strict superset:** close your PR as superseded and retire its head
+  branch under the ownership, authorization and exact-tip checks below. Do not resolve conflicts
+  merely so "your" PR also merges.
 - **One unique behavior remains:** transplant only that bounded delta onto the fresh base, test it,
   and update/open one PR. Do not merge the stale whole branch and reintroduce old registry/docs.
 - **Evidence differs:** keep both refs and ask for the real product decision; PR identity does not
@@ -523,30 +532,48 @@ prove the only base-relative change left is yours; never accept all of `ours` or
 
 #### 4. Retire remote branches only against an exact saved tip
 
+Bind the PR's `head.repo.full_name`, `head.ref` and `head.sha` independently of
+its base repository. A fork head belongs to that fork; a same-named branch in
+the base is a different deletion target. Separate permission to close a PR,
+permission to update its head, and authorization/capability to delete that ref.
+`maintainer_can_modify=true` can permit scoped PR edits despite a general fork
+Read role; neither that grant nor the role proves deletion capability. Do not
+attempt deletion merely to probe permission.
+
+For an owned or explicitly authorized head with verified deletion capability,
+close an unmerged PR and retire its head in the same authorized operation. For
+an external author's branch without established deletion authority/capability,
+complete the authorized PR closure, retain the branch and report its exact
+repository/ref/tip and the missing condition. Say “deletion capability unverified”
+when only a general role is known; reserve “permission denied” for an actual
+authoritative denial. Do not change fork permissions to complete cleanup.
+
 The local/ref backup and dirty-WIP gates belong to `git-safety-net`. Once it has produced and
-re-verified a bundle, query each remote deletion target immediately before deleting it:
+re-verified a bundle, bind `head_remote` to the named remote for the verified head
+repository (use `origin` only when that identity matches). Query each remote
+deletion target immediately before deleting it:
 
 ```bash
 bundle_recorded_sha='RECORDED_SHA_FROM_VERIFIED_BUNDLE'
-expected_sha=$(gh api repos/{owner}/{repo}/git/ref/heads/{branch/path} --jq '.object.sha') || exit 1
+expected_sha=$(gh api repos/{head_owner}/{head_repo}/git/ref/heads/{branch/path} --jq '.object.sha') || exit 1
 test "$expected_sha" = "$bundle_recorded_sha" || {
   printf 'Remote branch moved after preservation; rebuild the audit and backup.\n' >&2
   exit 1
 }
 git push \
   --force-with-lease="refs/heads/{branch/path}:$expected_sha" \
-  origin \
+  "$head_remote" \
   ":refs/heads/{branch/path}" || exit 1
-gh api 'repos/{owner}/{repo}/branches?per_page=100' --paginate --jq '.[].name' || exit 1
+gh api 'repos/{head_owner}/{head_repo}/branches?per_page=100' --paginate --jq '.[].name' || exit 1
 # Interpret the query status before using its output.
 query_status=0
-git ls-remote --exit-code origin "refs/heads/{branch/path}" || query_status=$?
+git ls-remote --exit-code "$head_remote" "refs/heads/{branch/path}" || query_status=$?
 case "$query_status" in
   2) printf 'ABSENT: approved remote branch is no longer present.\n' ;;
   0) printf 'Branch still exists; retirement is incomplete.\n' >&2; exit 1 ;;
   *) printf 'UNKNOWN: remote query failed; retirement is unverified.\n' >&2; exit 1 ;;
 esac
-git remote prune origin
+git remote prune "$head_remote"
 ```
 
 Set `bundle_recorded_sha` from the verified preservation receipt. The explicit expected-SHA lease
@@ -562,7 +589,7 @@ leased deletion form keeps the same exact-tip precheck and independently require
 `ABSENT` after the push:
 
 ```bash
-<absolute-push-and-verify-helper> <repo> origin \
+<absolute-push-and-verify-helper> <repo> "$head_remote" \
   "--force-with-lease=refs/heads/{branch/path}:$expected_sha" \
   --delete "{branch/path}"
 ```

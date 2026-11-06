@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **frontend-visual-qa** (v1.21.35 → v1.21.36): Verify complete multiline request/log rows against horizontal and vertical clipping, preserve exact identifiers and count meaning, and follow the row's original-record action through matching content.
 - **data-visualization-discipline** (v1.1.9 → v1.1.10): Distinguish valid historical-window samples from expired native sampling, preserve per-source clock ownership, and retain current-snapshot and missing-clock controls.
+- **github-ops** (v1.15.5 → v1.16.0): Diagnose missing checks and approve only the reviewed fork workflow run within its execution authorization; route squash-message review and distinguish fork editing from authorized exact-tip branch retirement.
+- **qa-expert** (v1.2.11 → v1.2.12): Add selected non-UTF-8 subprocess, multilingual output and actual backend/branch witnesses to runtime compatibility acceptance.
+- **pdf-creator** (`daymade-docs` v1.29.3 → v1.29.4): Document the source-only test environment and affected native-backend acceptance without expanding installed converter dependencies.
 
 - **pdf-creator** (`daymade-docs` v1.29.2 → v1.29.3): Find Chrome and Microsoft Edge in Windows installation directories; preserve Unicode through pandoc and Poppler; skip optional typography lint when `pdfinfo` or `pdftotext` is missing. Fixes #1157.
 - **claude-switch-models-setup** (`daymade-claude-code` v5.1.1 → v5.1.2): Recommend MiniMax-M3.1-Flash for new global/China profiles with adaptive thinking and max effort; retain explicit M3 alternatives, legacy requests and export-bound credentials. Verify real launcher requests and distinguish source-only maintainer tests from installed bundles. Fixes #1107.
