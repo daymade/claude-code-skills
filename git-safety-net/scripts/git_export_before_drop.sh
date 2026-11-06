@@ -55,8 +55,9 @@
 #
 # Note on stash numbering: indices shift as stashes are dropped or added. The exporter
 # freezes the complete list and full commit OIDs before reading any stash content, then
-# uses only those OIDs. Export FIRST, then drop from the HIGHEST index down so the
-# numbers you exported still mean what you think they mean.
+# uses only those OIDs. Recheck each current stash OID against its exported manifest
+# before an authorized drop. Highest-index-first only prevents shifts from your own
+# drops; concurrent stash additions/removals invalidate the old index mapping.
 
 set -euo pipefail
 

@@ -580,10 +580,11 @@ Freeze each authorized ref and full tip SHA independently of any backup. Apply
 required export. When an export is required, create and verify a repository-external bundle:
 
 ```bash
-scripts/git_export_before_drop.sh \
-  --branch <authorized-ref-1> --branch <authorized-ref-2> \
-  --out <external-backup-dir>
-scripts/git_export_before_drop.sh --verify-current <external-backup-dir>/branches.bundle
+SKILL_ROOT="<absolute-loaded-git-safety-net-directory>"
+"$SKILL_ROOT/scripts/git_export_before_drop.sh" \
+  --branch "<authorized-ref-1>" --branch "<authorized-ref-2>" \
+  --out "<external-backup-dir>"
+"$SKILL_ROOT/scripts/git_export_before_drop.sh" --verify-current "<external-backup-dir>/branches.bundle"
 ```
 
 For a linked worktree requiring export, select its branch. For a detached HEAD requiring export,
@@ -591,8 +592,8 @@ create one collision-checked recovery ref pointing at the recorded HEAD, then ex
 
 ```bash
 git update-ref refs/recovery/<worktree-id> <recorded-head> 0000000000000000000000000000000000000000
-scripts/git_export_before_drop.sh \
-  --branch refs/recovery/<worktree-id> --out <external-backup-dir>
+"$SKILL_ROOT/scripts/git_export_before_drop.sh" \
+  --branch "refs/recovery/<worktree-id>" --out "<external-backup-dir>"
 ```
 
 This pin is part of preserving the named retirement target; it does not authorize pinning other
@@ -662,9 +663,10 @@ After establishing the semantic and publication evidence above, bind the request
 to the first frozen manifest and its preparation-time hash:
 
 ```bash
-# Resolve scripts/... against the Skill bundle root. Repeat --absent-worktree per authorized path.
+# Repeat --absent-worktree per authorized path.
+SKILL_ROOT="<absolute-loaded-git-safety-net-directory>"
 EXPECTED_MANIFEST_SHA256=$(< "$TASK_DIR/targets.tsv.sha256")
-scripts/git_verify_closeout.py \
+"$SKILL_ROOT/scripts/git_verify_closeout.py" \
   --repo "$REPO" \
   --expected-common-dir "$COMMON_DIR" \
   --target-manifest "$TASK_DIR/targets.tsv" \
