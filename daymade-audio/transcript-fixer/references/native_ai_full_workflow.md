@@ -88,8 +88,7 @@ for a plain Fast pass.
 3. **Load domain priors, then read the entire transcript.** Read its domain context
    when present and finish every chunk before deciding early ambiguities. Include
    ASR-derived metadata; before editing metadata or a ledger/reversal, read
-   [metadata provenance](native_metadata_provenance.md). Stage 1 protects only a
-   single-line `asr_note`; native edits must preserve its history and one key.
+   [metadata provenance](native_metadata_provenance.md).
 4. **Triage each candidate.** Use Confident / Needs verification / Uncertain.
    Before settling a name or an unfamiliar/load-bearing token, read
    [entity triage and local-first rungs 0–7](native_entity_triage.md), plus

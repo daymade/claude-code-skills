@@ -201,6 +201,7 @@ python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord receive received.txt
 `legacy/unknown` 回到现有语义分流，保留覆盖缺口，不能丢掉新阻塞。
 
 保存的是宿主实际收到的完整字符串，包括 metadata 行、advisory、空行和末尾空白。
+文件和 stdin 均以 UTF-8 接收，保留原始 LF/CRLF 行尾；不要先通过文本转换器规范化。
 从宿主事件或下方 inbox inspection 导出原字段，用 `write_bytes(envelope.encode("utf-8"))`
 保存；不要重排 metadata JSON、手抄正文或用 heredoc / `echo` 重建信封：它们可能补一个
 原文没有的末尾换行。不要对原文 `strip()`，原本存在的换行也属于内容。

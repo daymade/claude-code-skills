@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **transcript-fixer** (`daymade-audio` v1.57.4 → v1.57.5): Use one metadata-provenance contract across correction, scanning and review reversal; preserve pending audit values when undoing a body edit and keep ordinary metadata reversible.
+- **peer-message** (v1.24.8 → v1.24.9): Preserve UTF-8 envelope LF/CRLF bytes through both file and stdin receive paths; align the operating entry with original-input capture.
+
 - **git-safety-net** (v1.27.0 → v1.27.1): Route stash export/recovery and original-inventory closeout from the project instructions to their owning SOPs; resolve bundled scripts explicitly and qualify stash drop order with a fresh identity check. Consolidate recovery details without changing executable behavior.
 
 - **transcript-fixer** (`daymade-audio` v1.57.3 → v1.57.4): Preserve pending ASR audit values across reruns while correcting titles, keywords and spoken text with unchanged line numbers.
