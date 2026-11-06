@@ -138,9 +138,21 @@ login or restart merely to repair its receipt. If no replayable completion exist
 retain that gap instead of promoting a current-account observation to operation
 success. Preserve the original SIDs and pending work throughout recovery.
 
+For an authorized routine switch on an existing saved-login/shared-owner path,
+keep the operation lane limited to the deployed owner's preflight, any supported
+target-scoped quota refresh, one original request, same-ID status/observation,
+and target-account readback from that same owner. Measure the 60-second budget
+from the user's request to that readback. Do not put code edits, tests, dependency
+installation, PRs, builds, deployment or an all-account refresh in this lane.
+If a deployed consumer lacks a required fix, report that attempt as missed;
+repair it in the separately authorized engineering lane without moving the start
+time or retroactively marking the original operation successful. New OAuth,
+MFA, independent grants and exceptional recovery do not inherit the routine
+60-second guarantee; their original IDs and safety barriers still apply.
+
 ### Pre-clear challenges without transferring the formal AM space
 
-If Cloudflare is expected to block a shared-owner OAuth flow, use a neutral `https://auth.openai.com/` page with no OAuth parameters before the formal POST. The user may complete the human challenge there and stop without logging in. Once Account Manager creates the formal login TaskSpace, its browser consumer owns that space through success-page observation and finish/verify. Do not call `handOff`, `claimTaskSpace`, or drive it from another agent: transferring ownership makes the consumer's snapshots fail. A Signed in page still requires the independent account, original-receipt and continuation checks above.
+If Cloudflare is expected to block a shared-owner OAuth flow, use a neutral `https://auth.openai.com/` page with no OAuth parameters before the formal POST. The user may complete the human challenge there and stop without logging in. Once Account Manager creates the formal login TaskSpace, its browser consumer owns that space through success-page observation and finish/verify on the ordinary success path. If that consumer positively identifies a user-verification challenge, it stops page input without finishing or transferring the space; the same native receiver and login ID settle the original request within its existing deadline. Do not call `handOff`, `claimTaskSpace`, automatically enter a security code, or drive the space from another agent: transferring ownership makes the consumer's snapshots fail. A Signed in page still requires the independent account, original-receipt and continuation checks above.
 
 ### Adopt a saved login in a shared daemon
 
