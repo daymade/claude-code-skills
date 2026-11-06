@@ -148,12 +148,6 @@ def _utcnow() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 
-# A frontmatter `key:` line. Deliberately unindented, matching
-# `dictionary_processor._mask_ledger_spans`: an indented key is part of a
-# multi-line YAML value, which neither the masker nor this parser reads.
-_FRONTMATTER_KEY_RE = re.compile(r"^([A-Za-z_][\w-]*):")
-
-
 def is_temp_path(path: str | Path) -> bool:
     """True when the path lives under the OS temp dir — a caller pipeline's
     staging copy. Queue items must not anchor to files that vanish."""
