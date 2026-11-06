@@ -56,11 +56,13 @@ At creation, record the address family, exact destination/prefix, gateway, inter
 pre-change route table, and the original business request. The example below deliberately uses
 only synthetic values: IPv4 host `192.0.2.10/32`, gateway `192.0.2.1`, and interface `en99`.
 
-Before cleanup, capture unedited stdout, stderr and exit status for both reads:
+Before cleanup, capture unedited stdout, stderr and exit status for each read. Keep
+both address-family tables, even when the task-owned host route is IPv4:
 
 ```bash
 route -n get -inet 192.0.2.10
 netstat -rn -f inet
+netstat -rn -f inet6
 ```
 
 Require every read to exit 0, produce the expected route output, and have no route failure on
@@ -84,7 +86,10 @@ sudo route -n delete -inet -host 192.0.2.10 192.0.2.1
 
 Afterward, save the same unedited route-get/table stdout, stderr and exit status as the exact post
 snapshot. Confirm that `192.0.2.10/32` with the recorded gateway and interface is absent, and that
-the pre-existing default and network routes remain present with their original identities. If
+the pre-existing default and network routes in **both IPv4 and IPv6** remain present with their
+original family, destination/prefix, gateway and interface. Missing or unreadable family snapshots
+leave preservation unverified. If only an IPv6 default disappears while the IPv4 table remains
+unchanged, verification still fails; do not report cleanup as successful. If
 `route get` now selects a default or another fallback, do not claim that the kernel fallback
 deleted the default route; verify the default separately against the pre/post snapshots.
 
