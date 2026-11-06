@@ -184,8 +184,12 @@ For saved HTML batches, follow [the conversion owner](daymade-docs/doc-to-markdo
 and its actual-reader pilot before expansion. Keep conversion evidence and reader
 observations separate; this file does not define another batch recipe.
 
-For proxy-selection or disruptive VPN recovery changes, enter `tunnel-doctor` and its
-proxy-conflict and network-recovery references. For unresolved tunnel packet-loss
+For tunnel/proxy-path failures or slow throughput, enter
+[tunnel-doctor](tunnel-doctor/SKILL.md) first. For unresolved protocol, streaming or
+throughput investigations, use [debugging-network-issues](debugging-network-issues/SKILL.md).
+Proxy-selection and disruptive VPN changes follow tunnel-doctor's
+[proxy-conflict procedure](tunnel-doctor/references/proxy_conflict_reference.md) and
+[network-change recovery](tunnel-doctor/references/network_change_recovery.md). For unresolved tunnel packet-loss
 localization, read the [capture procedure](debugging-network-issues/references/packet-capture-recipes.md#four-boundary-tunnel-captures).
 For same-provider node failures with a working subscription, enter
 [provider account checks](tunnel-doctor/references/provider_account_suspension.md).
