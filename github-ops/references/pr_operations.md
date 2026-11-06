@@ -343,9 +343,6 @@ For missing checks or a fork run awaiting approval, first follow
 [the run-state diagnosis](workflow_operations.md#resolve-missing-checks-and-fork-approval).
 Before a squash merge, follow the existing
 [reviewed-head and commit-message procedure](https://github.com/daymade/claude-code-skills/blob/main/github-review-pr/references/remediation_and_landing.md#merge-with-the-reviewed-head-guard).
-Review GitHub's proposed message; supply concise explicit metadata when required
-there, using a body file for multiline text. Keep merge-queue limitations with
-that owner rather than assuming direct-merge metadata flags control the queue.
 
 Before merging, observe the checks required by the task/repository at the exact
 candidate; use `gh pr checks NUMBER -R OWNER/REPO --watch` and inspect its exit
