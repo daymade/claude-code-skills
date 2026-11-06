@@ -1598,7 +1598,7 @@ class TestRevertLedgerIsTheAsrNoteKeyNotTheWholeFrontmatter:
     """`_ledger_line_flags` 曾把**整个 frontmatter 块**标成台账。
 
     后果是「写得进、撤不回」：accept 路径的台账定义是
-    `dictionary_processor._mask_ledger_spans`，它只屏蔽 `asr_note:` 的值，
+    `dictionary_processor._mask_ledger_spans`，它只屏蔽审计字段的值，
     于是 `title: 旧词相关会议` 能被 accept 改成 `新词相关会议`，reopen 却因整块
     被标成台账而拒绝还原——并且返回的理由是 "the replacement text survives
     only in the asr_note ledger"，把操作者引向一个根本不存在的排查方向。
@@ -1645,6 +1645,23 @@ class TestRevertLedgerIsTheAsrNoteKeyNotTheWholeFrontmatter:
         assert entry["ok"] is False
         assert "asr_note ledger" in entry["msg"]
         assert "title" not in entry["msg"], "不许把操作者引向无关的 frontmatter 键"
+
+
+@pytest.mark.parametrize("pending", [
+    "asr_pending: [新词]",
+    "asr_pending:\n  - candidate: 新词",
+    'asr_pending: [\n"新词"\n]',
+])
+def test_reversal_preserves_pending_audit_but_can_revert_body(pending):
+    from core.review_queue import _revert_one_body_occurrence
+    audit_only = f"---\n{pending}\n---\n正文。\n"
+    reverted, message = _revert_one_body_occurrence(audit_only, "新词", "旧词")
+    assert reverted is None
+    assert "audit metadata" in message
+    with_body = audit_only + "正文出现新词。\n"
+    reverted, message = _revert_one_body_occurrence(with_body, "新词", "旧词")
+    assert reverted == audit_only + "正文出现旧词。\n"
+    assert message == "reverted"
 
 
 def test_body_and_ledger_validate_before_any_write(queue, tmp_path):

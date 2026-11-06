@@ -1785,8 +1785,10 @@ def cmd_coord(args):
             elif args.operation == "commit":
                 result = board.commit(args.message_id, actor, args.outcome)
             elif args.operation == "receive":
-                envelope = (sys.stdin.read() if args.envelope_file == "-" else
-                            Path(args.envelope_file).read_text(encoding="utf-8"))
+                # Preserve prepared bytes: text I/O normalizes CRLF before hashing.
+                raw = (sys.stdin.buffer.read() if args.envelope_file == "-" else
+                       Path(args.envelope_file).read_bytes())
+                envelope = raw.decode("utf-8")
                 result = board.receive(envelope, actor)
             elif args.operation == "finish":
                 result = board.finish(args.message_id, actor)

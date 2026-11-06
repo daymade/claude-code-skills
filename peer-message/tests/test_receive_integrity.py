@@ -1,5 +1,6 @@
 import contextlib
 import hashlib
+import io
 import importlib.util
 import json
 from pathlib import Path
@@ -106,6 +107,24 @@ class ReceiveIntegrityTests(unittest.TestCase):
         self.assertEqual(envelope, original)
         self.assertEqual(list(board.db.iterdump()), before)
         self.assertEqual(hashlib.sha256(board.path.read_bytes()).hexdigest(), before_bytes)
+
+    def test_cli_file_and_stdin_preserve_original_line_endings(self):
+        for source in ("file", "stdin"):
+            for body in ("synthetic body", "synthetic\r\nbody\r\n"):
+                with self.subTest(source=source, body=body), self.board() as board:
+                    prepared = self.prepare(board, body=body)
+                    raw = prepared["body"].encode("utf-8")
+                    path = self.root / "received.txt"
+                    path.write_bytes(raw)
+                    output = io.StringIO()
+                    stream = io.TextIOWrapper(io.BytesIO(raw), encoding="utf-8", newline=None)
+                    with mock.patch.object(peer, "coordination_current_address", return_value="codex:receiver"), \
+                         mock.patch.object(peer, "coordination_actor_key", side_effect=lambda value: value), \
+                         mock.patch.object(peer.sys, "stdin", stream), contextlib.redirect_stdout(output):
+                        result = peer.main(["--state-dir", str(board.root), "coord", "receive",
+                                            str(path) if source == "file" else "-"])
+                    self.assertEqual(result, 0)
+                    self.assertEqual(json.loads(output.getvalue())["integrity"], "verified_prepared_core")
 
     def test_receiver_added_newline_and_json_reserialization_are_not_originals(self):
         for mutation in ("heredoc-newline", "json-spacing"):

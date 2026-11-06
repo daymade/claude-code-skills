@@ -148,12 +148,6 @@ def _utcnow() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 
-# A frontmatter `key:` line. Deliberately unindented, matching
-# `dictionary_processor._mask_ledger_spans`: an indented key is part of a
-# multi-line YAML value, which neither the masker nor this parser reads.
-_FRONTMATTER_KEY_RE = re.compile(r"^([A-Za-z_][\w-]*):")
-
-
 def is_temp_path(path: str | Path) -> bool:
     """True when the path lives under the OS temp dir — a caller pipeline's
     staging copy. Queue items must not anchor to files that vanish."""
@@ -2073,33 +2067,16 @@ class ReviewQueue:
 
 
 def _ledger_line_flags(content: str) -> list[bool]:
-    """One flag per line: True when the line is part of the correction ledger
-    (an `asr_note:` key inside the leading YAML frontmatter block, or an
-    `asr_note:` line anywhere). Those lines quote old forms deliberately
-    ("修正含：<旧形>→<正确形>"), so they are never legitimate targets for a
-    revert or a re-anchor — editing one rewrites the audit trail (2026-09-20
-    #2241: a reopen revert turned 「旧词→新词」 into 「旧词→旧词」 because the new
-    form survived only in the ledger line).
+    """Use the accept/matcher audit boundary for reversal too.
 
-    Only the `asr_note:` KEY is a ledger. An earlier version flagged the whole
-    frontmatter block, which made every other frontmatter key un-revertible
-    while the accept path could still edit it (`title: 旧词 → 新词` accepted
-    fine, then reopen refused with "survives only in the asr_note ledger" — a
-    verdict that pointed the operator at the wrong place entirely). The accept
-    path's own notion of the ledger is `dictionary_processor._mask_ledger_spans`,
-    and it masks exactly `asr_note:` values; the two sides now agree. Writing
-    into a frontmatter key that is not a ledger and not being able to take it
-    back is the defect, and widening the revert refusal would only have widened
-    the asymmetry."""
+    Only masked value lines are protected, so ordinary metadata remains
+    reversible. Preserve the legacy standalone asr_note-line exclusion.
+    """
     lines = content.split("\n")
-    flags = [ln.startswith("asr_note:") for ln in lines]
-    if lines and lines[0].lstrip("﻿").strip() == "---":
-        for i in range(1, len(lines)):
-            if lines[i].strip() == "---":
-                break
-            m = _FRONTMATTER_KEY_RE.match(lines[i])
-            flags[i] = bool(m) and m.group(1) == "asr_note"
-    return flags
+    masked, _ = _mask_ledger_spans(content)
+    projected = masked.split("\n")
+    return [line.startswith("asr_note:") or line != projection
+            for line, projection in zip(lines, projected)]
 
 
 def _revert_one_body_occurrence(
@@ -2109,8 +2086,7 @@ def _revert_one_body_occurrence(
     new_content is None when nothing was written.
 
     The ledger is excluded on both sides of the count: a new form that
-    survives ONLY in an asr_note line is a ledger citation, not an un-reverted
-    edit — reverting it would corrupt the audit trail (#2241, 2026-09-20).
+    survives only in protected audit data is not an un-reverted body edit.
 
     The count has to be exact in BOTH dimensions. Counting lines alone let a
     line carrying the replacement text twice through as "reverted": the accept
@@ -2139,7 +2115,7 @@ def _revert_one_body_occurrence(
         if any(new_text in ln for ln, is_ledger in zip(lines, ledger) if is_ledger):
             return None, (
                 "not reverted: the replacement text survives only in the "
-                "asr_note ledger, which quotes old forms on purpose — leave "
+                "audit metadata (asr_note ledger / asr_pending), which quotes old forms on purpose — leave "
                 "the ledger alone and revert the body by hand if needed"
             )
         if new_text in content:
