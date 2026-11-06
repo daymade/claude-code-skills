@@ -150,9 +150,8 @@ word, so it's a deterministic fix and went to the dictionary via
      `不用改` / `别改` / `无需修改`.
    A trap the parser can't read is a trap that never gets scanned — when in
    doubt, run `--scan-traps` once and check the entry count in the header.
-   The scanner masks a single-line leading-frontmatter `asr_note` value, because
-   it cites old forms as correction provenance; multi-line ledger values are
-   not masked. In a complete leading frontmatter block it also excludes machine
+   The scanner applies the [protected audit boundary](native_metadata_provenance.md#protected-audit-values).
+   In a complete leading frontmatter block it also excludes machine
    `url`, `id`, `ids`, `status` fields and their underscore-suffixed forms,
    including indented continuations. Titles, keywords, source descriptions and
    body text remain in scope. Matching remains literal and case-sensitive;

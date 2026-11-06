@@ -465,6 +465,8 @@ For explicit single-task speaker-inference requests, load
 Use [transcript-fixer](daymade-audio/transcript-fixer/SKILL.md) for transcript
 correction. Its Native workflow owns evidence selection, selective human escalation,
 and correction/finalization order;
+for frontmatter edits, reruns or reversals, enter
+[metadata provenance](daymade-audio/transcript-fixer/references/native_metadata_provenance.md).
 [Native review packets](daymade-audio/transcript-fixer/references/native_review_packets.md)
 owns split, batch, and resumed review instructions; first-pass and cold reviewers
 use its [occurrence-specific evidence](daymade-audio/transcript-fixer/references/native_review_packets.md#occurrence-specific-evidence).
@@ -637,7 +639,7 @@ details belong in [the transport and receiver-evidence SOP](peer-message/referen
 Enter that SOP when diagnosing delayed Codex coordination or comparing live and queued receipts.
 Before asking about mutable ownership or a publication window, use the
 [fresh-state preflight](peer-message/references/coordination-and-learning-loop.md#51-发现别人的在制品先核实再问等一个有界窗口).
-For an inbound coordination envelope, a native reply or a receive-integrity error, follow
+For an inbound coordination envelope, a native reply, original-input capture or a receive-integrity error, follow
 [receive, reply and closure](peer-message/references/local-coordination.md#收件回信和关闭).
 For a known inbound `peer-message` envelope ID in Codex, use the
 [original-envelope receive recipe](peer-message/references/local-coordination.md#从-codex-入站原件接收).
