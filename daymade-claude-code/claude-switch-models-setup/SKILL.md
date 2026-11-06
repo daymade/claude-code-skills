@@ -302,9 +302,33 @@ do not infer those values from a hand-maintained template summary.
 
 Templates contain non-secret provider settings. Configurable gateways also use `<BASE_URL>`; the MiniMax templates pin the documented regional endpoint. Resolve required values through setup step 4: on an owner-authorized machine, first reuse the registered source and binding; a new user supplies their own valid key and never receives the maintainer's. Put the key only in the explicit export binding, and fill only non-secret values into the settings file. Existing legacy JSON credentials remain supported for reading; do not generate a new in-file credential.
 
-MiniMax-M3 supports adaptive or disabled thinking; keep `ANTHROPIC_REASONING_MODEL`
-on the same model. MiniMax-M2.7 thinking is always on; do not claim a
-template-level disable path. Read model and context values from the chosen template.
+For new MiniMax profiles, recommend `minimax.json` (global) or `minimax-cn.json`
+(China) first. These select **MiniMax-M3.1-Flash**. The explicit M3 alternatives
+are `minimax-m3.json` and `minimax-m3-cn.json`. Match the API key to its regional
+endpoint. All four use `[1m]` for Claude Code's 1M context handling; the actual
+API model IDs omit that suffix.
+
+Flash templates enable thinking and pin `CLAUDE_CODE_EFFORT_LEVEL=max`.
+The expected request uses `thinking.type=adaptive` and `output_config.effort=max`.
+When upgrading Claude Code, maintainers can rerun the localhost wire tests from
+the repository root; installed Skill bundles do not include this test suite:
+
+```bash
+CSMS_RUN_CLAUDE_WIRE_TESTS=1 python3 -m unittest discover \
+  -s daymade-claude-code/claude-switch-models-setup/tests \
+  -p test_minimax_profiles.py -v
+```
+
+Flash also accepts `low`, `medium`, `high`, and `xhigh` effort. Do not disable
+Flash thinking (`none`/`disabled` is rejected). For an explicit non-thinking
+workflow, choose M3 and set `alwaysThinkingEnabled` to `false`; keep
+`ANTHROPIC_REASONING_MODEL` on the same model. See the
+[MiniMax API contract](https://platform.minimax.io/docs/api-reference/text-anthropic-api).
+
+Do not replace a saved model or custom endpoint when adding templates. M2.7
+examples remain under `assets/templates/legacy/` for explicit legacy requests
+only, outside the active catalog. Their thinking is always on; do not claim a
+template-level disable path. Read exact values from the chosen template.
 
 ## Configuring Context Window Size
 
