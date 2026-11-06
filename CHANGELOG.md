@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.21.36 → v1.21.37): Add media-state journey cases for playback geometry, seeking, tall-image notices, exact source/preview identity and native downloaded-file validation. Change type: sampled acceptance-recipe extension; existing audit profiles and browser owners remain intact.
+
 - **pdf-creator** (`daymade-docs` v1.29.4 → v1.29.5): Correct the documented lint/preview/checklist order and automation opt-out; keep maintainer testing linked to its canonical QA, runtime and Python contracts.
 - **github-ops** (v1.16.0 → v1.16.1): Keep squash-message requirements with the review owner; align project routes for encoding acceptance, fork CI admission and branch retirement without duplicating their rules.
 

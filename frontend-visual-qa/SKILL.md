@@ -453,6 +453,11 @@ Also verify, when applicable:
 - print/PDF -> real Chrome preview -> nonblank pages;
 - Electron/native -> canonical app process/window -> native controls and shell.
 
+For a media library, evidence/review viewer or a video-download complaint, load
+[media playback and output cases](references/media-playback-and-output.md)
+before choosing samples. It covers poster-to-playback geometry, portrait/landscape,
+image notices, compatible previews, source identity, seeking and actual downloaded bytes.
+
 Load
 [references/journey-and-page-contracts.md](references/journey-and-page-contracts.md)
 when the audit includes state transitions, authorization, modes,
