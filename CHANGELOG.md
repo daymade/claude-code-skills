@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **github-ops** (v1.15.5 → v1.16.0): Diagnose missing checks and approve only the reviewed fork workflow run within its execution authorization; route squash-message review and distinguish fork editing from authorized exact-tip branch retirement.
+- **qa-expert** (v1.2.11 → v1.2.12): Add selected non-UTF-8 subprocess, multilingual output and actual backend/branch witnesses to runtime compatibility acceptance.
+- **pdf-creator** (`daymade-docs` v1.29.3 → v1.29.4): Document the source-only test environment and affected native-backend acceptance without expanding installed converter dependencies.
+
 - **pdf-creator** (`daymade-docs` v1.29.2 → v1.29.3): Find Chrome and Microsoft Edge in Windows installation directories; preserve Unicode through pandoc and Poppler; skip optional typography lint when `pdfinfo` or `pdftotext` is missing. Fixes #1157.
 - **claude-switch-models-setup** (`daymade-claude-code` v5.1.1 → v5.1.2): Recommend MiniMax-M3.1-Flash for new global/China profiles with adaptive thinking and max effort; retain explicit M3 alternatives, legacy requests and export-bound credentials. Verify real launcher requests and distinguish source-only maintainer tests from installed bundles. Fixes #1107.
 - **tunnel-doctor** (v1.17.13 → v1.17.14): Replace the snap-to-apt remote installer with signed repository preparation and apt installation; require alternate access and successful package download before removing snap. Limit named refusal codes to their observed scope. Fixes #1379.
