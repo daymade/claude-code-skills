@@ -32,6 +32,7 @@ distinguishes them.
 | Path classification and resolution | Compare rooted-without-drive, drive-absolute and relative inputs with the promised implementation under fixed base/current directories. Use its actual path API and the candidate's real path parser. | Compare exact paths/classifications at the same API boundary. Preserve literal input where the contract does; resolve only the inputs the target resolves. Healthy absolute and relative cases remain correct. |
 | Version or implementation difference | Run the discriminating input through the supported runtime versions or standard implementations; record their identities and outputs. | A host-specific substitute cannot stand in for an untested supported implementation. If it is unavailable, retain that gap while testing available paths. |
 | Required runtime capability | Before long validation, run a small operation through the actual selected interpreter in the affected job's platform and execution context; record its version/build and the required API. | A supported version string or a present symbol alone cannot establish readiness. A missing API or rejected operation leaves that job explicitly `not_ready`; a healthy control must complete the operation and release its resources. Keep unrelated jobs on their existing path. |
+| Subprocess text encoding | Run the affected producer/consumer boundary under the supported host encoding with multilingual input and output; include a non-UTF-8 host when relevant. | Compare exact decoded content, including metadata and body. Exit 0 and an existing artifact do not establish text preservation. Keep a UTF-8 healthy control. |
 
 For a Linux job requiring `os.pidfd_open`, two interpreter builds in the supported
 Python 3.12 series can differ in API availability. Probe the selected interpreter
@@ -64,6 +65,38 @@ Capture the oracle's output for the selected runtime and environment before
 evaluating the candidate. Do not hard-code a maintainer's current directory or
 generalize modeled path-module results to native Windows drive state.
 
+### Select encoding and execution-path cases
+
+Select these cases when a text-producing subprocess or platform-specific backend
+changes. Trace the user operation through each affected pipe before choosing the
+cases; fixing one pipe does not establish that later consumers preserve its text.
+
+For a Markdown-to-PDF pipeline, bind separate assertions to Markdown sent to
+Pandoc, HTML returned from Pandoc, and metadata/text returned from Poppler.
+Use synthetic mixed Chinese/ASCII content that differs visibly when corrupted.
+Exercise a real child pipe under `cp936` and `cp1252` where these host defaults
+are supported or deliberately modeled; setting a parent variable alone does not
+prove a child used that encoding. When tools promise UTF-8, verify both their
+output-encoding option where needed and the caller's explicit pipe encoding.
+Compare exact source text, extracted PDF text and metadata; inspect a rendered
+page for the affected visible-output claim. Label modeled pipes separately from
+native Windows application execution.
+
+Include missing optional tools and tools present as distinct cases. In a PDF
+converter, cover `pdftotext` present with `pdfinfo` absent, both absent and both
+present; the optional check must skip safely when its prerequisites are missing
+and actually execute with them present. Do not use `--no-preview` to verify a
+post-render lint that this flag also disables. Trace the real caller's condition
+and record a positive witness that the affected branch ran.
+
+For Chrome/Edge discovery, record the selected executable path and actual launch,
+then corroborate the resulting artifact where it exposes producer identity.
+A case named “Edge” that launches Chrome has not tested Edge. Isolate the
+test-owned discovery environment or use a dedicated machine without replacing
+the selector being accepted; preserve existing browser processes and profiles.
+Reuse this selection principle for other backends without requiring an unrelated
+backend matrix.
+
 ## Calibrate and report
 
 Run the original faulty behavior or a test-owned mutation through the same
@@ -72,6 +105,10 @@ controls. For the selection row, a cross-platform union must fail. For the path
 row, unconditionally resolving a rooted input against the supplied base must
 fail when that differs from the promised output. A mutation that only changes
 an unrelated helper does not calibrate the asserted behavior.
+
+For encoding, confirm that implicit host decoding corrupts or rejects the known
+multilingual bytes while explicit UTF-8 preserves them. For execution-path cases,
+reject the wrong executable and a bypassed check even if the outer command exits 0.
 
 Report the exact compared outputs, examined cases and runtime versions. Label
 real path-module execution with modeled filesystem inputs as such: it does not
@@ -84,6 +121,7 @@ These checks support compatibility claims, not adoption or retention claims.
 ## Sources
 
 - [Python path modules and version-specific `isabs`](https://docs.python.org/3.13/library/os.path.html#os.path.isabs)
+- [Python subprocess text-mode encoding](https://docs.python.org/3/library/subprocess.html#subprocess.Popen)
 - [Python 3.12 `os.pidfd_open` and Linux availability](https://docs.python.org/3.12/library/os.html#os.pidfd_open)
 - [Node.js platform-specific path APIs](https://nodejs.org/api/path.html#pathwin32)
 - [Node.js v24.14.0 normalization and resolution](https://nodejs.org/download/release/v24.14.0/docs/api/path.html#pathnormalizepath)

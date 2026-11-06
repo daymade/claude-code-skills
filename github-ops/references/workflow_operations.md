@@ -354,6 +354,59 @@ gh workflow run deploy.yml \
 
 ## Monitoring and Debugging
 
+### Resolve missing checks and fork approval
+
+Treat `no checks reported` as an observation, not a passing result or a test
+failure. Read the current PR head, then list the repository's workflow runs for
+that exact head, following pagination:
+
+```bash
+HEAD_SHA=$(gh pr view NUMBER -R OWNER/REPO --json headRefOid --jq .headRefOid) || exit 1
+gh api -X GET "repos/OWNER/REPO/actions/runs?head_sha=$HEAD_SHA&per_page=100" \
+  --paginate --jq '.workflow_runs[] | {id,event,path,head_sha,status,conclusion,run_attempt}'
+```
+
+Classify the observed run before taking action:
+
+| Observation | Next action |
+|---|---|
+| No matching run | Inspect event/path filters and the required workflow. Keep CI unrun or unknown until its actual cause is established. |
+| `action_required` | Inspect the run/UI for a fork-contributor approval requirement. A different approval cause needs its own procedure. |
+| Queued or in progress | Observe the existing run; do not approve or rerun it to create another attempt. |
+| Failed or never started | Inspect jobs, steps and annotations. Distinguish a test failure from installation, budget or runner admission failures. |
+
+For a fork-contributor approval, bind the base repository, PR, current reviewed
+full head SHA, run ID and workflow path. Read that workflow and its invoked
+scripts and actions at the reviewed revision; inspect token permissions, secrets,
+event context and runner trust, especially self-hosted execution of fork code.
+Use existing task authorization only when it covers this execution and cost.
+Unknown prerequisites remain pending; do not enable repository-wide automatic
+approval or change the trust boundary to clear one run.
+
+Immediately reread the PR head and run's `head_sha`, event and approval state.
+If the head moved or the run is not the reviewed one, reassess before approving.
+Pass the named write through the checked invocation from the Skill entry:
+
+```bash
+uv run python <github-ops-dir>/scripts/checked_gh.py \
+  --expected-login EXPECTED_LOGIN --host HOST -- \
+  api --method POST repos/OWNER/REPO/actions/runs/RUN_ID/approve
+gh api -X GET repos/OWNER/REPO/actions/runs/RUN_ID \
+  --jq '{head_sha,status,conclusion,run_attempt}'
+gh run watch RUN_ID -R OWNER/REPO --exit-status
+gh pr checks NUMBER -R OWNER/REPO --watch
+```
+
+Require independent evidence that the same reviewed head actually started and
+all required checks succeeded; approval acceptance alone is insufficient. If
+approval times out, reread that run before retrying. Recheck the live PR head
+before landing. Keep workflow approval separate from PR review approval, merge
+bypass and environment/deployment approval.
+
+Consult the [fork-run approval API](https://docs.github.com/en/rest/actions/workflow-runs#approve-a-workflow-run-for-a-fork-pull-request)
+and [fork approval guidance](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/approve-runs-from-forks)
+for the current endpoint and execution constraints.
+
 ### Diagnose a prerequisite failure before rerunning
 
 Bind the investigation to the run's exact `head_sha` and the failed job/step.

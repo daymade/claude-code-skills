@@ -19,6 +19,10 @@ recipient guide, read [the illustrated-manual workflow](references/illustrated-m
 before drafting. Continue through this Skill's normal theme, backend and
 visual self-check requirements after assembling the Markdown source.
 
+For source changes, follow [maintainer testing](references/maintainer-testing.md)
+for the complete test environment and native-backend acceptance. Keep this
+source-checkout workflow separate from ordinary installed-Skill use.
+
 ## Quick Start
 
 Every `scripts/…` path below is **relative to this skill's own directory** — run the commands from there, or substitute the absolute path. Running them from the directory holding your markdown fails with `Failed to spawn: 'scripts/md_to_pdf.py'`. Omitting the output path is allowed and derives it from the input's basename (`input.md` → `input.pdf`, in the input's directory).
