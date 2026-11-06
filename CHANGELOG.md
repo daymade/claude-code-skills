@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **debugging-network-issues** v1.11.10: Correct paired-probe causal limits and curl sample criteria. Accept completed, verified exit-0 Range responses and payload-bearing exit-28 samples; reject error responses and zero-byte timeouts.
+- **tunnel-doctor** v1.17.15: Compare macOS system resolution with dig, reject error-bearing route output despite exit 0 while retaining valid network routes, and document exact identity checks before retiring task-owned host routes.
+
 - **frontend-visual-qa** (v1.21.35 → v1.21.36): Verify complete multiline request/log rows against horizontal and vertical clipping, preserve exact identifiers and count meaning, and follow the row's original-record action through matching content.
 - **data-visualization-discipline** (v1.1.9 → v1.1.10): Distinguish valid historical-window samples from expired native sampling, preserve per-source clock ownership, and retain current-snapshot and missing-clock controls.
 - **github-ops** (v1.15.5 → v1.16.0): Diagnose missing checks and approve only the reviewed fork workflow run within its execution authorization; route squash-message review and distinguish fork editing from authorized exact-tip branch retirement.

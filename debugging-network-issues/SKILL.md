@@ -52,7 +52,7 @@ If the answer is "nothing" or "I cannot think of one", the hypothesis is unfalsi
 
 Multi-hop systems (client → CDN → LB → reverse proxy → app → upstream) concentrate bugs at the seams between layers. When a symptom could plausibly come from several layers, **do not reason about which layer; test**. Compare the same logical request across verified paths, name every changed hop, and attribute only the isolated difference. For intermittent failures, use a bounded return to the original condition before treating a successful variation as causal evidence. Read [references/layered-isolation-experiment.md](references/layered-isolation-experiment.md) for path design and A/B/A interpretation.
 
-**The same technique isolates capacity, not just correctness.** When the symptom is a rate rather than an error, vary the *stack* instead of the *hop*: measure the same direction over two channels that share the network path but share no application code. It is the cheapest way to stop tuning an application that was never the bottleneck. Resist compressing the reading into "agreement means the path" — that holds only when both channels are *slow*; two fast channels mean the probe failed to reproduce the symptom and prove nothing at all. See Step 0.7 for how to read each of the four outcomes.
+**The same technique isolates capacity, not just correctness.** When the symptom is a rate rather than an error, vary the *stack* instead of the *hop*: measure the same direction over two channels that share the network path but share no application code. Two slow channels make a shared-path limit the leading hypothesis; they do not exclude an application or workload factor common to both. A fast control supports a conclusion only for the transport, route and workload it actually matched. Two fast channels mean the probe did not reproduce the reported symptom, not that the incident is disproved. See Step 0.7 for how to read each of the four outcomes.
 
 ### 4. Counter-review before committing
 
@@ -208,19 +208,22 @@ For device or wired/Wi-Fi comparisons, load [device throughput fieldwork](refere
 
 **The decisive experiment: two independent channels, same direction, same time budget.**
 
-This is Principle 3's layered isolation applied to capacity instead of correctness. Pick two channels that reach the same host over the same network path but share **no application code** — the point is that a result they agree on cannot be caused by either one's internals.
+This is Principle 3's layered isolation applied to capacity instead of correctness. Pick two channels that reach the same host over the same network path but share **no application code**. Agreement supports a shared-path limit, but it does not exclude an application/workload factor common to both channels or independent application bottlenecks. For either channel to serve as a fast control, record whether its transport, route and workload match the slow channel; an unmatched control supports a conclusion only about the conditions it actually exercised.
 
-Both commands below are **time-budgeted, not size-budgeted**: they stream for a fixed number of seconds and report whatever arrived. That keeps the probe's cost constant no matter how bad the link is — a fixed 8 MB payload took under a second on the healthy path in the case study and about 90 seconds on the degraded one, and a degradation deeper than that scales the wait without bound, exactly when you can least afford it. It is also why the two numbers are comparable: same seconds, same direction, both measured **at the receiving end**.
+Both commands below are **time-budgeted, not size-budgeted**: they stream for a fixed maximum number of seconds and report whatever arrived. That keeps the probe's cost bounded no matter how bad the link is — a fixed 8 MB payload took under a second on the healthy path in the case study and about 90 seconds on the degraded one, and a degradation deeper than that scales the wait without bound, exactly when you can least afford it. Use each channel's observed elapsed time: a complete curl transfer may exit 0 before the cap, while a valid bounded sample uses the time actually received. Comparability comes from the same direction and receiving-end rate measurements, not from pretending every probe consumed the full budget.
 
 ```bash
 BUDGET=20
 
 # Channel A — the service under suspicion. Point it at the largest object you can name.
-# --max-time aborts mid-transfer; -w still prints, and curl exits 28. That is a
-# successful measurement, not a failure — read the rate, ignore the exit code here.
-curl -s -o /dev/null --max-time "$BUDGET" \
-  -w 'A: %{size_download} B in %{time_total}s = %{speed_download} B/s\n' \
-  "http://<host>:<port>/<a-large-object>"
+# Keep the body for payload validation. Capture curl's exit status before running
+# another command; neither exit 0 nor exit 28 is sufficient by itself.
+A_BODY=$(mktemp "${TMPDIR:-/tmp}/throughput-a.XXXXXX")
+A_RC=0
+curl -sS -o "$A_BODY" --max-time "$BUDGET" \
+  -w 'A: %{size_download} B in %{time_total}s = %{speed_download} B/s; HTTP %{http_code}\n' \
+  "http://<host>:<port>/<a-large-object>" || A_RC=$?
+echo "A curl exit: $A_RC"
 
 # Channel B — a completely different stack to the same host. `cat /dev/zero` streams
 # until cut off, so the byte count is decided by the link, not by the payload size.
@@ -230,21 +233,21 @@ echo "B: $B B in ${BUDGET}s = $((B / BUDGET)) B/s"
 
 > **Do not substitute `dd`'s own summary line for channel B's number.** `dd if=/dev/zero … ` reports how fast it wrote into *its stdout*, which for a piped SSH transfer is absorbed by the pipe and SSH's channel window — it measures the local write, not the wire, and it never sees connection setup. Measured on the case study's healthy path, raw SSH moved 33.6 MB end-to-end at 44 MB/s while `dd` self-reported 54.9 MB/s on the same transfer. A sender-side rate is an upper bound on the wire rate, never a measurement of it. Time the whole invocation from the receiving end, as above.
 
-**Expect the two channels to disagree in absolute terms — that is not a problem.** On the same healthy path, raw SSH measured ~44 MB/s while fetches through the media service measured 11–16 MB/s, because channel A pays for the service's own read and encode work on top of the wire. This is why the decision rule below is about **order of magnitude**, not equality: what you are testing is whether both channels sit in the same band, not whether they print the same number. Two channels that differ by 3× on a healthy link and both collapse to 0.1 MB/s on a degraded one have told you exactly what you needed.
+**Expect the two channels to disagree in absolute terms — that is not a problem.** On the same healthy path, raw SSH measured ~44 MB/s while fetches through the media service measured 11–16 MB/s, because channel A pays for the service's own read and encode work on top of the wire. This is why the decision rule below is about **order of magnitude**, not equality: what you are testing is whether both channels sit in the same band, not whether they print the same number. Two channels that differ by 3× on a healthy link and both collapse to 0.1 MB/s on a degraded one suggest a shared constraint; check common application/workload factors and path evidence before treating that as causation.
 
-**Before reading the table, confirm both probes actually ran.** This is trap 17 applied to your own recipe, and it is the easiest way to get a confidently wrong answer here: a probe that never transferred anything produces a *low or zero rate*, which the table below reads as "slow" and routes straight to "the path" — a conclusion drawn from a measurement that never happened. Two checks, both cheap:
+**Before reading the table, confirm both probes actually ran.** This is trap 17 applied to your own recipe, and it is the easiest way to get a confidently wrong answer here: a probe that never transferred anything produces a *low or zero rate*, which can be misread as "slow" and push the investigation toward a shared-path hypothesis — a conclusion drawn from a measurement that never happened. Two checks, both cheap:
 
-- **Channel A**: is `size_download` close to the object's real size? A DNS failure (curl exit 6), a refused connection (exit 7), or a 404 error page all return quickly and tiny — which can even read as *fast* and land you in the wrong row from the other direction. Only exit 28 (`--max-time` fired mid-transfer) means "the measurement is good, the object was just bigger than the budget".
-- **Channel B**: is `$B` plausibly non-zero? `2>/dev/null` in that command hides SSH's own errors, so a host you cannot authenticate to yields `B=0` silently. Re-run it once without `2>/dev/null` if the number looks wrong.
+- **Channel A**: require the expected HTTP status and intended payload, not just a byte count. Exit 0 is a valid complete measurement only when the complete expected object — or the exact requested `Range` — arrived and its payload was verified by the object's own format, known content or digest. Exit 28 can yield a valid **bounded** sample only when `$A_BODY` contains intended-object bytes that actually arrived before the deadline; use the observed `time_total` and do not call the object complete. DNS/connection/TLS errors, zero bytes, redirects to a login page, and error bodies are invalid measurements, regardless of how fast or slow they were. Remove the temporary body after the payload check.
+- **Channel B**: is `$B` plausibly non-zero? `2>/dev/null` in that command hides SSH's own errors, so a host you cannot authenticate to yields `B=0` silently. Re-run it once without `2>/dev/null` if the number looks wrong. Authentication/command errors and zero bytes are not slow-throughput measurements.
 
 Read the result as a four-way test — all four outcomes are reachable, and three of them tell you to stop what you were about to do:
 
 | Channel A | Channel B | Conclusion |
 | --- | --- | --- |
-| slow | slow | **The path.** Two unrelated stacks cannot be slow for unrelated reasons at the same rate. Stop tuning the application — nothing inside it will help. Go to "what changed about the path" below. |
-| slow | fast | **The application/service.** The path can clearly move bytes; A cannot. You now have a working control to bisect against. |
-| fast | slow | **Neither conclusion yet — your control is the anomaly.** SSH-specific cost (cipher on a weak CPU, a hop that shapes SSH), or B crossed a different path. Do not conclude "the service is fine"; replace B with a third stack and re-run. |
-| fast | fast | **The probe did not reproduce the symptom.** Do not declare the incident closed. The real workload differs in some dimension you have not replicated — direction (upload vs download), concurrency, object size, or time of day. Change one of those and re-measure before believing the green result. |
+| slow | slow | **A shared-path limit is likely, not proven.** Application/workload factors common to both channels and independent application bottlenecks remain possible. Confirm the shared transport/route and inspect those factors before changing the path; do not treat A-only tuning as futile on this evidence alone. If path evidence confirms the hypothesis, go to "what changed about the path" below. |
+| slow | fast | **A-specific application/service or path is suspect only under a matched control.** If B matched A's transport, route and workload, its fast result supports an A-side bottleneck. Otherwise it establishes only that B's tested conditions were fast; align the control before acquitting A's path. |
+| fast | slow | **Neither conclusion yet — your control is the anomaly.** A's fast result is scoped to its tested transport/route/workload. Check SSH-specific cost (cipher on a weak CPU, a hop that shapes SSH), or whether B crossed a different path. Do not conclude "the service is fine"; replace B with a third stack and re-run. |
+| fast | fast | **The probe did not reproduce the symptom.** Both green results are scoped to the transport/route/workload actually tested. The real workload differs in some dimension you have not replicated — direction (upload vs download), concurrency, object size, or time of day. Change one of those and re-measure before believing the green result. |
 
 **How close is "the same rate"?** Treat agreement within **~20%** as the same rate for this purpose — the two channels differ in framing, encryption and per-object overhead, so exact equality is not expected and not required. The judgement is order-of-magnitude: two stacks reading 0.09 and 0.11 MB/s agree; 0.1 and 12 MB/s do not. If the gap is between ~20% and ~2×, treat it as unresolved and widen the budget or the object size rather than picking a side.
 
