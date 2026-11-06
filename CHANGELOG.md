@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **transcript-fixer** (`daymade-audio` v1.57.4 → v1.57.5): Use one metadata-provenance contract across correction, scanning and review reversal; preserve pending audit values when undoing a body edit and keep ordinary metadata reversible.
+- **peer-message** (v1.24.8 → v1.24.9): Preserve UTF-8 envelope LF/CRLF bytes through both file and stdin receive paths; align the operating entry with original-input capture.
+
 - **git-safety-net** (v1.27.0 → v1.27.1): Route stash export/recovery and original-inventory closeout from the project instructions to their owning SOPs; resolve bundled scripts explicitly and qualify stash drop order with a fresh identity check. Consolidate recovery details without changing executable behavior.
 
 - **local-codex** (`daymade-codex` v2.4.5 → v2.4.6): Keep routine account switching within a user-to-readback 60-second operation lane, with target-scoped refresh and no in-lane engineering; preserve formal TaskSpace ownership and the original native deadline when user verification interrupts browser automation. Change type: bounded recovery-guide correction.
