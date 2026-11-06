@@ -89,7 +89,8 @@ For file-backed persistence and CLI acceptance (including wrapper argument forwa
 and compatibility aliases), transaction recovery tests,
 financial migration/fixture acceptance, admission/recovery bindings, runtime compatibility or project-bound release acceptance, enter
 [qa-expert](qa-expert/SKILL.md); its test-case routes select the detailed recipes.
-For required runtime capability probes, path normalization or drive-relative adapter cases,
+For required runtime capability probes, path normalization, drive-relative adapter cases,
+subprocess encoding or actual backend-execution acceptance,
 follow its [runtime compatibility recipe](qa-expert/references/runtime-compatibility-acceptance.md)
 and select the affected boundary before starting validation.
 
@@ -419,6 +420,8 @@ test failures and temporary-Git cleanup, follow [CI operations](references/ci-op
 
 For CI demand, notification overload, exhausted allowance or repeated validation,
 enter [github-ops' CI demand workflow](github-ops/references/ci-demand-and-notifications.md).
+For missing PR checks or fork runs awaiting approval, follow
+[the run-state diagnosis](github-ops/references/workflow_operations.md#resolve-missing-checks-and-fork-approval).
 For self-hosted routing, resource limits or cache persistence, follow its
 [runner acceptance](github-ops/references/workflow_operations.md#self-hosted-runner-capacity-and-acceptance).
 Keep demand selection, validation-reuse and capacity acceptance in those owners.
@@ -885,14 +888,9 @@ For hosted-state writes through `gh`, follow its
 before using an operation recipe. For historical account or connector attribution,
 use the [identity-source contract](tibo-reset-codex/references/account-usage.md#区分身份来源与观察时刻).
 
-For closing an unmerged PR (declined or superseded), use `github-ops`'s
-[branch retirement workflow](github-ops/references/pr_operations.md#4-retire-remote-branches-only-against-an-exact-saved-tip).
-It owns head-repository identity, deletion authority/capability, exact-tip cleanup
-and reporting a retained external fork branch. `gh pr merge --delete-branch`
-only covers merged PRs.
-Apply that same owning workflow after merge-adjacent cleanup failures or a strict
-up-to-date refusal; it owns exact-tip preservation, independent absence readback
-and history-policy recovery.
+For closing an unmerged PR, retiring its head, merge-adjacent cleanup failures
+or a strict up-to-date refusal, follow
+[the branch retirement workflow](github-ops/references/pr_operations.md#converging-parallel-prs-and-retiring-remote-branches).
 For sensitive publication residuals, first enter `github-sensitive-data-cleanup`'s
 [surface selection](github-sensitive-data-cleanup/SKILL.md#step-05-bind-each-exposed-surface);
 approved PR body revision removal follows `github-ops`'s

@@ -8,7 +8,8 @@ source checkout before continuing; do not silently download another test suite.
 
 ## Prepare the selected checks
 
-Use Python 3.10+ and `uv`. Inspect the selected tests' native prerequisites before
+Follow the repository's [Python requirements](https://github.com/daymade/claude-code-skills/blob/main/CLAUDE.md#python-development)
+and use `uv`. Inspect the selected tests' native prerequisites before
 running: Pandoc for Markdown conversion; Poppler (`pdfinfo`, `pdftotext`,
 `pdftoppm`) for PDF text, metadata and raster checks; a working WeasyPrint system
 runtime for its integration cases; and the actual Chrome/Edge installation for
@@ -28,8 +29,8 @@ uv run --isolated --no-project \
   python -m pytest scripts/tests -q
 ```
 
-Use the same environment for a bounded selection by appending the test node/path
-to the pytest invocation instead of `scripts/tests`. Preserve the exit status
+Use the same environment for a bounded selection by replacing `scripts/tests`
+with the selected test path or node. Preserve the exit status
 and inspect skipped tests and failures. Clear collection/import failures before
 claiming any test result. Keep these development dependencies separate from
 ordinary converter requirements; Chrome rendering does not require this whole
@@ -39,19 +40,9 @@ test environment.
 
 For encoding or Windows discovery changes, enter
 [QA runtime compatibility acceptance](https://github.com/daymade/claude-code-skills/blob/main/qa-expert/references/runtime-compatibility-acceptance.md#select-encoding-and-execution-path-cases).
-Preserve the original input and expected visible text before testing. Record
-the actual executable invoked; `--backend chrome` can select Chrome or Edge and
-does not establish which executable ran. Keep modeled discovery/pipe tests
-distinct from native Windows rendering.
-
-Use a synthetic mixed Chinese/ASCII document with Unicode metadata and a small
-table. Check exact extracted text and metadata, inspect the rendered page, and
-follow the Skill's existing visual/table-border checks. When changing optional
-Poppler handling, test tools missing and present. Keep previews enabled when
-accepting the post-render typography lint: `--no-preview` also disables that lint
-and cannot verify its missing-tool handling. Keep test profiles and output paths
-isolated without stopping existing browsers or altering user profiles.
-
-Reuse passing evidence for unchanged code and inputs. Finish after the affected
-failures, healthy controls and required native observations have evidence; report
-any required unavailable observation precisely.
+Bind the selected cases to the converter's
+[backend selection](../SKILL.md#backends) and
+[typography lint conditions](../SKILL.md#layer-2-typography-lint-post-render-detection-catches-the-rest).
+Include a small table in the fixture to exercise its table checks.
+Complete the [visual delivery checks](../SKILL.md#visual-self-check-mandatory--do-not-skip)
+on the resulting PDF.

@@ -190,11 +190,13 @@ For existing Word/WPS → PDF, use the docx-creator route above.
 
 ## Visual Self-Check (MANDATORY — Do Not Skip)
 
-**This is not optional.** After every PDF generation, the script automatically:
+**Visual inspection is mandatory.** When automatic self-checks run, the script
+performs them in this order:
 
-1. Converts each page to PNG via `pdftoppm` (poppler-utils) into a `<pdf-name>/` subdirectory under the **system temp dir** (NOT next to the PDF — previews are a throwaway self-check artifact and must never linger in your working tree / git repo). The run prints the directory as `Previews:` and an existing `First page:` path. Poppler may zero-pad page numbers according to the page count; enumerate the actual `page-*.png` files instead of constructing filenames.
-2. Prints a structured self-check checklist reminding the caller to visually inspect each page
-3. Runs typography lint to detect CJK line-break anti-patterns
+1. Run [typography lint](#layer-2-typography-lint-post-render-detection-catches-the-rest)
+   under its stated prerequisite conditions.
+2. Convert each page to PNG via `pdftoppm` (poppler-utils) into a `<pdf-name>/` subdirectory under the **system temp dir** (NOT next to the PDF — previews are a throwaway self-check artifact and must never linger in your working tree / git repo). Read the printed `Previews:` directory and existing `First page:` path. Poppler may zero-pad page numbers according to the page count; enumerate the actual `page-*.png` files instead of constructing filenames.
+3. Print the structured self-check checklist for page inspection.
 
 **Why mandatory**: "PDF generated cleanly" ≠ "rendering matches markdown intent". Common silent failures include:
 - Paragraphs collapsing into one (CommonMark soft-break on consecutive non-blank lines)
@@ -214,7 +216,8 @@ For existing Word/WPS → PDF, use the docx-creator route above.
 
 These checks do not catch everything. The PNGs come from `pdftoppm`, which renders CID Type 0C fonts that macOS Preview and Adobe Reader show as blanks — so a font-embedding defect can look perfect in step 1 and be unreadable on the recipient's machine. That one is handled by theme routing, not by looking (see "Backends"); the check to run by hand is in Troubleshooting under "Inline code with mixed CJK + ASCII".
 
-**Disable** with `--no-preview` for batch / non-interactive runs:
+**Disable automated lint and previews** with `--no-preview` for batch /
+non-interactive runs. This does not waive the delivery checks above:
 
 ```bash
 python scripts/md_to_pdf.py input.md output.pdf --no-preview
