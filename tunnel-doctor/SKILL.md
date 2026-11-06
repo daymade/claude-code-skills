@@ -717,7 +717,7 @@ Two things that wrapper must get right:
 
 **(C) "The SSH channel is down entirely" — a verdict shape to resist, not a mechanism.** A window of back-to-back SSH failures (`ssh.github.com:443` banner timeouts, port 22 also `Connection closed`) with HTTPS 100% clean looks like a new mechanism. It isn't: re-measured across windows the same host showed `ssh -T git@github.com` succeeding 75–84% over 25 attempts — mechanism (B)'s bad-window peak all along. **N consecutive failures inside one time window are not N independent samples**: forwarding instability is time-varying, and a bad window produces 5-in-a-row failures routinely. Before concluding "the channel is dead," re-measure minutes later.
 
-How much sampling is enough depends on the **shape of the refusal**, not the count of failures. A named policy code (e.g. an API returning `KEYLESS_ACCESS_NOT_AVAILABLE`) is the endpoint *stating a rule* — a few same-session samples settle it. A challenge page, a rate limit, or a connection reset is *state* — it drifts with time and IP reputation, so a same-window losing streak counts as one sample, and only a cross-window re-measure can separate "dead" from "bad window."
+How much sampling is enough depends on the **scope of the refusal**, not the count of failures. Read its payload and current provider contract before treating a named code as a universal rule: `KEYLESS_ACCESS_NOT_AVAILABLE` can refer to the calling address. A challenge page, a rate limit, or a connection reset is *state* — it drifts with time and IP reputation, so a same-window losing streak counts as one sample. Re-measure across windows and authorized egress before generalising beyond the observed condition.
 
 Two facts to keep regardless:
 
@@ -1082,12 +1082,25 @@ Wait: code=1
 
 **Fix** — replace snap with apt installation:
 
+Confirm a working console or another connection before removing snap: that step
+interrupts Tailscale. Read `/etc/os-release`, then follow the matching distribution
+and release on the [official package page](https://pkgs.tailscale.com/stable/) to
+configure its signing key and signed apt repository. Stop if no matching apt
+instructions exist; do not guess a distribution or pipe a remote installer into
+a shell. Keep apt signature verification enabled. Run the following commands
+one at a time and stop on any failure; complete the repository update and package
+download before removing the working snap installation.
+
 ```bash
+sudo apt-get update
+sudo apt-get install --download-only tailscale
+
 # Remove snap version
 sudo snap remove tailscale
 
 # Install apt version
-curl -fsSL https://tailscale.com/install.sh | sh
+sudo apt-get install tailscale
+sudo systemctl enable --now tailscaled
 
 # Start with SSH enabled
 sudo tailscale up --ssh
