@@ -83,7 +83,7 @@ Routing is pinned by `scripts/tests/test_backend_routing.py`. A theme you add yo
 | Backend | Install | Pros | Cons |
 |---------|---------|------|------|
 | `weasyprint` | `pip install weasyprint` | Precise CSS rendering, no browser needed, does not clip overflow | Subsets PingFang SC as CID Type 0C — unreadable in Preview/Adobe |
-| `chrome` | Google Chrome installed | Zero Python deps, renders PingFang correctly | **Clips anything past the @page box** (see below) |
+| `chrome` | Google Chrome installed, or Microsoft Edge on Windows | Zero Python deps, renders PingFang correctly | **Clips anything past the @page box** (see below) |
 
 Override with `--backend chrome` or `--backend weasyprint`; an explicit flag always wins over auto-detection.
 
@@ -234,7 +234,7 @@ This silently fixes the most common anti-pattern (cell content forcibly wrapped 
 
 ### Layer 2: Typography lint (post-render detection, catches the rest)
 
-After PDF generation, the script runs `pdftotext -layout` per page and scans for known CJK anti-patterns per "中文文案排版指北" (Chinese typography style guide):
+After PDF generation, when previews are enabled and both `pdfinfo` and `pdftotext` are available, the script runs `pdftotext -layout` per page and scans for known CJK anti-patterns per "中文文案排版指北" (Chinese typography style guide). If either tool is missing, skip this optional lint:
 
 - Single CJK character alone on a line (cell still too narrow even after Layer 1)
 - Line ending with `（` followed by content next line (broken bracket pair)
