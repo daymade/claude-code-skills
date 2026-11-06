@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **transcript-fixer** (`daymade-audio` v1.57.3 → v1.57.4): Preserve pending ASR audit values across reruns while correcting titles, keywords and spoken text with unchanged line numbers.
+- **peer-message** (v1.24.7 → v1.24.8): Save received envelopes without JSON reserialization or added terminal newlines; retain strict digest checks and verify original-input recovery.
+
 - **transcript-fixer** (`daymade-audio` v1.57.2 → v1.57.3): With explicit `--reanchor-to`, an existing old file and a target with identical whole bytes permit a path-only move. Stale anchors remain unresolved and retain the normal resolve-time checks; no transcript is edited.
 
 - **git-safety-net** (v1.26.0 → v1.27.0): Preserve frozen stash untracked-tree bytes, Git modes and symlink targets without archive attributes or content conversion; reconstruct recovered state from actual raw bytes. Require Python 3.10+ only for selected untracked-tree export/recovery while preserving bundle-only and no-third-parent paths.

@@ -107,6 +107,24 @@ class ReceiveIntegrityTests(unittest.TestCase):
         self.assertEqual(list(board.db.iterdump()), before)
         self.assertEqual(hashlib.sha256(board.path.read_bytes()).hexdigest(), before_bytes)
 
+    def test_receiver_added_newline_and_json_reserialization_are_not_originals(self):
+        for mutation in ("heredoc-newline", "json-spacing"):
+            with self.subTest(mutation=mutation), self.board() as board:
+                prepared = self.prepare(board)
+                original = prepared["body"]
+                if mutation == "heredoc-newline":
+                    changed = original + "\n"
+                else:
+                    match = re.search(r"^\[peer-coordination: (\{[^\n]*\})\]$", original, re.M)
+                    changed = original[:match.start(1)] + json.dumps(
+                        json.loads(match.group(1)), ensure_ascii=False
+                    ) + original[match.end(1):]
+                self.assert_rejected_unchanged(board, changed, "content conflicts")
+                path = self.root / f"original-{mutation}.txt"
+                path.write_bytes(original.encode("utf-8"))
+                result = board.receive(path.read_bytes().decode("utf-8"), "codex:receiver")
+                self.assertEqual(result["integrity"], "verified_prepared_core")
+
     def test_exact_native_and_current_historical_wrappers_preserve_core_whitespace(self):
         shapes = ("native", "codex", "codex-historical", "claude", "claude-codex-hint", "claude-no-reply")
         count = 0

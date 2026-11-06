@@ -200,6 +200,13 @@ python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord receive received.txt
 `ignore_expired/ignore_superseded/ignore_closed` 安静收下，不回 ACK、不申请新窗口。
 `legacy/unknown` 回到现有语义分流，保留覆盖缺口，不能丢掉新阻塞。
 
+保存的是宿主实际收到的完整字符串，包括 metadata 行、advisory、空行和末尾空白。
+从宿主事件或下方 inbox inspection 导出原字段，用 `write_bytes(envelope.encode("utf-8"))`
+保存；不要重排 metadata JSON、手抄正文或用 heredoc / `echo` 重建信封：它们可能补一个
+原文没有的末尾换行。不要对原文 `strip()`，原本存在的换行也属于内容。
+`content conflicts` 后保留失败输入，从原宿主事件重新取件并比较字节；只在取得原件后重试。
+不能靠试删空白、重算 prepared 摘要或换通道使冲突输入通过。仅剩手抄件时保留未核实状态。
+
 保留完整原信封；有本地 prepared 摘要时，receive 先核对正文及协调元数据，再领取或判断过期/关闭。`integrity=verified_prepared_core` 只证明与该本地准备记录一致，不证明发送者身份或用户授权。正文冲突、损坏摘要或不能识别的包装明确报错，保留输入和状态，不能按旧回执忽略，也不要重写正文凑过检查。无摘要的旧记录仍按旧生命周期处理并标 `unavailable_legacy_digest`；无协调字段标 `legacy_no_metadata`，都不补造摘要或有效期。正常的新消息仍使用自己的 ID 处理，不因话题相同被丢弃。
 
 确需回信时关联原 id；短时请求已过期/关闭时回信也会被发送前抑制：

@@ -142,7 +142,7 @@ def straddles_word_boundary(text: str, pos: int, match: str) -> bool:
 # that had to be resolved kept_original by hand). Keywords/frontmatter fields
 # NOT in this list (e.g. `keywords:`) are still processed — metadata is a
 # search surface too.
-_LEDGER_FRONTMATTER_KEYS = ("asr_note",)
+_LEDGER_FRONTMATTER_KEYS = ("asr_note", "asr_pending")
 # Sentinel anchoring contains no matcher-visible padding: a transcript body can
 # legitimately contain □ (checkbox glyph / illegible-speech convention), and a
 # rule for that symbol must never disable ledger protection.
@@ -157,7 +157,10 @@ def _mask_ledger_spans(text: str) -> Tuple[str, List[LedgerSpan]]:
     order. Each masked value becomes a unique sentinel. The projection need not
     preserve columns: Change.line_number counts newlines, and restore locates
     the sentinel rather than an absolute offset. Only the value
-    portion of a single-line `key: value` is masked. Multi-line YAML values
+    portion of a single-line `asr_note: value` is masked. `asr_pending` also
+    protects block sequences/scalars and their continuation lines, one sentinel
+    per line so scan projections retain the original line numbers. Multi-line
+    `asr_note` YAML values
     (`asr_note: |` / `>` / folded, optionally with a trailing `# comment`)
     are deliberately SKIPPED — no span is recorded and nothing is masked,
     because masking only the 1-char block indicator would be protection
@@ -179,8 +182,22 @@ def _mask_ledger_spans(text: str) -> Tuple[str, List[LedgerSpan]]:
     while marker_prefix in text:
         marker_prefix += "X"
     spans: List[LedgerSpan] = []
+    pending_continuation = False
     for i in range(1, close_idx):
         line = lines[i]
+        pending = re.match(r"^asr_pending:[ \t]*(.*)$", line)
+        if pending or (pending_continuation and (
+            not line.strip() or line.startswith((" ", "\t", "-", "#", "]", "}"))
+        )):
+            start = pending.start(1) if pending else 0
+            value = line[start:]
+            if value:
+                sentinel = f"{marker_prefix}{len(spans)}⟫"
+                spans.append((sentinel, value))
+                lines[i] = line[:start] + sentinel
+            pending_continuation = True
+            continue
+        pending_continuation = False
         m = re.match(r"^([A-Za-z_][\w-]*):\s+(.*)$", line)
         if not m or m.group(1) not in _LEDGER_FRONTMATTER_KEYS:
             continue
@@ -249,7 +266,7 @@ def reveal_ledger_values_for_reporting(
 
 
 def project_without_ledger_values(text: str) -> str:
-    """Return a scan projection with single-line ledger values removed.
+    """Return a line-preserving scan projection with audit values removed.
 
     Matchers that only need line numbers must not scan the ledger's old-form
     citations or Stage 1's reversible sentinel. This

@@ -89,6 +89,41 @@ class TestLedgerMasking:
         assert "title: Dyna讨论" in corrected
 
 
+@pytest.mark.parametrize("pending", [
+    "asr_pending: [丹娜, review-12]",
+    "asr_pending: 丹娜待核",
+    "asr_pending:\n  - original: 丹娜\n    candidates: [Dyna]\n    reason: 丹娜待核",
+    "asr_pending:\n- original: 丹娜\n  candidates: [Dyna]",
+    "asr_pending: |\n  丹娜待核",
+    "asr_pending: []",
+    "asr_pending: null",
+    "asr_pending:",
+    "",  # absent is different from an empty value
+])
+def test_pending_metadata_is_not_spoken_text(pending):
+    text = f"---\n{pending}\ntitle: 丹娜讨论\nkeywords: [丹娜]\n---\n丹娜在正文。\n"
+    corrected, changes = _processor().process(text)
+    assert corrected == text.replace("title: 丹娜", "title: Dyna").replace(
+        "keywords: [丹娜]", "keywords: [Dyna]"
+    ).replace("丹娜在正文", "Dyna在正文")
+    assert len(changes) == 3
+    assert changes[-1].line_number == len(text.splitlines())
+    rerun, new_changes = _processor().process(corrected)
+    assert rerun == corrected
+    assert new_changes == []
+    projected = project_without_ledger_values(text)
+    assert projected.count("\n") == text.count("\n")
+    assert "丹娜待核" not in projected
+    assert projected.count("丹娜") == 3
+
+
+def test_pending_mask_only_applies_in_leading_frontmatter():
+    text = "正文\nasr_pending: 丹娜\n"
+    corrected, changes = _processor().process(text)
+    assert corrected == "正文\nasr_pending: Dyna\n"
+    assert len(changes) == 1
+
+
 class TestMaskRestorePrimitives:
     def test_mask_is_line_preserving_without_business_filler(self):
         masked, spans = _mask_ledger_spans(LEDGER_TRANSCRIPT)
