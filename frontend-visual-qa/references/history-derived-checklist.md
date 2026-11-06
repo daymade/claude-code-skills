@@ -138,9 +138,11 @@ time, version, traffic label, original-record action and count meaning must stay
 associated after wrapping. Preserve the supplied values; shortening an identifier
 or dropping the subject of a zero count does not repair readability.
 
-Compare a populated healthy row with a fixed-height control containing the same
-long path and count text. Check rendered text fragments against both horizontal
-and vertical cell bounds, then inspect the actual screenshots. Wrapping can fix
+For maintainer calibration, compare healthy and fixed-height rows with the same
+long path and count text only when the task supplies or authorizes that control.
+An ordinary read-only audit does not require creating a fault version. On the
+actual populated page, check rendered text fragments against both horizontal
+and vertical cell bounds, then inspect the screenshots. Wrapping can fix
 horizontal overflow while the next line remains clipped by a row or inner wrapper.
 Use the longest real field and a multi-digit count, not only the first short row.
 Keep normal vertical table scrolling distinct from clipping inside a cell: scroll
