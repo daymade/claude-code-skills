@@ -835,6 +835,11 @@ in that owner rather than maintaining another push example here.
 For task closeout, enter
 [git-safety-net's Outcome contract](git-safety-net/SKILL.md#outcome-contract--keep-the-safety-net-subordinate-to-the-users-job).
 Use this entry for recovery or repository convergence under concurrent work.
+For stash export or independent recovery, follow the
+[stash recovery procedure](git-safety-net/references/recovery_playbook.md#export-and-recover-selected-stashes).
+For final resource readback against the original inventory, follow the
+[terminal-state procedure](git-safety-net/references/merge_verification.md#5-prove-the-user-visible-terminal-state).
+Keep runtime requirements, artifact layouts and verification commands in those owners.
 For a failed fast-forward or a partly synchronized checkout, use its
 [guarded checkout recovery procedure](git-safety-net/references/prevention_practices.md#guarded-checkout-recovery).
 For local snapshot failures involving an index lock or commit-hook refusal, use its
