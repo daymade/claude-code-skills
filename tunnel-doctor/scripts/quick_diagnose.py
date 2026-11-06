@@ -217,9 +217,19 @@ def route_check(tailscale_ip: str) -> Dict[str, object]:
         if line.startswith("gateway:"):
             gateway = line.split(":", 1)[1].strip()
 
+    # A zero exit is not a route result when route reported an error or no
+    # interface was parsed. Interface routes legitimately omit a gateway.
+    if stderr or not interface:
+        return {
+            "ok": False,
+            "interface": interface,
+            "gateway": gateway,
+            "raw": stderr or stdout,
+        }
+
     # Identify which utun is Tailscale's and whether the route points to it
     tailscale_utun = find_tailscale_utun()
-    route_mtu = get_iface_mtu(interface) if interface else None
+    route_mtu = get_iface_mtu(interface)
     is_tailscale_iface = (interface == tailscale_utun) if tailscale_utun else None
     wrong_utun = (
         interface.startswith("utun")

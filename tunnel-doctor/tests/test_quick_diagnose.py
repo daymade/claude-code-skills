@@ -113,6 +113,37 @@ class QuickDiagnoseTests(unittest.TestCase):
             self.assertEqual(report["env_no_proxy"], "example.test")
             self.assertTrue(report["host_in_no_proxy"])
 
+    def test_route_check_rejects_route_error_despite_zero_exit(self):
+        stdout = "destination: 100.64.0.0\ninterface: utun7"
+        stderr = "route: destination not in table"
+        with patch.object(doctor, "run", return_value=(0, stdout, stderr)):
+            result = doctor.route_check("100.64.0.1")
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["interface"], "utun7")
+        self.assertEqual(result["raw"], stderr)
+
+    def test_route_check_rejects_missing_interface(self):
+        for stdout in ("", "destination: 100.64.0.0\ngateway: 100.64.0.1"):
+            with self.subTest(stdout=stdout), \
+                 patch.object(doctor, "run", return_value=(0, stdout, "")):
+                result = doctor.route_check("100.64.0.1")
+            self.assertFalse(result["ok"])
+
+    def test_route_check_accepts_network_route_without_gateway_or_host_match(self):
+        stdout = """route to: 100.64.0.1
+destination: 100.64.0.0
+mask: 255.192.0.0
+interface: utun7"""
+        with patch.object(doctor, "run", return_value=(0, stdout, "")) as run, \
+             patch.object(doctor, "find_tailscale_utun", return_value="utun7"), \
+             patch.object(doctor, "get_iface_mtu", return_value=1280):
+            result = doctor.route_check("100.64.0.1")
+        run.assert_called_once_with(["route", "-n", "get", "100.64.0.1"])
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["interface"], "utun7")
+        self.assertEqual(result["gateway"], "")
+        self.assertFalse(result["wrong_utun"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -756,6 +756,16 @@ debug3: resolve_host: lookup <host>:<port>
 
 **Why `nslookup` lies**: `nslookup` reads only `/etc/resolv.conf` (one nameserver). `dscacheutil` and `getaddrinfo` go through DirectoryService, which queries the whole resolver chain in `scutil --dns`. A divergence between these two is the smoking gun.
 
+Default `dig <host>` can also differ from the actual consumer because it queries a DNS server directly rather than necessarily following macOS's system-resolver path. Compare the **same consumer host** before attributing a stall:
+
+```bash
+HOST=<consumer-host>
+dig +short "$HOST"
+dscacheutil -q host -a name "$HOST"
+```
+
+Different answers or timing justify inspecting the matching scoped resolver in `scutil --dns`; they do not by themselves justify a DNS reset, cache flush or app restart.
+
 **The "ping ok but DNS dead" trap**: `ping <resolver-ip>` may answer in <1ms even when port 53 is dead, because the `utun` interface still claims the IP and replies to ICMP locally. Don't infer resolver health from `ping`. Test the actual service: `dig @<ip> +tries=1 +timeout=3 example.com`.
 
 #### Diagnosis: Bisect by Nameserver

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **debugging-network-issues** v1.11.10: Correct paired-probe causal limits and curl sample criteria. Accept completed, verified exit-0 Range responses and payload-bearing exit-28 samples; reject error responses and zero-byte timeouts.
+- **tunnel-doctor** v1.17.15: Compare macOS system resolution with dig, reject error-bearing route output despite exit 0 while retaining valid network routes, and document exact identity checks before retiring task-owned host routes.
+
 - **github-ops** (v1.15.5 → v1.16.0): Diagnose missing checks and approve only the reviewed fork workflow run within its execution authorization; route squash-message review and distinguish fork editing from authorized exact-tip branch retirement.
 - **qa-expert** (v1.2.11 → v1.2.12): Add selected non-UTF-8 subprocess, multilingual output and actual backend/branch witnesses to runtime compatibility acceptance.
 - **pdf-creator** (`daymade-docs` v1.29.3 → v1.29.4): Document the source-only test environment and affected native-backend acceptance without expanding installed converter dependencies.
