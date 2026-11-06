@@ -288,7 +288,7 @@ For persistent Python service installation, environment reuse or startup, follow
 
 ### Rendered UI delivery acceptance
 
-For rendered UI freshness, delayed editor/batch responses or deployment acceptance, enter
+For rendered UI freshness, multiline request/log tables, delayed editor/batch responses or deployment acceptance, enter
 [frontend-visual-qa](frontend-visual-qa/SKILL.md).
 For publication-wide clutter or AI Slop despite passing local checks, including
 controls, deks and expanded summaries, use its
@@ -327,7 +327,7 @@ Before laying out spatial, role or port-constrained relationship diagrams,
 or designing monitoring, availability or certificate matrices, enter
 [data-visualization-discipline](data-visualization-discipline/SKILL.md).
 Observation and risk semantics follow its data-validation route.
-For incomplete observations, unknown counts or confirmed zero, use its
+For historical observation windows, incomplete observations, unknown counts or confirmed zero, use its
 [operational-state matrix](data-visualization-discipline/references/operational-state-matrix.md).
 When maintaining UI-journey or operational-state regression cases, use
 [frontend-visual-qa evals](frontend-visual-qa/evals/evals.json) and

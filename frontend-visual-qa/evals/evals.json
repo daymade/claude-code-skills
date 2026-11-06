@@ -680,6 +680,21 @@
         "Rejects the stale-return control and accepts the healthy refusal/recovery path when observed; does not demand automatic selection, identity borrowing or removal of the refusal",
         "Reports synthetic fixture calibration separately from installed application behavior, real deployment, physical-input feel and user adoption"
       ]
+    },
+    {
+      "id": 46,
+      "name": "complete-operational-rows-and-original-event",
+      "prompt": "Audit the supplied operational-table fixture at ?fault=none and ?fault=fixed-row-height in a desktop browser. Read the complete request objects, versions and request/server-error counts, including the lower rows reached through normal vertical table scrolling. Follow an original-event action and verify the selected event and UTC range against the rendered record body. Do not edit the fixture, shorten values or infer current service health from a recorded HTTP result. If a browser is unavailable, report only what supplied source/geometry can establish.",
+      "expected_output": "Accepts complete wrapped rows in the healthy control, rejects text clipped by the fixed-height row despite zero page-level horizontal overflow, and distinguishes normal table-viewport scrolling from within-cell truncation. Verifies the matching original-event content and time range without claiming deployment, authentication or business completion from the synthetic page.",
+      "files": ["evals/files/operational-table-fixture.html"],
+      "expectations": [
+        "Uses actual rendered text and screenshots plus both cell axes; enabled wrapping or document scrollWidth alone is insufficient",
+        "Preserves complete UUID paths, 12-character versions and the subjects of request/server-error counts instead of deleting or shortening source values",
+        "Accepts the healthy control after scrolling to lower rows; does not label a partially visible viewport-edge row as a clipped cell without checking its full row",
+        "Rejects fixed-row-height for vertical text clipping even when there is no page-level horizontal overflow",
+        "Executes the original-event action and verifies its rendered event identity, source time and selected UTC range, rather than stopping at the link URL or editor",
+        "Keeps recorded HTTP 200/500 separate from current service health and labels this as synthetic fixture evidence"
+      ]
     }
   ]
 }

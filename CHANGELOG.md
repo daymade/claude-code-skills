@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.21.35 → v1.21.36): Verify complete multiline request/log rows against horizontal and vertical clipping, preserve exact identifiers and count meaning, and follow the row's original-record action through matching content.
+- **data-visualization-discipline** (v1.1.9 → v1.1.10): Distinguish valid historical-window samples from expired native sampling, preserve per-source clock ownership, and retain current-snapshot and missing-clock controls.
 - **github-ops** (v1.15.5 → v1.16.0): Diagnose missing checks and approve only the reviewed fork workflow run within its execution authorization; route squash-message review and distinguish fork editing from authorized exact-tip branch retirement.
 - **qa-expert** (v1.2.11 → v1.2.12): Add selected non-UTF-8 subprocess, multilingual output and actual backend/branch witnesses to runtime compatibility acceptance.
 - **pdf-creator** (`daymade-docs` v1.29.3 → v1.29.4): Document the source-only test environment and affected native-backend acceptance without expanding installed converter dependencies.
