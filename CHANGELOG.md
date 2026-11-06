@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **tunnel-doctor** (v1.17.13 → v1.17.14): Replace the snap-to-apt remote installer with signed repository preparation and apt installation; require alternate access and successful package download before removing snap. Limit named refusal codes to their observed scope. Fixes #1379.
+- **agent-web-search-setup** (`daymade-claude-code` v5.1.0 → v5.1.1): Treat Firecrawl keyless refusals as potentially address-dependent, retain the original test's limits, and distinguish contributor-reported keyed results. Fixes #1328.
+
 - **git-safety-net** (v1.27.0 → v1.27.1): Route stash export/recovery and original-inventory closeout from the project instructions to their owning SOPs; resolve bundled scripts explicitly and qualify stash drop order with a fresh identity check. Consolidate recovery details without changing executable behavior.
 
 - **transcript-fixer** (`daymade-audio` v1.57.3 → v1.57.4): Preserve pending ASR audit values across reruns while correcting titles, keywords and spoken text with unchanged line numbers.

@@ -15,16 +15,15 @@ the other two labels, because it confirms the URL and hands you the exact next
 step, which a vendor page rarely does.
 
 **A third distinction runs underneath those two, and it decides how far a failure
-generalises.** When an endpoint refuses with a named policy — Firecrawl's
-`KEYLESS_ACCESS_NOT_AVAILABLE` is the example here — it is stating a rule, and a
-handful of calls in one sitting is ample evidence of that rule. When it refuses
-with a challenge, a throttle or an anti-bot message, it is reporting a condition
-that moves with time, address and reputation. Several failures in one window are
-then **one observation repeated**, not several, and they cannot support a claim
-about the product. Re-sample across days and across egress before turning that kind
-of failure into a verdict. The same arithmetic error is easy to make in the other
-direction, by reading a run of successes inside one window as proof of a ceiling
-that was never approached.
+generalises.** Read the error's scope rather than inferring a universal policy from
+its code. Firecrawl's `KEYLESS_ACCESS_NOT_AVAILABLE` can describe the calling
+address, not every anonymous user: its [keyless limits](https://docs.firecrawl.dev/rate-limits#keyless-no-api-key)
+apply per IP address per day. A challenge, throttle or anti-bot refusal can likewise
+move with time, address and reputation. Several failures in one window are then
+**one observation repeated**, not several. Re-sample across days and egress before
+generalising; when a refusal offers account authentication, distinguish that path
+from anonymous access. Do not read a run of successes inside one window as proof
+of a ceiling that was never approached.
 
 Quotas and prices are the volatile part. Treat them as what the vendor said that
 day and read the current page before quoting a number to anyone. Endpoints and
@@ -47,12 +46,12 @@ In order. A later criterion never overrules an earlier one.
    handed English sources reads that as the tool still being broken.
 6. Result quality, last. A working search beats a better one that will not run.
 
-**A keyless tier is a vendor decision, not a property.** One candidate here shipped
-an anonymous tier, documented it, and was refusing every anonymous call by the time
-it was tested — the server said so explicitly, in an HTTP 200. So when the default
-stops answering, do not debug it as if something on this machine broke. Re-run the
-five criteria above against the current menu and pick again. The same reasoning
-applies to the entry that is default today.
+**A keyless tier has conditions, not a permanent availability guarantee.** One
+candidate refused every anonymous call from the tested egress, including inside
+HTTP 200 responses. That observation does not establish a global withdrawal.
+When the default stops answering, inspect the payload and current documentation,
+separate address/account conditions from local failures, then re-run the criteria
+above against the current menu. Apply the same reasoning to today's default.
 
 **So carry an order, not a single choice.** Three shipping systems were looked at
 and all three chain their backends rather than betting on one: an open-source
@@ -199,7 +198,7 @@ which needs a real account; nothing here argues against registering for one.
 
 | Option | Why not |
 |---|---|
-| Firecrawl's **anonymous tier only** | **Live-tested and failed.** That tier is documented to cover search *and* scrape, which would have made it the one option replacing both dead tools with no account. Every anonymous call was refused by the server itself: HTTP 200 at the transport layer, `"isError": true` with `"code": "KEYLESS_ACCESS_NOT_AVAILABLE"` in the payload, four calls, zero results. The error text is unusually good — it names the cause and gives the fix — but the fix is "create an API key", so the keyless property is gone. **This rules out the anonymous tier, not the product.** Firecrawl also has a keyed free allowance and a self-hostable open-source edition; neither was exercised here, and either could be the right answer for somebody willing to register. |
+| Firecrawl's **anonymous tier from the tested egress** | **Four observed refusals, not a global exclusion.** The tested calls returned HTTP 200 with `"isError": true` and `"code": "KEYLESS_ACCESS_NOT_AVAILABLE"`, yielding zero results. Keyless usage is capped per IP address per day; address-based restrictions can require an API key. Re-test another authorized egress or use an account key before drawing a product-wide conclusion. The keyed free plan and self-hosted edition were not exercised in this Skill's original tests; contributor-reported results in [issue #1328](https://github.com/daymade/claude-code-skills/issues/1328) remain separately attributed. |
 | DuckDuckGo, via any wrapper | **Refused throughout one session, from one address.** Its anti-bot layer answered "DDG detected an anomaly in the request" to every attempt, and three retries including a deliberate wait changed nothing. Read that for exactly what it is: an anti-bot refusal is reputation- and time-dependent, so several failures inside one window are one observation repeated, not several. Enough to stop recommending it; not enough to call it dead. Re-test from a different address on a different day before either restoring or ruling it out. |
 | Brave's own hosted MCP | **Looked for and not found.** Brave's documentation describes a server that runs locally, whose HTTP mode is for self-hosting on a network you trust; no vendor-operated endpoint turned up in that documentation or its repository. That is the extent of the search — it is not a claim that none exists anywhere. |
 | Query-template bundles (for example the "search N engines at once" skills) | Instructive rather than bad. They cost nothing and need no key, because they are just a list of search-engine URL templates the model fills in and then **reads with its own fetch tool**. On the endpoint this skill exists for, that fetch tool is one of the dead ones, so the whole bundle resolves to the failure being fixed. Usable only once a working fetch is already in place. |
