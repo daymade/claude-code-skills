@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Operational table reading fixture</title>
+<style>
+*{box-sizing:border-box}body{margin:24px;font:14px/22px system-ui,sans-serif;color:#17202a;background:#fff}h1{font-size:22px}a{color:#1256b2}nav{display:flex;gap:20px;margin-bottom:20px}.table{max-width:1160px;overflow:auto;height:260px;border:1px solid #ccd3da}.row{display:grid;grid-template-columns:310px 150px 175px 125px 95px 160px 140px}.cell{padding:8px;border-right:1px solid #dce1e6;border-bottom:1px solid #dce1e6;overflow-wrap:anywhere;min-width:0}.head{position:sticky;top:0;background:#eef2f5;z-index:1;font-weight:600}.data{min-height:82px}.fixed .data{height:32px;min-height:0}.fixed .data .cell{overflow:hidden}.note{max-width:900px}pre{white-space:pre-wrap;overflow-wrap:anywhere;border:1px solid #ccd3da;padding:16px;max-width:900px}
+</style>
+<h1>Request evidence</h1>
+<p class="note">Synthetic local reading fixture. The recorded HTTP result describes that request, not the service's current health.</p>
+<nav><a href="?fault=none">Variant A</a><a href="?fault=fixed-row-height">Variant B</a></nav>
+<main id="content"></main>
+<script>
+const range={from:'2026-01-01T14:00:00Z',to:'2026-01-01T14:30:00Z'};
+const rows=[
+ {event:'sample-event-a',object:'POST /demo/objects/00000000-0000-4000-8000-000000000001/finalize',result:'HTTP 500',observed:'2026-01-01T14:08:05Z',version:'abc123def456',traffic:'synthetic',count:'1 request / 1 server error'},
+ {event:'sample-event-b',object:'GET /demo/collections/summary',result:'HTTP 200',observed:'2026-01-01T14:29:40Z',version:'abc123def456',traffic:'synthetic',count:'12 requests / 0 server errors'},
+ {event:'sample-event-c',object:'GET /demo/people/00000000-0000-4000-8000-000000000003/profile',result:'HTTP 200',observed:'2026-01-01T14:29:45Z',version:'abc123def456',traffic:'synthetic',count:'8 requests / 0 server errors'},
+ {event:'sample-event-d',object:'GET /demo/collections',result:'HTTP 200',observed:'2026-01-01T14:29:50Z',version:'abc123def456',traffic:'synthetic',count:'2 requests / 0 server errors'}
+];
+const params=new URLSearchParams(location.search),main=document.querySelector('#content');
+if(params.get('view')==='record'){
+ document.querySelector('h1').textContent='Original request record';
+ const row=rows.find(r=>r.event===params.get('event'));
+ const pre=document.createElement('pre');pre.textContent=JSON.stringify(row?{...row,selectedRange:{from:params.get('from'),to:params.get('to')}}:{error:'No matching synthetic event'},null,2);main.append(pre);
+}else{
+ const caption=document.createElement('p');caption.textContent=`Selected UTC range: ${range.from} to ${range.to}`;main.append(caption);
+ const grid=document.createElement('div');grid.className='table'+(params.get('fault')==='fixed-row-height'?' fixed':'');grid.setAttribute('role','grid');grid.setAttribute('aria-label','Recorded requests');
+ const header=document.createElement('div');header.className='row head';header.setAttribute('role','row');
+ for(const text of ['Request object','Recorded result','Source time (UTC)','Source version','Traffic','Window records','Original event']){const c=document.createElement('div');c.className='cell';c.setAttribute('role','columnheader');c.textContent=text;header.append(c)}grid.append(header);
+ for(const row of rows){const line=document.createElement('div');line.className='row data';line.setAttribute('role','row');line.dataset.event=row.event;
+  for(const text of [row.object,row.result,row.observed,row.version,row.traffic,row.count]){const cell=document.createElement('div');cell.className='cell';cell.setAttribute('role','gridcell');const value=document.createElement('span');value.textContent=text;cell.append(value);line.append(cell)}
+  const cell=document.createElement('div');cell.className='cell';cell.setAttribute('role','gridcell');const link=document.createElement('a'),url=new URL(location.href);url.search=new URLSearchParams({view:'record',event:row.event,...range});link.href=url;link.target='_blank';link.rel='noopener';link.textContent='View original';cell.append(link);line.append(cell);grid.append(line);
+ }main.append(grid);
+}
+</script>
+</html>

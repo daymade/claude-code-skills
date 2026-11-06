@@ -130,6 +130,31 @@ Prefer:
 
 Do not globally shrink type or hide overflow.
 
+### Complete Operational Table Rows
+
+Use this case for request, log or audit tables whose identifiers and counts must
+remain exact. Treat the row as the reading unit: request object, result, source
+time, version, traffic label, original-record action and count meaning must stay
+associated after wrapping. Preserve the supplied values; shortening an identifier
+or dropping the subject of a zero count does not repair readability.
+
+For maintainer calibration, compare healthy and fixed-height rows with the same
+long path and count text only when the task supplies or authorizes that control.
+An ordinary read-only audit does not require creating a fault version. On the
+actual populated page, check rendered text fragments against both horizontal
+and vertical cell bounds, then inspect the screenshots. Wrapping can fix
+horizontal overflow while the next line remains clipped by a row or inner wrapper.
+Use the longest real field and a multi-digit count, not only the first short row.
+Keep normal vertical table scrolling distinct from clipping inside a cell: scroll
+to the remaining records before judging a partially visible viewport-edge row.
+
+Execute the original-record action and compare its selected identity and time
+range with that row. Wait for the matching record body, not merely its URL or
+query editor. A model readback, an enabled wrapping option or an HTTP 200 response
+does not complete this reading and handoff check. Stop when the populated rows
+and handoff satisfy the existing page contract; do not widen a table repair into
+unrelated auth, deployment or backend work.
+
 ## Layout And Composition
 
 Judge the whole page before local pixel alignment.
