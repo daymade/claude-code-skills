@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **openclaw** (v1.3.0 → v1.3.1): Align live configuration with native APIs; document verified backups, native upgrade recovery and state-aware rollback. Scope verification to the repaired behavior while preserving offline tools and plugin diagnostics.
+- **openclaw-model-switch** (v1.2.0 → v1.2.1): Prefer validated batch writes and the CLI reload hint; verify the default through a real Gateway turn with exact model and fallback evidence. Preserve older-version file tools and distinguish Gateway, delivery and ingress checks.
+
 - **frontend-visual-qa** (v1.21.36 → v1.21.37): Add media-state journey cases for playback geometry, seeking, tall-image notices, exact source/preview identity and native downloaded-file validation. Change type: sampled acceptance-recipe extension; existing audit profiles and browser owners remain intact.
 
 - **pdf-creator** (`daymade-docs` v1.29.4 → v1.29.5): Correct the documented lint/preview/checklist order and automation opt-out; keep maintainer testing linked to its canonical QA, runtime and Python contracts.

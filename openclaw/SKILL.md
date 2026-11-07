@@ -12,6 +12,11 @@ argument-hint: '[audit|diff|copy|add-model|list|switch] [options]'
 
 A unified skill for managing OpenClaw (龙虾) instance configs.
 
+For a running instance, read [operations](references/openclaw_operations.md) before writing
+configuration or upgrading. Use the installation's validated native API and its reload hint;
+the bundled config commands remain available for offline/exported files and compatible older
+installations. Route a live model switch and its Gateway verification to `openclaw-model-switch`.
+
 ## Subcommands
 
 ```bash

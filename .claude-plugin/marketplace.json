@@ -1145,7 +1145,7 @@
       "description": "Manage OpenClaw (龙虾 / lobster) instance configurations, gateway health, and plugin lifecycle — audit, diff, copy, add-model, list, and switch models across openclaw.json files; diagnose a parked or down gateway, plugin register failures, and hooks blocked after an upgrade; confirm whether an install is out of date. Use when juggling multiple OpenClaw / Claude Code wrapper instances, applying DeepSeek model patches, managing default models and aliases, or validating config.",
       "source": "./openclaw",
       "strict": false,
-      "version": "1.3.0",
+      "version": "1.3.1",
       "category": "claude-code",
       "keywords": [
         "openclaw",
@@ -1214,7 +1214,7 @@
       "description": "Switch or repair the model configuration of an OpenClaw instance (e.g., Kimi k2p6 → k3): change the default model, add model definitions, and fix model-config failures — 401 \"Invalid token\", \"No available channel / model not found\", thinking-level rejections, and config edits that don't take effect. Ships a config-discovering switch script with backup + mirror sync, an endpoint probe protocol, and a field-tested trap catalog (env-var key hijack, provider-plugin thinking restrictions, relay availability).",
       "source": "./openclaw-model-switch",
       "strict": false,
-      "version": "1.2.0",
+      "version": "1.2.1",
       "category": "claude-code",
       "keywords": [
         "claude-code",
