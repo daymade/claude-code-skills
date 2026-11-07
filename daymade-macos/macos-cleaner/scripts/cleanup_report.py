@@ -11,6 +11,9 @@ Usage:
 
     # Override the measured volume when the approved target is not the Data volume
     uv run scripts/cleanup_report.py --volume /Volumes/External --snapshot before
+
+    # Diagnose existing inventory without measuring paths or writing snapshots
+    uv run scripts/cleanup_report.py --inventory inventory.json [--json]
 """
 
 import os
@@ -20,6 +23,11 @@ import argparse
 import subprocess
 from datetime import datetime
 from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+from storage_diagnosis import load_inventory, build_diagnosis, render_diagnosis
 
 
 DEFAULT_VOLUME = '/System/Volumes/Data'
@@ -153,11 +161,11 @@ def generate_report(before, after):
     print("-" * 60)
 
     if recovered > 0:
-        print(f"✅ Recovered: {format_size(recovered):>12}")
+        print(f"Observed used-space decrease: {format_size(recovered):>12}")
         percent_recovered = (recovered / before_used) * 100
         print(f"   ({percent_recovered:.1f}% of used space)")
     elif recovered < 0:
-        print(f"⚠️  Space increased: {format_size(abs(recovered)):>12}")
+        print(f"Observed used-space increase: {format_size(abs(recovered)):>12}")
         print("   (This may be due to system activity during cleanup)")
     else:
         print("No change in disk usage")
@@ -176,11 +184,13 @@ def generate_report(before, after):
     print("-" * 60)
 
     if gained > 0:
-        print(f"✅ Gained:  {format_size(gained):>12}")
+        print(f"Observed available-space gain: {format_size(gained):>12}")
     elif gained < 0:
-        print(f"⚠️  Lost:   {format_size(abs(gained)):>12}")
+        print(f"Observed available-space loss: {format_size(abs(gained)):>12}")
     else:
         print("No change")
+    print('These are same-volume observations over a live window; '
+          'concurrent writes, snapshots and APFS accounting prevent per-action attribution.')
 
     # Recommendations
     print("\n" + "=" * 60)
@@ -210,12 +220,15 @@ def main():
     parser = argparse.ArgumentParser(
         description='Generate cleanup reports'
     )
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument(
         '--snapshot',
         choices=['before', 'after'],
-        required=True,
         help='Snapshot type (before or after cleanup)'
     )
+    mode.add_argument('--inventory', metavar='JSON_OR_STDIN',
+                      help='Read-only diagnosis from an existing inventory JSON file or -; no scans/snapshot writes')
+    parser.add_argument('--json', action='store_true', help='JSON diagnosis output with --inventory')
     parser.add_argument(
         '--compare',
         action='store_true',
@@ -227,6 +240,27 @@ def main():
         help=f'Volume to measure (default: {DEFAULT_VOLUME})'
     )
     args = parser.parse_args()
+
+    if args.inventory:
+        if args.compare:
+            parser.error('--compare requires --snapshot after')
+        try:
+            if args.inventory == '-':
+                value = load_inventory(sys.stdin)
+            else:
+                with Path(args.inventory).open(encoding='utf-8') as stream:
+                    value = load_inventory(stream)
+            report = build_diagnosis(value)
+        except (OSError, ValueError, TypeError) as error:
+            print(f'Cannot read diagnosis inventory: {error}', file=sys.stderr)
+            return 2
+        if args.json:
+            print(json.dumps(report, sort_keys=True))
+        else:
+            render_diagnosis(report)
+        return 0 if report['collection_complete'] else 1
+    if args.json:
+        parser.error('--json requires --inventory')
 
     if args.snapshot == 'before':
         print("📸 Capturing disk usage before cleanup...")

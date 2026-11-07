@@ -95,7 +95,7 @@ Use `df -k` for calculations and `df -h` for the human-readable report. Treat an
 
 Copy a user-supplied free-space or capacity target exactly. A read-only inventory can proceed without one: report the current values and locate the largest occupants within the authorized read scope. Do not delay that diagnosis to ask for a cleanup target. A cleanup without an explicit target cannot claim that the user's capacity goal has been met; report measured release and remaining candidates instead.
 
-Keep this first phase read-only. Do not run `scripts/cleanup_report.py` yet: it creates a local state directory and snapshot file. Preserve the command output in the report instead. On a remote target, always run the direct `df` commands on that host; the local helper must not measure the controller Mac by mistake.
+Keep this first phase read-only. Do not run `scripts/cleanup_report.py --snapshot` yet: snapshot mode creates a local state directory and file. Its `--inventory <JSON-or->` mode only consumes existing evidence; follow [the diagnosis CLI](references/storage-diagnosis.md) for exact-file metadata or a non-overlapping inventory report. On a remote target, always run measurement commands on that host; a controller's snapshot must not stand in for the target volume.
 
 ### Follow the named suspect before broad scans
 
@@ -290,6 +290,7 @@ uv run scripts/cleanup_report.py --snapshot after --compare
 - `references/apfs-shared-blocks.md` and `scripts/apfs_cow.py` — preserve exact inactive local paths with guarded APFS cloning, pinned rollback, per-item lock release and an exact remainder.
 - `scripts/stream_accounting.py` — calculate internal full-clone allocation upper bounds from supplied native observations; not a probe or physical-release measurement.
 - `scripts/measure_apfs_allocation.py` — bounded, metadata-only private-allocation observations for explicit physical paths; report partial/unsupported results as unknown, not zero reclaim.
+- `references/storage-diagnosis.md` and `scripts/storage_diagnosis.py` — shared analysis/report contract, non-overlapping inventory accounting, role/reference next actions and representative sparse/clone cases; retain unknowns and large visible hotspots without estimating cleanup credit.
 
 Load only the branch relevant to the current task:
 
@@ -309,7 +310,7 @@ Load only the branch relevant to the current task:
 - `scripts/analyze_large_files.py` — large-file discovery inside an approved path; exit 1 marks an incomplete scan (find errors, timeout, unreadable files), never a clean result. "No single file above the threshold" does not make the path small: many below-threshold files can make one directory the dominant cost, so read directory aggregates independently of top single files. Preserving content on a NAS is not the same as local residency. Use an installed, authorized NAS transfer owner (`nas-use` where available); it is not bundled here. Without one, retain the assets and report migration as unverified instead of improvising a copy.
 - `scripts/analyze_dev_env.py` — Docker/package-manager inventory plus fixed common-project-root `.git` sizing; require that full read scope first.
 - `scripts/safe_delete.py` — legacy guarded permanent deletion for exact approved non-user-data targets; it is not a Trash or recovery tool.
-- `scripts/cleanup_report.py` — local-target before/after reporting for `/System/Volumes/Data` by default, with an explicit `--volume` override.
+- `scripts/cleanup_report.py` — read-only `--inventory` diagnosis or local-target `--snapshot` before/after observations for `/System/Volumes/Data` by default, with an explicit `--volume` override in snapshot mode.
 
 ## Do not use this skill when
 

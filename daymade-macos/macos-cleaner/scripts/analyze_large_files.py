@@ -4,6 +4,7 @@ Find large files on macOS and categorize them.
 
 Usage:
     uv run scripts/analyze_large_files.py --path PATH [--threshold SIZE] [--limit N]
+    uv run scripts/analyze_large_files.py --files FILE [FILE ...] --json
 
 Options:
     --threshold    Minimum file size in MB (default: 100)
@@ -15,7 +16,13 @@ import os
 import sys
 import argparse
 import subprocess
+import json
 from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+from storage_diagnosis import observe_file, inventory, build_diagnosis, render_diagnosis
 
 
 def format_size(bytes_size):
@@ -48,7 +55,7 @@ def categorize_file(path):
 
     # Disk images
     disk_exts = {'.iso', '.img', '.toast'}
-    if suffix in disk_exts:
+    if suffix in disk_exts or path.name.lower().endswith('.img.raw'):
         return ('Disk Image', '💿', 'Confirm offline reinstall/recovery value')
 
     # Database files
@@ -142,15 +149,17 @@ def find_large_files(search_path, threshold_bytes, limit):
             continue
         path = Path(line)
         try:
-            size = path.stat().st_size
+            info = path.stat()
+            size = info.st_size
         except OSError:
             issues.append(f'could not measure file: {line}')
             continue
-        files.append((path, size))
+        allocated = info.st_blocks * 512 if hasattr(info, 'st_blocks') else None
+        files.append((path, size, allocated))
 
-    # Sort by size descending
-    files.sort(key=lambda x: x[1], reverse=True)
-    return files[:limit], issues
+    # Sparse apparent size is not occupancy. Unknown allocation stays visible.
+    files.sort(key=lambda x: x[2] if x[2] is not None else x[1], reverse=True)
+    return [(path, size) for path, size, _allocated in files[:limit]], issues
 
 
 def main():
@@ -163,11 +172,15 @@ def main():
         default=100,
         help='Minimum file size in MB (default: 100)'
     )
-    parser.add_argument(
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument(
         '--path',
-        required=True,
         help='Exact user-approved path to search (required)'
     )
+    source.add_argument('--files', nargs='+',
+                        help='Exact selected files; metadata only, no find or directory scan')
+    parser.add_argument('--json', action='store_true',
+                        help='Emit a storage inventory for cleanup_report.py --inventory')
     parser.add_argument(
         '--limit',
         type=int,
@@ -175,16 +188,39 @@ def main():
         help='Maximum number of results (default: 50)'
     )
     args = parser.parse_args()
+    if args.threshold < 0 or args.limit <= 0:
+        parser.error('threshold must be nonnegative and limit must be positive')
+    if args.files and len(args.files) > 64:
+        parser.error('--files accepts at most 64 explicitly selected files')
 
     threshold_bytes = args.threshold * 1024 * 1024
-    search_path = os.path.expanduser(args.path)
+    if args.files:
+        large_files = [(Path(os.path.expanduser(path)), None) for path in args.files]
+        scan_issues = []
+        scope = {'mode': 'exact_files', 'paths': args.files, 'recursive': False}
+    else:
+        search_path = os.path.expanduser(args.path)
+        if not args.json:
+            print(f"🔍 Searching for files larger than {args.threshold} MB")
+            print(f"📂 Search path: {search_path}")
+            print("=" * 80)
+            print("This may take a few minutes...\n")
+        large_files, scan_issues = find_large_files(search_path, threshold_bytes, args.limit)
+        scope = {'mode': 'approved_path_search', 'path': search_path,
+                 'threshold_bytes': threshold_bytes, 'result_limit': args.limit,
+                 'directory_totals': 'not measured by single-file discovery'}
 
-    print(f"🔍 Searching for files larger than {args.threshold} MB")
-    print(f"📂 Search path: {search_path}")
-    print("=" * 80)
-    print("This may take a few minutes...\n")
-
-    large_files, scan_issues = find_large_files(search_path, threshold_bytes, args.limit)
+    rows = []
+    for path, _size in large_files:
+        row = observe_file(path)
+        row['category'] = categorize_file(path)[0]
+        rows.append(row)
+        if row.get('error'):
+            scan_issues.append(f"{path}: {row['error']}")
+    data = inventory(rows, scope=scope, issues=scan_issues)
+    if args.json:
+        print(json.dumps(data, sort_keys=True))
+        return 1 if scan_issues else 0
 
     if scan_issues:
         print("\n⚠️  INCOMPLETE SCAN — results may be missing entries:")
@@ -207,58 +243,9 @@ def main():
         return 0
 
     print(f"\n📦 Found {len(large_files)} large files")
-    print("=" * 80)
-    print(f"{'#':<4} {'Size':<12} {'Type':<12} {'Location'}")
-    print("-" * 80)
-
-    # Group by category
-    by_category = {}
-    total_size = 0
-
-    for i, (path, size) in enumerate(large_files, 1):
-        category, icon, note = categorize_file(path)
-
-        # Shorten path for display
-        try:
-            rel_path = path.relative_to(Path.home())
-            display_path = f"~/{rel_path}"
-        except ValueError:
-            display_path = str(path)
-
-        # Truncate long paths
-        if len(display_path) > 45:
-            display_path = display_path[:42] + "..."
-
-        print(f"{i:<4} {format_size(size):<12} {icon} {category:<10} {display_path}")
-
-        # Track by category
-        if category not in by_category:
-            by_category[category] = {'count': 0, 'size': 0, 'note': note}
-        by_category[category]['count'] += 1
-        by_category[category]['size'] += size
-        total_size += size
-
-    print("-" * 80)
-    print(f"{'Total':<4} {format_size(total_size):<12}")
-
-    # Category summary
-    print("\n\n📊 Breakdown by Category")
-    print("=" * 80)
-    for category, data in sorted(
-        by_category.items(),
-        key=lambda x: x[1]['size'],
-        reverse=True
-    ):
-        print(f"\n{category}")
-        print(f"  Files: {data['count']}")
-        print(f"  Total: {format_size(data['size'])}")
-        print(f"  💡 {data['note']}")
-
-    print("\n\n💡 Next Steps:")
-    print("   1. Review the list and identify files you no longer need")
-    print("   2. For videos/archives: consider moving to external storage")
-    print("   3. For databases/VMs: verify they're not in use")
-    print("   4. Return exact candidates to the main skill's impact and confirmation gate")
+    render_diagnosis(build_diagnosis(data))
+    print('Categories are filename hints, not verified purpose or retirement authority.')
+    print("Return exact candidates to the main skill's impact and confirmation gate.")
 
     if scan_issues:
         print("\n⚠️  Exit 1: the scan was incomplete (see warnings above); "

@@ -8,9 +8,11 @@ display and exit 0.
 """
 
 import importlib.util
+import json
 import subprocess
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
@@ -23,6 +25,7 @@ SKILL_PATH = Path(__file__).resolve().parents[1] / 'SKILL.md'
 SPEC = importlib.util.spec_from_file_location('analyze_large_files', SCRIPT_PATH)
 LARGE_FILES = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(LARGE_FILES)
+import storage_diagnosis as DIAGNOSIS
 
 
 def find_result(returncode, stdout='', stderr=''):
@@ -91,6 +94,19 @@ class FindLargeFilesUnitTests(unittest.TestCase):
         self.assertEqual(files, [])
         self.assertEqual(len(issues), 1)
         self.assertIn('could not measure', issues[0])
+
+    def test_sparse_apparent_size_does_not_hide_larger_allocated_file(self):
+        sparse = self.root / 'sparse.img.raw'
+        with sparse.open('wb') as stream:
+            stream.truncate(8 * 1024 * 1024)
+        dense = self.root / 'dense.bin'
+        dense.write_bytes(b'x' * 65536)
+        self.assertLess(sparse.stat().st_blocks, dense.stat().st_blocks)
+        with patch.object(LARGE_FILES.subprocess, 'run', return_value=find_result(
+                0, f'{sparse}\n{dense}\n')):
+            files, issues = LARGE_FILES.find_large_files(str(self.root), 0, 1)
+        self.assertEqual(files, [(dense, 65536)])
+        self.assertEqual(issues, [])
 
 
 class MainExitTests(unittest.TestCase):
@@ -179,6 +195,106 @@ class DocumentedCommandTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn(f'Searching for files larger than {threshold} MB', result.stdout)
         self.assertIn('No large files found', result.stdout)
+
+
+class ExactFileObservationTests(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name).resolve()
+        self.file = self.root / 'selected file.img.raw'
+        self.file.write_bytes(b'x' * 4096)
+
+    def native(self, query):
+        return patch.dict(sys.modules, {'_apfs_native': SimpleNamespace(private_size_fd=query)})
+
+    def test_private_zero_is_known_and_payload_is_never_read(self):
+        with self.native(lambda fd: 0), patch.object(Path, 'open', side_effect=AssertionError('payload read')):
+            row = DIAGNOSIS.observe_file(self.file)
+        self.assertEqual(row['logical_bytes'], 4096)
+        self.assertEqual(row['allocated_bytes'], self.file.stat().st_blocks * 512)
+        self.assertEqual(row['private_bytes'], 0)
+        self.assertEqual(row['nlink'], 1)
+        self.assertNotIn('error', row)
+
+    def test_native_denial_preserves_visible_allocation_and_unknown_reason(self):
+        def denied(fd):
+            raise PermissionError('synthetic native denial')
+        with self.native(denied):
+            row = DIAGNOSIS.observe_file(self.file)
+        self.assertEqual(row['logical_bytes'], 4096)
+        self.assertIsNone(row['private_bytes'])
+        self.assertIn('PermissionError', row['private_reason'])
+        self.assertNotIn('error', row)  # optional native metric, not discovery failure
+
+    def test_changed_file_marks_observation_incomplete(self):
+        def changed(fd):
+            self.file.write_bytes(b'changed size')
+            return 4096
+        with self.native(changed):
+            row = DIAGNOSIS.observe_file(self.file)
+        self.assertIn('changed', row['error'])
+        self.assertIsNone(row['private_bytes'])
+
+    def test_symlink_is_not_followed_and_directory_is_not_recursively_sized(self):
+        link = self.root / 'selected-link'
+        link.symlink_to(self.file)
+        with self.native(lambda fd: self.fail('symlink target queried')):
+            row = DIAGNOSIS.observe_file(link)
+            directory = DIAGNOSIS.observe_file(self.root)
+        self.assertEqual(row['kind'], 'symlink')
+        self.assertIsNone(row['private_bytes'])
+        self.assertIn('no recursive sizing', directory['error'])
+        self.assertIsNone(directory['allocated_bytes'])
+        parent_link = self.root / 'parent-link'
+        parent_link.symlink_to(self.root, target_is_directory=True)
+        self.assertIn('error', DIAGNOSIS.observe_file(parent_link / self.file.name))
+
+    def test_exact_json_entry_never_runs_find_or_any_subprocess(self):
+        output = StringIO()
+        with patch.object(LARGE_FILES.subprocess, 'run', side_effect=AssertionError('unexpected scan')), \
+             self.native(lambda fd: 0), \
+             patch.object(sys, 'argv', ['probe', '--files', str(self.file), '--json']), \
+             redirect_stdout(output):
+            code = LARGE_FILES.main()
+        result = json.loads(output.getvalue())
+        self.assertEqual(code, 0)
+        self.assertEqual(result['scope']['recursive'], False)
+        self.assertEqual(result['entries'][0]['path'], str(self.file))
+        self.assertEqual(result['entries'][0]['private_bytes'], 0)
+        self.assertEqual(result['entries'][0]['reference_status'], 'unknown')
+
+    def test_missing_exact_file_is_incomplete_json_and_nonzero(self):
+        output = StringIO()
+        with patch.object(sys, 'argv', ['probe', '--files', str(self.root / 'missing'), '--json']), \
+             redirect_stdout(output):
+            code = LARGE_FILES.main()
+        result = json.loads(output.getvalue())
+        self.assertEqual(code, 1)
+        self.assertFalse(result['collection_complete'])
+        self.assertIsNone(result['entries'][0]['allocated_bytes'])
+        self.assertTrue(result['issues'])
+
+    def test_actual_installed_form_symlink_pipeline_is_read_only(self):
+        installed = self.root / 'installed skill'
+        installed.symlink_to(SCRIPT_PATH.parents[1], target_is_directory=True)
+        isolated_home = self.root / 'isolated-home'
+        isolated_home.mkdir()
+        import os
+        env = dict(os.environ, HOME=str(isolated_home), PYTHONDONTWRITEBYTECODE='1')
+        collected = subprocess.run(
+            [sys.executable, '-B', str(installed / 'scripts/analyze_large_files.py'),
+             '--files', str(self.file), '--json'], env=env, capture_output=True, text=True,
+            timeout=10, check=False)
+        self.assertEqual(collected.returncode, 0, collected.stderr)
+        rendered = subprocess.run(
+            [sys.executable, '-B', str(installed / 'scripts/cleanup_report.py'), '--inventory', '-', '--json'],
+            input=collected.stdout, env=env, capture_output=True, text=True, timeout=10, check=False)
+        self.assertEqual(rendered.returncode, 0, rendered.stderr)
+        report = json.loads(rendered.stdout)
+        self.assertEqual(report['hotspots'][0]['logical_bytes'], 4096)
+        self.assertIsNone(report['reclaimable_bytes'])
+        self.assertEqual(list(isolated_home.iterdir()), [])
 
 
 if __name__ == '__main__':
