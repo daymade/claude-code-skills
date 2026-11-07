@@ -9,7 +9,8 @@ description: >-
 
 # OpenClaw Model Switch
 
-Switch or repair an OpenClaw instance's model configuration by safely editing `openclaw.json`.
+Switch or repair the model used by the running OpenClaw instance. Prefer its validated native
+configuration commands; retain the bundled file tools for offline and older-version work.
 
 **Diagnose before you edit.** Model failures on OpenClaw are usually NOT the model id —
 they are key routing (env hijack), provider-plugin restrictions, or endpoint/model mismatch.
@@ -26,15 +27,23 @@ Do NOT assume a hardcoded path. Candidate locations (check all, edit all that ex
 2. `~/.kimi/kimi-claw/openclaw.json` — Kimi Claw mirror, kept in sync on some installs
 3. `~/.kimi_openclaw/openclaw.json` — legacy desktop path
 
-Confirm which one the gateway actually reads: `openclaw gateway status` prints
-`Config (service): <path>`. If several exist, treat them as mirrors: **edit all of them
-identically**, otherwise the next sync overwrites your fix.
+Confirm which one the gateway actually reads with `openclaw gateway status` (or its JSON
+config paths). Select that installation's profile/config context before issuing commands.
+If several files exist, verify which are maintained mirrors and keep those in sync;
+existence alone does not prove they belong to the same instance. Reconcile an Ansible or
+other deployment source too when it owns the default, so the next deployment preserves it.
 
 ## Step 2 — Probe the endpoint + model BEFORE touching config
 
 Never trust a relay's model listing (`GET /v1/models` on new-api style relays is frequently
 incomplete — a model can be absent from the list yet serve fine). The only authority is a
 real completion probe **from the host that will run the bot**:
+
+Match the Gateway's effective credential and proxy route. An SSH login shell can inherit a
+dead proxy that the Gateway does not use; record that difference before interpreting a failed
+probe. Do not print keys or dump the process's full environment. Use the exact model variant
+requested by the user and verify its input modes, context/output limits and supported thinking
+settings from the provider's current documentation; do not infer them from the family name.
 
 ```bash
 curl -sS -o /tmp/probe.json -w "HTTP %{http_code}\n" \
@@ -53,12 +62,51 @@ blind-switch.
 
 ## Step 3 — Switch the model
 
+Read `openclaw config set --help` on the selected installation. On versions supporting batch
+writes, prepare a private JSON batch containing the model definition and default assignment:
+
+```json
+[
+  {"path":"models.providers.example.models","value":[{"id":"target-model","name":"Target model"}]},
+  {"path":"agents.defaults.model.primary","value":"example/target-model"}
+]
+```
+
+Replace `example` with the existing provider id and `target-model` with the verified served
+model. Fill the definition's reasoning, input and token limits from the verified model spec;
+include `agents.defaults.thinkingDefault` only when the target requires a compatible change.
+Preserve credentials, headers, plugins and unrelated model entries. Back up the active config
+privately before applying the batch; do not commit either credentials or the live config.
+
 ```bash
-python3 scripts/switch-model.py <model-id> --restart
+openclaw config set --batch-file ./model-batch.json --merge --dry-run
+openclaw config set --batch-file ./model-batch.json --merge
+```
+
+Use `--merge` to retain existing model definitions; use replacement only for an explicitly
+authorized removal. Follow the CLI's application hint: hot reload, no change, or required
+restart. The hint describes expected application, so complete Step 4 even after a hot-reload
+hint. Restart only when required, after checking service ownership, in-flight work and recovery.
+See [native configuration commands](https://docs.openclaw.ai/cli/config).
+
+### Offline tools and older versions
+
+Retain these helpers for exported/stopped configurations or a verified older CLI without the
+native write interface. Back up the selected files and preserve maintained mirrors. A live
+older-version repair must respect the same service and in-flight-work checks; `--restart`
+is an explicit option, not the default completion step. This helper has no dry-run mode;
+inspect a private exported copy first when the proposed file edits need a preview.
+The legacy helper only supplies definitions for its known-model table and rewrites same-provider
+entries in `agents.defaults.models`. For other targets, complete the verified definition and
+restore any existing allowlist parameters in the offline candidate before adopting it. Use
+explicit `--config` when discovery would include unverified mirrors; inspect the complete diff.
+
+```bash
+python3 scripts/switch-model.py <model-id>
 # target a specific provider instead of the guessed one:
-python3 scripts/switch-model.py k3 --provider kimi-relay --restart
+python3 scripts/switch-model.py k3 --provider kimi-relay
 # explicit config path (skips discovery):
-python3 scripts/switch-model.py k3 --config ~/.openclaw/openclaw.json --restart
+python3 scripts/switch-model.py k3 --config ~/.openclaw/openclaw.json
 ```
 
 The script: discovers and backs up every candidate config to `<config-dir>/config-backups/`,
@@ -67,16 +115,23 @@ files, and restarts the gateway with `--restart`.
 
 ## Step 4 — Verify end-to-end (mandatory)
 
-A restarted gateway proves nothing. Run one real agent turn and read the result metadata:
+A local/isolated turn is a provider precheck. For the live switch, run a new session through
+the Gateway without `--local` and without a `--model` override, then read the result metadata:
 
 ```bash
-openclaw agent --local --json --agent main --session-id verify-$(date +%s) -m "ping"
+openclaw agent --json --agent main --session-id verify-$(date +%s) -m "Reply with a short verification marker."
 ```
 
-Success looks like: `"result": "success"`, `"fallbackUsed": false`, and the gateway log shows
-`agent model: <provider>/<model> (thinking=...)`. `"result": "success"` with
-`fallbackUsed: true` means your target failed and a fallback saved the turn — the config is
-still wrong.
+Require a successful command, a visible reply and the requested model in the actual execution.
+For 2026.11.1, inspect `result.meta.agentMeta.terminalReceipt`: `requested.model`,
+`effective.model` and `effective.responseModel` must match the intended variant, and `rerouted`
+must be false. Also require `result.meta.executionTrace.fallbackUsed=false`. A successful
+reply rescued by fallback does not validate the requested model. On older schemas, use the
+equivalent execution metadata and Gateway logs; missing identity evidence remains unverified.
+
+Report the tested boundary precisely. A Gateway turn does not test channel ingress or delivery.
+If delivery is part of the request, use an authorized target and inspect its send receipt;
+claim an inbound channel round trip only after observing a new message on that channel.
 
 ## Common failures → read the troubleshooting reference
 
@@ -94,7 +149,9 @@ still wrong.
 - **Preserve** existing `apiKey`, `headers`, plugin configs, and `env` blocks — retype only the fields you mean to change
 - **Validate JSON** after manual edits: `python3 -m json.tool openclaw.json > /dev/null`
 - **Do not** commit config files containing API keys to version control
-- After changing anything, redo the Step-4 verification — and if it fails, restore the newest backup before trying something else
+- If verification fails, preserve its result and reconcile or restore the owned config through
+  the matching native interface. Restore an offline file backup only to its verified stopped
+  owner; do not overwrite a running managed store or newer concurrent changes.
 
 ## Resources
 

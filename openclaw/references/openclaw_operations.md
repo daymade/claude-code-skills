@@ -15,11 +15,78 @@ openclaw update --dry-run            # validating phase reports install integrit
 ```
 
 `update --dry-run` prints `Current version`, `Target version`, and the update
-channel. When current equals target and the `validating` phase passes, the
-install carries no interrupted-upgrade residue.
+channel. Also read `openclaw update status --json` when an upgrade was interrupted;
+version equality and a validation pass do not establish that the update transaction settled.
 
 `npm view` alone is not sufficient: the `latest` dist-tag can lag a GitHub
 release. Check GitHub tags when npm and a release note disagree.
+Check the selected npm registry and cache before attributing a mismatch to publication lag;
+query the exact target against the official registry when that is the intended source.
+
+## Upgrade an existing instance
+
+1. Bind the host, CLI installation, service owner and active config/state paths using Gateway
+   status. Do not infer a VM or cloud deployment from a worker alias. Check in-flight work
+   and the service's recovery path before an upgrade that may restart it.
+2. Verify the requested release/channel, Node compatibility and download route. Probe npm
+   under the updater's actual environment, including npm-specific proxy settings. A working
+   Gateway route does not prove that an inherited SSH/npm proxy works. Use the existing network
+   diagnosis procedure for path failures; do not rewrite global proxies as an upgrade step.
+3. Create an independent full-state backup outside the live state tree. Check the installed
+   backup command's flags; for supported versions use:
+
+   ```bash
+   openclaw backup create --output <private-dir> --verify
+   ```
+
+   Inspect the archive/manifest and retain its matching release. A config `.bak` alone does
+   not cover databases, sessions, credentials, plugins and workspace state.
+4. For a runnable existing installation, use `openclaw update --tag <verified-version> --yes`
+   through its deployment owner. Let that updater own migration, plugin convergence and service
+   handoff. Do not substitute deletion of the global module or blanket extension reinstalls.
+   Use documented package-manager recovery only when native update is unavailable or directs it.
+5. Read back installed and serving versions, update outcome, Gateway/channel readiness and
+   relevant plugin loading. Verify the requested behavior with a real Gateway turn for model
+   changes, and an authorized send/receipt when delivery is in scope. Restore normal monitoring
+   after maintenance and observe a completed healthy run.
+
+Keep deployment-managed version/model pins aligned with the adopted runtime. Parse the CLI's
+version token rather than comparing the whole labelled banner to a bare version string.
+Use the [update guide](https://docs.openclaw.ai/install/updating) and
+[backup guide](https://docs.openclaw.ai/install/backups) for release-specific behavior.
+
+### Healthy Gateway with an unfinished update
+
+Inspect `openclaw update status --json` and the named driver/phase separately from Gateway
+health. Preserve the update record and backups. Do not start another updater while an owner
+is live or unverifiable; elapsed time alone does not establish abandoned ownership.
+
+After the owning update has exited, use the updated installation's supported recovery command:
+
+```bash
+openclaw update repair --yes --no-restart --timeout 120 --json
+openclaw update status --json
+```
+
+Check `update repair --help` first on another version. `--no-restart` does not override a
+requirement for exclusive state access. Honor live-driver or stopped-service requirements;
+terminate only a task-owned process or an explicitly authorized idle service after verifying
+identity and recovery. Never edit update database rows, delete locks or remove retained
+recovery artifacts to make status appear clean.
+
+Require no active run and a terminal recorded outcome, then verify serving behavior separately.
+Retain nonblocking warnings with their scope; they do not authorize credential rotation,
+channel access-policy changes or unrelated repairs. Follow
+[update repair](https://docs.openclaw.ai/cli/update/repair-and-recovery).
+
+### Downgrade and full-state recovery
+
+Do not equate reverting a package pin with restoring the instance. Check the selected release's
+downgrade support, database migrations, plugin versions and writes accepted since the backup.
+Use the deployment/service owner and documented recovery path with a verified matching backup.
+Preserve newer work before replacing state; an interrupted/refused restore is not a successful
+rollback. Keep automatic recovery and intentional downgrade distinct. See
+[rollback and recovery](https://docs.openclaw.ai/install/updating/rollback-and-recovery).
 
 **A version question is usually a health question.** When an install "feels
 old", verify the version first, then move to gateway and plugin health — the
@@ -150,7 +217,8 @@ registered but inert.
 Read the current value with `openclaw config get plugins.entries.<id>`. Change
 it with `openclaw config patch --stdin`, which validates against the schema,
 hot-reloads, and writes `openclaw.json.bak`. Do not hand-edit
-`~/.openclaw/openclaw.json`.
+the live managed config. For model assignments, follow `openclaw-model-switch`; select the
+native command supported by the installed release rather than requiring one historical syntax.
 
 ## `doctor --fix` has side effects
 
@@ -301,7 +369,11 @@ whichever plugin it happens to name.
 
 ## Verification ladder
 
-Ordered strongest to weakest, for claiming an OpenClaw repair worked:
+Choose evidence for the behavior being repaired. For model switching, follow the live Gateway
+receipt checks in `openclaw-model-switch`; `--local` is only a precheck. For channel delivery,
+inspect an authorized send receipt. Neither proves a new channel message was received.
+
+For plugin discovery/loading and blocked typed hooks, use these narrower checks:
 
 1. **`openclaw plugins doctor` reports checks passed, *and* the gateway log's
    `blocked because` count is 0 after the fix.** These two are peers, not a
@@ -313,8 +385,8 @@ Ordered strongest to weakest, for claiming an OpenClaw repair worked:
 3. `openclaw gateway status` → running / active, port listening
 4. `openclaw status` panels (`Memory: enabled (plugin ...)`)
 
-Steps 3 and 4 stay green while step 1 fails. A claim that something is fixed
-needs step 1, not steps 3 or 4.
+Steps 3 and 4 stay green while step 1 fails. Use step 1 for plugin loading or hook-access
+claims; it does not establish model replies, channel delivery or a working memory backend.
 
 **An agent's own report of a tool call is not evidence.** `openclaw agent
 --json` returns a `toolSummary` shaped like `{ "calls": 1, "tools":
