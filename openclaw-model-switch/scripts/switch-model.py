@@ -228,12 +228,12 @@ def main():
     if args.restart:
         print("Restarting gateway...")
         restart_gateway()
-        print("\nNOTE: Verify end-to-end before calling this done (SKILL.md Step 4):")
-        print("  openclaw agent --local --json --agent main --session-id verify-$(date +%s) -m ping")
-        print('  → expect "result": "success" and "fallbackUsed": false')
     else:
-        print("NOTE: You must restart the gateway for changes to take effect.")
-        print("      Run with --restart or execute: openclaw gateway restart")
+        print("NOTE: The file was changed; live Gateway adoption is not yet verified.")
+        print("      Follow the installed version's application/restart requirements (SKILL.md Step 3).")
+    print("\nVerify the live default through the Gateway (SKILL.md Step 4):")
+    print("  openclaw agent --json --agent main --session-id verify-$(date +%s) -m ping")
+    print("  Require a visible reply, the intended effective model, and no fallback; inspect this version's execution metadata.")
 
 
 if __name__ == "__main__":

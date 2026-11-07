@@ -96,6 +96,10 @@ native write interface. Back up the selected files and preserve maintained mirro
 older-version repair must respect the same service and in-flight-work checks; `--restart`
 is an explicit option, not the default completion step. This helper has no dry-run mode;
 inspect a private exported copy first when the proposed file edits need a preview.
+The legacy helper only supplies definitions for its known-model table and rewrites same-provider
+entries in `agents.defaults.models`. For other targets, complete the verified definition and
+restore any existing allowlist parameters in the offline candidate before adopting it. Use
+explicit `--config` when discovery would include unverified mirrors; inspect the complete diff.
 
 ```bash
 python3 scripts/switch-model.py <model-id>
