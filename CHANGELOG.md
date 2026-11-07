@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-watchdog** (`daymade-macos` v1.30.2 → v1.30.3): Diagnose invisible local notifications through sender, application, Focus and sharing settings; verify the requested display surface through the installed sender while preserving authorization and job state.
+
 - **macos-cleaner** (`daymade-macos` v1.30.0 → v1.30.1): Separate logical, allocated and private bytes in file diagnostics; preserve unknown measurements, avoid overlapping inventory totals, and label disk changes as observations.
 - **claude-code-hooks** (`daymade-claude-code` v5.1.2 → v5.1.3): Audit functional overlap, false blocking and observed execution cost through bounded read-only evidence; keep unmeasured cost explicit.
 - **macos-cleaner** (`daymade-macos` v1.30.1 → v1.30.2): Route instruction readers to the allocation CLI and leave input limits with their implementing parsers.

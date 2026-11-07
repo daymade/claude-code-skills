@@ -68,6 +68,7 @@ stand down without waiting for a human to disable it.
 | Cooldown/backoff/notification-throttle patterns + sanitized war stories | `references/quiet-watchdog-patterns.md` |
 | SRE alert layering (page vs ticket, fatigue numbers) | `references/alert-discipline.md` |
 | A watchdog alert appears under Script Editor or its sender is unclear | `references/alert-discipline.md` § Message content; inspect the delivered card |
+| A local notification was sent but the user cannot see it | `references/alert-discipline.md` § Local notifications are not visible; verify the requested display surface |
 
 ## The quiet-watchdog contract
 

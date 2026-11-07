@@ -57,6 +57,47 @@ Rate pattern for repeated identical failures (from the published dynamic rate-li
 - For local `osascript` notifications, inspect a delivered card in Notification Center on the target Mac. Distinct watchdogs can appear under `Script Editor`; an `osascript` exit code does not establish the user-visible app name.
 - When the displayed app name is generic, put the watcher or monitored service in the notification title so the reader can identify its log without opening the card.
 
+## Local notifications are not visible
+
+Use this path when a job emitted a notification but the user reports no banner or card.
+Start with the installed job and the target Mac's notification UI; further code checks
+do not resolve missing display evidence. Keep the original test's title and time so
+an older card cannot be mistaken for the new result.
+
+1. **Identify the sender.** Inspect an existing matching card or the application's
+   notification settings. An `osascript` notification can appear under Script Editor;
+   verify the actual sender before changing an application's permissions.
+2. **Check the application's display options.** In System Settings → Notifications,
+   inspect Allow Notifications, Desktop and the banner/alert style, and Notification
+   Center. Match the requested surface: a card in Notification Center does not prove
+   that a desktop banner appeared. Labels vary by macOS version.
+3. **Check the active Focus.** Inspect whether the sender is allowed or silenced.
+   Within the task's authorization, prefer the specific application's exception;
+   do not disable Focus globally merely to make one job visible.
+4. **Check sharing suppression.** Inspect “when mirroring or sharing the display”
+   in Notifications, and whether sharing/mirroring is active. A virtual display's
+   presence alone does not establish that suppression caused the failure. Changing
+   this setting affects other applications too: explain that scope and obtain
+   authorization if it is not already covered, then retain the original value for
+   recovery. See [Apple's Notifications settings](https://support.apple.com/guide/mac-help/mchl205da693/mac).
+5. **Read back the active setting.** Prefer the native settings UI. A successful
+   preference-file write or a notification database entry is supporting evidence,
+   not proof that the active setting changed or that a banner rendered. If the UI
+   remains unchanged, keep the change unverified; do not use historical preference
+   paths or guessed private APIs as a replacement for that observation. Respect
+   host input/foreground refusals and do not restart shared notification services.
+6. **Test the installed path once after a relevant change.** Use a safe event from
+   the actual installed sender, then inspect a matching new banner or card on the
+   target Mac. A standalone probe of another sender cannot accept the job. When
+   only human observation can settle visibility, request that observation and keep
+   the result pending; do not repeatedly send uncertain tests or report restoration
+   from command success. Actual reading by the user remains separate from rendering.
+
+Stop when the requested surface is observed, or state the exact remaining display
+or host-permission gap and its next action. Preserve the original job's state and
+notification deduplication; this diagnosis does not authorize re-running its
+business action or changing delivery channels.
+
 ## Anti-patterns
 
 - **Notify on every cycle** — the "all failed" message re-sent every interval. This is the single most common way a watchdog burns its channel.
