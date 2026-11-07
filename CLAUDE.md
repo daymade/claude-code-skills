@@ -451,6 +451,8 @@ Before choosing or changing any periodic observer's cadence, follow
 [macos-watchdog's observation contract](daymade-macos/macos-watchdog/references/probe-cost.md).
 Before choosing an observer's failure-notification threshold, follow
 [observation-failure timing](daymade-macos/macos-watchdog/references/alert-discipline.md#observation-failure-timing).
+When a local job emitted a notification but its banner or card is not visible, follow
+[local notification diagnosis](daymade-macos/macos-watchdog/references/alert-discipline.md#local-notifications-are-not-visible).
 For named macOS load/runaway alerts, follow
 [macos-load-doctor's intervention and diagnosis-completion contract](daymade-macos/macos-load-doctor/SKILL.md#5-act-within-the-boundary).
 For memory pressure or suspected child-process leaks, enter that Skill's
