@@ -37,6 +37,11 @@ answer is another hook. First complete the **Loop Contract** in rule 7 and read
 [pitfall #36](references/hook_pitfalls.md#36-a-self-applied-review-rule-can-loop-without-any-hook).
 The loop may be created entirely by an agent repeatedly applying a prose rule.
 
+For an existing hook's usefulness, duplicate behavior or cost, follow the
+[read-only effect and cost audit](references/effect-and-cost-audit.md) before
+consolidating or retiring it. Keep configured handlers, observed processes,
+in-process rules and measured wall time separate; missing correlation stays unknown.
+
 ## Hook types and what the exit code means
 
 | Type | Fires | Exit 0 | Exit 2 | Other |

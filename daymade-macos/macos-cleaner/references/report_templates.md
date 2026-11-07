@@ -33,6 +33,11 @@ false savings promise.
 
 State permission errors and incomplete scans. Never present a partial `du` total as the complete category size.
 
+Use [the diagnosis CLI](storage-diagnosis.md) to render existing inventory or
+exact-file metadata. Keep logical, allocated and native private bytes separate,
+with reasons for unknowns, actual roles/references and a deciding next action.
+Keep sample/device groups and volume observations separate from path subtotals.
+
 ## Protected-service baseline
 
 | Service | Process/parent | Listener | Launch mechanism | Health probe | Log-growth window |
