@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **tibo-reset-codex** (v2.8.1 → v2.8.2): Route monitor-stop requests directly to the actual host's lifecycle procedure; preserve read-only research boundaries and verify all in-scope schedulers stopped without querying reset sources.
+
 - **macos-watchdog** (`daymade-macos` v1.30.2 → v1.30.3): Diagnose invisible local notifications through sender, application, Focus and sharing settings; verify the requested display surface through the installed sender while preserving authorization and job state.
 
 - **macos-cleaner** (`daymade-macos` v1.30.0 → v1.30.1): Separate logical, allocated and private bytes in file diagnostics; preserve unknown measurements, avoid overlapping inventory totals, and label disk changes as observations.
