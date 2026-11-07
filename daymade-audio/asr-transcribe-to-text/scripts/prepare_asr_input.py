@@ -10,7 +10,8 @@ Two jobs:
      recorders) into one continuous session file, preserving order and letting the
      ASR engine choose stable low-energy long-audio boundaries instead of device cuts.
   B. Normalize for ASR (16 kHz mono) and optionally apply a pitch-PRESERVED speedup
-     (--speed) to shrink uploads billed by duration (Feishu Minutes and similar).
+     (--speed) to shrink uploads billed by duration (Feishu Minutes and similar),
+     only when the user permits a speed change. Keep 1.0x for original-speed work.
 
 The script self-verifies instead of trusting ffmpeg exit code:
   - output duration must equal sum(inputs) / speed (tolerance 1.5 s)
@@ -20,7 +21,7 @@ The script self-verifies instead of trusting ffmpeg exit code:
 
 Usage:
   uv run prepare_asr_input.py SEG1.wav SEG2.wav -o merged.wav
-  uv run prepare_asr_input.py SEG*.wav -o upload.m4a --speed 1.3
+  uv run prepare_asr_input.py SEG*.wav -o upload.m4a --speed 1.3  # authorized speedup
   python3 prepare_asr_input.py a.wav b.wav -o master.flac --order given
 
 Output codec is chosen by extension: .wav (pcm_s16le) / .m4a (AAC 48k) /
@@ -114,7 +115,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Merge + normalize audio for ASR, optional pitch-preserved speedup.")
     ap.add_argument("inputs", nargs="+", help="Input audio/video files (segments of one session)")
     ap.add_argument("-o", "--output", required=True, help="Output file; extension picks codec (.wav/.m4a/.flac/.mp3)")
-    ap.add_argument("--speed", type=float, default=1.0, help="Pitch-preserved tempo factor, e.g. 1.3 (ASR-safe zone: <=1.5)")
+    ap.add_argument("--speed", type=float, default=1.0, help="Tempo factor (default 1.0); change only with user permission, e.g. 1.3 (ASR-safe zone: <=1.5)")
     ap.add_argument("--order", choices=["auto", "given"], default="auto",
                     help="auto: sort by YYYYMMDD_HHMMSS in filenames when all have one; given: keep CLI order")
     args = ap.parse_args()

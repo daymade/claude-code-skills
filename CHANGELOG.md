@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **asr-transcribe-to-text** (`daymade-audio` v1.57.5 → v1.57.6): Preserve original-speed upload and source-time review requirements; make metered speedup conditional on user permission and a verified mapping back to the original media.
+
 - **macos-watchdog** (`daymade-macos` v1.30.2 → v1.30.3): Diagnose invisible local notifications through sender, application, Focus and sharing settings; verify the requested display surface through the installed sender while preserving authorization and job state.
 
 - **macos-cleaner** (`daymade-macos` v1.30.0 → v1.30.1): Separate logical, allocated and private bytes in file diagnostics; preserve unknown measurements, avoid overlapping inventory totals, and label disk changes as observations.
