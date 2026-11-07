@@ -26,6 +26,13 @@ An existing transcript can satisfy the text request but does not satisfy an
 outstanding video upload. Slow transfers or upload failures do not authorize
 extracting audio, transcoding or speeding up the video.
 
+**Apply original-speed requirements to audio as well.** For an original-file or
+original-speed upload request, upload a compatible original directly. If merging
+or format conversion is needed and permitted, keep 1.0x speed and the original
+source-time mapping. Use 1.0x for playback/speaker review against the original
+media unless the user permits a time-mapped derivative. Metered billing alone
+does not authorize speedup; follow the preprocessing conditions below.
+
 Before starting transcription, check the owning project's transcript catalog,
 external source index, and declared prior-work carriers for an existing
 canonical transcript using source ID, date, title, and entity terms. A verified
@@ -204,6 +211,8 @@ ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:no
 ## Preprocess: Merge Segments & Shrink Metered Uploads (optional)
 
 Skip this section for original-video uploads; retain the selected original file.
+For original-file or original-speed audio requests, follow the route above;
+neither this section nor its destination table overrides those constraints.
 
 Run this BEFORE transcription when either applies:
 
@@ -214,7 +223,8 @@ Run this BEFORE transcription when either applies:
   Merge them once to preserve session order; the explicit long-audio runner
   (Step 3 Path L) then owns stable source-time blocks. Transcribing device
   segments separately throws away cross-segment context inside those chunks.
-- **The audio goes to a metered ASR** (Feishu Minutes, any per-minute quota) — a
+- **The audio goes to a metered ASR and the user permits speedup** (Feishu Minutes,
+  any per-minute quota) — a
   pitch-PRESERVED speedup cuts billed duration directly, and modern ASR does not care:
   1.3x was user-verified on Feishu Minutes (2026-07-16) with no perceptible recognition
   difference, and public Whisper benchmarks show no sharp WER drop until 2.0x
@@ -225,7 +235,7 @@ and verifies its own output instead of trusting the ffmpeg exit code:
 
 ```bash
 uv run ${CLAUDE_SKILL_DIR}/scripts/prepare_asr_input.py SEG1.wav SEG2.wav -o merged.wav   # merge only
-uv run ${CLAUDE_SKILL_DIR}/scripts/prepare_asr_input.py SEG*.wav -o upload.m4a --speed 1.3  # merge + quota-saving speedup
+uv run ${CLAUDE_SKILL_DIR}/scripts/prepare_asr_input.py SEG*.wav -o upload.m4a --speed 1.3  # only with speedup permission
 ```
 
 Expected output:
@@ -248,12 +258,16 @@ Wrote upload.m4a
   order or a missing segment); overall loudness prints for comparison with the source.
 - Speedup must be `atempo`-style pitch-preserved stretch — never sample-rate trickery,
   which shifts pitch and breaks both ASR accuracy and diarization voiceprints.
+- For authorized speedup, retain the originals, speed factor and segment boundaries.
+  Map timestamps back to the original media before source-time playback or speaker
+  review. If the downstream path cannot preserve that mapping, keep 1.0x speed;
+  sped-up upload timestamps are not original-media timestamps.
 - **Pick the output format by destination** — codec follows the file extension:
 
   | Destination | Format | Why |
   |---|---|---|
   | Local MLX pipeline (Path A) | `.wav` or `.m4a` | Both feed the pipeline directly (m4a verified 2026-07-18: a 3-min slice transcribed cleanly). M4A is ~5x smaller — 324 MB WAV → 63 MB M4A on a 2h49m merge, duration identical to the second |
-  | Metered upload (Feishu Minutes, per-minute quota) | `.m4a` + `--speed 1.3` | AAC 48k is speech-transparent for ASR, ~30% smaller than mp3 at equal speech quality; speedup cuts billed duration ~23% |
+  | Metered upload (Feishu Minutes, per-minute quota) | `.m4a` at 1.0x; `--speed 1.3` only with speedup permission and source-time mapping | AAC 48k is speech-transparent for ASR, ~30% smaller than mp3 at equal speech quality; permitted speedup cuts billed duration ~23% |
   | Self-hosted vLLM endpoint (Path B) | `.ogg` | Accepted where MP3 is refused, and ~8× smaller than WAV — which is what keeps a long recording under the server's 25 MB request cap. See Path B's limits section |
   | Lossless archive | `.flac` | ~50% of WAV, bit-perfect |
   | Only when the target rejects the above | `.mp3` | Compatibility fallback |
