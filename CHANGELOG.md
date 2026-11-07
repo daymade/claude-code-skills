@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **macos-cleaner** (`daymade-macos` v1.30.0 → v1.30.1): Separate logical, allocated and private bytes in file diagnostics; preserve unknown measurements, avoid overlapping inventory totals, and label disk changes as observations.
 - **claude-code-hooks** (`daymade-claude-code` v5.1.2 → v5.1.3): Audit functional overlap, false blocking and observed execution cost through bounded read-only evidence; keep unmeasured cost explicit.
+- **macos-cleaner** (`daymade-macos` v1.30.1 → v1.30.2): Route instruction readers to the allocation CLI and leave input limits with their implementing parsers.
+- **claude-code-hooks** (`daymade-claude-code` v5.1.3 → v5.1.4): Add the instruction-file audit entry and remove the derived observation count and copied reader-key definition.
 
 - **openclaw** (v1.3.0 → v1.3.1): Align live configuration with native APIs; document verified backups, native upgrade recovery and state-aware rollback. Scope verification to the repaired behavior while preserving offline tools and plugin diagnostics.
 - **openclaw-model-switch** (v1.2.0 → v1.2.1): Prefer validated batch writes and the CLI reload hint; verify the default through a real Gateway turn with exact model and fallback evidence. Preserve older-version file tools and distinguish Gateway, delivery and ingress checks.

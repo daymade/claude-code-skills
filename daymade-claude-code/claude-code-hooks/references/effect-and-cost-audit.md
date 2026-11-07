@@ -29,7 +29,7 @@ and bounded window. Absence leaves coverage unknown. Read an audit command's
 implementation first: even `status` may create a lock or run liveness probes.
 Do not use such an entry as a zero-write read.
 
-## Separate six observations
+## Separate the observations
 
 | Observation | Evidence and limit |
 |---|---|
@@ -81,9 +81,8 @@ unreadable/malformed input and missing fields as gaps. For newly created replay
 files, anchor the window at fixture creation time while retaining source-relative
 ordering: candidate selection uses filesystem metadata before record timestamps.
 Treat `Total runs` as the reader's count after copy deduplication, not a process
-or native-call count. Its key uses `toolUseID`, `hookEvent`, `hookName` and
-command-or-hook-name; ID, event and at least one command/name must be nonempty.
-That key alone cannot distinguish a copied record from a second identical
+or native-call count. Read the loaded reader's implementation for its current
+deduplication key and required fields. That key alone cannot distinguish a copied record from a second identical
 handler execution. Use execution evidence to decide actual duplicate work.
 
 Read existing engine telemetry separately through its owner-documented reader,

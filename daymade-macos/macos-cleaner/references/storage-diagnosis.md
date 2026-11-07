@@ -13,7 +13,8 @@ python3 -B scripts/analyze_large_files.py --files "<exact-physical-file>" --json
   python3 -B scripts/cleanup_report.py --inventory - --json
 ```
 
-Select at most 64 files. This mode does not run `find`, `du`, Docker, payload
+Selection limits are enforced by the [analyzer](../scripts/analyze_large_files.py).
+This mode does not run `find`, `du`, Docker, payload
 hashing or a recursive walk. It opens physical parents without following
 symlinks, observes `st_size` and `st_blocks * 512`, and reuses
 `_apfs_native.private_size_fd` on a pinned regular-file descriptor. Native
@@ -32,7 +33,8 @@ in a large cache. Omit `--json` for human-readable output.
 python3 -B scripts/cleanup_report.py --inventory "<existing-inventory.json>"
 ```
 
-Supply a UTF-8 JSON object of at most 1 MiB:
+Supply a UTF-8 JSON object; its input boundary is defined by the
+[inventory parser](../scripts/storage_diagnosis.py):
 
 ```json
 {
