@@ -317,6 +317,10 @@ Before drawing page relationships or a click-through journey, use
 [the topology/visit distinction](data-visualization-discipline/references/visual-form-selection.md#关系拓扑与有序旅程).
 For live status, attention filters, retention intent or excluded-record recovery, follow its
 [cross-view attention journey](frontend-visual-qa/references/journey-and-page-contracts.md#operational-attention-across-views).
+For audits of asset-ledger hierarchy, row selection or issue resolution, follow its
+[operational asset review](frontend-visual-qa/references/journey-and-page-contracts.md#operational-asset-review-select-understand-resolve).
+For shared controls or help mounted outside the workspace's style scope, use its
+[scoped-style and portal checks](frontend-visual-qa/references/journey-and-page-contracts.md#scoped-styles-and-portal-content).
 For embedded-reader sizing, surrounding navigation, overlays, zoom, reading/return,
 focus or filtered-selection changes, use its
 [reader journey](frontend-visual-qa/references/journey-and-page-contracts.md#embedded-readers-and-semantic-zoom).
