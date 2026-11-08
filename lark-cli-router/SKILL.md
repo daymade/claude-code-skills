@@ -34,6 +34,13 @@ Use its bounded candidate helper with explicit authorized profiles; do not start
 ingest, gap audit or ASR for a playback-link lookup. Preserve a supplied minute
 token or meeting ID and use the embedded guide's direct lookup instead.
 
+## Deleted documents and Wiki spaces
+
+When investigating a deletion notice, a missing Wiki space, or an empty recycle
+bin, read [deletion and recovery](references/deletion-and-recovery.md) before
+concluding that the source cannot be recovered. Keep CLI commands in the current
+embedded guides; whole-space recovery may require the authorized admin interface.
+
 ## Preserve document layout
 
 When updating a document with manual formatting, changing table widths, or

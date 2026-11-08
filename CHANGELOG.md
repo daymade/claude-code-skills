@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **daymade-skill** (v1.77.2 → v1.77.3): Align repository and suite instructions with the canonical publication, native-discovery and consumed-bundle workflows; remove duplicated setup details from the repository guide. Runtime interfaces and SOP definitions are unchanged.
+- **lark-cli-router** (v1.0.0 → v1.0.1): Distinguish deleted items from whole Wiki spaces, inspect the corresponding recovery surface, and keep recovery, archive coverage and deletion authorization separate. Change type: bounded recovery-routing correction.
 
 - **skill-creator / skill-governance** (`daymade-skill` v1.77.1 → v1.77.2): Add shared-plugin publication and source-alias adoption cases. Check concurrent release inputs before review and distinguish published content from the bundle actually consumed, preserving existing review, activation and merge gates.
 - **peer-message** (v1.24.9 → v1.24.10): Discover the complete current native tool surface before selecting a coordination transport; retain actual-schema, identity, delivery and fallback boundaries.
