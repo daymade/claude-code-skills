@@ -191,7 +191,11 @@ For tunnel/proxy-path failures or slow throughput, enter
 throughput investigations, use [debugging-network-issues](debugging-network-issues/SKILL.md).
 Proxy-selection and disruptive VPN changes follow tunnel-doctor's
 [proxy-conflict procedure](tunnel-doctor/references/proxy_conflict_reference.md) and
-[network-change recovery](tunnel-doctor/references/network_change_recovery.md). For unresolved tunnel packet-loss
+[network-change recovery](tunnel-doctor/references/network_change_recovery.md). For Shadowrocket rapid toggle loops or Network Extension startup assertions, read its
+[Network Extension recovery section](tunnel-doctor/references/network_change_recovery.md#network-extension-state-and-stale-listener-recovery).
+When a watchdog is suspected, first align the actual actor and state transitions through
+[macos-watchdog troubleshooting](daymade-macos/macos-watchdog/SKILL.md#troubleshooting-quick-map).
+For unresolved tunnel packet-loss
 localization, read the [capture procedure](debugging-network-issues/references/packet-capture-recipes.md#four-boundary-tunnel-captures).
 For same-provider node failures with a working subscription, enter
 [provider account checks](tunnel-doctor/references/provider_account_suspension.md).
