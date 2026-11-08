@@ -37,6 +37,27 @@ parallel work. An unrelated base advance alone does not require a new PR head or
 another CI run. Keep the final-tree comparison, version checks and exact-candidate
 review binding; do not reopen unrelated Skills merely because main advanced.
 
+### Case: two releases share a plugin version
+
+The release executor checks the owning plugin, not just the edited Skill name,
+before freezing review. Two different Skill directories can share one registered
+plugin version; their releases can collide in the manifest even when their
+reference files do not overlap. Inspect the current base and open changes for
+that plugin, its shared manifest/CHANGELOG and validation dependencies. Coordinate
+the order with any actual writer through the existing publication preflight;
+an empty coordination registry is not an exclusive publication window.
+
+For example, if another release of the same suite lands first, derive the next
+version from that immutable base and preserve its changelog entry. Freeze and
+review the resulting candidate. If reconciliation occurs after review, inspect
+the actual distribution and dependency delta before choosing normal review or
+the opt-in rebind procedure. An unchanged edited reference alone is insufficient:
+a sibling Skill or shared validation input may have changed. Reuse unaffected
+behavior evidence; do not rerun it merely to obtain a newer timestamp or treat it
+as evidence for the changed delta. Finish through the existing version, review,
+CI and exact-head merge gates. This early conflict check is executor procedure;
+the release helper does not discover or reserve other writers' work.
+
 After integration changes a move/deletion candidate, repeat inbound-reference verification
 on the entire final tree, including consumers outside the original diff. Follow
 [Docs Cleaner's reference-maintenance procedure](https://github.com/daymade/claude-code-skills/blob/main/daymade-docs/docs-cleaner/SKILL.md#updating-references-to-a-file-you-moved-or-deleted)

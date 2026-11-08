@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-creator / skill-governance** (`daymade-skill` v1.77.1 → v1.77.2): Add shared-plugin publication and source-alias adoption cases. Check concurrent release inputs before review and distinguish published content from the bundle actually consumed, preserving existing review, activation and merge gates.
+- **peer-message** (v1.24.9 → v1.24.10): Discover the complete current native tool surface before selecting a coordination transport; retain actual-schema, identity, delivery and fallback boundaries.
+
 - **ghostty-use** (v1.11.5 → v1.11.6): Add a complete no-foreground GUI acceptance loop with current-keybinding discovery, per-ID readiness/missing outcomes, independent selected-tab/body readback and dynamic tab-set reconciliation. Change type: sampled acceptance-recipe extension; paste-based restore and existing authorization boundaries remain unchanged.
 - **kimi-use** (v1.8.3 → v1.8.4): Add a low-overhead native-tab traversal recipe combining selected-tab and document observation, with explicit delivery/readback, dynamic-identity and repeat-guard boundaries. Change type: sampled desktop-verification recipe extension.
 
