@@ -709,6 +709,9 @@ For a remote Codex sign-in prompt or choosing existing-login reuse versus new au
 [Local Codex authentication recovery](daymade-codex/local-codex/references/oauth-guide.md#remote-account-switch-and-expired-login-recovery).
 Keep quota checks on the separate route below.
 
+For stopping a Tibo monitor or ending reset tracking, enter the
+[host lifecycle route](tibo-reset-codex/SKILL.md#停用监控先走宿主操作).
+
 For Codex reset announcements or account quota questions, enter
 [tibo-reset-codex](tibo-reset-codex/SKILL.md). Follow its
 [account usage SOP](tibo-reset-codex/references/account-usage.md) before authentication,
