@@ -650,15 +650,10 @@ for candidate selection and commands; keep the detailed rules in those owners.
 ### Local Agent Messaging
 
 For local transport selection or accepted/consumed delivery interpretation, enter
-[peer-message](peer-message/SKILL.md). For independent sessions, enter the
-[local coordination workflow](peer-message/references/local-coordination.md#原生跨会话通信)
-before sending, including complete prepared-envelope size checks and parent-request expiry at send time. Use its routing guidance for uncovered local targets
-or coordination evidence that needs verification, never to bypass denied or Held messages.
-Treat `peer-message/scripts/peer.py` as the fallback CLI executable
-contract, [codex_live.py](peer-message/scripts/codex_live.py) as its Codex live adapter,
-and `peer-message/SKILL.md` as the runtime router and owner of stable
-runtime prerequisites plus the peer-cannot-authorize safety boundary. Independent-session
-task/resource declarations and request lifecycle belong in its `references/local-coordination.md`.
+[peer-message](peer-message/SKILL.md), starting with
+[current-host tool discovery](peer-message/references/local-coordination.md#先发现完整工具面再选通信通道).
+For independent-session preflight and request lifecycle, follow the
+[local coordination workflow](peer-message/references/local-coordination.md#原生跨会话通信).
 Keep native-guard installation, recovery and actual-host acceptance in that workflow;
 do not duplicate its parameters here. Reply lookup, transport and discovery
 details belong in [the transport and receiver-evidence SOP](peer-message/references/protocol-and-discovery.md).
@@ -775,13 +770,8 @@ receipt, and an automatic outbox path gets one non-retrying HTTP attempt.
 For affected executable entries before release and after source synchronization,
 follow [source location and activation](daymade-skill/skill-creator/references/source-location-and-activation.md).
 
-For installed-Skill and fresh-host acceptance, test the canonical source route. Use the current
-`claude-switch-models-setup` local-source workflow for this maintainer machine,
-and use `daymade-skill:skill-governance` to verify source, installed state,
-discovery policy, and the fresh model-visible catalog. Do not blindly remove and
-re-add a marketplace: removing it uninstalls plugins installed from that
-marketplace. Do not `cp -r` a second Skill tree into a user Skill directory; that
-copy immediately creates an independent drift owner.
+For installed-Skill and fresh-host acceptance, enter
+[skill-governance](daymade-skill/skill-governance/SKILL.md).
 
 For maintainer source-backed activation, source-watcher deployment, or authorized plugin-to-personal
 Skill conversion, follow
@@ -791,13 +781,11 @@ that owner's [explicit source preferences](daymade-claude-code/claude-switch-mod
 For Skill authoring in an approved independent Fleet clone, follow the
 [leased-authoring owner procedure](daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md#leased-fleet-authoring-clones).
 
-When delivery includes local availability, finish the source owner's dry-run/apply
-and the [newly registered Skill gate](daymade-skill/skill-governance/references/skill-surface-governance.md#14-verify-a-newly-registered-skill).
-Take expected identities from the requested change, not from links or a whitelist
-that may already omit the new Skill. Keep installation/catalog evidence separate
-from actual task results. A daemon using a pinned plugin copy also needs the
+For requested local availability, follow
+[source-backed activation and consumed-bundle readback](daymade-skill/skill-governance/references/skill-surface-governance.md#5-reconcile-source-backed-activation)
+and the [fresh-host delivery gate](daymade-skill/skill-governance/references/skill-surface-governance.md#14-verify-a-newly-registered-skill).
+For a daemon using a pinned plugin copy, follow the
 [pin-update workflow](daymade-claude-code/claude-switch-models-setup/references/troubleshooting.md#advance-the-pin).
-Do not treat a merged source change as proof that this runtime advanced.
 For a named-target availability verdict, use the
 [target-verdict procedure](daymade-skill/skill-governance/references/skill-surface-governance.md#named-target-verdict).
 Keep its invocation and result contract in that owner.
