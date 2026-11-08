@@ -328,6 +328,26 @@ capabilities or decide data preservation. A copy-only edit does not require it.
    current page at Level A/B; source, build, and handler assertions alone cannot
    close the rendered finding. Leave unavailable page or write evidence explicit.
 
+For a catalog or topology refactor, apply the same preservation recipe to these
+representative reading tasks:
+
+- Read each relationship's role from authoritative data. Distinguish a production
+  deployment from a machine used for maintenance and a runner used for standard
+  CI. Verify that the visible labels and detail view let the reader identify
+  which machine hosts the service; a shared "related" label must not turn all
+  three roles into deployment claims. Keep an unknown host unknown.
+- Use a query with a known match initially below nonmatching records. Verify the
+  task's promised search priority in the visible list; highlighting a match in
+  place does not prove it was brought forward. Open that result and verify its
+  identity, relationship role and selection context in the detail view. Change
+  or clear the query and follow the promised return path; compare the visible
+  selection and context with the pre-change contract rather than requiring a
+  new retention behavior.
+- Keep a genuine production-host record as a healthy control. Check the mixed
+  roles and search/detail journey as separate outcomes; a correct total or an
+  intact diagram cannot establish either one. Retain necessary provenance and
+  uncertainty while removing redundant explanation.
+
 Retain a compact map in the existing report:
 `old operation -> current entry -> expected IDs/values -> observed result -> evidence/verdict`.
 Reuse unchanged passing checks bound to the same content and inputs; rerun only
