@@ -105,6 +105,7 @@ Determine which scenario applies:
 - **Every domestic/DIRECT-rule site fails at once (TLS `unexpected EOF` mid-handshake, proxy-port CONNECT returns 503, Node CLIs report `UNKNOWN_CERTIFICATE_VERIFICATION_ERROR`) while proxied overseas sites keep working** → TUN DIRECT split-brain (Step 2J)
 - **One hostname fails after a DNS/delegation move while other sites work** → read [single-host DNS migration](references/single-host-dns-migration.md) before diagnosing a broken forwarding plane or restarting a shared tunnel.
 - **Everything on macOS fails at once — domestic AND overseas, and even Step 2J's real-IP probe fails** → do not declare an outage yet; run the physical-interface discriminator in "TUN full-stall vs genuine outage" (above Step 2A)
+- **Shadowrocket 一打开就高速开关，或 `neagent`/PlugInKit 反复报 `Failed to start extension` / `could not acquire startup assertion`** → 先按 [Network Extension state and stale-listener recovery](references/network_change_recovery.md#network-extension-state-and-stale-listener-recovery) 对齐实际 actor、扩展生命周期与精确 listener；不要先重启所有 watchdog 或相邻 daemon
 - **SSH connects but `operation not permitted`** → Tailscale SSH config issue (Step 4)
 - **SSH connects but `be-child ssh` exits code 1** → WSL snap sandbox issue (Step 5)
 - **TCP port 22 reachable (`nc -z` succeeds) but SSH fails with `kex_exchange_identification: Connection closed`** → Tailscale SSH proxy intercept on WSL (Step 5A)
@@ -142,8 +143,8 @@ When symptoms point at a component (proxy, VPN, route table, DNS), **don't commi
 
 | Suspected component | Authoritative health check (run this first) |
 |---------------------|---------------------------------------------|
-| HTTP proxy (Shadowrocket / Clash / Surge) | `curl -x http://127.0.0.1:<port> -m 10 https://api.github.com` returns 200 |
-| Tailscale daemon | `tailscale status` returns peer list (not connection error) |
+| HTTP proxy (Shadowrocket / Clash / Surge) | `lsof -nP -iTCP:<port> -sTCP:LISTEN` proves the exact address is listening, then `curl -x http://127.0.0.1:<port> -m 10 https://api.github.com` returns 200 through that loopback listener; Connected or a LAN-only listener is not a substitute |
+| Tailscale daemon | `tailscale status` returns a running backend and peer list (not `Tailscale is stopped`), then a real `tailscale ping` succeeds; `scutil --nc` Connected alone certifies only the network-configuration state |
 | A specific DNS resolver | `dig @<nameserver-ip> +tries=1 +timeout=3 example.com` <100ms |
 | Routing for an IP | `route -n get <ip>` shows expected interface |
 | Per-resolver bisection (when DNS is suspect) | The `for ns in ...; do dig @$ns ...` loop in Step 2I |
