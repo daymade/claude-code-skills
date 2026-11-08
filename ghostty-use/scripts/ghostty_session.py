@@ -61,7 +61,12 @@ BIRTH_LEEWAY_SECONDS = 0.5     # clock tolerance only; a transcript never predat
                                # TUI (float birthtime vs second-truncated lstart), so a
                                # larger window would only admit fresh corpse files
 FIRST_WRITE_WINDOW_SECONDS = 1200  # first message may lag the tab opening
-MAX_IDENTITY_HEAD_BYTES = 256 << 10
+# Bounded identity read: the whole 40-line head shares this budget. Kimi-profile
+# transcripts carry large system-reminder/skill-expansion records up front — two
+# real sessions measured at 479KB/524KB for 40 lines (2026-11-08), overflowing the
+# old 256KB budget and failing closed into unresolved. 1MB covers those with ~2x
+# headroom while keeping the read bounded.
+MAX_IDENTITY_HEAD_BYTES = 1 << 20
 
 
 class SessionList(list):
