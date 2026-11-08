@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **ghostty-use** (v1.11.4 → v1.11.5): Drop the incidental session count from the side-channel verification example; the durable criterion is window-visibility versus process-liveness, not a historical tally.
+- **feishu-doc-scraper** (v1.12.3 → v1.13.0): Inventory opaque clickable and plain-text website links before batch scope/volume decisions; preserve selected acquisition/upload/retention policy on continuation. Import verified original-preview recoveries offline into the existing attachment state and manifest while retaining failed-attempt history. Change type: additive discovery and recovery interfaces.
+
 - **frontend-visual-qa** (v1.21.38 → v1.21.39): Add bounded catalog/topology acceptance cases for exact-model photos, labeled schematic fallbacks after missing or failed media, relationship roles, visible search priority and retained detail context. Change type: sampled acceptance-recipe extension; existing audit and action boundaries remain intact.
 - **frontend-visual-qa** (v1.21.37 → v1.21.38): Audit operational ledgers through selection, navigation and actual issue resolution; distinguish useful persistent inspectors from generic rails. Add scoped-style/portal and settled-tooltip counterexamples while preserving project decisions and desktop scope.
 

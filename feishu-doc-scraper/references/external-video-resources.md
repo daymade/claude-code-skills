@@ -1,6 +1,6 @@
 # External video discovery and handoff
 
-Load this branch when a captured document contains external video links. The
+Load this branch when a captured document contains external website or video links. The
 executing agent owns discovery and reconciliation; platform and storage owners
 perform authorized metadata reads, downloads and retention. This Skill does not
 implement another platform downloader.
@@ -11,7 +11,7 @@ Run the extractor on each document's raw HTML (or original Markdown when the API
 returned Markdown), including child documents:
 
 ```bash
-python3 <skill-dir>/scripts/feishu_extract_refs.py <captured-body.html> --type external-video
+python3 <skill-dir>/scripts/feishu_extract_refs.py <captured-body.html> --type external
 ```
 
 The existing JSON array and `type/ref/title/dispatch` fields remain supported.
@@ -24,11 +24,23 @@ short link or direct media URL stays distinguishable. Direct-media queries remai
 unchanged because they may carry access signatures; keep captures and worklists
 within the source's authorized visibility and do not publish signed URLs.
 
-Coverage includes Bilibili video/episode/series/playlist and b23 short links,
+The scan includes quoted links and bare URLs in the raw body, including plain-text
+URLs inside tables. `external-web` records inventory opaque website destinations;
+they establish neither video availability nor authority to recurse or download.
+Keep exact query parameters and fragments. A known video or other handled
+reference is not duplicated as a generic webpage. Feishu-native links stay with
+their existing handlers.
+
+This is a candidate inventory. `needs_url_review` flags CJK text inside a URL:
+it may be a real Unicode path/query or prose touching a bare link. Resolve the
+boundary against the source before fetching; do not silently truncate a valid
+Unicode URL or count an unverified candidate as an available video.
+
+Video recognition includes Bilibili video/episode/series/playlist and b23 short links,
 YouTube watch/shorts/live/embed/playlist and youtu.be links, plus direct
 MP4/M4V/WebM/MOV/M3U8/MPD URLs. It does not infer video content from arbitrary
 webpages, channel pages, JavaScript players or opaque redirectors. Inspect such
-source cards when present and add a locator to the worklist manually; zero
+source cards within the selected scope and classify their existing webpage locator; zero
 recognized links does not establish that every possible external player was read.
 
 Merge discoveries into the destination's resource worklist by `(type, ref)`;
@@ -38,6 +50,27 @@ Keep unresolved short links distinct until an authorized platform read establish
 their target. Preserve the original link when recording that resolution.
 
 ## Select the authorized job and owner
+
+### Stabilize the batch before transferring it
+
+Before bulk downloads, uploads or child-page creation, reconcile the complete
+in-scope URL inventory, including plain-text URLs. Separate native Feishu assets,
+selected external media and ordinary websites retained as links. State the
+selected roots/depth/parts, local and cloud destinations, and any user-set limits.
+Use source metadata to report item counts and byte volume; when unavailable,
+label a bounded sample estimate and its uncertainty, or retain `unknown`.
+Do not start downloading the entire collection to estimate its size.
+
+Check local capacity and the selected cloud destination's known limits before
+expanding the batch. A newly discovered collection or a materially different
+volume changes the execution decision: reconcile it against the user's intended
+copy and limits, then proceed within existing authorization. Ask only when a
+scope/cost choice remains unresolved; an explicit full-collection request remains
+supported. Report progress by selected branch and transferred bytes so the user
+can see what occupies storage. Changing disks or adding cloud pages is not a
+substitute for resolving an uncertain capture boundary.
+
+### Hand off only the selected resources
 
 Before acquisition, carry the requested result (link, text, audio or video), source
 document, original and canonical URL, platform identity/part, selected episode or
@@ -79,6 +112,19 @@ access tests, downloads or state updates.
 
 ## Resource states and completion
 
+Keep acquisition, cloud upload and cleanup decisions separate in the existing
+worklist. On correction, update the selected policy, stop owned controllers and
+workers for the excluded branch, and read back their terminal state. Preserve
+completed files and cloud copies according to the latest retention instruction;
+stopping a job does not authorize deletion. Before resuming, use that current
+policy rather than the original batch arguments. Continue authorized branches
+without restarting canceled ones.
+
+Acceptance example: after “stop external downloads/uploads, retain local files”
+and “keep existing cloud copies”, a later “continue” permits the remaining Feishu
+copy/audit. It produces no new website payloads or cloud case pages and deletes
+no retained copies. A later explicit request can select external acquisition again.
+
 Use these explicit states in the destination's worklist (existing equivalent
 schema names are acceptable when their meanings match):
 
@@ -98,3 +144,8 @@ existing [storage contract](archive-storage-contract.md#nas-retained-external-me
 for durable retention; neither platform-owner success nor a local cache alone
 proves NAS/OSS retention. Report incomplete media acquisition even when the Feishu
 body and reference graph have been fully captured.
+
+For link-preserving copies, compare destinations, identity parameters and source
+positions. Adjacent same-destination anchors may merge without losing content;
+raw anchor-count inequality alone is not a missing-link finding. Destination-set
+equality alone also cannot prove that every occurrence remains in its intended place.

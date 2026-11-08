@@ -5,6 +5,8 @@
 # ///
 """Download source-card attachments from a saved docs +fetch response.
 
+With --resume --recoveries, reconcile verified original-preview files offline.
+
 Uses the installed lark-cli as user; never logs in, exports browser credentials,
 uploads, changes permissions or selects durable storage. Exit 0: all unique
 attachments verified; 3: partial downloads; 2: invalid input/local state.
@@ -104,7 +106,56 @@ def write_json(path, value):
             os.unlink(temp)
 
 
-def archive(capture, output, source, profile=None, workers=4, timeout=90, resume=False):
+def verified_recoveries(path, binding, items):
+    """Bind permitted original-preview receipts to this exact capture, offline."""
+    path = Path(path)
+    if path.is_symlink():
+        raise ValueError('Refuse symlink recovery input')
+    data = json.loads(path.read_text())
+    if not isinstance(data, dict) or data.get('binding') != binding:
+        raise ValueError('Recovery capture/source/profile binding changed')
+    if binding.get('revision_id') is None:
+        raise ValueError('Recovery import needs the captured source revision')
+    rows = data.get('items')
+    if not isinstance(rows, list) or not rows:
+        raise ValueError('Recovery items must be a nonempty list')
+    expected = {item['token']: item for item in items}
+    recovered = {}
+    for row in rows:
+        if (not isinstance(row, dict) or not isinstance(row.get('token'), str)
+                or row['token'] not in expected):
+            raise ValueError('Recovery token is not in this capture')
+        token = row['token']
+        if token in recovered:
+            raise ValueError('Duplicate recovery token')
+        paths = []
+        for key in ('path', 'receipt'):
+            value = row.get(key)
+            if not isinstance(value, str) or not value or not Path(value).is_absolute():
+                raise ValueError('Recovery payload and receipt need explicit absolute paths')
+            candidate = Path(value)
+            if candidate.is_symlink() or not candidate.is_file():
+                raise ValueError('Recovery payload or receipt is missing or unsafe')
+            paths.append(candidate)
+        payload, receipt_path = paths
+        receipt = json.loads(receipt_path.read_text())
+        identity = f"{token}@{binding['revision_id']}"
+        if (not isinstance(receipt, dict) or receipt.get('identity') != identity
+                or receipt.get('status') not in ('complete', 'already_verified')
+                or receipt.get('proxy') is not False
+                or type(receipt.get('bytes')) is not int
+                or not isinstance(receipt.get('sha256'), str)
+                or not re.fullmatch(r'[0-9a-f]{64}', receipt['sha256'])):
+            raise ValueError('Recovery needs a matching original-preview verification receipt')
+        verified = verify_file(payload, expected[token])
+        if any(receipt[key] != verified[key] for key in ('bytes', 'sha256')):
+            raise ValueError('Recovery payload differs from its verified receipt')
+        recovered[token] = (payload, verified, identity)
+    return recovered
+
+
+def archive(capture, output, source, profile=None, workers=4, timeout=90, resume=False,
+            recoveries=None):
     raw = Path(capture).read_bytes()
     data = json.loads(raw)
     if not isinstance(data, dict) or data.get('ok') is not True:
@@ -127,7 +178,9 @@ def archive(capture, output, source, profile=None, workers=4, timeout=90, resume
     items = inventory(content)
     if not items:
         raise ValueError('No source-card attachments; use the reference worklist for other resources')
-    if shutil.which('lark-cli') is None:
+    if recoveries is not None and not resume:
+        raise ValueError('Recovery import requires --resume; it never starts acquisition')
+    if recoveries is None and shutil.which('lark-cli') is None:
         raise ValueError('lark-cli is required; prepare the CLI before downloading')
     binding = {'capture_sha256': hashlib.sha256(raw).hexdigest(), 'source': source,
                'profile': profile, 'document_id': document.get('document_id'),
@@ -145,7 +198,10 @@ def archive(capture, output, source, profile=None, workers=4, timeout=90, resume
     os.close(fd)
     try:
         state = output / 'attachment-state.json'
+        manifest_path = output / 'manifest.json'
+        manifest_before = manifest_path.read_bytes() if manifest_path.is_file() else None
         previous = {}
+        prior_results = {}
         prior_manifest = None
         if resume:
             if state.is_symlink() or not state.is_file():
@@ -156,10 +212,13 @@ def archive(capture, output, source, profile=None, workers=4, timeout=90, resume
             prior_items = saved.get('items')
             if not isinstance(prior_items, list) or any(not isinstance(i, dict) for i in prior_items):
                 raise ValueError('Resume state has invalid attachment records')
+            if any(not isinstance(i.get('attempts', []), list) for i in prior_items):
+                raise ValueError('Invalid prior attempt history; preserve the state')
             stored_capture = output / 'capture.json'
             if stored_capture.is_symlink() or not stored_capture.is_file() or stored_capture.read_bytes() != raw:
                 raise ValueError('Archived capture changed; preserve it and use a new output directory')
             previous = {i['token']: i for i in prior_items if i['status'] == 'verified'}
+            prior_results = {i['token']: i for i in prior_items}
             manifest_path = output / 'manifest.json'
             if manifest_path.exists() or manifest_path.is_symlink():
                 if manifest_path.is_symlink() or not manifest_path.is_file():
@@ -173,6 +232,8 @@ def archive(capture, output, source, profile=None, workers=4, timeout=90, resume
         else:
             (output / 'capture.json').write_bytes(raw)
             write_json(state, {'binding': binding, 'items': []})
+        recovered = verified_recoveries(recoveries, binding, items) if recoveries is not None else {}
+        state_before = state.read_bytes()
         media = output / 'attachments'
         if media.is_symlink():
             raise ValueError('Refuse symlink attachment directory')
@@ -183,11 +244,32 @@ def archive(capture, output, source, profile=None, workers=4, timeout=90, resume
         def download(item):
             dest = media / item['name']
             try:
+                if item['token'] in recovered:
+                    payload, verified, identity = recovered[item['token']]
+                    if not dest.exists() and not dest.is_symlink():
+                        with tempfile.TemporaryDirectory(prefix='.recover-', dir=output) as temp:
+                            target = Path(temp) / item['name']
+                            shutil.copyfile(payload, target)
+                            copied = verify_file(target, item)
+                            if copied['sha256'] != verified['sha256']:
+                                raise ValueError('Recovery payload changed during import')
+                            os.link(target, dest)
+                    actual = verify_file(dest, item)
+                    if actual['sha256'] != verified['sha256']:
+                        raise ValueError('Existing attachment differs from recovery; preserve it')
+                    return {**item, **actual, 'status': 'verified', 'transfer': 'recovered',
+                            'recovery': {'method': 'original_preview', 'identity': identity}}
                 if dest.exists() or dest.is_symlink():
                     verified = verify_file(dest, item)
                     if item['token'] not in previous or previous[item['token']]['sha256'] != verified['sha256']:
                         raise ValueError('Existing attachment is unowned or changed; preserve it')
-                    return {**item, **verified, 'status': 'verified', 'transfer': 'reused'}
+                    return {**item, **verified, 'status': 'verified', 'transfer': 'reused',
+                            **({'recovery': previous[item['token']]['recovery']}
+                               if 'recovery' in previous[item['token']] else {})}
+                if recoveries is not None:
+                    return {**item, 'status': 'failed',
+                            'error': prior_results.get(item['token'], {}).get(
+                                'error', 'Not recovered; acquisition was not attempted')}
                 with tempfile.TemporaryDirectory(prefix='.download-', dir=output) as temp:
                     target = Path(temp) / item['name']
                     cmd = ['lark-cli'] + (['--profile', profile] if profile else [])
@@ -212,8 +294,19 @@ def archive(capture, output, source, profile=None, workers=4, timeout=90, resume
         results = []
         with ThreadPoolExecutor(max_workers=workers) as pool:
             for result in pool.map(download, items):
+                prior = prior_results.get(result['token'], {})
+                attempts = prior.get('attempts', [])
+                if not isinstance(attempts, list):
+                    raise ValueError('Invalid prior attempt history; preserve the state')
+                if prior.get('status') == 'failed' and result['status'] == 'verified':
+                    attempts = [*attempts, {k: prior[k] for k in ('status', 'error') if k in prior}]
+                if attempts:
+                    result['attempts'] = attempts
                 results.append(result)
+                if state.read_bytes() != state_before:
+                    raise ValueError('Attachment state changed during this run; preserve the later edit')
                 write_json(state, {'binding': binding, 'items': results})
+                state_before = state.read_bytes()
         good = [r for r in results if r['status'] == 'verified']
         files = [{'role': 'embedded_media_original', 'storage': 'source',
                   'locator': {'system': 'feishu', 'source_url': source, 'token': r['token']},
@@ -254,6 +347,11 @@ def archive(capture, output, source, profile=None, workers=4, timeout=90, resume
         errors = validate_manifest(manifest)
         if errors:
             raise ValueError('; '.join(errors))
+        current_manifest = manifest_path.read_bytes() if manifest_path.is_file() else None
+        if current_manifest != manifest_before:
+            raise ValueError('Manifest changed during this run; preserve the later edit')
+        if state.is_symlink() or state.read_bytes() != state_before:
+            raise ValueError('Attachment state changed during this run; preserve the later edit')
         write_json(output / 'manifest.json', manifest)
         return {'status': 'attachments_complete' if len(good) == len(items) else 'partial',
                 'requested': len(items), 'verified': len(good), 'failed': len(items)-len(good),
@@ -268,15 +366,17 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('capture', help='Complete saved docs +fetch JSON response')
     p.add_argument('--source', required=True, help='Original Feishu/Lark document URL (no share query)')
-    p.add_argument('--output', required=True, help='New local archive directory')
+    p.add_argument('--output', required=True, help='New archive directory, or the existing directory with --resume')
     p.add_argument('--profile', help='Already authorized lark-cli profile; never switches the global profile')
     p.add_argument('--workers', type=int, default=4)
     p.add_argument('--timeout', type=int, default=90)
     p.add_argument('--resume', action='store_true', help='Reuse only files verified by this exact saved capture')
+    p.add_argument('--recoveries', help='Offline import of bound original-preview receipts; requires --resume and does not download')
     a = p.parse_args()
     try:
-        result = archive(a.capture, a.output, a.source, a.profile, a.workers, a.timeout, a.resume)
-    except (OSError, ValueError, KeyError) as exc:
+        result = archive(a.capture, a.output, a.source, a.profile, a.workers, a.timeout, a.resume,
+                         a.recoveries)
+    except (OSError, ValueError, KeyError, zipfile.BadZipFile, ET.ParseError) as exc:
         print(json.dumps({'status': 'invalid', 'error': str(exc)}, ensure_ascii=False))
         return 2
     print(json.dumps(result, ensure_ascii=False))

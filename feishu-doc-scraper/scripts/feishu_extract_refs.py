@@ -199,14 +199,8 @@ TRACKING_KEYS = frozenset({
 })
 
 
-def external_video_refs(text: str) -> list[dict]:
-    """Discover video locators without network access or platform downloads.
-
-    Remove only named tracking fields. Keep all other query fields and fragments,
-    including p/cid, v, list/index and timestamps; unknown identity is not merged.
-    Short links remain unresolved locators until the platform owner resolves them.
-    """
-    refs = []
+def http_urls(text: str):
+    """Yield quoted and plain-text URL locators without making network requests."""
     decoded = unescape(text)
     for match in RE_HTTP_URL.finditer(decoded):
         # Closing prose/Markdown punctuation is not part of these URL forms.
@@ -220,10 +214,22 @@ def external_video_refs(text: str) -> list[dict]:
         try:
             parsed = urlsplit(source_url)
             host = (parsed.hostname or "").lower()
-            if parsed.username or parsed.password or parsed.port:
+            if parsed.username or parsed.password:
                 continue
+            parsed.port  # Validate malformed ports without discarding ordinary website links.
         except ValueError:
             continue
+        if host:
+            yield source_url, parsed
+
+
+def external_video_refs(text: str) -> list[dict]:
+    """Discover video locators; remove only named platform tracking fields."""
+    refs = []
+    for source_url, parsed in http_urls(text):
+        if parsed.port:
+            continue
+        host = parsed.hostname.lower()
         path = parsed.path
         query = parse_qsl(parsed.query, keep_blank_values=True)
         keys = {key for key, _ in query}
@@ -266,6 +272,24 @@ def external_video_refs(text: str) -> list[dict]:
             "dispatch": "external video handoff (references/external-video-resources.md); preserve requested scope and resolve the installed platform owner before downloading",
         })
     return refs
+
+
+def external_web_refs(text: str, videos: list[dict], known: list[dict]) -> list[dict]:
+    """Inventory opaque website links, without inferring video or fetch authority."""
+    recognized = {url for ref in videos for url in ref['source_urls']}
+    recognized.update(ref['ref'] for ref in known if ref['ref'].startswith(('https://', 'http://')))
+    return [{
+        'type': 'external-web', 'ref': url, 'title': '',
+        'source_url': url, 'source_urls': [url], 'platform': parsed.hostname.lower(),
+        'resource_kind': 'webpage', 'status': 'discovered',
+        'needs_url_review': bool(re.search(r'[\u4e00-\u9fff]', url)),
+        'dispatch': 'Retain the original link; inspect only within the selected scope. '
+                    'This locator does not authorize recursion or media acquisition '
+                    '(references/external-video-resources.md).',
+    } for url, parsed in http_urls(text)
+        if url not in recognized and not any(
+            parsed.hostname.lower() == suffix or parsed.hostname.lower().endswith('.' + suffix)
+            for suffix in FEISHU_HOST_SUFFIXES)]
 
 # How the caller should handle each type (mirrors the reference's dispatch
 # table, surfaced here so the caller does not have to re-derive it). Wiki and
@@ -446,7 +470,9 @@ def extract(text: str) -> list[dict]:
             "dispatch": DISPATCH["tencent-meeting"],
         })
 
-    refs.extend(external_video_refs(text))
+    videos = external_video_refs(text)
+    refs.extend(videos)
+    refs.extend(external_web_refs(text, videos, refs))
 
     n_tables = len(RE_LARK_TABLE.findall(text))
     if n_tables:
