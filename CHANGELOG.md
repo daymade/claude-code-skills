@@ -7,7 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **frontend-visual-qa** (v1.21.37 → v1.21.38): Add bounded catalog/topology acceptance cases for exact-model photos, labeled schematic fallbacks after missing or failed media, relationship roles, visible search priority and retained detail context. Change type: sampled acceptance-recipe extension; existing audit and action boundaries remain intact.
+- **frontend-visual-qa** (v1.21.38 → v1.21.39): Add bounded catalog/topology acceptance cases for exact-model photos, labeled schematic fallbacks after missing or failed media, relationship roles, visible search priority and retained detail context. Change type: sampled acceptance-recipe extension; existing audit and action boundaries remain intact.
+- **frontend-visual-qa** (v1.21.37 → v1.21.38): Audit operational ledgers through selection, navigation and actual issue resolution; distinguish useful persistent inspectors from generic rails. Add scoped-style/portal and settled-tooltip counterexamples while preserving project decisions and desktop scope.
 
 - **ghostty-use** (v1.11.3 → v1.11.4): Document the resolver-replay diagnosis for active-but-unresolved sessions, the empty-tab unresolved case, and the kimi-cu side-channel snapshot check with its window-visibility versus process-liveness boundary.
 - **ghostty-use** (v1.11.2 → v1.11.3): Raise the bounded transcript-identity head budget from 256KB to 1MB so Claude sessions with large front-loaded system records resolve to their transcripts instead of failing closed into unresolved live TUIs; foreign, missing or invalid sessionId heads and over-budget files remain rejected.
