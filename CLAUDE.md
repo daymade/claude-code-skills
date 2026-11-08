@@ -556,6 +556,10 @@ For Feishu document reads and archives, enter
 [feishu-doc-scraper](feishu-doc-scraper/SKILL.md). Its
 [API extraction SOP](feishu-doc-scraper/references/lark-cli-api-extraction.md)
 owns resolved Wiki target dispatch and the authorized reference-traversal scope.
+For external website/video inventories and bulk-transfer boundaries, follow the
+[external resource workflow](feishu-doc-scraper/references/external-video-resources.md).
+For original attachment downloads, resume and offline recovery, follow the
+[attachment archive SOP](feishu-doc-scraper/references/attachment-archives.md).
 Its
 [comments and feedback SOP](feishu-doc-scraper/references/comments-and-feedback.md)
 owns discussion capture and interpretation; the bundled helper owns the CLI
@@ -565,7 +569,6 @@ Use that handoff for authorized source access instructions alongside original li
 For storage decisions, use its
 [archive storage contract](feishu-doc-scraper/references/archive-storage-contract.md)
 alongside the destination repository's storage SOP.
-Keep generated manifest metadata aligned with that contract's on-demand statistics rule.
 For local originals, Obsidian delivery or a personal source-catalog handoff, follow the Skill's
 [original-media and reader SOP](feishu-doc-scraper/references/original-media-and-reader.md).
 For Minutes transcript export and permission handling, follow its
