@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-watchdog** (`daymade-macos` v1.30.3 → v1.30.4): Align suspected watchdog symptoms with actual action logs and Network Extension retry evidence; keep auto-cooldown from suppressing current-round state restoration and require honest DIRECT/proxy recovery semantics. Change type: bounded diagnostic and recovery-contract correction.
+- **tunnel-doctor** (v1.17.15 → v1.17.16): Distinguish Network Extension startup retries, exact-address listeners, real proxy requests and Tailscale backend state; add exiting-process evidence boundaries and latest-correction recovery checks. Change type: bounded diagnostic and recovery-guide correction.
 - **ghostty-use** (v1.11.5 → v1.11.6): Add a complete no-foreground GUI acceptance loop with current-keybinding discovery, per-ID readiness/missing outcomes, independent selected-tab/body readback and dynamic tab-set reconciliation. Change type: sampled acceptance-recipe extension; paste-based restore and existing authorization boundaries remain unchanged.
 - **kimi-use** (v1.8.3 → v1.8.4): Add a low-overhead native-tab traversal recipe combining selected-tab and document observation, with explicit delivery/readback, dynamic-identity and repeat-guard boundaries. Change type: sampled desktop-verification recipe extension.
 
