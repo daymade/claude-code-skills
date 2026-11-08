@@ -42,9 +42,11 @@ enumerate its actual resource types, then load only those handlers. Record body,
 attachments, independent retention and reader acceptance separately. An attachment
 batch alone never establishes completion of the document's reference graph.
 
-For Bilibili, YouTube or direct-media links in the body, load
+For website links, Bilibili, YouTube or direct-media links in the body, load
 [external video discovery and handoff](references/external-video-resources.md).
-Enumerate them on every captured body and retain a resource worklist; discovery,
+Enumerate clickable and plain-text URLs on every captured body; opaque websites
+remain link locators until selected for inspection. Use the reference's batch
+scope/volume preflight before mass acquisition or cloud creation. Discovery,
 text capture and media acquisition have separate completion states. Delegate
 authorized acquisition to the installed platform/storage owner with the user's
 selected part or playlist range.

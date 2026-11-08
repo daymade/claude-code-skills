@@ -76,6 +76,37 @@ existing [original-preview branch](original-media-and-reader.md#select-the-failu
 only when its operation-specific conditions hold. Do not infer that a body-read
 permission or an XLSX success grants access to other media.
 
+### Reconcile a permitted original-preview recovery
+
+When the separate [original-preview operation](original-media-and-reader.md#select-the-failure-branch)
+is permitted and has completed, import its verified result into this same archive.
+Do not leave a second recovery list as the current completion authority. Preserve
+the original failed attempt as history; the current state and manifest must agree.
+
+For this import, set the preview request's `identity` to `<source-token>@<captured-revision>`.
+Create a local JSON object with `binding` copied unchanged from this archive's
+`attachment-state.json` and a nonempty `items` list. Each item supplies `token`,
+the absolute payload `path`, and absolute `.verified.json` `receipt` path. Use the
+same saved capture, source and profile as the original archive:
+
+```bash
+python3 <skill-dir>/scripts/archive_attachments.py <capture.json> \
+  --source <original-feishu-url> --output <existing-archive> --profile <bound-profile> \
+  --resume --recoveries <local-recoveries.json>
+```
+
+This is an offline reconciliation operation: no CLI login, download retry or
+permission change occurs, including for items not listed in the recovery input.
+It checks capture/source/profile binding, receipt identity, captured size, payload
+hash and supported container integrity. A changed destination is not overwritten.
+Source payloads remain intact. Existing successful manifest entries, downstream
+retention and reader records survive; failed resources not recovered remain explicit.
+No temporary signed URL or browser credential belongs in the input.
+
+The preview receipt is verification evidence, not independent proof of original
+byte identity. Keep the original-preview branch's quality and identity limits;
+video dimensions/playback and reader acceptance are still separate checks.
+
 ## Acceptance
 
 The executing agent reconciles the raw document's requested attachment identities

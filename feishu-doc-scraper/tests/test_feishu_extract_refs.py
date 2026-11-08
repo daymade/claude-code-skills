@@ -20,6 +20,35 @@ finally:
     sys.path.pop(0)
 
 
+class ExternalWebsiteInventoryTests(unittest.TestCase):
+    def test_clickable_and_plain_text_share_pages_are_link_only_locators(self):
+        text = ('<a href="https://cases.example/s/One?lang=zh-CN&amp;variant=1">案例</a>'
+                '<p>https://cases.example/s/Two?lang=zh-CN&amp;variant=2</p>'
+                '<p>https://cases.example/s/One?lang=zh-CN&amp;variant=1</p>')
+        rows = [r for r in MODULE.extract(text) if r['type'] == 'external-web']
+        self.assertEqual({r['ref'] for r in rows}, {
+            'https://cases.example/s/One?lang=zh-CN&variant=1',
+            'https://cases.example/s/Two?lang=zh-CN&variant=2'})
+        self.assertTrue(all(r['status'] == 'discovered' and r['resource_kind'] == 'webpage'
+                            for r in rows))
+
+    def test_known_video_and_native_feishu_are_not_duplicated_as_webpages(self):
+        text = ('https://www.youtube.com/watch?v=SyntheticID\n'
+                'https://tenant.feishu.cn/docx/SyntheticDocument123\n'
+                'https://portal.example:8443/cases#part-2\n'
+                'https://user:password@private.example/cases')
+        rows = MODULE.extract(text)
+        self.assertEqual([r['ref'] for r in rows if r['type'] == 'external-web'],
+                         ['https://portal.example:8443/cases#part-2'])
+        self.assertEqual(len([r for r in rows if r['type'] == 'external-video-youtube']), 1)
+
+    def test_touching_prose_is_flagged_without_destroying_unicode_url_evidence(self):
+        url = 'https://cases.example/search?q=中文'
+        row = next(r for r in MODULE.extract(f'<p>{url}</p>') if r['type'] == 'external-web')
+        self.assertEqual(row['source_url'], url)
+        self.assertTrue(row['needs_url_review'])
+
+
 class FeishuHostSuffixContractTests(unittest.TestCase):
     """Synthetic URL controls exercise accepted tenants and lookalike rejection."""
 

@@ -120,6 +120,150 @@ class AttachmentArchiveTests(unittest.TestCase):
             state = json.loads((self.output/'attachment-state.json').read_text())
             self.assertEqual(state['items'][0]['worksheets'][0]['name'], 'Sheet1')
 
+    def recovery_input(self):
+        binding = json.loads((self.output/'attachment-state.json').read_text())['binding']
+        payload = self.root/'recovered original.xlsx'
+        payload.write_bytes(xlsx())
+        receipt = self.root/'recovered original.xlsx.verified.json'
+        receipt.write_text(json.dumps({'identity': f'{TOKEN}@1', 'status': 'complete',
+                                      'bytes': len(xlsx()), 'sha256': archive.digest(payload),
+                                      'proxy': False}))
+        request = self.root/'recoveries.json'
+        data = {'binding': binding, 'items': [{'token': TOKEN, 'path': str(payload),
+                                             'receipt': str(receipt)}]}
+        request.write_text(json.dumps(data))
+        return request, data, receipt
+
+    def failed_archive(self):
+        self.save()
+        with patch.object(archive.subprocess, 'run', return_value=
+                          subprocess.CompletedProcess([], 1, '', 'denied')):
+            self.assertEqual(archive.archive(self.capture, self.output, SOURCE)['status'], 'partial')
+
+    def test_verified_preview_recovery_updates_current_state_without_acquisition(self):
+        self.failed_archive()
+        request, data, receipt = self.recovery_input()
+        with patch.object(archive.shutil, 'which', return_value=None), \
+                patch.object(archive.subprocess, 'run', side_effect=AssertionError('No download allowed')):
+            result = archive.archive(self.capture, self.output, SOURCE, resume=True, recoveries=request)
+        self.assertEqual(result['status'], 'attachments_complete')
+        state = json.loads((self.output/'attachment-state.json').read_text())
+        self.assertEqual(state['items'][0]['status'], 'verified')
+        self.assertEqual(state['items'][0]['transfer'], 'recovered')
+        self.assertEqual(state['items'][0]['attempts'][0]['status'], 'failed')
+        manifest = json.loads((self.output/'manifest.json').read_text())
+        self.assertEqual(manifest['resource_summary']['failed_attachments'], [])
+        self.assertEqual(archive.validate_manifest(manifest), [])
+        with patch.object(archive.subprocess, 'run', side_effect=AssertionError('No second transfer')):
+            archive.archive(self.capture, self.output, SOURCE, resume=True)
+        state = json.loads((self.output/'attachment-state.json').read_text())
+        self.assertEqual(len(state['items'][0]['attempts']), 1)
+
+    def test_recovery_rejects_wrong_binding_receipt_and_missing_values_without_writes(self):
+        self.failed_archive()
+        request, data, receipt = self.recovery_input()
+        original = receipt.read_bytes()
+        state_before = (self.output/'attachment-state.json').read_bytes()
+        for value in (None, '', '0'*64):
+            record = json.loads(original)
+            record['sha256'] = value
+            receipt.write_text(json.dumps(record))
+            with self.subTest(sha=value), self.assertRaises(ValueError):
+                archive.archive(self.capture, self.output, SOURCE, resume=True, recoveries=request)
+            self.assertEqual((self.output/'attachment-state.json').read_bytes(), state_before)
+            self.assertFalse((self.output/'attachments/template.xlsx').exists())
+        receipt.write_bytes(original)
+        for invalid in ({}, {'binding': None, 'items': data['items']},
+                        {'binding': data['binding'], 'items': []},
+                        {'binding': data['binding'], 'items': [{'token': TOKEN, 'path': None}]}):
+            request.write_text(json.dumps(invalid))
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                archive.archive(self.capture, self.output, SOURCE, resume=True, recoveries=request)
+            self.assertEqual((self.output/'attachment-state.json').read_bytes(), state_before)
+
+    def test_recovery_leaves_other_failed_resources_pending_without_retry(self):
+        other = 'SyntheticAttachmentToken000002'
+        self.save(card()+card(other, 'other.xlsx'))
+        with patch.object(archive.subprocess, 'run', return_value=subprocess.CompletedProcess([], 1, '', '')):
+            archive.archive(self.capture, self.output, SOURCE)
+        request, data, receipt = self.recovery_input()
+        with patch.object(archive.subprocess, 'run', side_effect=AssertionError('No retry allowed')):
+            result = archive.archive(self.capture, self.output, SOURCE, resume=True, recoveries=request)
+        self.assertEqual((result['verified'], result['failed']), (1, 1))
+        self.assertFalse((self.output/'attachments/other.xlsx').exists())
+
+    def test_recovery_preserves_later_state_edit(self):
+        self.failed_archive()
+        request, data, receipt = self.recovery_input()
+        copy = archive.shutil.copyfile
+        changed = None
+        def edit_during_copy(source, target):
+            nonlocal changed
+            result = copy(source, target)
+            state = self.output/'attachment-state.json'
+            value = json.loads(state.read_text())
+            value['operator_note'] = 'later edit'
+            state.write_text(json.dumps(value))
+            changed = state.read_bytes()
+            return result
+        with patch.object(archive.shutil, 'copyfile', side_effect=edit_during_copy):
+            with self.assertRaisesRegex(ValueError, 'state changed'):
+                archive.archive(self.capture, self.output, SOURCE, resume=True, recoveries=request)
+        self.assertEqual((self.output/'attachment-state.json').read_bytes(), changed)
+
+    def test_recovery_preserves_state_edit_during_receipt_verification(self):
+        self.failed_archive()
+        request, data, receipt = self.recovery_input()
+        verify = archive.verify_file
+        changed = None
+        def edit_during_verification(path, item):
+            nonlocal changed
+            if changed is None:
+                state = self.output/'attachment-state.json'
+                value = json.loads(state.read_text())
+                value['operator_note'] = 'later edit during receipt verification'
+                state.write_text(json.dumps(value))
+                changed = state.read_bytes()
+            return verify(path, item)
+        with patch.object(archive, 'verify_file', side_effect=edit_during_verification):
+            with self.assertRaisesRegex(ValueError, 'state changed'):
+                archive.archive(self.capture, self.output, SOURCE, resume=True, recoveries=request)
+        self.assertEqual((self.output/'attachment-state.json').read_bytes(), changed)
+
+    def test_failed_recovery_preserves_initial_failure_on_later_success(self):
+        self.failed_archive()
+        original = json.loads((self.output/'attachment-state.json').read_text())['items'][0]['error']
+        request, data, receipt = self.recovery_input()
+        target = self.output/'attachments/template.xlsx'
+        target.write_bytes(b'wrong')
+        result = archive.archive(self.capture, self.output, SOURCE, resume=True, recoveries=request)
+        self.assertEqual(result['status'], 'partial')
+        target.unlink()  # This synthetic conflicting file belongs only to this test.
+        result = archive.archive(self.capture, self.output, SOURCE, resume=True, recoveries=request)
+        self.assertEqual(result['status'], 'attachments_complete')
+        row = json.loads((self.output/'attachment-state.json').read_text())['items'][0]
+        self.assertEqual(row['attempts'][0]['error'], original)
+        self.assertEqual(len(row['attempts']), 2)
+
+    def test_resume_preserves_later_manifest_edit(self):
+        self.failed_archive()
+        request, data, receipt = self.recovery_input()
+        copy = archive.shutil.copyfile
+        changed = None
+        def edit_during_copy(source, target):
+            nonlocal changed
+            result = copy(source, target)
+            path = self.output/'manifest.json'
+            value = json.loads(path.read_text())
+            value['resource_summary']['operator_note'] = 'later edit'
+            path.write_text(json.dumps(value))
+            changed = path.read_bytes()
+            return result
+        with patch.object(archive.shutil, 'copyfile', side_effect=edit_during_copy):
+            with self.assertRaisesRegex(ValueError, 'Manifest changed'):
+                archive.archive(self.capture, self.output, SOURCE, resume=True, recoveries=request)
+        self.assertEqual((self.output/'manifest.json').read_bytes(), changed)
+
     def test_partial_failure_retains_success_and_pending_references(self):
         other = 'SyntheticAttachmentToken000002'
         self.save(card()+card(other, 'second.xlsx')+'<file token="legacy">old.pdf</file><cite doc-id="child" file-type="docx"/>')

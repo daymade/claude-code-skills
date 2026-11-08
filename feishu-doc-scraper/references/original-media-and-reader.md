@@ -64,6 +64,12 @@ It never accelerates, transcodes, uploads or chooses durable storage. Record the
 stable source locator and verification in the existing archive manifest. Its
 `.verified.json` sidecar is local verification state, not source authority.
 
+For a failed source-card attachment archive, use its
+[offline recovery import](attachment-archives.md#reconcile-a-permitted-original-preview-recovery)
+to update the existing current state and manifest. Use that import's identity
+format before acquiring the preview. Do not report completion from a parallel
+media list while the canonical attachment state still records failure.
+
 ## Render the captured body
 
 Keep the original API JSON/HTML unchanged. For an Obsidian deliverable, place the
