@@ -250,6 +250,8 @@ user-local data outside the skill bundle; no default mapping ships.
 | `check` says present but tab looks empty | another live process already claimed that session id (e.g. resumed in another tab) |
 | osascript refuses keystrokes | grant Accessibility (System Events) permission; verify with `osascript -e 'tell application "System Events" to get UI elements enabled'` |
 | a brand-new tab is missing from the session list | a fresh TUI has no argv UUID and its transcript file appears with its first message; until then it shows under unresolved live TUIs. A late first message can fall outside the upper window defined by `FIRST_WRITE_WINDOW_SECONDS` and the candidate filters in [the resolver](scripts/ghostty_session.py) |
+| an obviously active session still shows as unresolved | replay the resolver against the real inputs instead of guessing: `python3 -I` + importlib to load `scripts/ghostty_session.py`, then call `_claude_candidates(cwd, process_start_epoch)` (or `_codex_candidates`). Empty candidates point at the filter layer — birth window, or `_head_cwd` identity verification failing closed on its shared `MAX_IDENTITY_HEAD_BYTES` head budget or a foreign sessionId — not at multi-TUI assignment. `_head_cwd(path, expected_sid=sid)` returning None while `_head_cwd(path)` returns a cwd isolates the identity-budget shape |
+| a long-open TUI stays unresolved with no transcript of its own | a tab opened but never used (no first message, no rollout born in its start window) has nothing to anchor; unresolved is correct and there is no session to restore |
 
 ## One-shot helper terminals and original sessions
 

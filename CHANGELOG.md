@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **ghostty-use** (v1.11.3 → v1.11.4): Document the resolver-replay diagnosis for active-but-unresolved sessions, the empty-tab unresolved case, and the kimi-cu side-channel snapshot check with its window-visibility versus process-liveness boundary.
 - **ghostty-use** (v1.11.2 → v1.11.3): Raise the bounded transcript-identity head budget from 256KB to 1MB so Claude sessions with large front-loaded system records resolve to their transcripts instead of failing closed into unresolved live TUIs; foreign, missing or invalid sessionId heads and over-budget files remain rejected.
 - **asr-transcribe-to-text** (`daymade-audio` v1.57.5 → v1.57.6): Preserve original-speed upload and source-time review requirements; make metered speedup conditional on user permission and a verified mapping back to the original media.
 - **tibo-reset-codex** (v2.8.1 → v2.8.2): Route monitor-stop requests directly to the actual host's lifecycle procedure; preserve read-only research boundaries and verify all in-scope schedulers stopped without querying reset sources.
