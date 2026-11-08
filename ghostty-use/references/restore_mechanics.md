@@ -64,7 +64,9 @@ The executing agent checks the same selected IDs at two distinct levels:
   after loading. A title restored from history corroborates the observed identity;
   readable prior turns and the normal input surface establish that the inspected
   conversation loaded. `Resuming session…`, an empty shell, a login gate or an error
-  screen does not. Titles alone do not prove every selected tab is ready.
+  screen does not. Titles alone do not prove every selected tab is ready. Working,
+  compaction, quota or stalled indicators and historical error turns can coexist with
+  readable history; distinguish them from an error screen that prevents loading.
 
 Inspect remaining loading/uncertain tabs within a bounded wait. Bind observations
 to the current tab and the process/manifest identity; a generic title or cwd is
@@ -74,6 +76,28 @@ still-wanted missing IDs; never reopen an existing process merely because histor
 is loading. This procedure adds native observation, not a new script readiness check.
 Do not send prompts, resume the old business task or make model requests just to
 test an open-only restoration.
+
+For a complete no-foreground GUI pass, keep this acceptance separate from the
+paste-based restore and run a bounded traversal:
+
+1. Freeze the selected manifest as the coverage ledger and observe the initiating
+   tab. Read current `next_tab`, `previous_tab` and `goto_tab` bindings with
+   `ghostty +list-keybinds`; do not assume default keys. Use `press_key` with
+   `activate:false`. If AXPress or any other route is observed to foreground the
+   window, stop that route; omitting `activate` does not prove no foregrounding.
+2. Move one tab at a time, then independently re-observe with `get_app_state`.
+   When the current response supports it, use `mode=ax,
+   ax_filter=AXRadioButton` to obtain both the selected tab and current
+   `document_text`; if either is absent or ambiguous, obtain a fresh complete or
+   bounded observation instead. Require readable prior turns and the normal
+   input/work surface for each ready row. Delivery `ok:true` is not this evidence.
+3. Account for every requested ID independently of AX indexes. If a tab disappears
+   or order changes, re-read the actual selected title/body and reconcile against
+   the manifest; retain an ambiguous binding as unverified. Mark a requested ID
+   missing with cause unknown rather than assigning its neighbor a pass or
+   reopening it merely to restore a count. Complete the pass only when every
+   requested ID is `ready`, still `loading`, `missing` or `unreadable`; then follow
+   the return-to-initiating-conversation check below.
 
 After switching a tab, a Kimi action can report delivery while its automatic
 post-capture fails because the bound renderer/window identity changed. Re-observe
