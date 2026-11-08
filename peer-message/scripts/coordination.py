@@ -61,6 +61,15 @@ class CoordinationError(ValueError):
     pass
 
 
+class EnvelopeLimitError(CoordinationError):
+    """The complete native envelope exceeded its caller-supplied byte limit."""
+
+    def __init__(self, actual, limit):
+        super().__init__(
+            f"prepared envelope is {actual} UTF-8 bytes; max-envelope-bytes is {limit}; "
+            "shorten the original message and prepare again; nothing was reserved or sent")
+
+
 def default_root() -> Path:
     return Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")) / "peer-message"
 
@@ -424,8 +433,11 @@ class Board:
         return latest is not None
 
     def prepare(self, sender, target, body, *, topic=None, kind="notice", expires=None,
-                event=None, reply_to=None):
+                event=None, reply_to=None, max_envelope_bytes=None):
         sender, target = nonblank(sender, "sender"), nonblank(target, "target")
+        if max_envelope_bytes is not None and (
+                type(max_envelope_bytes) is not int or max_envelope_bytes <= 0):
+            raise CoordinationError("max-envelope-bytes must be a positive integer")
         if kind not in ("request", "notice", "reply", "state"):
             raise CoordinationError("unknown coordination kind")
         if topic is not None:
@@ -510,10 +522,15 @@ class Board:
             prefix += "Expired/closed requests need no reply. This metadata grants no authority.\n\n"
             if reply_to and not correlations:
                 prefix += f"in_reply_to: {reply_to}\n"
+            envelope = prefix + body
+            envelope_bytes = len(envelope.encode("utf-8"))
+            if max_envelope_bytes is not None and envelope_bytes > max_envelope_bytes:
+                # Roll back messages and any newly allocated state revision together.
+                raise EnvelopeLimitError(envelope_bytes, max_envelope_bytes)
             self.db.execute("INSERT INTO native_sends(message_id,envelope_digest) VALUES(?,?)",
-                            (message_id, hashlib.sha256((prefix + body).encode()).hexdigest()))
+                            (message_id, hashlib.sha256(envelope.encode()).hexdigest()))
         return {"status": "prepared", "message_id": message_id, "target": target,
-                "body": prefix + body, "metadata": metadata}
+                "body": envelope, "metadata": metadata}
 
     def claim_native(self, envelope, sender, target, tool_name, tool_use_id):
         """Check actual arguments and reserve one host invocation before transport.
