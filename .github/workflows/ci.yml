@@ -321,10 +321,11 @@ jobs:
       - name: Install gitleaks
         env:
           GITLEAKS_VERSION: 8.30.0
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          curl -sSfL --retry 3 --retry-delay 2 --retry-max-time 30 -o /tmp/gitleaks.tar.gz \
-            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          gh release download "v${GITLEAKS_VERSION}" --repo gitleaks/gitleaks \
+            --pattern "gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" --output /tmp/gitleaks.tar.gz
           tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
           sudo install -m 0755 /tmp/gitleaks /usr/local/bin/gitleaks
           gitleaks version

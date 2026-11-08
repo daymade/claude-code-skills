@@ -56,9 +56,9 @@ For GitHub readback and authorized reruns, use
 When evidence establishes an installation/environment failure, keep that result and
 the unrun steps visible. An authorized retry must bind the same candidate and unchanged
 inputs; verify the new runner, actual installation result and final required-check state.
-For transient download failures, inspect the installer's retry policy in
-[ci.yml](../.github/workflows/ci.yml). Use bounded retries; exhaustion must still fail
-the install step and leave the scan unrun. Accept recovery only after installation,
+If a release's browser download endpoint repeatedly fails, compare the pinned asset
+through the official release API before changing the installer in
+[ci.yml](../.github/workflows/ci.yml). Accept recovery only after installation,
 the scanner's positive control and the repository scan all succeed.
 Do not loop reruns while the cause remains unknown or replace a required check with an
 unrelated local green run. Local reproduction must use the workflow's relevant environment
