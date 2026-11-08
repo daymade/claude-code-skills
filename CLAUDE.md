@@ -673,9 +673,7 @@ shared resource, and the verification contracts that decide what a peer assertio
 peer denial is worth belong in
 `peer-message/references/coordination-and-learning-loop.md`. Keep implementation, CLI help,
 tests, and those owners aligned; README and changelog entries should point to
-them instead of restating volatile protocol facts. The repository-wide
-local-source activation contract below still applies—never hand-create Codex
-Skill links.
+them instead of restating volatile protocol facts.
 
 ### Ghostty Terminal Sessions
 
@@ -776,8 +774,8 @@ For installed-Skill and fresh-host acceptance, enter
 For maintainer source-backed activation, source-watcher deployment, or authorized plugin-to-personal
 Skill conversion, follow
 [Local Source Sync Architecture](daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md).
-Do not hand-create user Skill links. Intentional same-name source variants follow
-that owner's [explicit source preferences](daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md#explicit-source-preferences).
+Intentional same-name source variants follow that owner's
+[explicit source preferences](daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md#explicit-source-preferences).
 For Skill authoring in an approved independent Fleet clone, follow the
 [leased-authoring owner procedure](daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md#leased-fleet-authoring-clones).
 
