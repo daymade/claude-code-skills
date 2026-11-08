@@ -1717,7 +1717,8 @@ def prepare_coordination(board, args, target, body, sender):
     return board.prepare(canonical_address(sender, args), canonical_address(target, args), body,
                          topic=args.topic, kind=args.kind,
                          expires=expires,
-                         event=args.event, reply_to=args.in_reply_to)
+                         event=args.event, reply_to=args.in_reply_to,
+                         max_envelope_bytes=getattr(args, "max_envelope_bytes", None))
 
 
 def managed_send(args, target, body, sender, reply_to):
@@ -1887,6 +1888,8 @@ def build_parser() -> argparse.ArgumentParser:
     prepare_parser = operations.add_parser("prepare", help="preflight native transport without sending")
     prepare_parser.add_argument("target")
     common_message_arguments(prepare_parser)
+    prepare_parser.add_argument("--max-envelope-bytes", type=int,
+                                help="positive UTF-8 byte limit from the native tool schema; includes coordination framing")
     commit_parser = operations.add_parser("commit")
     commit_parser.add_argument("--message-id", required=True)
     commit_parser.add_argument("--outcome", choices=("accepted", "not_sent", "unknown"), required=True)
@@ -2007,6 +2010,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {exc}", file=sys.stderr)
         emit_json_error_receipt(args, exc.outcome, exc)
         return exc.exit_code
+    except coordination.EnvelopeLimitError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        emit_json_error_receipt(args, "not_sent", exc)
+        return EXIT_USAGE
     except (coordination.CoordinationError, sqlite3.Error, OSError) as exc:
         print(f"error: coordination state/input unavailable: {exc}; retain state", file=sys.stderr)
         emit_json_error_receipt(args, "unknown", exc)

@@ -185,6 +185,11 @@ python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord prepare '<exact-target>' reques
 只有 `prepared` 才将输出的 `body` 原样交给原生工具；记录其 `message_id`。
 发送前按当前宿主工具的实际限制核对完整 `body`，包括协调信封；限制按 UTF-8
 字节计时，用 `len(body.encode("utf-8"))`，不拿原始正文的字符数代替。
+原生工具声明字节上限时，在 `coord prepare` 加
+`--max-envelope-bytes '<该工具的实际上限>'`；它核对包含 metadata、advisory 和
+reply 关联行的完整 UTF-8 信封，超限返回非零且不保留发送预留或新 state revision，
+缩短原始正文后沿原准入重试。未声明或非字节计量的限制不猜值；省略参数保留原流程，
+发送前仍按工具实际合同检查。此检查不发送消息、不改变权限，也不替代原生回执。
 若完整信封超限且已确认 transport 未调用，先对该 prepared id 执行
 `coord commit --message-id '<prepared-id>' --outcome not_sent`，再缩短原始正文，
 沿原准入重新 prepare。不得截改 prepared body、只删信封或改走其他 transport；

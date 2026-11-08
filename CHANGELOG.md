@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **peer-message** (v1.24.10 → v1.25.0): Add optional native-envelope UTF-8 byte preflight to `coord prepare`; reject oversized messages atomically before retaining send reservations or state revisions. Preserve omitted-limit behavior, native delivery guards and receipt boundaries.
+
 - **daymade-skill** (v1.77.2 → v1.77.3): Align repository and suite instructions with the canonical publication, native-discovery and consumed-bundle workflows; remove duplicated setup details from the repository guide. Runtime interfaces and SOP definitions are unchanged.
 - **lark-cli-router** (v1.0.0 → v1.0.1): Distinguish deleted items from whole Wiki spaces, inspect the corresponding recovery surface, and keep recovery, archive coverage and deletion authorization separate. Change type: bounded recovery-routing correction.
 
