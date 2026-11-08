@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **ghostty-use** (v1.11.5 → v1.11.6): Add a complete no-foreground GUI acceptance loop with current-keybinding discovery, per-ID readiness/missing outcomes, independent selected-tab/body readback and dynamic tab-set reconciliation. Change type: sampled acceptance-recipe extension; paste-based restore and existing authorization boundaries remain unchanged.
+- **kimi-use** (v1.8.3 → v1.8.4): Add a low-overhead native-tab traversal recipe combining selected-tab and document observation, with explicit delivery/readback, dynamic-identity and repeat-guard boundaries. Change type: sampled desktop-verification recipe extension.
+
 - **ghostty-use** (v1.11.4 → v1.11.5): Drop the incidental session count from the side-channel verification example; the durable criterion is window-visibility versus process-liveness, not a historical tally.
 - **feishu-doc-scraper** (v1.12.3 → v1.13.0): Inventory opaque clickable and plain-text website links before batch scope/volume decisions; preserve selected acquisition/upload/retention policy on continuation. Import verified original-preview recoveries offline into the existing attachment state and manifest while retaining failed-attempt history. Change type: additive discovery and recovery interfaces.
 
