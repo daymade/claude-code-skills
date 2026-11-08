@@ -555,7 +555,6 @@ recycle bin, enter [lark-cli-router's deletion and recovery route](lark-cli-rout
 
 For external customer groups paired with Wiki pages, enter
 [lark-cli-router's external collaboration workflow](lark-cli-router/SKILL.md#external-customer-collaboration).
-It owns group reuse/creation, descendant-scoped grants and their verification.
 
 ### Feishu Document Capture
 
