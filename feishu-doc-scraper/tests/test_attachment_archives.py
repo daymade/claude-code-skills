@@ -211,6 +211,40 @@ class AttachmentArchiveTests(unittest.TestCase):
                 archive.archive(self.capture, self.output, SOURCE, resume=True, recoveries=request)
         self.assertEqual((self.output/'attachment-state.json').read_bytes(), changed)
 
+    def test_recovery_preserves_state_edit_during_receipt_verification(self):
+        self.failed_archive()
+        request, data, receipt = self.recovery_input()
+        verify = archive.verify_file
+        changed = None
+        def edit_during_verification(path, item):
+            nonlocal changed
+            if changed is None:
+                state = self.output/'attachment-state.json'
+                value = json.loads(state.read_text())
+                value['operator_note'] = 'later edit during receipt verification'
+                state.write_text(json.dumps(value))
+                changed = state.read_bytes()
+            return verify(path, item)
+        with patch.object(archive, 'verify_file', side_effect=edit_during_verification):
+            with self.assertRaisesRegex(ValueError, 'state changed'):
+                archive.archive(self.capture, self.output, SOURCE, resume=True, recoveries=request)
+        self.assertEqual((self.output/'attachment-state.json').read_bytes(), changed)
+
+    def test_failed_recovery_preserves_initial_failure_on_later_success(self):
+        self.failed_archive()
+        original = json.loads((self.output/'attachment-state.json').read_text())['items'][0]['error']
+        request, data, receipt = self.recovery_input()
+        target = self.output/'attachments/template.xlsx'
+        target.write_bytes(b'wrong')
+        result = archive.archive(self.capture, self.output, SOURCE, resume=True, recoveries=request)
+        self.assertEqual(result['status'], 'partial')
+        target.unlink()  # This synthetic conflicting file belongs only to this test.
+        result = archive.archive(self.capture, self.output, SOURCE, resume=True, recoveries=request)
+        self.assertEqual(result['status'], 'attachments_complete')
+        row = json.loads((self.output/'attachment-state.json').read_text())['items'][0]
+        self.assertEqual(row['attempts'][0]['error'], original)
+        self.assertEqual(len(row['attempts']), 2)
+
     def test_resume_preserves_later_manifest_edit(self):
         self.failed_archive()
         request, data, receipt = self.recovery_input()

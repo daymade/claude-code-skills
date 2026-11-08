@@ -206,7 +206,8 @@ def archive(capture, output, source, profile=None, workers=4, timeout=90, resume
         if resume:
             if state.is_symlink() or not state.is_file():
                 raise ValueError('Resume state missing or unsafe')
-            saved = json.loads(state.read_text())
+            state_before = state.read_bytes()
+            saved = json.loads(state_before)
             if not isinstance(saved, dict) or saved.get('binding') != binding:
                 raise ValueError('Capture/source/profile changed; use a new output directory')
             prior_items = saved.get('items')
@@ -232,8 +233,8 @@ def archive(capture, output, source, profile=None, workers=4, timeout=90, resume
         else:
             (output / 'capture.json').write_bytes(raw)
             write_json(state, {'binding': binding, 'items': []})
+            state_before = state.read_bytes()
         recovered = verified_recoveries(recoveries, binding, items) if recoveries is not None else {}
-        state_before = state.read_bytes()
         media = output / 'attachments'
         if media.is_symlink():
             raise ValueError('Refuse symlink attachment directory')
@@ -298,7 +299,8 @@ def archive(capture, output, source, profile=None, workers=4, timeout=90, resume
                 attempts = prior.get('attempts', [])
                 if not isinstance(attempts, list):
                     raise ValueError('Invalid prior attempt history; preserve the state')
-                if prior.get('status') == 'failed' and result['status'] == 'verified':
+                attempted = recoveries is None or result['token'] in recovered
+                if prior.get('status') == 'failed' and attempted:
                     attempts = [*attempts, {k: prior[k] for k in ('status', 'error') if k in prior}]
                 if attempts:
                     result['attempts'] = attempts
