@@ -546,37 +546,20 @@ To find an existing Feishu recording by date, enter
 For updates that preserve manual formatting or change table/page width, enter
 [lark-cli-router's layout workflow](lark-cli-router/SKILL.md#preserve-document-layout).
 
+### Feishu Deleted Content
+
+For deleted documents or Wiki spaces, missing-space responses, or an empty
+recycle bin, enter [lark-cli-router's deletion and recovery route](lark-cli-router/SKILL.md#deleted-documents-and-wiki-spaces).
+
 ### Feishu External Collaboration
 
 For external customer groups paired with Wiki pages, enter
 [lark-cli-router's external collaboration workflow](lark-cli-router/SKILL.md#external-customer-collaboration).
-It owns group reuse/creation, descendant-scoped grants and their verification.
 
 ### Feishu Document Capture
 
-Before the first linked-resource read, follow
-[source account binding](lark-cli-router/references/source-account-binding.md).
-For Feishu document reads and archives, enter
-[feishu-doc-scraper](feishu-doc-scraper/SKILL.md). Its
-[API extraction SOP](feishu-doc-scraper/references/lark-cli-api-extraction.md)
-owns resolved Wiki target dispatch and the authorized reference-traversal scope.
-For external website/video inventories and bulk-transfer boundaries, follow the
-[external resource workflow](feishu-doc-scraper/references/external-video-resources.md).
-For original attachment downloads, resume and offline recovery, follow the
-[attachment archive SOP](feishu-doc-scraper/references/attachment-archives.md).
-Its
-[comments and feedback SOP](feishu-doc-scraper/references/comments-and-feedback.md)
-owns discussion capture and interpretation; the bundled helper owns the CLI
-interface. Before permanent filing or choosing an authorized archive destination,
-follow the [destination handoff](feishu-doc-scraper/references/archive-destination-handoff.md).
-Use that handoff for authorized source access instructions alongside original links.
-For storage decisions, use its
-[archive storage contract](feishu-doc-scraper/references/archive-storage-contract.md)
-alongside the destination repository's storage SOP.
-For local originals, Obsidian delivery or a personal source-catalog handoff, follow the Skill's
-[original-media and reader SOP](feishu-doc-scraper/references/original-media-and-reader.md).
-For Minutes transcript export and permission handling, follow its
-[Minutes procedure](feishu-doc-scraper/references/feishu-minutes-transcript.md).
+For faithful Feishu document reads, resource archives and destination handoffs,
+enter [feishu-doc-scraper](feishu-doc-scraper/SKILL.md) and follow its task router.
 
 ### Prior Work Retrieval Boundary
 
