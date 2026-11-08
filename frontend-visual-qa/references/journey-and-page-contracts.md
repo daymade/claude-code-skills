@@ -42,6 +42,57 @@ For each relevant state, verify:
 Do not require every possible state for a local visual-only change. Cover the
 states affected by the implementation or explicitly requested by the user.
 
+### Operational Asset Review: Select, Understand, Resolve
+
+When the user disputes a workspace's hierarchy, start from their original task,
+not the current tabs or the author's checklist. Separate stored facts, the
+person's intended decision and computed attention reasons before judging the
+grouping. For example, a renewal plan, a registrar's auto-renew setting and an
+unresolved usage conflict are different facts; acknowledging a warning does not
+resolve the conflict. Ask a reader unfamiliar with the implementation to identify
+the object, present state, available action and expected result from the screen.
+
+If the hierarchy remains unsettled, use the existing `interaction-design-board`
+workflow to compare viable interaction models before another structural patch.
+If the user's latest instruction already settles the behavior, implement and
+audit that decision without reopening the choice or requesting approval again.
+Keep layout decisions with the project's product contract.
+
+For a changed asset ledger and inspector, exercise the applicable sequence:
+
+    ordinary entry -> select A -> select B -> filter/page -> Back -> refresh
+
+Observe the selected identity, visible highlight, detail content, URL, draft and
+focus together. Follow the product's selection and draft policy rather than
+inventing one. If whole-row selection is supported, exercise ordinary cells,
+keyboard activation, repeated selection, text selection and nested controls;
+checkboxes, buttons and links must retain their own actions. Cover empty results
+and explicit object links when selection or filtering changes.
+
+Compare the whole workspace before and after opening or switching details at
+the requested desktop widths. Record actual viewport and pane widths, header
+positions, column readability, unused space, overflow and scroll owners. A wider
+pane alone does not pass if it reflows navigation, obscures the next row or leaves
+a short ledger stretched across an unnecessarily wide canvas. A persistent
+selected-object inspector can suit repeated review; an overlay can suit brief
+inspection. Neither is a universal default, and neither desktop case introduces
+mobile work outside the user's scope.
+
+Follow an issue action through resolution, not merely navigation. In a fixture,
+an asset planned for retirement can still be an application's active address.
+Open its specific issue, identify the exact address and supported correction,
+cancel once to verify no mutation, then save the authorized correction. Read back
+the affected records and the original asset's attention reasons. Opening a
+generic application page, hiding a row or changing a count without removing the
+actual conflict does not establish completion. Use isolated data for writes;
+visual review does not authorize changing real renewal or ownership decisions.
+
+For independent review, supply the raw user request, immutable candidate and
+relevant observed sequence. The reviewer must be able to reject the task model
+or composition as well as individual controls. Preserve a healthy control, such
+as a readable persistent inspector or a valid unresolved warning, so an audit
+does not reject a pattern simply because it is permanent or still needs work.
+
 For changed asynchronous loading or saving, the executing auditor uses the
 authorized project harness to distinguish success, a delayed response, an explicit
 failure, no response headers, and headers followed by a body that never completes.
@@ -634,6 +685,23 @@ For every relevant overlay, record:
 Use rendered geometry, not wrapper props, as evidence. Sticky headers, footers,
 notifications, and non-modal dialogs must not entirely hide focused controls.
 
+### Scoped Styles And Portal Content
+
+When shared controls or their help move into a portal, inspect that actual
+mounting location. A visually-hidden class defined under `@scope` for the main
+workspace will not style a modal mounted outside it: explanatory text can become
+visible and overflow even while the control's accessibility reference remains
+valid. Compare the same control inside and outside the scope. Verify the hidden
+description's computed geometry and clipping, the visible button treatment,
+modal overflow and the accessible description's presence; do not hide the help
+with `display: none` merely to repair the screenshot.
+
+Exercise hover and keyboard focus help on the rendered control, including the
+unavailable-control explanation where applicable. Let the transition settle
+before judging contrast or clipping. A mid-fade tooltip can look low-contrast;
+confirm its final opacity, computed colors and outstanding animations before
+changing shared styles. A settled healthy tooltip is the counterexample to keep.
+
 ## Browser-Integrated Outputs
 
 ### Cited Source Inspection
@@ -750,7 +818,8 @@ Expected:
 - compact filters and actions near the data they affect;
 - overview metrics only where they help triage;
 - addressable workspaces;
-- details invoked by selection rather than a permanent generic rail;
+- details tied to the selected object, with a persistent inspector when the
+  repeated-review task calls for it rather than a permanent generic rail;
 - one intentional scroll owner per region;
 - mobile alternatives preserving identity, status, decision fields, and action.
 - charts and KPI views that expose units, data source/provenance, selected time
