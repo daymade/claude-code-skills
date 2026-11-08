@@ -19,6 +19,38 @@ and obtain the required authorization before an authorized production pause; an 
 remains unresolved rather than being described as passed. This ordering is executed by the release
 executor through the repository's existing publisher; this reference installs no enforcement.
 
+### Replay the next maintenance cycle through every gate
+
+When adding a managed resource, changing replacement behavior, or editing a plan/apply wrapper,
+exercise the next maintenance cycle as well as the first deployment. A certificate upload can
+pass its service-specific plan validator while the publisher's shared-resource lifecycle gate
+rejects the next `create,delete` replacement. Initial creation never exercises that deletion path.
+
+Read the actual entry and follow its invoked validators, target/environment forwarding and
+global lifecycle checks. Use the project's existing offline fixture runner to feed native-shaped
+plan JSON through that complete chain, with synthetic certificate/key values and explicit owner
+identity. Calling only the new validator or mocking the other gates as successful does not test
+the maintenance path. Keep fixture execution outside live backends and cloud writes; where a
+gate cannot run offline, report that boundary and its required verification rather than bypass it.
+
+For a project that explicitly authorizes rotation of its currently bound certificate, cover:
+
+| Plan scenario | Required result through the complete publisher gate chain |
+|---|---|
+| First upload: certificate `create`, existing CDN `update` | Accept only the intended hostname, certificate reference and unchanged non-certificate fields |
+| Next rotation: certificate `create,delete`, CDN `update` | Accept only the dedicated maintenance target/environment, create-before-destroy order and exact old certificate currently bound to that CDN |
+| Repeat after success: both resources `no-op` | Accept after still checking hostname, ownership, certificate presence and the bound ID |
+| Standalone deletion or `delete,create` replacement | Reject |
+| Wrong/missing/empty owner, target, environment or required certificate values | Reject |
+| An unrelated resource mutation or a different old certificate | Reject |
+
+Keep the negative controls on the normal full-apply and teardown routes: they must not inherit
+the maintenance exception. A project-specific rotation exception belongs at the existing lifecycle
+boundary, after proof of the complete restricted plan; do not remove shared-resource protection
+or permit deletion of every resource of that provider type. Read the actual fixture results and
+retain both the scoped-validator and full-chain outcomes. Reuse this evidence while its publisher,
+validators and relevant inputs remain unchanged.
+
 ## 1. Static configuration
 
 Run the repository's canonical formatter and wrapper. If no wrapper exists:
