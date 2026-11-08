@@ -350,7 +350,7 @@
       "description": "Apple-platform development and operations suite for macOS window capture, TCC and Keychain dialog diagnosis, Full Disk Access repair, iOS/macOS app development, disk cleanup, and launchd watchdogs.",
       "source": "./daymade-macos",
       "strict": false,
-      "version": "1.30.3",
+      "version": "1.30.4",
       "category": "suite",
       "keywords": [
         "suite",
@@ -850,7 +850,7 @@
       "description": "MUST be used first for tunnel / proxy-path connectivity failures or slow throughput (网络故障 / 连不上 / 代理或隧道下超时). Diagnoses Tailscale, proxy, TUN, DNS and SSH-tunnel problems on macOS and Windows/WSL, e.g. Tailscale ping works but SSH fails, curl works but browser gets 503, Git/Docker fails behind the proxy, or downloads crawl despite a reachable proxy. Not for application-layer bugs (use debugging-network-issues).",
       "source": "./tunnel-doctor",
       "strict": false,
-      "version": "1.17.15",
+      "version": "1.17.16",
       "category": "developer-tools",
       "keywords": [
         "tailscale",

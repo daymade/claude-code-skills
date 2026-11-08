@@ -32,6 +32,8 @@ Design patterns for the four contract clauses in SKILL.md, each with the sanitiz
 
 **Pattern.** When the full remediation ladder fails, record an exhausted round and stand down for an escalating tier (e.g. 30 min → 2 h → 6 h). During cool-down: no probes, no remediation, no notifications, entry logged. On expiry: one retry round. Success clears the counter; failure advances the tier.
 
+**Cleanup is not a future round.** Auto cool-down may suppress the next probe/remediation, but must not suppress restoration promised by the round that just failed. Save the exact target identity and original state before the first disruptive action; restore only a service that was originally connected and that this round interrupted. Manual pause, user quit and later user intent still prohibit action. An originally disconnected service must stay disconnected. Independently read back restoration instead of treating the cleanup command's return as proof.
+
 **War story.** A proxy-repair watchdog's ladder ended with `notify "all failed, needs human"` and **did not reset its dead counter**. Next cycle the counter still exceeded the patient threshold → full ladder again → notify again. On an unfixable network (real-IP reachable, domain path hijacked — a captive portal the watchdog cannot fix), this re-ran the entire ladder plus a chat notification every 5 minutes forever, each round re-launching the proxy app to the foreground. The user's report: "it keeps opening the app; I quit it and it comes back." `ThrottleInterval` cannot fix this — the job exits 0 every time; the spam is application-level, so the silence must be too.
 
 **Implementation.** `scripts/watchdog-cooldown.sh` — source and wire three call sites: gate at entry (`paused_any`), record on ladder exhaustion (`record_exhausted`), clear on real heal (`clear_exhausted`). Manual `pause`/`resume` subcommands included as the human override.
@@ -53,6 +55,8 @@ sr_open() {  # name yours after the target
 ## Pattern 5: Health checks certify only the plane they probe
 
 **Pattern.** Enumerate the traffic planes your watchdog's service carries (proxied vs direct, read vs write, control vs data) and probe each one. "Healthy" must name the plane: `proxy-plane=ok direct-plane=dead`.
+
+**Return and notification semantics are part of the probe.** A helper that verifies a second plane must return an explicit result to its caller; a failed DIRECT heal cannot fall through to an unqualified `healthy`, `recovered`, or `failure state cleared` message. If the failed heal just recreated an exhausted/cool-down state, the same round must report that state rather than claiming it was cleared. Cover both the ordinary healthy path and the automatic-recovery path with a `proxy OK + DIRECT fail` fixture.
 
 **War story.** A proxy watchdog probed only `google.com/generate_204` through the tunnel. The tunnel's domestic-direct forwarding plane broke for 2+ hours while the proxied plane stayed healthy — domestic domains all failed TLS while overseas traffic flowed. The watchdog logged "Proxy already healthy" through the entire outage. Second story, same shape: the chain intermittently *dropped* ~40-50% of connections instead of dying, so a single probe passed ~60% of the time during a real outage — fixed by N=8 samples requiring ≥6 successes per cycle. A green check certifies the path it probed, at the rate it probed, nothing more.
 

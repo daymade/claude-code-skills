@@ -57,7 +57,7 @@ stand down without waiting for a human to disable it.
 |---|---|
 | Installing a NEW watchdog from scratch | Select the trigger through `references/event-driven-observers.md`, then § Deploy and § The quiet-watchdog contract |
 | Installing, upgrading, reusing or starting a persistent Python job | § Persistent Python runtime |
-| An existing watchdog misbehaves (spam, re-launches apps, hammers) | § The quiet-watchdog contract, diagnose which clause it violates |
+| An existing watchdog misbehaves (spam, re-launches apps, hammers) | § Troubleshooting quick map：先对齐实际 actor，再按 § The quiet-watchdog contract 诊断违反的条款 |
 | Stopping / disabling / restarting a job | § Stop semantics; before replacement follow `references/event-driven-observers.md` § Wait for an authorized unload before replacement |
 | Retiring a job and its tool permanently | § Stop semantics → Decommissioning a job permanently |
 | plist key details (KeepAlive forms, domains, logging, resource limits) | `references/launchd-plist-reference.md` |
@@ -100,6 +100,7 @@ When the full repair ladder fails, the environment is unfixable by the watchdog 
 - Record consecutive exhausted rounds in a state file.
 - After each exhausted round, stand down for an escalating tier (e.g. 30 min → 2 h → 6 h, last tier repeats).
 - One notification when *entering* cool-down; zero during it. On tier expiry, retry one round; any real heal clears the counter and the cool-down state.
+- **Auto cool-down suppresses future new repair rounds, not the current round's restoration.** Before the first disruptive action, save the exact target identity and original state. Cleanup must still restore an originally connected service that this round interrupted; an originally disconnected service stays disconnected. Manual pause, user quit and any later user intent still stand down. Read the restored state back independently.
 - A manual `pause [duration]` command with a TTL state file is the fallback — but the auto path must work with no human command at all. A disable mechanism that requires the user to remember a command is not a mechanism.
 
 Reusable implementation: `scripts/watchdog-cooldown.sh` (source it; provides `paused_any`, `record_exhausted`, `clear_exhausted`, `cmd_pause`/`cmd_resume`).
@@ -230,9 +231,10 @@ nothing but failure logs for six days.
 
 | Symptom | First check |
 |---|---|
+| App 一打开就高速开关，或频率高于所有 watchdog 周期 | 将每个候选 watchdog **实际发出** connect/disconnect/relaunch 的日志与时间戳，对齐同一时间窗的系统状态转换；注册、进程存在和“有能力”都不等于正在执行。若 `neagent`/PlugInKit 同时反复报 `Failed to start extension` / `could not acquire startup assertion`，按 `tunnel-doctor` 查 Network Extension 生命周期，不重启全部 watchdog |
 | "It re-launches the app I quit" | URL-scheme/`open` calls missing the process-alive gate (clause 4) |
 | "It spams the same repair every few minutes" | No exhausted-round cool-down (clause 3); also check the ladder's failure path doesn't reset its dead-counter |
-| "It reports healthy through a real outage" | Health check certifies only the path it probes — one green probe ≠ all planes healthy (add the second plane's probe) |
+| "It reports healthy through a real outage" | Health check certifies only the path it probes — one green probe ≠ all planes healthy (add the second plane's probe). 同一命令若声称覆盖 DIRECT+proxy，两面都通过才可报整体 healthy/recovered；DIRECT 失败并重新写入失败状态后，不得再宣称 `failure state cleared`（Pattern 5） |
 | "bootout didn't stick / it came back" | Confirm the exact domain/service target and who bootstrapped it again; for a persistent stop follow § Stop semantics |
 | Silent no-runs | `StandardErrorPath` missing → failures invisible; then `log show --predicate 'process == "launchd"' --last 15m` |
 | "log mtime is fresh" but the job is actually failing | out.log all-green is **not** health — a failed pass may write nothing (`set -e` + prints-verified-only-on-success), so the last-success timestamp stays fresh forever. Judge the **failure** path (err.log / last-exit status), not success-side freshness (Pattern 7) |

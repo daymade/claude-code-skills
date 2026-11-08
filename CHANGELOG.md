@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-watchdog** (`daymade-macos` v1.30.3 → v1.30.4): Align suspected watchdog symptoms with actual action logs and Network Extension retry evidence; keep auto-cooldown from suppressing current-round state restoration and require honest DIRECT/proxy recovery semantics. Change type: bounded diagnostic and recovery-contract correction.
+- **tunnel-doctor** (v1.17.15 → v1.17.16): Distinguish Network Extension startup retries, exact-address listeners, real proxy requests and Tailscale backend state; add exiting-process evidence boundaries and latest-correction recovery checks. Change type: bounded diagnostic and recovery-guide correction.
+
 - **ghostty-use** (v1.11.4 → v1.11.5): Drop the incidental session count from the side-channel verification example; the durable criterion is window-visibility versus process-liveness, not a historical tally.
 - **feishu-doc-scraper** (v1.12.3 → v1.13.0): Inventory opaque clickable and plain-text website links before batch scope/volume decisions; preserve selected acquisition/upload/retention policy on continuation. Import verified original-preview recoveries offline into the existing attachment state and manifest while retaining failed-attempt history. Change type: additive discovery and recovery interfaces.
 

@@ -5,6 +5,8 @@ It does not authorize a restart or a new background service. Keep ordinary probe
 
 ## Before interruption
 
+Re-read the latest human queued/interrupt correction immediately before applying a previously planned action. Restate the latest goal, exclusions, original state and next required observation; older candidates become invalid when the correction changes scope. Do not quietly restore an optional requirement the user removed, and do not replace a rejected root-cause repair with a relay, alternate port or other bypass.
+
 1. Identify the exact VPN/service, application process if required, current connection state,
    configuration owner, and user path that must keep working. Record the original state.
    An originally disconnected VPN must not be connected as incidental cleanup.
@@ -45,6 +47,47 @@ local fixture before a live interruption. Include these observations:
   unless starting it was explicitly part of the maintenance.
 
 Never exercise these failures on a colleague's working computer merely to test the recovery code.
+
+## Network Extension state and stale-listener recovery
+
+Use this section when a proxy/VPN app flaps rapidly, its extension cannot start, or an old listener survives the apparent process exit. For suspected watchdog involvement, first apply `macos-watchdog`'s actor-alignment rule: compare each candidate's actual action log with the same time window's system transitions. A registered job, a running process, or the capability to connect/disconnect does not prove that it is the actor.
+
+### Startup-assertion loop
+
+When Shadowrocket flaps faster than the watchdog cadence, inspect a bounded system-log window before restarting anything:
+
+```bash
+/usr/bin/log show --last 2m --style compact \
+  --predicate 'process == "neagent" AND eventMessage CONTAINS "Failed to start extension"'
+```
+
+`Failed to start extension … could not acquire startup assertion` or `Specified target process … does not exist` identifies a Network Extension/PlugInKit startup retry path. It is not evidence that a watchdog issued a connect/disconnect action. Read the suspected watchdog's own cooldown and action records before assigning blame or restarting neighboring daemons.
+
+### Control state, listener and business path are separate
+
+For an HTTP proxy, preserve these as independent observations:
+
+```bash
+scutil --nc list
+lsof -nP -iTCP:<port> -sTCP:LISTEN
+curl -x http://127.0.0.1:<port> --connect-timeout 5 --max-time 12 \
+  -sS -o /dev/null -w 'loopback proxy: %{http_code}\n' https://www.google.com/generate_204
+```
+
+- A URL-scheme exit 0 or `scutil` Connected proves only that a request/configuration transition was accepted.
+- The listener must exist at the **exact address the consumer uses**. A LAN listener or a successful LAN proxy request does not satisfy `127.0.0.1`.
+- Test the DIRECT plane and the user's original application separately; one proxy success does not certify every forwarded plane.
+- Do not generalize one Proxy Share observation into a permanent rule such as “on means LAN-only” or “off means no listener”. Record the current app version, setting, listener and request result without claiming causation from the setting alone.
+
+Tailscale has two independent acceptance surfaces: `scutil --nc` describes the network configuration, while `tailscale status` describes its backend. If the configuration is Connected but the CLI reports `Tailscale is stopped`, the backend is not recovered. Use the existing authorized backend restoration action, then require both a running status and a real `tailscale ping`; do not treat Connected as that evidence.
+
+### Exiting process and stale-socket boundary
+
+If `ps` reports the process as exiting (for example `E`/`?Es`) and independent probes find no inspectable threads or Mach/launchd ownership, a successful `kill` return only reports signal delivery. XNU drops signals after `P_LEXIT`; `proc_prepareexit()` places the process on `zombproc` before `proc_exit()` completes reference draining and file-table invalidation. Repeating SIGKILL cannot force that cleanup to finish. `netstat -anv`'s PID field is backed by `so_last_pid`; treat it as the last-accessor clue, not proof of a live FD owner.
+
+Stop same-shape SIGKILL and generic restarts of `pkd`, `neagent`, `nesessionmanager` or other neighboring daemons when their readback shows no effect. **That is not permission to stop investigating.** Change the evidence plane: inventory every socket/reference rather than only the familiar port, inspect current kernel/source semantics, and use an independent diagnostic when needed. Only after those checks may you report that no verified, supported user-space same-port reclamation method remains for the observed state. A reboot is a separately authorized recovery action, not proof that the preceding kill or daemon restart worked.
+
+Do not turn raw RST injection, a loopback relay, `SO_REUSEPORT` rebinding, or deleting/recreating the VPN service into a routine stale-listener repair. Clearing established connections does not prove that a LISTEN socket was released; a bypass is not the rejected root-cause repair.
 
 ## Task-owned temporary host-route cleanup
 
@@ -116,5 +159,13 @@ already-armed restoration action and use existing records to coordinate the stop
 
 - [Python cleanup actions](https://docs.python.org/3/tutorial/errors.html#defining-clean-up-actions)
   describes `finally` execution while an exception propagates.
+- [XNU `proc_prepareexit()`](https://github.com/apple-oss-distributions/xnu/blob/ac9718fb1af618d5ce8678d0dc6e8a58f252216f/bsd/kern/kern_exit.c#L2267-L2269)
+  places the process on `zombproc` and sets `P_REF_DEAD`.
+- [XNU `proc_exit()` cleanup](https://github.com/apple-oss-distributions/xnu/blob/ac9718fb1af618d5ce8678d0dc6e8a58f252216f/bsd/kern/kern_exit.c#L2366-L2384)
+  later performs reference draining, AIO exit and `fdt_invalidate()`.
+- [XNU signal handling after `P_LEXIT`](https://github.com/apple-oss-distributions/xnu/blob/ac9718fb1af618d5ce8678d0dc6e8a58f252216f/bsd/kern/kern_sig.c#L2149-L2156)
+  discards the signal with the comment “Don't send signals to a process which has already exited”.
+- [Apple `netstat` socket display](https://github.com/apple-oss-distributions/network_cmds/blob/97e27e6244c16d399bfeb254315ddc5828711c56/netstat.tproj/main.c#L867-L889)
+  passes `so->so_last_pid` to `proc_name()` and prints that field as the PID.
 - [Ansible block error handling](https://docs.ansible.com/projects/ansible/latest/playbook_guide/playbooks_blocks.html#handling-errors-with-blocks)
   documents `rescue`/`always` and the unreachable-host boundary.
