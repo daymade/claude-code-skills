@@ -692,8 +692,12 @@ For observer freshness, follow
 [observation-health verification](ghostty-use/references/automatic-snapshots.md#verify-observation-health).
 Before a restore or retry, follow its
 [current-set reconciliation](ghostty-use/references/restore_mechanics.md#reconcile-the-current-wanted-set).
-After process reconciliation, follow
+After process reconciliation, and before a complete GUI acceptance pass that must
+not foreground Ghostty, follow
 [history-readiness acceptance](ghostty-use/references/restore_mechanics.md#verify-history-readiness-after-process-reconciliation).
+Keep per-requested-ID GUI readback; process checks and delivery receipts are not
+substitutes. For low-overhead traversal, follow
+[ordered native-tab acceptance](kimi-use/references/kimi-cu-desktop-automation.md#原生标签页的顺序验收).
 For change-only automatic backups, use its
 [automatic workflow](ghostty-use/references/automatic-snapshots.md).
 
