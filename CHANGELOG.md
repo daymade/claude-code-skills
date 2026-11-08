@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **terraform-skill** (v1.5.12 → v1.5.13): Add a certificate-maintenance replay case covering initial creation, next replacement and no-op through the complete publisher/lifecycle gate chain, with unsafe-context and deletion controls.
 - **daymade-skill** (v1.77.2 → v1.77.3): Align repository and suite instructions with the canonical publication, native-discovery and consumed-bundle workflows; remove duplicated setup details from the repository guide. Runtime interfaces and SOP definitions are unchanged.
 - **lark-cli-router** (v1.0.0 → v1.0.1): Distinguish deleted items from whole Wiki spaces, inspect the corresponding recovery surface, and keep recovery, archive coverage and deletion authorization separate. Change type: bounded recovery-routing correction.
 
