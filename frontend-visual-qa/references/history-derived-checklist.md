@@ -323,6 +323,30 @@ state or an explicitly chosen reflow; a blank gap or text crossing into the next
 column is not a healthy empty state. A successful image request in other rows
 does not verify the missing-media branch.
 
+For a hardware catalog or topology that prefers real photographs, exercise the
+existing media checks with these cases:
+
+- Resolve the recorded model and variant from the project's authoritative data.
+  Look for a matching product photograph in approved or authoritative sources
+  before accepting that none is available. Verify its identity and provenance;
+  visual resemblance or a nearby model name does not establish a match. Preserve
+  a verified photograph as the preferred view; cut out its background only when
+  permitted and the crop retains identifying features.
+- Keep an explicitly labeled schematic when the exact photograph is unavailable,
+  the model is unknown, or the photograph cannot decode. Do not substitute a
+  similar device or remove the existing illustration merely because no matching
+  photograph was found. Retain necessary unknown-model and source information.
+- Inspect a normal photograph and the no-photo/unknown-model branches. In an
+  authorized isolated target, also fail the photograph's actual browser decode
+  or request, then inspect the visible fallback. A manually selected schematic
+  does not test the image-error branch. Preserve the original target in audit-only
+  mode and mark that branch unverified when no safe probe is authorized.
+- Open the resulting screenshots at the required widths. Check that each image
+  or schematic remains recognizable and its caption stays inside its allocated
+  area without overlapping the image or adjacent text. Use geometry to explain
+  a visible collision; a successful request or nonzero image size cannot prove
+  the right model or a usable fallback.
+
 Classify media before calling it broken:
 
 - **not requested** — a rendered but offscreen lazy image has not entered its
