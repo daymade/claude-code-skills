@@ -170,6 +170,30 @@ can be selected without copying its computed membership into a per-Skill list.
 Keep the host-specific policy in the source owner's manifest; do not add
 third-party cold bundles merely to explain why they exist on disk.
 
+### Case: the source alias resolves into concurrent work
+
+The delivery executor resolves the installed alias at readback time and compares
+the files the host will consume with the intended immutable published bundle.
+A merged PR, a matching plugin version or a valid source link cannot establish
+that content match. Compare the shipped entry, references and required helpers;
+checking only the file changed in this release can miss a different dependency.
+
+For example, an alias may point into the canonical checkout while another session
+has it on a feature branch. The branch name alone is neither success nor failure:
+if the expected shipped bundle matches, retain that content evidence; if it differs,
+local adoption is still unverified even though publication succeeded. Identify the
+actual differing files and coordinate with the writer, preserving their work.
+Use the existing source-sync owner and approved activation policy for any needed
+reconciliation; do not switch their branch, copy a new cache or redirect the alias
+into a disposable review worktree to manufacture a match.
+
+Then run the requested fresh-host catalog check and, when task behavior is part
+of delivery, observe the host consume the Skill and check its result separately.
+Report publication, installed-content match, discovery and task behavior at their
+observed layers. Missing or unavailable observations stay unverified. These are
+executor checks using Git, filesystem readback and the host probes; the catalog
+audit alone does not compare the complete published bundle or prove execution.
+
 ## 6. Keep cold bundles without loading their catalog entries
 
 Use when a bundle's references, scripts, or assets must remain installed while
