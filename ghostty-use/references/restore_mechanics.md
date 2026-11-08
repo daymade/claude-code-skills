@@ -9,6 +9,7 @@ Earlier CLI/System Events probes: Ghostty 1.3.1 on macOS, 2026-10-04.
 | `ghostty +new-window` CLI action | `+new-window is not supported on this platform` (verified) |
 | AppleScript tab dictionary / System Events | earlier probes found no usable tab restore interface; this does not establish what other AX adapters expose |
 | Kimi native AX observation | a later live probe exposed `AXTabGroup`, tab titles and selected `AXRadioButton` values; use these for observation, not as proof of a complete session-to-window map |
+| Kimi computer-use side-channel check of a snapshot | window titles carry `<task> | <project>`, matchable against each session's manifest cwd; tab titles carry no session id, so this proves recorded sessions are visibly real, never a per-ID map. Targetable-window listings can omit minimized/other-Space windows that the AX tree still names, and a window leaving the visible list says nothing about process liveness — re-run `check` after observing window changes instead of inferring loss (verified 2026-11-08: a window left the targetable list while all 31 recorded sessions stayed present) |
 | macOS window-state restore (Cmd+T…) | reopens empty shells only, never the sessions |
 
 Keep the batch-helper boundary separate from platform capability. The current
