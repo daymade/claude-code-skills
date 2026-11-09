@@ -206,7 +206,8 @@ handling, while the worker owns event identity and delivery state.
 For Terraform publication, linked releases, shared-route replacement, approval, first mutation,
 expired plans, saved-plan input-type mismatches, frozen approval-input verification,
 environment isolation or initialization-cache changes, enter
-[`terraform-skill`](terraform-skill/SKILL.md).
+[`terraform-skill`](terraform-skill/SKILL.md). Certificate rotation or another recurring
+maintenance change uses its [publisher and maintenance-cycle validation](terraform-skill/references/pre-deploy-validation.md#replay-the-next-maintenance-cycle-through-every-gate).
 
 For Deep Research or Kimi financial-research changes, enter the owning
 [`deep-research`](deep-research/SKILL.md) or [`kimi-use`](kimi-use/SKILL.md) Skill.
@@ -637,6 +638,8 @@ For local transport selection or accepted/consumed delivery interpretation, ente
 [current-host tool discovery](peer-message/references/local-coordination.md#先发现完整工具面再选通信通道).
 For independent-session preflight and request lifecycle, follow the
 [local coordination workflow](peer-message/references/local-coordination.md#原生跨会话通信).
+For a native payload limit or a rejected preparation, use its
+[complete-envelope preflight and recovery](peer-message/references/local-coordination.md#完整信封限制与失败收口).
 Keep native-guard installation, recovery and actual-host acceptance in that workflow;
 do not duplicate its parameters here. Reply lookup, transport and discovery
 details belong in [the transport and receiver-evidence SOP](peer-message/references/protocol-and-discovery.md).

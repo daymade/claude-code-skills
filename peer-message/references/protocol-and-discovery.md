@@ -305,19 +305,20 @@ queue 与 history 不是原子快照；内容在两次读取之间迁移时可�
 对于带 `--json` 的 `send`、`broadcast`、`list`、`whoami`、`verify`、`replies`、
 `inspect-inbound` 和 `coord prepare`，仅进入 handler 后由 `main()` 捕获的异常会让 stdout 额外输出一个可解析的错误
 对象，成功路径输出不变；stderr 诊断文本与上表退出码逐字保持不变，非 JSON 调用
-的三个通道逐字节不变：
+的通道逐字节不变：
 
 ```json
 {"status": "error", "outcome": "not_sent", "error": "synthetic pre-send failure"}
 ```
 
-- `status` 恒为 `error`。`outcome` 只取投递路径在失败对象上显式记录的两个值：
+- `status` 恒为 `error`。`outcome` 只取投递路径或专用异常处理分支明确给出的值：
   `not_sent`（确定未发出，如缺 uv、live adapter 无法启动）与 `unknown`（发出与否
   无法判定，如写入后超时、断连或回执不可解析），与 `coord commit --outcome` 同一词汇。
 - `error` 为原失败对象的 `str(exc)`，与 outcome 分开承载诊断；消费者不从该文字推断是否发出。
-- 回执只信任失败对象上显式记录的 outcome；缺失或不认识的值一律序列化为
-  `unknown`。不从人类可读错误文本猜 outcome——coordination 状态或 OS 类失败
-  永远输出 `unknown`，绝不是 `not_sent`。
+- 通用异常只信任失败对象上显式记录的 outcome；缺失或不认识的值一律序列化为
+  `unknown`。不从人类可读错误文本猜 outcome。普通 coordination 状态或 OS 类失败
+  输出 `unknown`；`EnvelopeLimitError` 有独立的发送前处理分支，按
+  [完整信封限制与失败收口](local-coordination.md#完整信封限制与失败收口)执行。
 - 退出码不参与回执判定：异常未显式记录 outcome 的失败（如目标解析失败，退出 3）
   回执仍为 `unknown`；Board 侧按退出码推导的 not_sent 记录以 `coord status` 为准，
   两者不互相改写。
