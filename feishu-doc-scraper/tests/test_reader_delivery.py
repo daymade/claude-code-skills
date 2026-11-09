@@ -261,6 +261,94 @@ class ReaderDeliveryTests(unittest.TestCase):
         for time in ['2000-01-01T00:00:00+00:00','2099-01-01T00:00:00+00:00']:
             with self.assertRaisesRegex(ValueError,'follow the inspect'):gate.validate_observation(r,{**e,'observed_at':time})
 
+    def write_capture(self, document):
+        capture = self.base / 'capture.json'
+        capture.write_text(json.dumps({'data': {'document': document}}))
+        return capture
+
+    def test_renderer_rejects_blank_converted_body_without_output(self):
+        capture = self.write_capture({
+            'content': '<fragment mode="outline"><outline></outline></fragment>',
+            'title': 'Synthetic outline',
+        })
+        output = self.root / 'rejected.md'
+        (self.root / 'discussion.md').write_text('Synthetic discussion companion.')
+        with self.assertRaisesRegex(ValueError, 'Converted Markdown body is empty'):
+            render.render(capture, self.manifest, output,
+                          'https://example.feishu.cn/wiki/SyntheticNodeToken1234567890',
+                          discussion='discussion.md')
+        self.assertFalse(output.exists())
+
+    def test_renderer_rejection_preserves_existing_output_bytes(self):
+        capture = self.write_capture({
+            'content': '<fragment mode="outline"><outline></outline></fragment>',
+            'title': 'Synthetic outline',
+        })
+        output = self.root / 'existing.md'
+        original = b'Existing output\n\nPreserve these exact bytes.\n'
+        output.write_bytes(original)
+        with self.assertRaisesRegex(ValueError, 'Converted Markdown body is empty'):
+            render.render(capture, self.manifest, output,
+                          'https://example.feishu.cn/wiki/SyntheticNodeToken1234567890')
+        self.assertEqual(output.read_bytes(), original)
+
+    def test_renderer_rejects_missing_null_and_empty_source_body(self):
+        cases = {
+            'missing': {'title': 'Synthetic missing body'},
+            'null': {'content': None},
+            'empty': {'content': ''},
+            'whitespace': {'content': ' \n\t'},
+        }
+        for name, document in cases.items():
+            with self.subTest(name=name):
+                capture = self.write_capture(document)
+                output = self.root / f'{name}.md'
+                with self.assertRaisesRegex(ValueError, 'no document HTML body'):
+                    render.render(capture, self.manifest, output,
+                                  'https://example.feishu.cn/wiki/SyntheticNodeToken1234567890')
+                self.assertFalse(output.exists())
+
+    def test_renderer_preserves_text_and_scoped_fragment_bodies(self):
+        cases = {
+            'full': '<p>Healthy full body.</p>',
+            'section': '<fragment mode="section"><p>Selected section body.</p></fragment>',
+            'range': '<fragment mode="range"><p>Selected range body.</p></fragment>',
+        }
+        for name, content in cases.items():
+            with self.subTest(name=name):
+                capture = self.write_capture({'content': content, 'title': 'Synthetic body'})
+                original_capture = capture.read_bytes()
+                output = self.root / f'{name}.md'
+                result = render.render(
+                    capture, self.manifest, output,
+                    'https://example.feishu.cn/wiki/SyntheticNodeToken1234567890')
+                self.assertEqual(result['status'], 'converted_reader_pending')
+                self.assertIn('body.', output.read_text())
+                self.assertEqual(capture.read_bytes(), original_capture)
+
+    def test_renderer_preserves_media_only_and_attachment_bodies(self):
+        cases = {
+            'image': (
+                '<p><img src="SyntheticImageToken1234567890" alt=""></p>',
+                'media/image.png',
+            ),
+            'attachment': (
+                '<p><source token="SyntheticVideoToken1234567890" '
+                'name="course name.mp4"></source></p>',
+                'media/course name.mp4',
+            ),
+        }
+        for name, (content, expected_reference) in cases.items():
+            with self.subTest(name=name):
+                capture = self.write_capture({'content': content, 'title': 'Synthetic media'})
+                output = self.root / f'{name}-only.md'
+                result = render.render(
+                    capture, self.manifest, output,
+                    'https://example.feishu.cn/wiki/SyntheticNodeToken1234567890')
+                self.assertEqual(result['media_references'], 1)
+                self.assertEqual(result['actual_reader'], 'not_verified')
+                self.assertIn(expected_reference, output.read_text())
+
     def test_renderer_refuses_output_outside_root_before_writing(self):
         capture=self.base/'capture.json'
         capture.write_text(json.dumps({'data':{'document':{'content':'<p>Body</p>','title':'Title'}}}))
