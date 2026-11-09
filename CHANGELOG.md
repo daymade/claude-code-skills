@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **peer-message** (v1.25.1 → v1.25.2): Read native Codex coordination envelopes from their exact history carrier, preserve the original inner payload, and verify sender and recipient before receive. Keep scripted intake and digest/lifecycle checks.
+- **report-with-html** (v1.5.0 → v1.5.1): Remove Skill-authored initial-navigation and rehosting restrictions from local HTTP preview guidance. Preserve the loopback manifest server and rendered-delivery verification.
 
 - **kimi-use** (v1.8.4 → v1.8.5): Distinguish backend input limitations, host permission refusals and unknown effects; verify authorized native recovery and upgrade outcomes separately.
 

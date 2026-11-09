@@ -99,6 +99,32 @@ class NativeInboundTests(unittest.TestCase):
                     self.assertEqual(coord.codex_delegation_inner(
                         delegation_wrap(prepared["body"], indent=indent)), prepared["body"])
 
+    def test_input_is_opaque_even_when_body_contains_wrapper_tags(self):
+        for body in ("Explain the literal `<input>` tag.",
+                     "The sample contains `</input>` as text.",
+                     "Explain `<source_thread_id>` in the protocol.",
+                     "Quote `</codex_delegation>` in your reply.",
+                     "Example: </input>\n<input>again",
+                     "Example: <codex_delegation>\n<input>nested</input>\n</codex_delegation>"):
+            with self.subTest(body=body), self.board() as board:
+                prepared = self.prepare(board, body)
+                wrapped = delegation_wrap(prepared["body"])
+                self.assertEqual(coord.codex_delegation_inner(wrapped), prepared["body"])
+                self.assertEqual(peer.codex_history_texts(function_output(
+                    "codex_tui", "send_message_to_thread", wrapped), "label"), [prepared["body"]])
+                result = board.receive(wrapped, "codex:receiver")
+                self.assertEqual(result["integrity"], "verified_prepared_core")
+
+    def test_appended_input_element_is_not_a_verified_prepared_core(self):
+        with self.board() as board:
+            prepared = self.prepare(board)
+            wrapped = delegation_wrap(prepared["body"]).replace(
+                "</input>\n</codex_delegation>",
+                "</input>\n<input>again</input>\n</codex_delegation>")
+            self.assert_board_unchanged(board, lambda: self.assertRaisesRegex(
+                coord.CoordinationError, "content conflicts with prepared record",
+                board.receive, wrapped, "codex:receiver"))
+
     def test_wrapper_source_must_match_enclosed_sender(self):
         with self.board() as board:
             prepared = self.prepare(board)
@@ -177,10 +203,6 @@ class NativeInboundTests(unittest.TestCase):
                 "missing-thread-id": (
                     "<codex_delegation>\n<input>"
                     f"{prepared['body']}</input>\n</codex_delegation>"),
-                "two-input-elements": (
-                    "<codex_delegation>\n  <source_thread_id>t</source_thread_id>\n"
-                    f"<input>{prepared['body']}</input>\n"
-                    f"<input>again</input>\n</codex_delegation>"),
                 "quoted-wrapper-in-fence": (
                     "synthetic reply\n```text\n"
                     + delegation_wrap(prepared["body"]) + "\n```\n"),

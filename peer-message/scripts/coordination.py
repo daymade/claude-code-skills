@@ -162,20 +162,15 @@ def codex_delegation_inner(text):
         <codex_delegation>\\n  <source_thread_id>id</source_thread_id>\\n
           <input>[peer-coordination: {...}]\\n...body</input>\\n</codex_delegation>
 
-    Quoted, nested, partial or malformed wrappers, extra elements, and tool
-    output that merely mentions the wrapper are not coordination intake and
-    return ``None``. Structural indentation is permitted; inner bytes are
-    preserved exactly. The source thread must match the enclosed sender; digest verification
-    downstream still decides whether the core matches a prepared record.
+    Quoted, partial or malformed outer wrappers and tool output that merely
+    mentions the wrapper are not coordination intake and return ``None``.
+    Structural indentation is permitted; input is opaque text, including
+    literal tag examples, and its bytes are preserved exactly. The source
+    thread must match the enclosed sender; downstream digest verification
+    rejects altered cores, including extra elements appended to a prepared input.
     At most one file-style terminal newline outside the wrapper is tolerated.
     """
-    if not isinstance(text, str) or any(
-        text.count(token) != 1 for token in (
-            "<codex_delegation>", "</codex_delegation>",
-            "<source_thread_id>", "</source_thread_id>",
-            "<input>", "</input>",
-        )
-    ):
+    if not isinstance(text, str):
         return None
     core = text[:-1] if text.endswith("\n") else text
     match = re.fullmatch(
