@@ -3282,6 +3282,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **tibo-reset-codex** (v2.6.0 → v2.6.1): Deliver verified decision-changing information through the existing host contract before nonessential follow-up. Make preserving banked resets conditional on account evidence and the cost of delaying valuable work; preserve read-only hosting, notification permissions and manual redemption. Change type: bounded decision and delivery guidance correction.
 
+- **terraform-skill** (v1.5.13 → v1.5.14): Route restoration through the existing release checks; verify separately owned DNS, consumer hostname TLS and selected SSH arguments before resuming application acceptance.
+- **peer-message** (v1.25.2 → v1.25.3): Add owner-release, successor-claim and readback steps; distinguish resource-window release from responsibility for the consumer's result.
+- **tech-selection** (`daymade-claude-code` v5.1.4 → v5.1.5): Assign hosted-database and object-storage responsibilities before capacity comparisons; retain justified binary fields and unknown provider/account constraints.
+
 ## [1.82.0] - 2026-07-07
 
 ### Changed

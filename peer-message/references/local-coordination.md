@@ -77,6 +77,23 @@ python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord release --scope '<project>' --t
 返回 `released`。未释放的陈旧项定向核对，不能通过删库、假身份、超时或重启绕过。
 原生 parent/subagent 已有任务树关联，不为每条内部消息调用此板。
 
+交接独立会话的声明时，由原负责人和接手者各在自己的真实身份下执行；不替对方 release：
+
+```bash
+# 原负责人：确认交接范围和接手者已同意后释放同一事项
+python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord release --scope '<project>' --task '<issue-or-deliverable>'
+# 接手者：原负责人释放后，用同一 scope/task/resource 登记并读回
+python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord claim --scope '<project>' --task '<issue-or-deliverable>' \
+  --resource '<shared-repository>:publish'
+python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord status --scope '<project>' --owners-only
+```
+
+接手者核对读回的 owner、task 和 resource；`conflict` 时回到现有负责人协调，不抢占。
+这只交接协调声明，实际写权限、锁和发布窗口仍按资源自己的合同取得。
+原负责人交出产物后，继续承担交付责任，直到接手者沿约定入口实际使用并读回所需结果，
+或明确接受尚缺步骤的责任；消息已送达、声明已释放都不单独证明业务完成。
+可在短窗口结束时先释放发布资源，不为等待产物使用而持续占用它。
+
 ## 同一问题只保留一个有效请求
 
 窗口请求是时效性消息。有效期取实际请求的结束时间；相对窗口可用
