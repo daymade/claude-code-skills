@@ -1,11 +1,6 @@
-# Local HTTP preview — initial delivery route
+# Local HTTP preview
 
-Choose this route before the first browser navigation for a new local report.
 Keep the HTML file as the durable artifact; preview its reviewed snapshot over HTTP.
-Do not try `file://` first. If a browser or permission tool explicitly refuses a
-navigation, stop that operation: do not rehost the refused artifact, switch tools,
-open it through the shell, or weaken host policy. Resume that artifact only after
-an official capability update or explicit permission recovery permits it.
 
 ## Prepare the exact snapshot
 
@@ -59,8 +54,8 @@ after report edits and their required review.
    terminate foreign processes or trust a stale PID alone.
 
 The executing agent performs these checks with its actual browser capabilities.
-The helper establishes HTTP readiness; it cannot establish rendered delivery or
-permission recovery. Record those observations separately. Retain an unavailable
+The helper establishes HTTP readiness; it cannot establish rendered delivery.
+Record those observations separately. Retain an unavailable
 browser step as unresolved with its exact recovery condition.
 
 ## Exposure boundary
