@@ -35,6 +35,7 @@ hand the verified evidence to `daymade-claude-code:continue-claude-code-work`.
 | The latest conversation about a topic, including a newer continuation | Use recall to locate relevant project(s); for Codex, continue with `read-codex-history`'s **Latest topic across continuations** route instead of treating relevance top-K as latest. Claude/Kimi have no indexed recent-session inventory here, so keep unverified continuation coverage unknown |
 | How identified sessions or a physically bounded project ended | Follow **Inspect session endings** in `references/workflow_examples.md` |
 | A deleted/overwritten file preserved in Claude file-history records | `scripts/recover_content.py` |
+| An old HTML page whose images, media, data or temporary paths may also be gone | Recover its checkpoint first, then follow [page and attachment recovery](references/page-and-attachment-recovery.md) |
 | How often each Skill ran and who started it (user command, model after the user named it, model unprompted), e.g. to decide model-visible vs user-invocable-only | `scripts/skill_usage_ledger.py index`, then `report` (Claude and Codex together); see **Skill usage ledger** below |
 | Kimi CLI sessions | `history_index.py recall --provider kimi`, then read the named session's `wire.jsonl`; see **Kimi CLI** below |
 | Continue a verified Claude session | Stop reading and invoke `daymade-claude-code:continue-claude-code-work` |
@@ -260,10 +261,13 @@ do not add a second thematic classification unless asked.
 
 ### Deleted-content recovery
 
-Recovery writes files, so keep it separate from ordinary reading. First run the
-recovery report against the exact Session file, review every proposed destination,
-then write only after the user asked to recover content. Never restore directly
-over the current project tree.
+Recovery writes files, so keep it separate from ordinary reading and run it only
+when the user asked to recover content. Use an explicit fresh output directory:
+the helper writes recovered files while producing its report. Review the report,
+source/version and recovered paths before adopting them; never restore directly
+over the current project tree. For an HTML page, continue with
+[page and attachment recovery](references/page-and-attachment-recovery.md) before
+calling the page restored.
 
 ### Skill usage ledger
 

@@ -92,6 +92,10 @@ checkpoint the final file. `--write-only` is an explicit lower-fidelity choice,
 not an automatic fallback. If the report says `Later state: recorded deleted`,
 the bytes are the last available pre-deletion checkpoint, not the current state.
 
+For an HTML page, continue with [page and attachment recovery](page-and-attachment-recovery.md)
+to resolve media/data references and distinguish recovered bytes, regenerated
+assets, screenshots and missing dependencies before opening the restored copy.
+
 Codex rollout hits can be found with indexed `--provider codex`, but they cannot be passed to
 `recover_content.py`: Codex search and Claude file recovery are separate
 capabilities.

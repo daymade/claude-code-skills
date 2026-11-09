@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **report-with-html** (v1.5.1 → v1.6.0): Restore and host existing HTML through a bounded transport-only route. Stream large, explicitly listed media snapshots with HTTP range support while preserving small-preview compatibility and frozen content.
+- **read-claude-code-history** (`daymade-claude-code` v5.1.5 → v5.1.6): Recover page dependencies alongside HTML and distinguish original bytes, regenerated assets, screenshot-only evidence and missing media. Align recovery instructions with the helper's file-writing behavior.
+
 - **peer-message** (v1.25.1 → v1.25.2): Read native Codex coordination envelopes from their exact history carrier, preserve the original inner payload, and verify sender and recipient before receive. Keep scripted intake and digest/lifecycle checks.
 - **report-with-html** (v1.5.0 → v1.5.1): Remove Skill-authored initial-navigation and rehosting restrictions from local HTTP preview guidance. Preserve the loopback manifest server and rendered-delivery verification.
 - **kimi-use** (v1.8.5 → v1.8.6): Keep recovery permission and retry rules with their owning sections, route desktop recovery from project instructions, and remove the optional duplicate marketplace description.
