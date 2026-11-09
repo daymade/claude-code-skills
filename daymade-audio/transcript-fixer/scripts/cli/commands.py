@@ -2827,12 +2827,27 @@ def _emit_json(payload) -> None:
     print(json.dumps(payload, ensure_ascii=False))
 
 
+def _record_review_blocker(queue, item_id, code, message, operation="resolve"):
+    persisted = queue.record_blocker(item_id, code, message, operation)
+    if persisted:
+        return queue.workflow_state(item_id)
+    return {"state": "blocked", "code": code, "operation": operation,
+            "message": message, "diagnostics_persisted": False,
+            "evidence_sufficiency": "unknown"}
+
+
 def _queue_cmd_error(args: argparse.Namespace, kind: str, message: str, code: int = 1) -> None:
     """Uniform error channel for the review-queue commands: with --json the
     machine-readable {error, message} object goes to stdout (consumers parse
     stdout only); without it, plain text goes to stderr. Exits `code`."""
+    item_id = getattr(args, "resolve_review", None)
+    workflow = None
+    if item_id and kind not in {"missing_decision", "not_found"}:
+        queue = _get_review_queue()
+        workflow = _record_review_blocker(queue, item_id, kind, message)
     if getattr(args, "json_output", False):
-        _emit_json({"error": kind, "message": message})
+        _emit_json({"error": kind, "message": message,
+                    **({"workflow": workflow} if workflow else {})})
     else:
         print(f"Error: {message}", file=sys.stderr)
     sys.exit(code)
@@ -2921,8 +2936,10 @@ def cmd_reanchor_review(args: argparse.Namespace) -> None:
             if context_offset is not None:
                 kwargs["context_offset"] = context_offset
             results.append(queue.reanchor(item_id, **kwargs))
+            queue.clear_blocker(item_id)
         except ReviewQueueError as e:
-            failures.append({"id": item_id, "error": str(e)})
+            workflow = _record_review_blocker(queue, item_id, "reanchor_failed", str(e), "reanchor")
+            failures.append({"id": item_id, "error": str(e), "workflow": workflow})
 
     if getattr(args, "json_output", False):
         _emit_json({"reanchored": results, "failed": failures,
@@ -2981,7 +2998,8 @@ def cmd_list_review(args: argparse.Namespace) -> None:
     }
 
     if getattr(args, "json_output", False):
-        _emit_json({"items": [i.to_dict() for i in items], "stats": stats, "scope": scope})
+        _emit_json({"items": [{**i.to_dict(), "workflow": queue.workflow_state(i.id)} for i in items],
+                    "stats": stats, "scope": scope})
         return
 
     if not items:
@@ -3001,7 +3019,9 @@ def cmd_list_review(args: argparse.Namespace) -> None:
             if item.line_number:
                 anchor += f":{item.line_number}"
         suggestion = f" → {item.suggested_text!r}" if item.suggested_text else " → (no suggestion)"
-        print(f"#{item.id:<4} [{item.kind}/{item.domain}] {item.original_text!r}{suggestion}{anchor}")
+        workflow = queue.workflow_state(item.id)
+        state = workflow["state"] + (":" + workflow["category"] if "category" in workflow else "")
+        print(f"#{item.id:<4} [{item.kind}/{item.domain}] {item.original_text!r}{suggestion}{anchor} [{state}]")
     print()
     print("Resolve: --resolve-review ID --decision accepted|kept_original|overridden|skipped")
 
@@ -3013,9 +3033,10 @@ def cmd_show_review(args: argparse.Namespace) -> None:
     if item is None:
         _queue_cmd_error(args, "not_found", f"review item {args.show_review} not found")
     if getattr(args, "json_output", False):
-        _emit_json(item.to_dict())
+        _emit_json({**item.to_dict(), "workflow": queue.workflow_state(item.id)})
         return
     d = item.to_dict()
+    print(f"{'workflow':>16}: {json.dumps(queue.workflow_state(item.id), ensure_ascii=False)}")
     for key in ("id", "status", "kind", "domain", "source", "priority", "created_at",
                 "file_path", "line_number", "original_text", "suggested_text",
                 "evidence", "context_snippet"):
@@ -3159,18 +3180,22 @@ def cmd_resolve_review(args: argparse.Namespace) -> None:
             candidate_index=getattr(args, "review_candidate_index", None),
         )
     except ReAnchorNeeded as e:
+        workflow = _record_review_blocker(queue, args.resolve_review, "re_anchor_needed", str(e))
         if getattr(args, "json_output", False):
-            _emit_json({"error": "re_anchor_needed", "message": str(e)})
+            _emit_json({"error": "re_anchor_needed", "message": str(e),
+                        "workflow": workflow})
         else:
             print(f"🛑 Nothing applied — {e}", file=sys.stderr)
         sys.exit(2)
     except ReviewQueueError as e:
+        workflow = _record_review_blocker(queue, args.resolve_review, "review_queue_error", str(e))
         if getattr(args, "json_output", False):
-            _emit_json({"error": "review_queue_error", "message": str(e)})
+            _emit_json({"error": "review_queue_error", "message": str(e), "workflow": workflow})
         else:
             print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
 
+    queue.clear_blocker(args.resolve_review)
     if getattr(args, "json_output", False):
         _emit_json(result)
         return

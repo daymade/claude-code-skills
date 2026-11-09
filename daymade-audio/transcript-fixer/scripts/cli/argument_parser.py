@@ -491,7 +491,7 @@ def create_argument_parser() -> argparse.ArgumentParser:
         action="store_true",
         dest="list_review",
         help="List review-queue items (filter with --review-status/--domain/"
-             "--review-source/--review-file)"
+             "--review-source/--review-file); includes execution-blocker diagnostics"
     )
     parser.add_argument(
         "--review-status",
@@ -632,8 +632,8 @@ def create_argument_parser() -> argparse.ArgumentParser:
         "--authority-record", metavar="JSON", dest="review_authority_record",
         help="JSON file with kind=user_answer, entity_reference or wording_reference, bound to this "
              "item_id and target. See review_queue_dashboard.md for each kind's "
-             "supported forms and source requirements. wording_reference supports only the "
-             "documented message-arrival clause from an exact parallel-transcript quote. "
+             "supported forms and source requirements. wording_reference supports only "
+             "the documented message-arrival, video-editing and weekly-meeting constructions. "
              "Validation does not authenticate user authorship or source authority. "
              "Only with accepted/overridden; incompatible with --authority."
     )

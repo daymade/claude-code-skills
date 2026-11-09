@@ -41,6 +41,24 @@ produced, and an optional **action pack** executed on accept: `file_edit`
 `append_note` (add a trap line to a domain context file). No action pack + a
 file anchor = the default single `file_edit`.
 
+### Pending execution state
+
+CLI `--list-review` and `--show-review` expose additive `workflow` diagnostics.
+`needs_adjudication` means no recorded execution blocker, with evidence sufficiency
+`unknown`; it does not prove evidence is missing. `blocked` records the most recent
+failed resolve/re-anchor attempt, its code, timestamp and category (`authority`,
+`anchor` or `execution`). Fix that blocker and retry before describing the occurrence
+as an unresolved hearing question. An authority rejection does not prove the
+candidate is right; it identifies the guard that refused the write.
+
+The companion `<database-path>.review-attempts.sqlite3` stores only these diagnostics.
+Refusals preserve the transcript, verdict, evidence, audit and primary database;
+successful re-anchor/verdict clears the blocker. Diagnostics do not settle a row,
+change pending counts, or supply authority. If diagnostic storage fails, the error
+response reports `diagnostics_persisted: false` and keeps its original exit code.
+Rows from older versions retain `needs_adjudication` until an actual attempt is
+observed; do not reconstruct an unsupported evidence verdict from prose notes.
+
 ### One occurrence, multiple candidates
 
 Treat the located body span as the question. Enqueue compares occurrences within
@@ -203,6 +221,24 @@ candidate must remain `kind=wording`, `entity_type=unknown`; person/entity kinds
 other syntax and known roster names/variants retain their existing authority route.
 This is a bounded nonperson discriminator, not a general grammar classifier.
 
+Two further finite constructions use `source_type=transcript_restatement` and the
+same required binding/source fields shown below:
+
+- `video_editing`: `减了数量条→剪了数量条` or `减不下去了→剪不下去了`.
+  The source quote must contain the exact recorded context once and a distinct
+  literal `剪数量条` cue from the same utterance; `quote_offset` selects that cue.
+  Quantity accepts Arabic digits or `一二三四五六七八九十百零两`; it stays unchanged.
+- `weekly_meeting`: `周慧/周汇/周惠→周会` only in `我…没讲清楚/没说清楚`,
+  where the prefix is initial `我` or ends `是不是我` / `因为我` / `是我`.
+  The source quote must literally restate `我周会的时候说话` or `我周会的时候讲`;
+  `quote_offset` selects `周会`. Independently verify that this is the same speaker
+  restating the disputed meeting context; a generic mention elsewhere is insufficient.
+
+Known roster entries and ASR variants in either original or target still refuse
+these constructions. Unsupported syntax, name/address cues and other entities
+retain the existing person-name authority route. These are written evidence,
+never an invented user verdict or an audio check.
+
 Synthetic example: the selected context is `有消吸来。先看记录，再决定。`, and a
 verified parallel export contains `这两天没更新。还有消息来。`. Bind the exact
 current queue item and literal strings, not this example's ID or source path:
@@ -225,8 +261,8 @@ current queue item and literal strings, not this example's ID or source path:
 ```
 
 Offsets are zero-based Unicode-character offsets. `context_offset` must select
-the recorded original occurrence, and `quote_offset` the exact target within the
-quote. Both selected clauses must be whole: a target embedded in a person's name,
+the recorded original occurrence. For `message_arrival`, `quote_offset` selects
+the exact target within the quote. Both selected arrival clauses must be whole: a target embedded in a person's name,
 an attribution or another phrase does not qualify. Missing, null, blank, wrong-item
 or wrong-target fields refuse without changing the verdict/evidence or transcript.
 The CLI reads `source_path` and verifies the quote literally; the operator must
@@ -380,6 +416,16 @@ is itself refused if `original` is not in it). After an occurrence anchor is ref
 the guard's context check passes and `A`/`W`/CLI resolve proceed normally
 (explicit action packs get their `file_edit` path rewritten to the new file).
 The refusal messages themselves name this command.
+
+For an explicitly selected slot, re-anchor can also replay successful recorded
+neighbouring queue edits on the same file and hinted line. Both old occurrence
+contexts must overlap exactly and identify both slots; only real successful
+`file_edit` logs qualify. The reconstructed context must match current text
+exactly once, on that same line. This repairs a pending anchor after another
+accepted edit in its sentence without treating unrelated changes as evidence.
+Unknown neighbouring changes, a different paragraph, duplicate context, missing
+context/logs and an already corrected target remain refused. Read back the
+refreshed context/offset, then build any authority record against that current row.
 
 With explicit `--reanchor-to`, an existing old file and a target with identical
 whole bytes permit a path-only move. The queue keeps IDs, status, anchors,
