@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **feishu-doc-scraper** (v1.13.0 → v1.13.1): Reject empty converted bodies and validate the documented extraction recipes before publishing notes; preserve existing notes, original HTML and valid text or media bodies.
 - **local-codex** (`daymade-codex` v2.4.6 → v2.4.7): Separate client/backend provenance and official-package compatibility from optional patches; verify new and existing sessions independently and preserve unknown login receipts through supported reconciliation. Change type: bounded diagnostic and acceptance clarification.
 - **peer-message** (v1.25.0 → v1.25.1): Align preflight recovery and JSON error-receipt guidance with the existing complete-envelope limit handler; distinguish rejected preparation from an already prepared unsent message. Runtime behavior is unchanged.
 

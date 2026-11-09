@@ -146,6 +146,8 @@ def render(capture, manifest, output, source, discussion=None):
         whiteboard_counts[token] = whiteboard_counts.get(token, 0) + 1
     converted = subprocess.run(['pandoc', '-f', 'html', '-t', 'gfm', '--wrap=none'],
                                input=content, text=True, capture_output=True, check=True).stdout
+    if not converted.strip():
+        raise ValueError('Converted Markdown body is empty')
     # Blank lines keep adjacent images independent in Markdown readers.
     converted = converted.replace(')![](', ')\n\n![](')
     if '�' in converted:
