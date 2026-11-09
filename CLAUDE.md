@@ -206,7 +206,8 @@ handling, while the worker owns event identity and delivery state.
 For Terraform publication, linked releases, shared-route replacement, approval, first mutation,
 expired plans, saved-plan input-type mismatches, frozen approval-input verification,
 environment isolation or initialization-cache changes, enter
-[`terraform-skill`](terraform-skill/SKILL.md).
+[`terraform-skill`](terraform-skill/SKILL.md). Certificate rotation or another recurring
+maintenance change uses its [publisher and maintenance-cycle validation](terraform-skill/references/pre-deploy-validation.md#replay-the-next-maintenance-cycle-through-every-gate).
 
 For Deep Research or Kimi financial-research changes, enter the owning
 [`deep-research`](deep-research/SKILL.md) or [`kimi-use`](kimi-use/SKILL.md) Skill.
