@@ -132,6 +132,68 @@ def reply_correlations(body: str) -> list[str]:
     return matches
 
 
+def native_coordination_metadata(text):
+    """Read a native v1 marker at byte zero without changing its payload."""
+    if not isinstance(text, str):
+        return None
+    match = re.fullmatch(r"\[peer-coordination: (\{[^\n]*\})\]", text.partition("\n")[0])
+    if match is None:
+        return None
+    try:
+        metadata = json.loads(match.group(1))
+    except (TypeError, ValueError):
+        return None
+    if (not isinstance(metadata, dict) or type(metadata.get("v")) is not int
+            or metadata["v"] != 1 or any(
+                not isinstance(metadata.get(key), str) or not metadata[key].strip()
+                for key in ("id", "sender", "target"))):
+        return None
+    return metadata
+
+
+def codex_delegation_inner(text):
+    """Return the exact inner bytes of one complete Codex delegation wrapper.
+
+    Recognition is limited to the observed native inbound carrier grammar — a
+    whole-text wrapper holding one single-line ``source_thread_id`` element and
+    one ``input`` element whose content begins with the coordination marker
+    line:
+
+        <codex_delegation>\\n  <source_thread_id>id</source_thread_id>\\n
+          <input>[peer-coordination: {...}]\\n...body</input>\\n</codex_delegation>
+
+    Quoted, nested, partial or malformed wrappers, extra elements, and tool
+    output that merely mentions the wrapper are not coordination intake and
+    return ``None``. Structural indentation is permitted; inner bytes are
+    preserved exactly. The source thread must match the enclosed sender; digest verification
+    downstream still decides whether the core matches a prepared record.
+    At most one file-style terminal newline outside the wrapper is tolerated.
+    """
+    if not isinstance(text, str) or any(
+        text.count(token) != 1 for token in (
+            "<codex_delegation>", "</codex_delegation>",
+            "<source_thread_id>", "</source_thread_id>",
+            "<input>", "</input>",
+        )
+    ):
+        return None
+    core = text[:-1] if text.endswith("\n") else text
+    match = re.fullmatch(
+        r"<codex_delegation>\n"
+        r"[ \t]*<source_thread_id>([^<\r\n]+)</source_thread_id>\n"
+        r"[ \t]*<input>(.*)</input>\n"
+        r"</codex_delegation>",
+        core,
+        flags=re.DOTALL,
+    )
+    if match is None:
+        return None
+    metadata = native_coordination_metadata(match.group(2))
+    if metadata is None or metadata["sender"] != "codex:" + match.group(1):
+        return None
+    return match.group(2)
+
+
 def _prepared_core(envelope, metadata_start):
     """Remove known transport framing without stripping prepared body whitespace."""
     if metadata_start == 0:
@@ -609,6 +671,13 @@ class Board:
         return "verified_prepared_core"
 
     def receive(self, envelope, actor):
+        # A complete Codex delegation wrapper receives its exact inner bytes;
+        # digest and identity checks below still govern the unwrapped core.
+        if isinstance(envelope, str) and envelope.startswith("<codex_delegation>"):
+            delegation = codex_delegation_inner(envelope)
+            if delegation is None:
+                raise CoordinationError("malformed or source-mismatched native delegation")
+            envelope = delegation
         matches = list(re.finditer(r"^\[peer-coordination: (\{[^\n]*\})\]$", envelope, re.M))
         if not matches:
             return {"status": "legacy", "integrity": "legacy_no_metadata",

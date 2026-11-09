@@ -282,6 +282,11 @@ def codex_queue_texts(raw: str, label: str) -> list[str]:
 def codex_history_texts(raw: str, label: str) -> list[str]:
     value = json_object(raw, label)
     if value.get("type") == "functionCallOutput":
+        if value.get("namespace") == "codex_tui" and value.get("name") == "send_message_to_thread":
+            if not isinstance(value.get("output"), str):
+                raise PeerError(f"{label}.output must be a string")
+            inner = coordination.codex_delegation_inner(value["output"])
+            return [inner] if inner is not None else []
         if value.get("namespace") != "peer_message" or value.get("name") != "delivery":
             return []
         if not isinstance(value.get("output"), str):
@@ -331,6 +336,29 @@ def parse_codex_envelope(envelope: str) -> dict[str, Any] | None:
             "body": body,
         }
     return None
+
+
+def parse_native_coordination_envelope(envelope: str) -> dict[str, Any] | None:
+    """Recognize one complete native coordination envelope at byte zero.
+
+    The whole text must start with a single-line ``[peer-coordination: {...}]``
+    metadata line whose JSON carries a nonblank ``id``; anything else — quoted,
+    fenced or mentioned marker lines, and wrappers — is not native intake and
+    returns ``None``. Exact input bytes are preserved for conflict comparison
+    and receive digest verification. Sender and target stay advisory metadata.
+    """
+    meta = coordination.native_coordination_metadata(envelope)
+    if meta is None:
+        return None
+    first_newline = envelope.find("\n")
+    return {
+        "message_id": meta["id"],
+        "sender": meta["sender"],
+        "reply_to": None,
+        "envelope_type": "native-coordination",
+        "envelope": envelope,
+        "body": envelope[first_newline + 1:] if first_newline >= 0 else "",
+    }
 
 
 def parse_reply_envelope(envelope: str) -> dict[str, Any] | None:
@@ -977,6 +1005,7 @@ def inspect_inbound(target: str, message_id: str, codex_home: Path) -> dict[str,
                     ).fetchall()
                 for row in rows:
                     store["candidate_records_examined"] += 1
+                    native_carrier = False
                     if prefix == "queue":
                         label = f"{path.name}:queued_items:{row['id']}"
                         texts = codex_queue_texts(row["payload_json"], label)
@@ -987,6 +1016,10 @@ def inspect_inbound(target: str, message_id: str, codex_home: Path) -> dict[str,
                     else:
                         label = f"{path.name}:thread_items:{row['item_id']}"
                         texts = inspect_history_texts(row["item_json"], row["item_type"], label)
+                        record = json_object(row["item_json"], label)
+                        native_carrier = (row["item_type"] == "functionCallOutput"
+                                          and record.get("namespace") == "codex_tui"
+                                          and record.get("name") == "send_message_to_thread")
                         location = {
                             "kind": kind, "path": str(path), "turn_id": row["turn_id"],
                             "item_id": row["item_id"], "rollout_ordinal": row["rollout_ordinal"],
@@ -995,12 +1028,17 @@ def inspect_inbound(target: str, message_id: str, codex_home: Path) -> dict[str,
                         if not text.strip():
                             raise PeerError(f"{label} contains empty text")
                         parsed = parse_codex_envelope(text)
+                        if parsed is None and native_carrier:
+                            parsed = parse_native_coordination_envelope(text)
                         if parsed is None:
                             if requested_codex_wrapper(text, message_id):
                                 raise PeerError(f"{label} has a malformed requested peer envelope")
                             continue
                         if parsed["message_id"] != message_id:
                             continue
+                        if (parsed["envelope_type"] == "native-coordination"
+                                and coordination.native_coordination_metadata(text)["target"] != target):
+                            raise PeerError(f"{label}: native recipient does not match selected thread")
                         if message is not None and message["envelope"] != text:
                             raise PeerError(
                                 f"{label}: conflicting inbound payloads share message id "
