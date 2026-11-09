@@ -151,8 +151,46 @@ def native_coordination_metadata(text):
     return metadata
 
 
+_XML_ENTITIES = {"amp": "&", "lt": "<", "gt": ">", "quot": '"', "apos": "'"}
+_XML_REFERENCE = re.compile(
+    r"&(?:(?P<name>amp|lt|gt|quot|apos)|#(?P<decimal>[0-9]+)|#x(?P<hex>[0-9A-Fa-f]+));"
+)
+
+
+def _decode_native_xml_text(text):
+    """Decode one strict XML text layer, rejecting invalid references.
+
+    Only XML's five named entities and numeric character references are known.
+    A single substitution pass keeps encoded entity text such as ``&amp;gt;``
+    literal as ``&gt;`` instead of recursively turning it into ``>``.
+    """
+    decoded = []
+    offset = 0
+    for ampersand in re.finditer("&", text):
+        reference = _XML_REFERENCE.match(text, ampersand.start())
+        if reference is None:
+            return None
+        decoded.append(text[offset:ampersand.start()])
+        name = reference.group("name")
+        if name is not None:
+            decoded.append(_XML_ENTITIES[name])
+        else:
+            digits = reference.group("decimal")
+            try:
+                value = int(digits, 10) if digits is not None else int(reference.group("hex"), 16)
+            except ValueError:
+                return None
+            if not (value in (0x9, 0xA, 0xD) or 0x20 <= value <= 0xD7FF
+                    or 0xE000 <= value <= 0xFFFD or 0x10000 <= value <= 0x10FFFF):
+                return None
+            decoded.append(chr(value))
+        offset = reference.end()
+    decoded.append(text[offset:])
+    return "".join(decoded)
+
+
 def codex_delegation_inner(text):
-    """Return the exact inner bytes of one complete Codex delegation wrapper.
+    """Return the exact prepared text inside one complete Codex XML wrapper.
 
     Recognition is limited to the observed native inbound carrier grammar — a
     whole-text wrapper holding one single-line ``source_thread_id`` element and
@@ -164,8 +202,10 @@ def codex_delegation_inner(text):
 
     Quoted, partial or malformed outer wrappers and tool output that merely
     mentions the wrapper are not coordination intake and return ``None``.
-    Structural indentation is permitted; input is opaque text, including
-    literal tag examples, and its bytes are preserved exactly. The source
+    Structural indentation is permitted. Decode the source and opaque input
+    through exactly one strict XML entity layer, preserving the prepared text's
+    CRLF and trailing whitespace; unknown or malformed references return
+    ``None``. Literal tag examples survive as text after that decode. The source
     thread must match the enclosed sender; downstream digest verification
     rejects altered cores, including extra elements appended to a prepared input.
     At most one file-style terminal newline outside the wrapper is tolerated.
@@ -183,10 +223,14 @@ def codex_delegation_inner(text):
     )
     if match is None:
         return None
-    metadata = native_coordination_metadata(match.group(2))
-    if metadata is None or metadata["sender"] != "codex:" + match.group(1):
+    source_thread_id = _decode_native_xml_text(match.group(1))
+    inner = _decode_native_xml_text(match.group(2))
+    if source_thread_id is None or inner is None:
         return None
-    return match.group(2)
+    metadata = native_coordination_metadata(inner)
+    if metadata is None or metadata["sender"] != "codex:" + source_thread_id:
+        return None
+    return inner
 
 
 def _prepared_core(envelope, metadata_start):
@@ -666,8 +710,8 @@ class Board:
         return "verified_prepared_core"
 
     def receive(self, envelope, actor):
-        # A complete Codex delegation wrapper receives its exact inner bytes;
-        # digest and identity checks below still govern the unwrapped core.
+        # A complete Codex delegation wrapper loses exactly one XML carrier
+        # layer; digest and identity checks still govern the decoded core.
         if isinstance(envelope, str) and envelope.startswith("<codex_delegation>"):
             delegation = codex_delegation_inner(envelope)
             if delegation is None:
