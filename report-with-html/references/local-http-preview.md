@@ -54,11 +54,11 @@ separate `--file`; no globs or directory arguments. The schema binds an absolute
 root, relative entry, and exact relative file paths plus SHA256. Repeated JSON
 field names, unrecognized fields, missing/null/empty values, absent entry, non-HTML entry, duplicate
 files, traversal, symlinks, nonregular files, or stale hashes fail before serving.
-The existing schema-1 manifest and commands also accept media libraries. Up to
-256 files / 256 MiB use the original memory snapshot. Larger selections use a
-private disk snapshot and 64 KiB read/copy chunks; source edits or removal after
-startup cannot change the served bytes. There is no payload-size cap beyond
-available storage. Metadata is bounded to 65,536 listed files and a 16 MiB manifest.
+The existing schema-1 manifest and commands also accept media libraries. The
+[preview helper](../scripts/preview_report.py) defines memory-selection, metadata
+and chunk-size bounds. Small selections use memory; larger selections use a
+private disk snapshot and bounded reads/copies. Source edits or removal after
+startup cannot change the served bytes; payload size is limited by available storage.
 
 Disk mode makes a complete temporary copy of the explicitly listed payload. Before
 copying, the helper checks free space on the selected destination volume against
