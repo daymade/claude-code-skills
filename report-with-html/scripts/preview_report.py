@@ -2,8 +2,7 @@
 """Serve a frozen, explicit report file manifest on IPv4 loopback only.
 
 Python 3.10+, POSIX O_NOFOLLOW/dir_fd; no dependencies. Runtime data belongs
-outside this bundle. This is an initial delivery route, never a retry after a
-browser policy refusal. See references/local-http-preview.md.
+outside this bundle. See references/local-http-preview.md.
 """
 import argparse
 import hashlib
