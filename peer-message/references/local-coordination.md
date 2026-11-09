@@ -177,23 +177,33 @@ python3 "$PEER_SKILL_ROOT/scripts/install_native_guard.py" \
 
 原生工具覆盖收件人时只发送原生消息。本 Skill 维护同一状态，不换 transport：
 
-```bash
-python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord prepare '<exact-target>' request.txt \
-  --kind request --topic '<project>:publish-window' --expires-in 300
-```
+### 完整信封限制与失败收口
 
-只有 `prepared` 才将输出的 `body` 原样交给原生工具；记录其 `message_id`。
 发送前按当前宿主工具的实际限制核对完整 `body`，包括协调信封；限制按 UTF-8
 字节计时，用 `len(body.encode("utf-8"))`，不拿原始正文的字符数代替。
-原生工具声明字节上限时，在 `coord prepare` 加
-`--max-envelope-bytes '<该工具的实际上限>'`；它核对包含 metadata、advisory 和
-reply 关联行的完整 UTF-8 信封，超限返回非零且不保留发送预留或新 state revision，
-缩短原始正文后沿原准入重试。未声明或非字节计量的限制不猜值；省略参数保留原流程，
+原生工具声明字节上限时，用该实际值执行预检；`NATIVE_MAX_BYTES` 只是本次命令的
+shell 参数变量，不是应用配置。它核对包含 metadata、advisory 和 reply 关联行的完整信封：
+
+```bash
+: "${NATIVE_MAX_BYTES:?Set the UTF-8 byte limit from the current native tool schema}"
+python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord prepare '<exact-target>' request.txt \
+  --kind request --topic '<project>:publish-window' --expires-in 300 \
+  --max-envelope-bytes "$NATIVE_MAX_BYTES" --json
+```
+
+预检超限时不生成可提交的 `message_id`，也不保留
+发送预留或新 state revision；`--json` 返回 `status=error / outcome=not_sent`，退出码
+为 2。此时不调用原生发送或 `coord commit`，缩短原始正文后沿原准入重新 prepare。
+未声明或非字节计量的限制不猜值；省略参数保留原流程，
 发送前仍按工具实际合同检查。此检查不发送消息、不改变权限，也不替代原生回执。
-若完整信封超限且已确认 transport 未调用，先对该 prepared id 执行
+只有 `prepared` 才记录其 `message_id` 并将输出的 `body` 原样交给原生工具。
+若已取得 prepared id，随后才发现完整信封超限，且已确认 transport 未调用，先执行
 `coord commit --message-id '<prepared-id>' --outcome not_sent`，再缩短原始正文，
 沿原准入重新 prepare。不得截改 prepared body、只删信封或改走其他 transport；
 transport 是否调用不明时，沿下文原通道读回，不凭超限推定未发送。
+
+### 原生调用与回执
+
 其他 suppression 状态安静结束。前置检查绑定宿主的发送 session、实际收件人、完整
 body 和 tool-use id；缺失记录、过期、正文改写、已收件/关闭/结果未知、被新状态替代
 或同一 id 用于另一个调用均拒绝。同一宿主调用的 hook 重入不另发消息。
