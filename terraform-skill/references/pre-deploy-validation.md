@@ -360,6 +360,31 @@ Keep these checks in the project's canonical pre-deploy wrapper instead of trust
 Fail with the concrete mismatch and next action. Do not continue to apply merely to collect a more
 expensive version of the same error.
 
+### Restore an existing host without skipping shared dependencies
+
+When a restoration reuses an existing compute resource or replaces its address, trace the selected
+execution path through the hostname's owning resource and state. An existing-instance branch can
+skip shared reconciliation; a clean compute plan does not prove a DNS record in another state is
+current. Inspect that owner's desired target and live record, then reconcile through its authorized
+publisher. Do not create a second record or move state ownership to repair an address mismatch.
+
+The restoring agent verifies the normal hostname over TLS from the intended consumer's network,
+and exercises SSH with the actual selected `IdentityFile` and `UserKnownHostsFile`. Inspect effective
+selection with `ssh -G <host>` without connecting; then run the authorized read-only SSH probe with
+those settings and host-key checking intact. Validate the constructed arguments through the actual
+SSH parser, including missing and empty paths the selected publisher declares required; preserve
+deliberate SSH defaults when its contract permits them.
+An IP/`--resolve` probe or another machine's success can isolate a local resolver/proxy failure,
+but cannot certify the failing consumer path. Keep malformed SSH options distinct from DNS or
+server failures; preserve any unverified path.
+
+Replay this branch in the existing project harness with synthetic old/new addresses
+`192.0.2.10` / `192.0.2.20` and `app.example.com`: existing compute + stale separately owned DNS
+must report the mismatch; the supported reconciliation must update the owning record without a
+duplicate; unchanged target must remain a no-op. Test the actual SSH option construction with
+valid, malformed, missing and empty settings. After the normal hostname TLS and SSH probes pass,
+resume the original application journey; infrastructure readiness alone does not close acceptance.
+
 ## Primary contracts
 
 - Alibaba Cloud: SLS evaluate-expression operators and evaluation behavior:

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **terraform-skill** (v1.5.13 → v1.5.14): Route restoration through the existing release checks; verify separately owned DNS, consumer hostname TLS and selected SSH arguments before resuming application acceptance.
+- **peer-message** (v1.25.1 → v1.25.2): Add owner-release, successor-claim and readback steps; distinguish resource-window release from responsibility for the consumer's result.
+- **tech-selection** (`daymade-claude-code` v5.1.4 → v5.1.5): Assign hosted-database and object-storage responsibilities before capacity comparisons; retain justified binary fields and unknown provider/account constraints.
+
 - **local-codex** (`daymade-codex` v2.4.7 → v2.4.8): Honor accepted interruption for official shared-backend upgrades without a global idle prerequisite; distinguish official pinned packages from custom builds and verify account-controller adoption separately. Enhanced migrations retain their own drain contract.
 - **feishu-doc-scraper** (v1.13.1 → v1.13.2): Keep the body-capture recipe in its API SOP, route the Skill and repository guide to it, and align refresh guidance with the existing refusal to overwrite notes. Remove the handwritten contents summary; extraction behavior is unchanged.
 - **feishu-doc-scraper** (v1.13.0 → v1.13.1): Reject empty converted bodies and validate the documented extraction recipes before publishing notes; preserve existing notes, original HTML and valid text or media bodies.

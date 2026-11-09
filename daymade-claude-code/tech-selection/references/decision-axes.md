@@ -93,6 +93,16 @@ Criteria are written as imperatives with decidable steps. "Keep it simple" and
 > 「提前设计好数据结构的话，数据结构是最重要的。算法是另外的……你如果数据结构一开始没设计好，那后面你会花很多的精力……但是你也不要去过度工程，要去设计一个可迭代的、长期可维护的技术方案」
 > 「我写需求，数据结构你来定」
 
+For a capped hosted database alongside an existing object store, assign each persisted payload
+before comparing plans: raw media, source files and large blobs normally belong in object storage;
+the database holds the fields needed for queries, ACL, relations, transactions and required history,
+with stable object references. Keep small binary values in the database when a named consumer or
+transaction requirement justifies them; this is a workload decision, not a blanket blob ban.
+The selecting agent estimates growth for both stores from representative payloads, retention and
+history, then checks the chosen provider/account's actual limits and permissions. Unverified limits,
+account eligibility and access stay `unknown`. Splitting accounts does not substitute for this data
+placement and capacity design; evaluate it only if the verified workload and provider terms justify it.
+
 ---
 
 ### Axis 6 · End-to-end usable beats polishing one link

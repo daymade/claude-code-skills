@@ -16,7 +16,7 @@ green wrappers, or process completeness.
 
 ## Route the task
 
-- Release, shared gateway, saved plan, staging receipt, or production promotion: read
+- Release, restoration, shared gateway, saved plan, staging receipt, or production promotion: read
   [release-safety-and-environment-parity.md](references/release-safety-and-environment-parity.md)
   and [pre-deploy-validation.md](references/pre-deploy-validation.md) before approval or mutation.
 - Environment isolation, including cached initialization, environment retirement, shared data backend, DNS ownership, state, or snapshots: read
