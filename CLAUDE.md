@@ -696,6 +696,9 @@ Before a Codex startup diagnosis or a build/resume/recovery claim, follow
 [entry identity](daymade-codex/local-codex/references/entry-identity.md).
 That SOP owns the shell/executable binding and the limits of identity evidence.
 
+For an authorized shared Codex backend upgrade or restart, enter
+[shared daemon maintenance](daymade-codex/local-codex/references/shared-daemon-maintenance.md).
+
 ### Codex Quota and Account Checks
 
 For selected-site Cookie copying between local profiles of the same macOS Chrome,
