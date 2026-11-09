@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **report-with-html** (v1.6.0 → v1.6.1): Keep preview limits with their executable owner and route existing-page hosting and missing-asset recovery from repository instructions. Runtime behavior is unchanged.
+
 - **transcript-fixer** (`daymade-audio` v1.57.7 → v1.57.8): Route reviewed-file continuation through execution-blocker inspection before choosing more audio evidence, and align the repository entry with the finite written-wording contract.
 
 - **peer-message** (v1.25.3 → v1.25.4): Decode native Codex XML carrier entities once before verifying the prepared coordination envelope. Preserve payload whitespace, direct envelopes and strict digest and identity checks.

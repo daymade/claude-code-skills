@@ -232,6 +232,11 @@ For growth analysis from sales or support conversations, enter
 [product-growth](product-growth/SKILL.md) and follow its
 [customer-conversation evidence recipe](product-growth/references/customer-conversations.md).
 
+For reopening or hosting existing HTML, enter
+[existing HTML restoration](report-with-html/references/local-http-preview.md#existing-html-restoration).
+For missing page files or attachments, follow
+[page and attachment recovery](daymade-claude-code/read-claude-code-history/references/page-and-attachment-recovery.md).
+
 For HTML report creation or updates, enter
 [report-with-html's Define success workflow](report-with-html/SKILL.md#workflow)
 for reader/use, evidence precision, delivery location and investigation acceptance.
