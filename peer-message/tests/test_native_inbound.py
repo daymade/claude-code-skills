@@ -16,6 +16,7 @@ import sqlite3
 import tempfile
 import unittest
 from unittest import mock
+from xml.sax.saxutils import escape as xml_escape
 
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
@@ -25,11 +26,12 @@ SPEC.loader.exec_module(peer)
 coord = peer.coordination
 
 def delegation_wrap(inner_envelope, source_thread_id="sender", indent="  "):
-    """Rebuild the exact observed carrier around an inner coordination envelope."""
+    """Serialize text into the native carrier with one XML escaping layer."""
+    xml_text = {'"': "&quot;", "'": "&apos;"}
     return (
         "<codex_delegation>\n"
-        f"{indent}<source_thread_id>{source_thread_id}</source_thread_id>\n"
-        f"{indent}<input>{inner_envelope}</input>\n"
+        f"{indent}<source_thread_id>{xml_escape(source_thread_id, xml_text)}</source_thread_id>\n"
+        f"{indent}<input>{xml_escape(inner_envelope, xml_text)}</input>\n"
         "</codex_delegation>"
     )
 
@@ -81,7 +83,7 @@ class NativeInboundTests(unittest.TestCase):
 
     def test_inner_bytes_preserved_exactly(self):
         with self.board() as board:
-            body = "synthetic\r\nmultiline\r\nbody"
+            body = "synthetic & ->\r\nmultiline\r\nbody \t "
             prepared = board.prepare("codex:sender", "codex:receiver", body,
                                      kind="request", topic="synthetic:bytes", expires=2000)
             wrapped = delegation_wrap(prepared["body"])
@@ -90,6 +92,70 @@ class NativeInboundTests(unittest.TestCase):
             self.assertTrue(prepared["body"].endswith(body))
             result = board.receive(wrapped, "codex:receiver")
             self.assertEqual(result["integrity"], "verified_prepared_core")
+
+    def test_native_xml_entities_decode_exactly_once(self):
+        bodies = (
+            "synthetic & <tag> -> \"double\" and 'single'",
+            "literal entities: &gt; &lt; &amp; &quot; &apos; &#62; &#x3e;",
+        )
+        for body in bodies:
+            with self.subTest(body=body), self.board() as board:
+                prepared = self.prepare(board, body)
+                wrapped = delegation_wrap(prepared["body"])
+                inner = coord.codex_delegation_inner(wrapped)
+                self.assertEqual(inner, prepared["body"])
+                if body.startswith("literal entities:"):
+                    self.assertIn("&amp;gt;", wrapped)
+                    self.assertIn("&gt;", inner)
+                result = board.receive(wrapped, "codex:receiver")
+                self.assertEqual(result["integrity"], "verified_prepared_core")
+
+    def test_numeric_xml_references_verify_against_prepared_text(self):
+        with self.board() as board:
+            prepared = self.prepare(board, "decimal -> hex & and literal &#62;")
+            wrapped = delegation_wrap(prepared["body"])
+            wrapped = wrapped.replace("-&gt;", "-&#62;", 1).replace("&amp;", "&#x26;", 1)
+            self.assertEqual(coord.codex_delegation_inner(wrapped), prepared["body"])
+            result = board.receive(wrapped, "codex:receiver")
+            self.assertEqual(result["integrity"], "verified_prepared_core")
+
+    def test_escaped_source_thread_id_decodes_before_sender_binding(self):
+        with self.board() as board:
+            source = "sender&<source>"
+            prepared = board.prepare(f"codex:{source}", "codex:receiver", "body",
+                                     kind="request", topic="synthetic:source", expires=2000)
+            wrapped = delegation_wrap(prepared["body"], source_thread_id=source)
+            self.assertIn("sender&amp;&lt;source&gt;", wrapped)
+            result = board.receive(wrapped, "codex:receiver")
+            self.assertEqual(result["integrity"], "verified_prepared_core")
+
+    def test_legacy_unescaped_plain_wrapper_remains_supported(self):
+        with self.board() as board:
+            prepared = self.prepare(board)
+            wrapped = (
+                "<codex_delegation>\n"
+                "  <source_thread_id>sender</source_thread_id>\n"
+                f"  <input>{prepared['body']}</input>\n"
+                "</codex_delegation>"
+            )
+            self.assertEqual(coord.codex_delegation_inner(wrapped), prepared["body"])
+            result = board.receive(wrapped, "codex:receiver")
+            self.assertEqual(result["integrity"], "verified_prepared_core")
+
+    def test_unknown_or_malformed_xml_references_are_rejected(self):
+        references = (
+            "&nbsp;", "&unknown;", "&", "&amp", "&#;", "&#x;", "&#X3E;",
+            "&#xZZ;", "&#0;", "&#xD800;", "&#xFFFE;", "&#x110000;",
+        )
+        for reference in references:
+            with self.subTest(reference=reference), self.board() as board:
+                prepared = self.prepare(board)
+                wrapped = delegation_wrap(prepared["body"]).replace(
+                    "synthetic native delegation body", "synthetic " + reference)
+                self.assertIsNone(coord.codex_delegation_inner(wrapped))
+                self.assert_board_unchanged(board, lambda: self.assertRaisesRegex(
+                    coord.CoordinationError, "native delegation", board.receive,
+                    wrapped, "codex:receiver"))
 
     def test_structural_indentation_preserves_inner_payload(self):
         with self.board() as board:
