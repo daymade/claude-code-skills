@@ -1030,11 +1030,13 @@ If it fires, fix the issue — do NOT use `--no-verify` to bypass.
 - Move detailed documentation to `references/` files
 - Avoid duplication between SKILL.md and references
 - Keep `tunnel-doctor` environment-neutral: it may teach discovery and presence checks, but exact private node labels, billing identities, endpoints, credentials, and current chain state remain in the owning private configuration/Skill and must not be copied into this public repository.
-- Kimi desktop input and tunnel diagnostics follow the current host-specific procedures in `kimi-use/references/driving-kimi-app.md` and `tunnel-doctor/SKILL.md`; a proxy bypass recommendation requires compared path evidence.
+- For kimi-cu desktop input or recovery, enter [desktop automation](kimi-use/references/kimi-cu-desktop-automation.md); for Kimi.app mode and driver setup, enter [driving Kimi.app](kimi-use/references/driving-kimi-app.md). Network-path diagnosis remains with [tunnel-doctor](tunnel-doctor/SKILL.md).
 - Scripts must be executable with proper shebangs
 - All bundled resources must be referenced in SKILL.md
 
 ## Marketplace Configuration
+
+For marketplace metadata changes, use the [repository checker](scripts/ci/check_marketplace.py) and its [regression cases](scripts/ci/test_check_marketplace.py); the executable check sequence is in [CI](.github/workflows/ci.yml).
 
 The marketplace is configured in `.claude-plugin/marketplace.json`:
 - Contains plugin entries: single-skill plugins point `source` directly at the skill directory (no `skills` field); any plugin entry with a non-empty `skills` array is a suite and uses those relative paths for multi-skill routing

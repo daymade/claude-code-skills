@@ -6,18 +6,10 @@ This is the manifest every user's `/plugin marketplace add` reads. A plugin whos
 pulling the marketplace — and nothing else in the repo notices, because no skill
 imports this file.
 
-Only assertions that hold on `main` today are enforced, so a red result always means
-"this pull request broke something", never "this repo has always been like that".
-Deliberately NOT enforced: a length cap on marketplace descriptions. The 1024-character
-limit belongs to SKILL.md frontmatter (quick_validate checks it there); no such limit is
-documented for this file, and one entry already exceeds it. Guessing a constraint and
-gating on it would fail honest pull requests for a rule nobody agreed to.
-
 Both directions are checked: every declared entry must resolve on disk, AND every
 plugin-looking directory on disk must be declared. The second direction is the one that
 fails silently otherwise — a skill committed without a marketplace entry simply never
-becomes installable, and no other check notices (2026-07-21: seven skills sat
-unregistered, one for four months).
+becomes installable.
 
 Run locally: python3 scripts/ci/check_marketplace.py
 """
@@ -32,7 +24,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = REPO_ROOT / ".claude-plugin" / "marketplace.json"
 SEMVER = re.compile(r"\d+\.\d+\.\d+")
-REQUIRED_FIELDS = ("name", "source", "description", "version")
+REQUIRED_FIELDS = ("name", "source", "version")
 
 # Directories that look like plugins but are deliberately never registered: eval and
 # review scratch areas from the skill-creator regression workflow (same `*-workspace/`
@@ -100,6 +92,11 @@ def main() -> int:
         if missing:
             failures.append(f"{label}: missing required field(s): {', '.join(missing)}")
             continue
+
+        # Vendor schema: description is optional, but must be a string if present.
+        # https://code.claude.com/docs/en/plugins/marketplace-reference#plugin-entries
+        if "description" in plugin and not isinstance(plugin["description"], str):
+            failures.append(f"{label}: description must be a string when present")
 
         seen[plugin["name"]] = seen.get(plugin["name"], 0) + 1
 
