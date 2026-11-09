@@ -37,6 +37,9 @@ jobs:
       - name: Marketplace manifest resolves
         run: python3 scripts/ci/check_marketplace.py
 
+      - name: Optional marketplace description contract
+        run: python3 -m unittest discover -s scripts/ci -p test_check_marketplace.py -v
+
       - name: Shared conversation core matches bundled readers
         run: python3 daymade-claude-code/sync_core.py check
 
