@@ -370,8 +370,9 @@ publisher. Do not create a second record or move state ownership to repair an ad
 
 The restoring agent verifies the normal hostname over TLS from the intended consumer's network,
 and exercises SSH with the actual selected `IdentityFile` and `UserKnownHostsFile`. Inspect effective
-selection with `ssh -G <host>` without connecting; then run the authorized read-only SSH probe with
-those settings and host-key checking intact. Validate the constructed arguments through the actual
+selection with `ssh -G <same-options> <host>` using the same constructed options as the selected
+publisher, without connecting; then run the authorized read-only SSH probe with those settings and
+host-key checking intact. Validate the constructed arguments through the actual
 SSH parser, including missing and empty paths the selected publisher declares required; preserve
 deliberate SSH defaults when its contract permits them.
 An IP/`--resolve` probe or another machine's success can isolate a local resolver/proxy failure,
