@@ -298,10 +298,10 @@ prepare 后原 request 仍可能过期；reply 自身的 `expires` 为 `null` �
 
 ### 从 Codex 入站原件接收
 
-只有已知自身 message ID 的脚本 `peer-message` 信封使用此配方。先按
+已知自身 message ID 的脚本 `peer-message` 信封及受支持的原生协调入站使用此配方。先按
 [按自身 ID 只读查看入站信封](protocol-and-discovery.md#按自身-id-只读查看入站信封)
-核对支持范围和当前 help；原生工具覆盖的通信仍走原生机制，不能把任意原生
-`codex_delegation` 包装拼成脚本信封。
+核对支持范围和当前 help；原生工具覆盖的通信仍走原生机制。取件器验证受支持的
+`codex_delegation` 载体后返回精确的内层协调信封，不手抄、重建或转换包装。
 
 执行 Agent 将 `INBOX_TARGET` 设为当前宿主实际的 `codex:<完整 UUID>`，
 `INBOUND_MESSAGE_ID` 设为该入站信封自身的精确 ID，再执行整段。它只从 JSON 的
@@ -332,7 +332,7 @@ if not (isinstance(result, dict) and result.get("target") == target
         and type(result.get("message_count")) is int and result["message_count"] == 1
         and result.get("errors") == [] and isinstance(message, dict)
         and message.get("message_id") == message_id
-        and message.get("envelope_type") == "peer-message"):
+        and message.get("envelope_type") in {"peer-message", "native-coordination"}):
     raise SystemExit("Inbound inspection is not one exact supported match; retain evidence and stop")
 envelope = message.get("envelope")
 if not isinstance(envelope, str) or not envelope.strip():

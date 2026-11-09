@@ -265,11 +265,13 @@ python3 "$PEER_SKILL_DIR/scripts/peer.py" inspect-inbound \
 
 按现有最高版本选库规则，对适用的 queue 与 thread history 各读取一次，使用 SQLite `mode=ro`。先以精确 thread ID 和 message ID 子串缩小 SQL 候选，再解析完整的 protocol-1 `peer-message`，核对自身 ID。支持 queue 的 `UserInput` 文本、history 中存储类型为 `userMessage` 的现行消息内容，以及 namespace=`peer_message`、name=`delivery` 的 `functionCallOutput`。不解析其他 thread 或其他 tool namespace 的正文。普通正文、引用、代码围栏、`in_reply_to` 或其他信封仅提及该 ID 都不算匹配；候选标示所请求的自身 ID，却缺少完整有效 wrapper 或使用不支持的协议时，显式报完整性错误。
 
+原生协调入站另外只接纳 history 的 `functionCallOutput`：namespace=`codex_tui`、name=`send_message_to_thread`，且 output 是完整 `codex_delegation` 包装。结构标签可带缩进；内层协调原文保持原字节，外层 `source_thread_id` 必须匹配内层 sender，recipient 必须匹配所选 inbox。普通用户文字、queue 文本或其他工具输出中的裸协调标记不因此获得原生载体身份。返回的 `envelope` 是已校验载体的精确内层文本，可直接保存后交给 `coord receive` 检查 prepared digest 与生命周期；没有命中有效载体时不重建原件，不把 `not_found_in_snapshot` 或 `unknown` 解释成消息不存在。
+
 即使 queue 已命中，也读取适用的 history。完全相同的原始信封合为一条，保留所有匹配坐标；同一自身 ID 出现不同原文、sender 或正文时，报冲突，不按新旧或 store 强弱选一份。缺失 store 在覆盖面中标为 absent；存在却不可读、schema/JSON/content 不合法的 store 导致错误，不能用另一处命中掩盖。
 
 `--json` 输出一个结果对象；普通模式输出状态、覆盖面、信任边界和完整原始信封，错误写 stderr。JSON 保留：
 
-- `target`、`message_id`、`inspection_status`、`message_count` 和 `message`；命中时 `message` 含 `message_id`、`sender`、`reply_to`、`envelope_type=peer-message` 与完整 `envelope`。
+- `target`、`message_id`、`inspection_status`、`message_count` 和 `message`；命中时 `message` 含 `message_id`、`sender`、`reply_to`、`envelope_type` 与完整 `envelope`。`envelope_type` 区分 `peer-message` 和 `native-coordination`；原生载体不额外产生脚本回信路线。
 - `evidence[]`：queue 的 `queue_item_id` / `queue_order`，或 history 的 `turn_id` / `item_id` / `rollout_ordinal`，并带 `kind` 与 `path`。
 - `evidence_stores[]`：每个 store 的 `kind`、`path`、`availability`、`read_status`、`candidate_records_examined`，失败时附 `error`；`errors[]` 在健康结果中为空。
 - `trust_boundary` 与 `snapshot_consistency=independent_store_reads`。
