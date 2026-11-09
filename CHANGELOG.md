@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **local-codex** (`daymade-codex` v2.4.7 → v2.4.8): Honor accepted interruption for official shared-backend upgrades without a global idle prerequisite; distinguish official pinned packages from custom builds and verify account-controller adoption separately. Enhanced migrations retain their own drain contract.
 - **feishu-doc-scraper** (v1.13.1 → v1.13.2): Keep the body-capture recipe in its API SOP, route the Skill and repository guide to it, and align refresh guidance with the existing refusal to overwrite notes. Remove the handwritten contents summary; extraction behavior is unchanged.
 - **feishu-doc-scraper** (v1.13.0 → v1.13.1): Reject empty converted bodies and validate the documented extraction recipes before publishing notes; preserve existing notes, original HTML and valid text or media bodies.
 - **local-codex** (`daymade-codex` v2.4.6 → v2.4.7): Separate client/backend provenance and official-package compatibility from optional patches; verify new and existing sessions independently and preserve unknown login receipts through supported reconciliation. Change type: bounded diagnostic and acceptance clarification.

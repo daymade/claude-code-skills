@@ -17,16 +17,22 @@ Account adoption remains in [the OAuth guide](oauth-guide.md#existing-native-own
    Preserve SID, cwd, latest turn, pending input, in-flight command handles and
    work/recovery locations. Check discovery pagination and truncation; report
    uncovered sessions instead of claiming the inventory is complete.
-3. Coordinate a maintenance window with affected writers. Use native messaging
-   where it covers the target, with the installed coordination protocol when
-   required. Wait for critical commits, installs and publications to finish
-   naturally; verify their terminal state or preserved recovery path. A peer
-   acknowledgement is coordination, not permission to terminate its processes.
-   Keep services and publishers outside the selected backend untouched.
-4. Confirm the current user's authorization covers this exact service and
-   possible task interruption. An already-authorized version switch does not
-   require another ceremonial approval. A refusal or an unsafe in-flight write
-   stops the dependent switch; continue independent authorized preparation.
+3. Confirm the current user's authorization covers this exact service and
+   possible task interruption. For an official upgrade whose interruption the
+   user accepts, notify affected writers and retain available recovery locations;
+   do not wait for every root, child or Goal to become idle or acknowledge a
+   global checkpoint. Client reconnection and server recovery are separate
+   mechanisms: inspect the selected versions' behavior, then verify the actual
+   result rather than assuming either universal recovery or inevitable loss.
+4. If interruption is forbidden or not covered by existing authorization,
+   coordinate a bounded window through the host's native messaging and installed
+   coordination protocol. A concrete unrecoverable external write or explicit
+   user exclusion still stops its dependent action; an active turn, child or
+   peer request to wait alone does not override the user's accepted interruption.
+   Preserve work and keep services and publishers outside the selected backend
+   untouched. Do not independently kill their processes or reset/pause Goals.
+   Custom enhanced-generation migrations retain their owner's drain and snapshot
+   contract; do not import that contract into ordinary official upgrades.
 5. Retain the previous complete package and its supported recovery command.
    Keep credentials, hooks, config and conversation history in their existing
    owner. Preserve an operation record with source/target identities and output
@@ -41,6 +47,13 @@ App Server's executable and package provenance. An official backend can serve
 a locally patched client; neither component's version or signature establishes
 the other's identity. A version mismatch is a compatibility question, not by
 itself an upgrade failure.
+
+Judge package provenance from its actual executable, official signature and
+complete package manifest, not its directory name. The official installer can
+copy signed release bytes into a `local-<digest>-<target>` directory for
+`update --from-cli`; that name does not establish a custom build. A standalone
+CLI package may omit companions needed by the daemon: verify the complete
+official package closure before using it as the update source.
 
 For the requested release channel, inspect the target official package and the
 controller's actual compatibility checks against the capabilities the user needs.
@@ -60,18 +73,19 @@ the official package without importing that patch as an Account Manager need.
 Do not change the user's release-channel preference as a side effect of this
 assessment. Keep an untested target's compatibility explicitly unverified.
 
-For the inspected 0.165/0.166 CLI, these commands have different effects:
+For the inspected 0.165/0.166 and 0.169.0-alpha.3 CLI, these commands have different effects:
 
 | Command | Effect |
 |---|---|
 | `codex app-server daemon update` | Select the official production package, remove a local package pin and restore the production update route; a running backend may restart. |
-| `codex app-server daemon update --from-cli` | Copy and pin the invoking CLI package; this may select a local build and restart the backend. |
+| `codex app-server daemon update --from-cli` | Copy and pin the invoking complete package, whether official signed release or local build, and restart the backend. Verify provenance separately. |
 | `codex app-server daemon restart` | Restart the selected backend; this alone does not return a patched package to official bytes. |
 
 Recheck help and implementation when versions differ. A graceful shutdown can
 force termination after its grace period; the command does not prove a busy
-backend is safe to replace. Never hand-edit the `current` package link, kill
-other sessions, or change account/home to make the operation pass.
+backend recovered successfully. Use the authorized official lifecycle for its
+accepted interruption; never hand-edit the `current` package link, independently
+kill other sessions, or change account/home to make the operation pass.
 
 Run the chosen command once through the bound entry and context. Persist
 stdout, stderr and terminal exit status outside the backend being replaced.
@@ -86,9 +100,18 @@ out whether the first one succeeded.
 
 Read back the selected package, provenance/hash, actual replacement process and
 backend version through the original endpoint. Check the ordinary login-shell
-entry separately. For a return to official updates, verify the production
-selection marker and updater state as well as the version; equal version text
-can hide different local bytes. Retained source branches do not activate them.
+entry separately. Distinguish official release bytes from the production update
+route: an explicitly selected official prerelease can remain pinned by
+`--from-cli`. Verify production selection/updater state only when returning to
+that route is requested; do not remove a prerelease pin merely to make this check
+pass. Equal version text can hide different local bytes. Retained source branches
+do not activate them.
+
+When an account controller pins the daemon's executable or PID/birth, prepare
+its supported replacement binding and reload the actual consumer after the new
+owner is available. Verify the original session-bound candidates and account;
+writing configuration alone does not establish controller adoption. A controller
+version allowlist gap is not proof that the official native API needs a patch.
 
 For each session whose continuation is claimed, inspect its original SID/cwd
 and turn boundary. Require a new message or completed tool execution after the
