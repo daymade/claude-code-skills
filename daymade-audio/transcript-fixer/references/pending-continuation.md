@@ -6,6 +6,11 @@ unreviewed text was added, return to the native route for the uncovered content.
 Read the file's provenance and exact-file queue; a global pending count or an old
 completion message cannot establish coverage.
 
+Before selecting more audio evidence or retrying a verdict, inspect
+[pending execution state](review_queue_dashboard.md#pending-execution-state)
+and follow the recorded blocker's recovery route. A failed write alone does not
+establish that the wording still lacks evidence.
+
 ## Pending audio evidence
 
 Reuse the completed local ladder and independent review when their input and
