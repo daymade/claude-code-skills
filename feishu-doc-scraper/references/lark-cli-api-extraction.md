@@ -2,20 +2,6 @@
 
 The primary, highest-fidelity way to turn a Feishu/Lark source into Markdown. Everything here was verified end-to-end on a real multi-document collection import (lark-cli 1.0.27 and 1.0.32, 2026-05; re-verified on 1.0.55, 2026-06 — which is where the docs-body and sheet field paths below changed, see Steps 3–4).
 
-## Contents
-
-- Why API over browser
-- Step 0: proxy and auth preflight
-- Step 1: classify the URL
-- Step 2: resolve wiki node → doc token
-- Step 3: fetch the body programmatically
-- Step 4: spreadsheets
-- Step 5: the reference-graph recursion (collections/hubs)
-- Step 6: cross-tenant and personal-space sources
-- Step 7: frontmatter and provenance
-- Command troubleshooting
-- What a clean run looks like
-
 ## Why API over browser
 
 On real collection work the lark-cli path did the entire job and the browser path was never needed, because the API path:
@@ -76,7 +62,10 @@ selected threads before summarizing. Preserve its JSON and Markdown companion,
 add a visible discussion link beside the body, and report its scope and gaps.
 The same step applies to documents reached recursively in Step 5.
 
-The body field moved between lark-cli versions, so probe both instead of hard-coding one — this keeps working whichever version is installed:
+Choose a distinct `<sanitized-title>` for each source before running this recipe.
+For a refresh, select a new versioned path; existing notes and HTML captures are
+rejected rather than overwritten. The body field moved between lark-cli versions,
+so select the nonblank field from the actual response:
 
 ```bash
 note_md="<sanitized-title>.md"

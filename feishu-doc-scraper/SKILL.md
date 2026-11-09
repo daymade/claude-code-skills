@@ -114,51 +114,11 @@ This does not conflict with any "Claude/Anthropic domains must use the proxy" ru
 - `…/sheets/<token>` — spreadsheet, use the sheets commands (see reference).
 - `…/minutes/<token>` — Minutes, go to **Path C**.
 
-**3. Fetch the body programmatically — never via the model.** The body field moved across lark-cli versions, so probe both rather than hard-coding one (this keeps working whichever version is installed):
-
-```bash
-note_md="<sanitized-title>.md"
-note_html="<sanitized-title>.html"
-if [ -e "$note_md" ] || [ -L "$note_md" ]; then
-  printf 'Refusing to overwrite existing note: %s\n' "$note_md" >&2
-  exit 1
-fi
-lark-cli docs +fetch --doc <obj_token> --format json --scope full --detail full > /tmp/fetch.json 2> /tmp/fetch.err || exit 1
-stage_md="$(mktemp "${note_md}.tmp.XXXXXX")" || exit 1
-stage_html="$(mktemp "${note_html}.tmp.XXXXXX")" || { rm -f "$stage_md"; exit 1; }
-trap 'rm -f "$stage_md" "$stage_html"' EXIT
-used_html=0
-# ≤1.0.32: clean Markdown in .data.markdown.
-# 1.0.55: body moved to .data.document.content as HTML (.data.markdown is null).
-# Select a nonblank string from the actual response; null/missing fields are not bodies.
-if jq -e -r '.data.markdown | strings | select(test("\\S"))' /tmp/fetch.json > "$stage_md"; then
-  : # got clean Markdown directly
-else
-  used_html=1
-  jq -e -r '.data.document.content | strings | select(test("\\S"))' /tmp/fetch.json > "$stage_html" || exit 1
-  pandoc -f html -t gfm "$stage_html" > "$stage_md" || exit 1
-fi
-if ! grep -q '[^[:space:]]' "$stage_md"; then
-  printf 'Refusing to publish an empty converted body: %s\n' "$note_md" >&2
-  exit 1
-fi
-if [ -e "$note_md" ] || [ -L "$note_md" ]; then
-  printf 'Refusing to overwrite existing note: %s\n' "$note_md" >&2
-  exit 1
-fi
-if [ "$used_html" -eq 1 ]; then
-  if [ -e "$note_html" ] || [ -L "$note_html" ]; then
-    printf 'Refusing to overwrite existing HTML capture: %s\n' "$note_html" >&2
-    exit 1
-  fi
-  mv "$stage_html" "$note_html" || exit 1
-fi
-mv "$stage_md" "$note_md" || exit 1
-rm -f "$stage_html" || exit 1
-trap - EXIT
-```
-
-⚠️ **`<sanitized-title>` must be a distinct name per document, never the literal string "source" reused across fetches.** Step 4 below fetches multiple documents (the hub, then every child it references) into the same working directory — running this exact snippet twice with a hardcoded `source.md`/`source.html` would let the second fetch silently overwrite the first document's saved body before you ever got to check it. The rest of this section still says "`source.html`"/"`source.md`" as shorthand for *whichever document's own saved files you're currently looking at* — not one shared filename for the whole collection.
+**3. Fetch the body programmatically — never via the model.** Use the
+[body capture procedure](references/lark-cli-api-extraction.md#step-3-fetch-the-body-programmatically),
+which owns the executable recipe, output naming, body-field selection and failure
+handling. The `source.html` / `source.md` names below refer to that document's own
+saved files, not shared filenames for the collection.
 
 ⚠️ **On this pandoc branch, `pandoc -f html -t gfm` silently strips several of Feishu's custom embedded tags — verified against real documents, 2026-08-16/17, and the damage is worse the deeper you look:**
 - **whiteboard** (`<whiteboard token="…">`, an inline diagram block) vanishes with zero trace. Confirmed on a real document: 3 raw tags in `.data.document.content` → 0 trace in the pandoc-converted `source.md` (`grep -c whiteboard` found 3 hits in the raw HTML, 0 in the converted Markdown).
@@ -235,7 +195,10 @@ These are the rules whose violation silently ruins the output. Each has a reason
 - **Transcripts come from the platform's native transcription, never re-ASR.** Downloading media and transcribing again loses speaker labels, timestamps, and accuracy.
 - **A generated docx Markdown is not done until it has been *visually* verified** against the source (render to image, read it). Feishu-exported docx uses font-size+bold for headings rather than Word heading styles, so a "no errors, word count matches" check passes while the entire heading hierarchy is silently flat. Text-level checks cannot catch this.
 - **Do not grind on the legacy docx image CLI methods.** Their failures through 1.0.32 do not decide a current browser original-preview permission. When body capture works but export/preview fails, use the operation-specific branch in [original media and reader handoff](references/original-media-and-reader.md); otherwise register the source tokens and report the unresolved image gap.
-- **Rich-media tag verification must run on each document's own `.html`, never its `.md`, on the pandoc fallback path — and each document needs its own filename, not a shared literal `source.html`.** `pandoc -f html -t gfm` silently strips Feishu's custom embedded tags — verified on a real document: 3 raw `whiteboard token="…"` tags in `.data.document.content` left zero trace in the converted `.md` (2026-08-16). Checking only the `.md` for residual tags on this path always reports "clean," even when content was silently discarded; reusing one hardcoded filename across a hub's multiple fetches (step 3) would additionally let a later document silently overwrite an earlier one's raw capture before it was ever checked.
+- On the pandoc branch, follow the API SOP's
+  [rich-media extraction and leaf gate](references/lark-cli-api-extraction.md#step-5-the-reference-graph-recursion-collectionshubs).
+  It defines the source representation to check; the body-capture procedure owns
+  per-document filenames and existing-output refusal.
 - **Never equate "downloaded" with "belongs in Git/LFS."** Raw video, Office files, PDFs, and images default to the Feishu original plus a stable locator; the local file is a cache. Git stores structured/searchable derivatives and provenance. OSS is an explicit durability route when source-only retention is insufficient. Run `python3 scripts/check_archive_storage.py <artifact-manifest.json>` before a package is committed.
 - **HTTP 200 from anonymous curl ≠ accessible.** A Feishu login wall returns 200 with a body containing `accounts.feishu.cn` / `login` / `passport` / an empty `<title>`. Check the body, never infer "public" from the status code.
 - **A file "not found" by a search agent is not authoritative.** Verify against authoritative sources before concluding (this is general Inference Discipline; relevant when locating where ingested content already lives).
