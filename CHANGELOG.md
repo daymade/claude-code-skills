@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **report-with-html** (v1.5.0 → v1.5.1): Remove Skill-authored initial-navigation and rehosting restrictions from local HTTP preview guidance. Preserve the loopback manifest server and rendered-delivery verification.
+
 - **kimi-use** (v1.8.4 → v1.8.5): Distinguish backend input limitations, host permission refusals and unknown effects; verify authorized native recovery and upgrade outcomes separately.
 
 - **local-codex** (`daymade-codex` v2.4.7 → v2.4.8): Honor accepted interruption for official shared-backend upgrades without a global idle prerequisite; distinguish official pinned packages from custom builds and verify account-controller adoption separately. Enhanced migrations retain their own drain contract.
