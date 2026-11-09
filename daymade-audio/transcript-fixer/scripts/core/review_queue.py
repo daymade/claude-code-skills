@@ -236,6 +236,65 @@ class ReviewQueue:
             PRIMARY KEY(item_id, fingerprint))""")
         return conn
 
+    def _execution_connect(self) -> sqlite3.Connection:
+        # A refused command must preserve even the main database bytes.
+        # This companion contains diagnostics only, never verdict/authority.
+        conn = sqlite3.connect(str(self.db_path) + ".review-attempts.sqlite3", timeout=15)
+        conn.row_factory = sqlite3.Row
+        conn.execute("""CREATE TABLE IF NOT EXISTS review_execution_blockers (
+            item_id INTEGER PRIMARY KEY, code TEXT NOT NULL,
+            message TEXT NOT NULL, operation TEXT NOT NULL,
+            attempted_at TEXT NOT NULL)""")
+        return conn
+
+    def record_blocker(self, item_id: int, code: str, message: str,
+                       operation: str = "resolve") -> bool:
+        with self._connect() as conn:
+            pending = conn.execute("SELECT 1 FROM review_items WHERE id=? AND status='pending'", (item_id,)).fetchone()
+        if pending:
+            try:
+                with self._execution_connect() as conn:
+                    conn.execute("INSERT OR REPLACE INTO review_execution_blockers VALUES (?,?,?,?,?)",
+                                 (item_id, code, message, operation, _utcnow()))
+                    conn.commit()
+            except (OSError, sqlite3.Error):
+                return False
+        return True
+
+    def clear_blocker(self, item_id: int) -> None:
+        if not Path(str(self.db_path) + ".review-attempts.sqlite3").is_file():
+            return
+        try:
+            with self._execution_connect() as conn:
+                conn.execute("DELETE FROM review_execution_blockers WHERE item_id=?", (item_id,))
+                conn.commit()
+        except (OSError, sqlite3.Error):
+            pass  # Diagnostics must never overturn a successful verdict.
+
+    def workflow_state(self, item_id: int) -> dict[str, Any]:
+        """Execution history cannot prove that an unattempted row lacks evidence."""
+        with self._connect() as conn:
+            item = conn.execute("SELECT status FROM review_items WHERE id=?", (item_id,)).fetchone()
+        if item is None or item[0] != PENDING:
+            return {"state": "decided"}
+        row = None
+        if Path(str(self.db_path) + ".review-attempts.sqlite3").is_file():
+            try:
+                with self._execution_connect() as conn:
+                    row = conn.execute("SELECT * FROM review_execution_blockers WHERE item_id=?", (item_id,)).fetchone()
+            except (OSError, sqlite3.Error) as exc:
+                return {"state": "unknown", "diagnostics_error": str(exc), "evidence_sufficiency": "unknown"}
+        if row is None:
+            return {"state": "needs_adjudication", "evidence_sufficiency": "unknown"}
+        code = row["code"]
+        category = ("anchor" if code in {"re_anchor_needed", "reanchor_failed"}
+                    else "authority" if code in {"target_unknown", "target_is_variant", "invalid_authority_record",
+                        "nonperson_roster_conflict", "nonperson_authority_required", "wording_authority_required",
+                        "wording_reference_scope"} else "execution")
+        return {"state": "blocked", "category": category, "code": code,
+                "message": row["message"], "operation": row["operation"],
+                "attempted_at": row["attempted_at"], "evidence_sufficiency": "unknown"}
+
     # ==================== Enqueue ====================
 
     def enqueue(self, items: list[dict[str, Any]]) -> dict[str, Any]:
@@ -664,6 +723,64 @@ class ReviewQueue:
 
     # ==================== Re-anchor ====================
 
+    def _context_after_recorded_edits(self, item: ReviewItem, content: str) -> Optional[str]:
+        """Replay only successful, occurrence-bound neighbouring queue edits.
+
+        No fuzzy matching: overlapping old snippets must agree byte-for-byte,
+        include both selected slots, and yield one exact current-file context.
+        """
+        context, selected = item.context_snippet, item.context_offset
+        if (not isinstance(context, str) or not context.strip() or type(selected) is not int
+                or type(item.line_number) is not int or item.line_number < 1
+                or context[selected:selected + len(item.original_text)] != item.original_text):
+            return None
+        with self._connect() as conn:
+            rows = conn.execute("""SELECT * FROM review_items WHERE file_path=? AND id!=?
+                AND status IN ('accepted','overridden') AND applied_at IS NOT NULL
+                ORDER BY applied_at, id""", (item.file_path, item.id)).fetchall()
+        changed = False
+        for row in rows:
+            old, new, prior = row["original_text"], row["resolved_text"], row["context_snippet"]
+            slot = row["context_offset"]
+            if (not all(isinstance(v, str) and v.strip() for v in (old, new, prior))
+                    or row["line_number"] != item.line_number
+                    or old == new or type(slot) is not int
+                    or prior[slot:slot + len(old)] != old or old == item.original_text):
+                continue
+            try:
+                logs = json.loads(row["apply_log"] or "[]")
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(logs, list) or not any(isinstance(log, dict)
+                       and log.get("ok") is True and not log.get("skipped")
+                       and log.get("applied_new") == new
+                       and isinstance((action := log.get("action")), dict)
+                       and action.get("type") == "file_edit"
+                       and action.get("path") == item.file_path
+                       and action.get("old") == old and action.get("new") == new for log in logs):
+                continue
+            alignments = []
+            for shift in range(-len(prior) + 1, len(context)):
+                lo, hi = max(0, shift), min(len(context), shift + len(prior))
+                p = shift + slot
+                if (hi - lo >= 16 and lo <= p and p + len(old) <= hi
+                        and lo <= selected and selected + len(item.original_text) <= hi
+                        and context[lo:hi] == prior[lo - shift:hi - shift]
+                        and (p + len(old) <= selected or p >= selected + len(item.original_text))):
+                    alignments.append(p)
+            if len(set(alignments)) != 1:
+                continue
+            p = alignments[0]
+            context = context[:p] + new + context[p + len(old):]
+            if p < selected:
+                selected += len(new) - len(old)
+            changed = True
+        lines = content.splitlines()
+        if (changed and content.count(context) == 1 and item.line_number <= len(lines)
+                and context in lines[item.line_number - 1]):
+            return self._focused_context(item.original_text, context, selected)
+        return None
+
     def reanchor(self, item_id: int, search_roots: Optional[list[str]] = None,
                  reanchor_to: Optional[str] = None,
                  context_offset: Optional[int] = None) -> dict[str, Any]:
@@ -761,6 +878,10 @@ class ReviewQueue:
         lines = content.splitlines()
         matches = [i + 1 for i, ln in enumerate(masked_lines) if item.original_text in ln]
         focused = self._focused_context(item.original_text, item.context_snippet, item.context_offset)
+        if focused and focused not in masked:
+            recovered = self._context_after_recorded_edits(item, masked)
+            if recovered is not None:
+                focused = recovered
         verdict = self._already_applied_verdict(
             masked, item.original_text, item.suggested_text or "",
             focused, item.line_number, selected_slot=item.context_offset is not None)
@@ -889,6 +1010,7 @@ class ReviewQueue:
             self._audit(conn, "review_reanchor", item_id, None,
                         {"file": str(path), "line": line_no, "repointed": repointed})
             conn.commit()
+        self.clear_blocker(item_id)
         return {"id": item_id, "file_path": str(path), "line_number": line_no,
                 "context_snippet": new_context, "context_offset": new_offset,
                 "file_repointed": repointed}
