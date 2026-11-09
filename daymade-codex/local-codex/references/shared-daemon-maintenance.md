@@ -34,6 +34,32 @@ Account adoption remains in [the OAuth guide](oauth-guide.md#existing-native-own
 
 ## Execute through the supported lifecycle
 
+### Assess the target package before requiring patches
+
+Record the invoking client's version/provenance separately from the running
+App Server's executable and package provenance. An official backend can serve
+a locally patched client; neither component's version or signature establishes
+the other's identity. A version mismatch is a compatibility question, not by
+itself an upgrade failure.
+
+For the requested release channel, inspect the target official package and the
+controller's actual compatibility checks against the capabilities the user needs.
+Existing support pinned to an older version proves an adapter coverage gap;
+it does not prove that the new official backend lacks the required APIs.
+Separate same-owner browser OAuth from optional per-request account admission
+and preserved-recovery extensions. Verify each requested capability before
+requiring a custom build or proposing a port. Missing custom lifecycle flags
+alone do not establish that every supported official upgrade route is unsafe;
+apply the affected-work and recovery checks in this guide to the chosen route.
+
+Scope each local patch to its demonstrated defect. A patch keeping ordinary
+MCP OAuth File-mode logout away from Keyring does not establish a prerequisite
+for primary-account switching or quota inspection. Retain it when that storage
+contract is required and the target upstream still fails it; otherwise assess
+the official package without importing that patch as an Account Manager need.
+Do not change the user's release-channel preference as a side effect of this
+assessment. Keep an untested target's compatibility explicitly unverified.
+
 For the inspected 0.165/0.166 CLI, these commands have different effects:
 
 | Command | Effect |
