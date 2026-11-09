@@ -80,7 +80,7 @@ uv run scripts/fix_transcription.py --input <file> --stage <1|2|3> [--output <di
 
 - `--enqueue-review JSON_PATH`: Enqueue items from a JSON file (`-` = stdin). Use the fields, aliases and validation notes in [Review Queue Item Schema](#review-queue-item-schema).
 - `--list-review`: List queue items, priority-sorted (filters: `--review-status pending|accepted|overridden|kept_original|skipped|all` default pending; `--domain`; `--review-source native_pass|stage1_deferred|learned_suggestion|manual`; `--review-file FILE` exact resolved transcript path). With `--review-file`, both `items` and `stats` are scoped to that one file; use `stats.pending_total == 0` as the final human-review gate.
-- `--show-review ID`: One item in full (evidence + proposed action pack)
+- `--show-review ID`: One item in full (evidence + proposed action pack). List/show JSON adds `workflow` to distinguish a recorded authority/anchor/execution blocker from a row still needing adjudication; see [pending execution state](review_queue_dashboard.md#pending-execution-state). Verdict/status and pending counts retain their existing meaning.
 - `--reanchor-review ID [ID...]`: Re-anchor pending item(s) whose transcript drifted or moved since enqueue (refresh line/context verbatim from the current file; when the file is gone, search `--reanchor-root DIR` + the recorded parent dir for `*.md` containing the original text — unique candidate re-points the anchor, ambiguous asks for `--reanchor-to FILE` which names the target explicitly and is refused if the original is not in it)
 - `--reanchor-context-offset N`: Select an explicitly evidenced slot with one `--reanchor-review ID`; follow [same-line occurrence anchoring](review_queue_dashboard.md#same-line-occurrence-anchoring) for offset units, refusal conditions and readback before resolving.
 - `--attach-authority ID --authority-text TEXT`: Append an audited authority citation to a queue item's `evidence`; it does not record a verdict. For the automatic audio-attachment gate and how to adjudicate its result, read [Batch pending adjudication](advanced_correction_evidence.md). A citation is one possible authority for a later `--resolve-review accepted/overridden`; the other name-convergence checks still apply.
@@ -160,7 +160,7 @@ uv run scripts/fix_transcription.py --input meeting.md --stage 1 --output ./meet
 
 - `0` - Success
 - `1` - Missing required parameters, file not found, or API key not configured (Stage 2/3)
-- `2` - `--resolve-review` refused because the anchor text no longer matches the target file (re-anchor needed; nothing was applied — fail closed); also `--reanchor-review` when every requested id failed
+- `2` - `--resolve-review` refused by an authority/occurrence guard or invalid authority record, or because the anchor no longer matches (nothing applied); also `--reanchor-review` when every requested id failed. Inspect the JSON `error`, not the exit code alone; a recorded blocker is visible in `workflow`.
 - `3` - `--enqueue-review` rejected one or more items whose `original`/`context` is not verbatim in the declared file (see `rejected_unanchored` in the JSON; items in `added` WERE enqueued — fix the rejects and re-enqueue them)
 - API request failures do **not** get a dedicated exit code — the pipeline keeps the original text and prints a warning (see [SKILL.md](../SKILL.md)「Agent-less API route」)
 

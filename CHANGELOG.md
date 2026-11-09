@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **transcript-fixer** (`daymade-audio` v1.57.6 → v1.57.7): Separate execution blockers from undecided review items, allow bounded wording evidence, and recover anchors only through recorded successful edits; preserve name authority and refusal atomicity.
+
 - **peer-message** (v1.25.1 → v1.25.2): Read native Codex coordination envelopes from their exact history carrier, preserve the original inner payload, and verify sender and recipient before receive. Keep scripted intake and digest/lifecycle checks.
 - **report-with-html** (v1.5.0 → v1.5.1): Remove Skill-authored initial-navigation and rehosting restrictions from local HTTP preview guidance. Preserve the loopback manifest server and rendered-delivery verification.
 - **kimi-use** (v1.8.5 → v1.8.6): Keep recovery permission and retry rules with their owning sections, route desktop recovery from project instructions, and remove the optional duplicate marketplace description.

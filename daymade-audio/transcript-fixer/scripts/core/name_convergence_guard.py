@@ -364,21 +364,64 @@ def _message_clause(text: str, offset: int, selected: str) -> bool:
     return clause in (selected, "还" + selected)
 
 
+def _wording_syntax(record: dict, original: str, target: str,
+                    context: str, offset: int) -> set[str]:
+    """Finite grammatical discriminators, never a generic wording exemption."""
+    construction, source_type = record.get("construction"), record.get("source_type")
+    quote, qoffset = record.get("quote"), record.get("quote_offset")
+    if (not isinstance(quote, str) or not quote.strip()
+            or type(qoffset) is not int or not 0 <= qoffset < len(quote)):
+        raise ValueError("wording_reference requires a literal quote and valid quote_offset")
+    terms = {original, target}
+    if construction == "message_arrival" and source_type == "parallel_transcript":
+        if (re.fullmatch(r"(?:还)?有(?:信息|消息)来", target) is None
+                or re.fullmatch(r"(?:还)?有[\u3400-\u9fff]{2}来", original) is None
+                or not _message_clause(context, offset, original)
+                or quote[qoffset:qoffset + len(target)] != target
+                or not _message_clause(quote, qoffset, target)):
+            raise ValueError("wording_reference requires whole message-arrival clauses")
+        return terms | {original.removeprefix("还")[1:-1], target.removeprefix("还")[1:-1]}
+    if source_type != "transcript_restatement":
+        raise ValueError("unsupported wording_reference construction/source_type")
+    if construction == "video_editing":
+        numbers = r"[一二三四五六七八九十百零两0-9]+"
+        cue = re.match(rf"剪{numbers}条", quote[qoffset:])
+        if (re.fullmatch(rf"减(?:了{numbers}条|不下去了)", original) is None
+                or target != "剪" + original[1:] or cue is None
+                or quote.count(context) != 1):
+            raise ValueError("video_editing requires a bound quantity/capacity clause and same-utterance 剪数量条 cue")
+        selected = quote.index(context) + offset
+        if qoffset < selected + len(original) and qoffset + len(cue.group()) > selected:
+            raise ValueError("video_editing cue must be distinct from the disputed slot")
+        for text, at, width in ((context, offset, len(original)), (quote, qoffset, len(cue.group()))):
+            if (re.search(r"(?:我叫|名字[是叫为：:]?|姓名[是为：:]?|名叫|称为|称作|老师|先生|女士)\s*$", text[max(0, at - 12):at])
+                    or re.match(r"\s*(?:老师|先生|女士|同学|总|哥|姐)", text[at + width:])):
+                raise ValueError("video_editing cannot replace a person-name/address slot")
+        return terms | {"剪"}
+    if construction == "weekly_meeting":
+        if (original not in {"周慧", "周汇", "周惠"} or target != "周会"
+                or re.search(r"(?:^|是不是|因为|是)我$", context[:offset]) is None
+                or re.match(r"没(?:讲|说)清楚", context[offset + len(original):]) is None
+                or quote[qoffset:qoffset + 2] != target
+                or re.search(r"我$", quote[:qoffset]) is None
+                or re.match(r"的时候(?:说话|讲)", quote[qoffset + 2:]) is None):
+            raise ValueError("weekly_meeting requires 我…没讲/说清楚 plus literal 我周会的时候说话/讲 restatement")
+        return terms
+    raise ValueError("unsupported wording_reference construction/source_type")
+
+
 def wording_reference_citation(record: object, *, item_id: int, target: str,
                               original: str, context: Optional[str],
                               context_offset: Optional[int], kind: str,
                               entity_type: str) -> str:
     """Validate a deliberately finite written-evidence route for ordinary wording.
 
-    This is not a general nonperson classifier. Only a standalone message-arrival
-    clause is supported; other grammatical forms retain the existing gate.
+    Unsupported grammatical forms retain the person-name gate.
     """
     if not isinstance(record, dict) or record.get("kind") != "wording_reference":
         raise ValueError("authority record requires kind=wording_reference")
     if kind != "wording" or entity_type != "unknown":
         raise ValueError("wording_reference requires kind=wording and entity_type=unknown")
-    if record.get("construction") != "message_arrival" or record.get("source_type") != "parallel_transcript":
-        raise ValueError("wording_reference supports only message_arrival from a parallel_transcript")
     if type(record.get("item_id")) is not int or record["item_id"] != item_id:
         raise ValueError("wording_reference item_id does not match this queue item")
     if record.get("original") != original or record.get("target") != target or record.get("context") != context:
@@ -386,20 +429,11 @@ def wording_reference_citation(record: object, *, item_id: int, target: str,
     offset = _citation_occurrence(original, context, context_offset)
     if type(record.get("context_offset")) is not int or record["context_offset"] != offset:
         raise ValueError("wording_reference context_offset does not select this occurrence")
-    # These literal nouns and the whole-clause check are the positive nonperson
-    # discriminator. An arbitrary wording label or 有NAME来 shape is insufficient.
-    if re.fullmatch(r"(?:还)?有(?:信息|消息)来", target) is None:
-        raise ValueError("wording_reference target is outside the supported message-arrival syntax")
-    if re.fullmatch(r"(?:还)?有[\u3400-\u9fff]{2}来", original) is None or not _message_clause(context, offset, original):
-        raise ValueError("wording_reference original is not a whole message-arrival clause")
     for key in ("source_ref", "source_path", "quote"):
         if not isinstance(record.get(key), str) or not record[key].strip():
             raise ValueError(f"wording_reference requires nonempty {key}")
-    quote, quote_offset = record["quote"], record.get("quote_offset")
-    if (type(quote_offset) is not int or quote_offset < 0
-            or quote[quote_offset:quote_offset + len(target)] != target
-            or not _message_clause(quote, quote_offset, target)):
-        raise ValueError("wording_reference quote_offset must select the exact whole target clause")
+    _wording_syntax(record, original, target, context, offset)
+    quote = record["quote"]
     if quote not in Path(record["source_path"]).expanduser().read_text(encoding="utf-8"):
         raise ValueError("wording_reference quote is absent from source_path")
     return WORDING_REFERENCE_PREFIX + json.dumps(record, ensure_ascii=False, separators=(",", ":"))
@@ -639,27 +673,32 @@ def guard(
     """
     if wording_reference_validated:
         if (kind != "wording" or entity_type != "unknown"
-                or re.fullmatch(r"(?:还)?有(?:信息|消息)来", to_text) is None):
+                or re.fullmatch(r"(?:(?:还)?有(?:信息|消息)来|剪(?:了[一二三四五六七八九十百零两0-9]+条|不下去了)|周会)", to_text) is None):
             return GuardRejection("wording_reference_scope", "written wording evidence cannot settle an entity/person question")
         cited = False
+        terms = set()
         for line in (evidence or "").splitlines():
             if WORDING_REFERENCE_PREFIX not in line:
                 continue
             try:
                 record = json.loads(line.split(WORDING_REFERENCE_PREFIX, 1)[1])
                 cited = (isinstance(record, dict) and record.get("kind") == "wording_reference"
-                         and record.get("construction") == "message_arrival"
-                         and record.get("source_type") == "parallel_transcript"
                          and record.get("original") == from_text and record.get("target") == to_text)
                 if cited:
+                    context = record.get("context")
+                    offset = record.get("context_offset")
+                    if not isinstance(context, str) or type(offset) is not int:
+                        cited = False
+                        continue
+                    terms = _wording_syntax(record, from_text, to_text, context, offset)
                     break
             except (TypeError, ValueError):
+                cited = False
                 continue
         if not cited:
             return GuardRejection("wording_authority_required", "written wording evidence requires its validated occurrence-bound citation")
         # Check the phrase and its noun too: a known person's name may itself be
         # a common noun. Classification evidence never overrides a roster.
-        terms = {from_text, to_text, from_text.removeprefix("还")[1:-1], to_text.removeprefix("还")[1:-1]}
         if any((claim := lookup_fn(term)).roster_entry or claim.roster_variant_of for term in terms):
             return GuardRejection("nonperson_roster_conflict", "wording reference conflicts with a recorded person; retain person-name authority")
         return None
