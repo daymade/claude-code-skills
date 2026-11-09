@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **transcript-fixer** (`daymade-audio` v1.57.7 → v1.57.8): Route reviewed-file continuation through execution-blocker inspection before choosing more audio evidence, and align the repository entry with the finite written-wording contract.
+
 - **report-with-html** (v1.5.1 → v1.6.0): Restore and host existing HTML through a bounded transport-only route. Stream large, explicitly listed media snapshots with HTTP range support while preserving small-preview compatibility and frozen content.
 - **read-claude-code-history** (`daymade-claude-code` v5.1.5 → v5.1.6): Recover page dependencies alongside HTML and distinguish original bytes, regenerated assets, screenshot-only evidence and missing media. Align recovery instructions with the helper's file-writing behavior.
 - **transcript-fixer** (`daymade-audio` v1.57.6 → v1.57.7): Separate execution blockers from undecided review items, allow bounded wording evidence, and recover anchors only through recorded successful edits; preserve name authority and refusal atomicity.
