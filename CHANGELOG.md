@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **local-codex** (`daymade-codex` v2.4.6 → v2.4.7): Separate client/backend provenance and official-package compatibility from optional patches; verify new and existing sessions independently and preserve unknown login receipts through supported reconciliation. Change type: bounded diagnostic and acceptance clarification.
+
 - **peer-message** (v1.24.10 → v1.25.0): Add optional native-envelope UTF-8 byte preflight to `coord prepare`; reject oversized messages atomically before retaining send reservations or state revisions. Preserve omitted-limit behavior, native delivery guards and receipt boundaries.
 
 - **terraform-skill** (v1.5.12 → v1.5.13): Add a certificate-maintenance replay case covering initial creation, next replacement and no-op through the complete publisher/lifecycle gate chain, with unsafe-context and deletion controls.

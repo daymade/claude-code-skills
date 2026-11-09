@@ -138,6 +138,22 @@ login or restart merely to repair its receipt. If no replayable completion exist
 retain that gap instead of promoting a current-account observation to operation
 success. Preserve the original SIDs and pending work throughout recovery.
 
+When the request covers both newly launched and existing sessions, verify both
+through the ordinary entry and the bound existing-session observer. A new
+session's native `/status` can establish its displayed account; an existing
+session's SID+cwd+unique-runtime observation can establish its current owner
+identity. Worker preferences, fresh quota, published candidates and another
+session's successful request do not cover those two checks. State the verified
+set and leave unresolved sessions explicit. Neither account check proves that
+an old task automatically resumed; require subsequent useful work under that
+original session before claiming continuation.
+
+If the live identity matches but the original login receipt remains unknown,
+keep the same request and its barriers. Use the owning controller's supported
+expired-request reconciliation when applicable; retain the original journal and
+failed/unconfirmed login result. A released resource or a successful current
+account/limits read is a reconciliation result, not retroactive login success.
+
 For an authorized routine switch on an existing saved-login/shared-owner path,
 keep the operation lane limited to the deployed owner's preflight, any supported
 target-scoped quota refresh, one original request, same-ID status/observation,

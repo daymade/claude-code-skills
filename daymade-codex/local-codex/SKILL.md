@@ -163,6 +163,10 @@ Before an authorized shared-daemon restart or package replacement, read
 affected work, retain an independent operation receipt, and verify continuation
 under the original session IDs; a new daemon is not proof that tasks resumed.
 
+For client/backend version differences or a proposed local patch, use that
+guide's [target-package assessment](references/shared-daemon-maintenance.md#assess-the-target-package-before-requiring-patches)
+before treating a custom build as necessary.
+
 For multi-step tasks, Codex supports session resume:
 ```bash
 # First step
