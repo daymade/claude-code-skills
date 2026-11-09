@@ -10,8 +10,7 @@ import unittest
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 RECIPES = (
-    ('SKILL.md', '**3. Fetch the body'),
-    ('references/lark-cli-api-extraction.md', 'The body field moved between'),
+    ('references/lark-cli-api-extraction.md', 'Choose a distinct'),
 )
 CASES = (
     ('empty_outline', {'data': {'document': {'content': '<fragment mode="outline"><outline></outline></fragment>'}}}, 0, False),

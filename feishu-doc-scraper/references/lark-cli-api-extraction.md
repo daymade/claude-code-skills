@@ -2,20 +2,6 @@
 
 The primary, highest-fidelity way to turn a Feishu/Lark source into Markdown. Everything here was verified end-to-end on a real multi-document collection import (lark-cli 1.0.27 and 1.0.32, 2026-05; re-verified on 1.0.55, 2026-06 — which is where the docs-body and sheet field paths below changed, see Steps 3–4).
 
-## Contents
-
-- Why API over browser
-- Step 0: proxy and auth preflight
-- Step 1: classify the URL
-- Step 2: resolve wiki node → doc token
-- Step 3: fetch the body programmatically
-- Step 4: spreadsheets
-- Step 5: the reference-graph recursion (collections/hubs)
-- Step 6: cross-tenant and personal-space sources
-- Step 7: frontmatter and provenance
-- Command troubleshooting
-- What a clean run looks like
-
 ## Why API over browser
 
 On real collection work the lark-cli path did the entire job and the browser path was never needed, because the API path:
@@ -76,7 +62,10 @@ selected threads before summarizing. Preserve its JSON and Markdown companion,
 add a visible discussion link beside the body, and report its scope and gaps.
 The same step applies to documents reached recursively in Step 5.
 
-The body field moved between lark-cli versions, so probe both instead of hard-coding one — this keeps working whichever version is installed:
+Choose a distinct `<sanitized-title>` for each source before running this recipe.
+For a refresh, select a new versioned path; existing notes and HTML captures are
+rejected rather than overwritten. The body field moved between lark-cli versions,
+so select the nonblank field from the actual response:
 
 ```bash
 note_md="<sanitized-title>.md"
@@ -231,7 +220,7 @@ grep -rlE '<(source|file|lark-table|lark-tr|sheet token=|mention-doc|cite doc-id
   && echo "UNRESOLVED — keep recursing" || echo "clean"
 ```
 
-⚠️ **On each document's saved `.html`, "empty" is not a literal stop condition.** Each `<sanitized-title>.html` (Step 3's per-document naming — never a literal shared `source.html` across a hub's multiple fetches, or the second fetch silently destroys the first) is an immutable raw capture of that one document — nothing in this skill rewrites a document's own file in place — so a hub doc that genuinely references N children or M diagrams keeps showing N+M matches forever in its own file, even after every one is correctly handled; chasing this grep to a literal zero across the whole directory will never terminate for a real hub. Treat each match as a worklist item: a `mention-doc`/`cite doc-id=`/`sheet` hit is resolved once the referenced child has actually been fetched and saved (as its own distinct file); a `whiteboard` hit is resolved once its preview `.jpg` was exported and Read (dispatch-table row above) — it is not a missing document to fetch, don't treat it as one. This grep still recurses over every file already on disk, so it naturally covers every document's raw `.html` saved in Step 3 alongside its pandoc-converted `.md` — no extra step needed there. (On the `.data.markdown` branch, where the fetched body is the deliverable Markdown itself, a literal empty result remains the simpler signal.)
+⚠️ **On each document's saved `.html`, "empty" is not a literal stop condition.** Follow the [per-document capture policy](#step-3-fetch-the-body-programmatically). A saved raw capture retains its original references even after their resources have been handled; chasing this grep to a literal zero across the whole directory will not terminate for a hub with references. Treat each match as a worklist item: a `mention-doc`/`cite doc-id=`/`sheet` hit is resolved once the referenced child has actually been fetched and saved as its own distinct file; a `whiteboard` hit is resolved once its preview `.jpg` was exported and Read (dispatch-table row above) — it is not a missing document to fetch. The recursive check covers each document's raw `.html` saved in Step 3 alongside its pandoc-converted `.md`. On the `.data.markdown` branch, where the fetched body is the deliverable Markdown itself, a literal empty result remains the simpler signal.
 
 ## Step 6: cross-tenant and personal-space sources
 

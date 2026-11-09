@@ -561,6 +561,9 @@ For external customer groups paired with Wiki pages, enter
 
 For faithful Feishu document reads, resource archives and destination handoffs,
 enter [feishu-doc-scraper](feishu-doc-scraper/SKILL.md) and follow its task router.
+Body-capture commands and failure recovery belong to its
+[API capture procedure](feishu-doc-scraper/references/lark-cli-api-extraction.md#step-3-fetch-the-body-programmatically);
+change and exercise that recipe rather than maintaining another copy in the entry.
 
 ### Prior Work Retrieval Boundary
 
