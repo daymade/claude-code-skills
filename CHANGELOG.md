@@ -7,10 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **terraform-skill** (v1.5.13 → v1.5.14): Route restoration through the existing release checks; verify separately owned DNS, consumer hostname TLS and selected SSH arguments before resuming application acceptance.
-- **peer-message** (v1.25.1 → v1.25.2): Add owner-release, successor-claim and readback steps; distinguish resource-window release from responsibility for the consumer's result.
-- **tech-selection** (`daymade-claude-code` v5.1.4 → v5.1.5): Assign hosted-database and object-storage responsibilities before capacity comparisons; retain justified binary fields and unknown provider/account constraints.
 - **report-with-html** (v1.5.0 → v1.5.1): Remove Skill-authored initial-navigation and rehosting restrictions from local HTTP preview guidance. Preserve the loopback manifest server and rendered-delivery verification.
+- **kimi-use** (v1.8.5 → v1.8.6): Keep recovery permission and retry rules with their owning sections, route desktop recovery from project instructions, and remove the optional duplicate marketplace description.
+- **Marketplace validation:** Accept omitted or empty-string descriptions, reject present non-string values, and exercise those boundaries in CI against the vendor schema contract.
 
 - **kimi-use** (v1.8.4 → v1.8.5): Distinguish backend input limitations, host permission refusals and unknown effects; verify authorized native recovery and upgrade outcomes separately.
 
@@ -3281,6 +3280,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Broken flagship install commands** ([#67](https://github.com/daymade/claude-code-skills/issues/67)): `claude plugin install skill-creator@daymade-skills` (plus `skill-reviewer` / `skills-search` / `doc-to-markdown`) failed because those are suite members, not standalone plugins. Corrected every occurrence across README.md, README.zh-CN.md, QUICKSTART.md, QUICKSTART.zh-CN.md to the suite name (`daymade-skill@daymade-skills` / `daymade-docs@daymade-skills`), invoked as `daymade-skill:skill-creator` etc.
 
 - **tibo-reset-codex** (v2.6.0 → v2.6.1): Deliver verified decision-changing information through the existing host contract before nonessential follow-up. Make preserving banked resets conditional on account evidence and the cost of delaying valuable work; preserve read-only hosting, notification permissions and manual redemption. Change type: bounded decision and delivery guidance correction.
+
+- **terraform-skill** (v1.5.13 → v1.5.14): Route restoration through the existing release checks; verify separately owned DNS, consumer hostname TLS and selected SSH arguments before resuming application acceptance.
+- **peer-message** (v1.25.1 → v1.25.2): Add owner-release, successor-claim and readback steps; distinguish resource-window release from responsibility for the consumer's result.
+- **tech-selection** (`daymade-claude-code` v5.1.4 → v5.1.5): Assign hosted-database and object-storage responsibilities before capacity comparisons; retain justified binary fields and unknown provider/account constraints.
 
 ## [1.82.0] - 2026-07-07
 
