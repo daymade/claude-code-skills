@@ -10,15 +10,17 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from dispatch_context import check_dispatch_context
+
 STATES = {"prepared", "submitted", "running", "collected", "deferred", "failed_unknown"}
 NEXT = {
     None: {"prepared", "collected"},  # direct collected requires imported=true
-    "prepared": {"submitted", "deferred", "failed_unknown"},
+    "prepared": {"prepared", "submitted", "deferred", "failed_unknown"},
     "submitted": {"running", "collected", "deferred", "failed_unknown"},
     "running": {"collected", "deferred", "failed_unknown"},
     "collected": {"collected"},  # retain a second export, never overwrite the first
-    "deferred": {"submitted"},
-    "failed_unknown": {"submitted"},
+    "deferred": {"prepared", "submitted"},
+    "failed_unknown": {"prepared", "submitted"},
 }
 
 
@@ -339,6 +341,7 @@ def cmd_plan(directory, max_parallel):
     active = []
     collected = []
     held = []
+    dispatch_errors = []
     surface_cards = {}
     for lane in lanes.values():
         state = current.get(lane["lane_id"], "planned")
@@ -355,6 +358,13 @@ def cmd_plan(directory, max_parallel):
             if study["schema_version"] == 1:
                 card["note"] = "Legacy request inventory unknown: upgrade before new dispatch"
                 held.append(card)
+                continue
+            try:
+                card["dispatch_context"] = check_dispatch_context(directory, lane["lane_id"])
+            except (ValueError, OSError, KeyError, TypeError) as exc:
+                card.update(blocked=True, error=str(exc), note="New dispatch blocked by context check")
+                held.append(card)
+                dispatch_errors.append({"lane_id": lane["lane_id"], "error": str(exc)})
                 continue
             card["prompt"] = lane["prompt"]
             surface_cards.setdefault(card["control_surface"], []).append(card)
@@ -388,7 +398,7 @@ def cmd_plan(directory, max_parallel):
         for surface, cards in surface_cards.items()
     ]
     groups = [surface_queues[i:i + max_parallel] for i in range(0, len(surface_queues), max_parallel)]
-    print(json.dumps({
+    plan = {
         "study_id": study["study_id"],
         "business_outcome": study["business_outcome"],
         "as_of": study["as_of"],
@@ -398,7 +408,13 @@ def cmd_plan(directory, max_parallel):
         "active_query_existing_origin": active,
         "collected": collected,
         "held_no_auto_retry": held,
-    }, ensure_ascii=False, indent=2))
+    }
+    if dispatch_errors:
+        plan["dispatch_context_errors"] = dispatch_errors
+    print(json.dumps(plan, ensure_ascii=False, indent=2))
+    if dispatch_errors:
+        raise ValueError("new dispatch blocked: " + "; ".join(
+            item["lane_id"] + ": " + item["error"] for item in dispatch_errors))
 
 
 def cmd_record(directory, args):
@@ -419,6 +435,22 @@ def cmd_record(directory, args):
         "state": args.state,
         "note": args.note,
     }
+    if args.prompt_file and args.state not in {"prepared", "submitted"}:
+        raise ValueError("--prompt-file only applies to prepared/submitted dispatch")
+
+    def bind_dispatch(prior_events):
+        if args.state not in {"prepared", "submitted"}:
+            return
+        checked = check_dispatch_context(directory, args.lane_id, args.prompt_file)
+        if args.state == "submitted":
+            prepared = next((item for item in reversed(prior_events)
+                             if item["lane_id"] == args.lane_id and item["state"] == "prepared"), None)
+            receipt = prepared.get("dispatch_context") if prepared else None
+            if receipt != checked:
+                raise ValueError("prepared dispatch context missing or changed; record prepared again before submitting")
+        event["dispatch_context"] = checked
+
+    bind_dispatch(events)
     if origin:
         event["origin"] = origin
     if any((args.observed_provider, args.observed_mode, args.mode_proof, args.mode_captured_at)):
@@ -472,6 +504,8 @@ def cmd_record(directory, args):
         fcntl.flock(fd, fcntl.LOCK_EX)
         # Independent agents can finish at once; recheck the transition under the ledger lock.
         events, current, origins = load_events(directory, lanes, study["schema_version"])
+        # Bind current source/prompt bytes again at the append boundary, not on historical reads.
+        bind_dispatch(events)
         check_event(directory, event, lanes, current, origins.get(args.lane_id), events,
                     require_mode=study["schema_version"] == 2)
         payload = (json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n").encode()
@@ -488,7 +522,7 @@ def main():
     subs = parser.add_subparsers(dest="command", required=True)
     for name in ("validate", "status"):
         subs.add_parser(name).add_argument("study_dir", type=Path)
-    plan = subs.add_parser("plan", help="derive parallel dispatch cards; makes no provider calls")
+    plan = subs.add_parser("plan", help="check new dispatch context and derive cards; existing tasks remain queryable")
     plan.add_argument("study_dir", type=Path)
     plan.add_argument("--max-parallel", type=int, default=3)
     record = subs.add_parser("record")
@@ -504,6 +538,8 @@ def main():
     record.add_argument("--mode-proof", help="saved actual-route UI/API or direct execution receipt under sources/")
     record.add_argument("--mode-captured-at", help="actual observation timestamp; file mtime is the default")
     record.add_argument("--file")
+    record.add_argument("--prompt-file", type=Path,
+                        help="exact UTF-8 lane.prompt bytes for prepared/submitted; drift fails")
     record.add_argument("--captured-at")
     record.add_argument("--imported", action="store_true")
     record.add_argument("--note", default="")

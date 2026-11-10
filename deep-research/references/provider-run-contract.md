@@ -41,6 +41,88 @@ This file does not infer user intent. An author could omit a mode from the inven
 
 Schema 1 remains readable for old studies and events. `validate` labels its request coverage `legacy-request-mode-unverified`; `plan` exposes existing active tasks and collected files, but holds planned/prepared lanes instead of issuing new dispatch cards. `record` refuses new prepared/submitted events on schema 1. New `start` requires schema 2. To reuse old results without retriggering work, leave the old study intact and import its original exports into a new schema-2 study with recoverable actual-mode observations; if those observations cannot be recovered, retain the legacy coverage limit. Merely changing the schema number does not establish the missing evidence, and old events must not be rewritten to invent it.
 
+### Continuation dispatch check
+
+Before a **new** provider task, resolve every `prior-research.json` match as `reuse`, `adapt`
+or `reject` with a concrete reason. Existing local claims, or a `reuse`/`adapt` prior, require
+an optional `continuation` object in the current `study.json`; the top-level schema remains 2.
+An initial study with no such inputs needs no new object. Search, historical validation,
+artifact collection and querying an existing submitted/running task do not require retrofitting it.
+
+```json
+{
+  "schema_version": 1,
+  "sources": [
+    {"source_id":"previous-claims", "path":"../previous/claims.jsonl", "sha256":"<actual file SHA-256>"},
+    {"source_id":"new-measurement", "path":"sources/originals/measurement.txt", "sha256":"<actual file SHA-256>"}
+  ],
+  "claims": [
+    {"context_id":"K1", "source_id":"previous-claims", "claim_id":"C1", "disposition":"carry"},
+    {"context_id":"K2", "source_id":"previous-claims", "claim_id":"C2", "disposition":"unknown", "reason":"The source did not measure the requested workload."}
+  ],
+  "questions": [
+    {"task_id":"Q1", "status":"unknown", "reason":"Throughput remains unmeasured for this workload."}
+  ]
+}
+```
+
+Paths are explicit relative file locators, including `../` to an existing study; no recursive
+lookup or history scan occurs. Each source needs its current SHA-256. Bind every selected
+prior's `claims.jsonl` and a nonempty current study's `claims.jsonl`, then classify **every**
+claim in those files once. `context_id` is unique within this dispatch. Each claim uses:
+
+- `carry`: render the original text, status, locator and evidence boundary unchanged.
+- `unknown`: require a reason and an original status of `unknown` or `contested`; a supported
+  finding cannot be relabeled unknown to omit it.
+- `correct`: require a reason and `correction: {"text":"<corrected conclusion>", "source_id":"new-measurement", "quote":"<exact evidence quotation>"}`. The evidence may be another passage in the same bound source or another claim in that file. Render both the original and correction; the reader checks whether the quoted passage supports the correction.
+- `excluded`: require a reason for irrelevance. Keep the classification in the study; omit
+  the excluded claim and its reason from the receiving prompt. A reader must assess the exclusion.
+
+A legacy prior without `claims.jsonl` instead binds its `report.md` and one or more exact
+`quote` fields in place of `claim_id`. Such quoted text stays `unverified-lead`; carrying it
+does not promote a model report to verified evidence. Reopen its decisive originals before citing it.
+
+Record every decision question once in `questions`, with `status: "unknown"` or `"closed"`
+and a concrete reason. A lane whose anchor question is closed cannot dispatch unless that
+question has `reopen: {"kind":"counterevidence", "source_id":"new-measurement", "quote":"<exact original passage>", "as_of":"2026-09-26", "reason":"<how the new evidence could change this answer>"}`.
+Kinds are `freshness`, `counterevidence`, `user-correction` and `scope-change`. Each requires
+an actual bound quotation, date and explanation; a yes/no flag is insufficient. A still-unknown
+question may proceed without a reopening claim. Closing one question does not close its neighbors.
+
+```bash
+python3 <skill>/scripts/dispatch_context.py prepare <study-dir> <lane-id>
+python3 <skill>/scripts/dispatch_context.py render <study-dir> <lane-id> --output <exact-prompt.txt>
+python3 <skill>/scripts/dispatch_context.py check <study-dir> <lane-id> --prompt-file <exact-prompt.txt>
+python3 <skill>/scripts/provider_runs.py record <study-dir> <lane-id> prepared --prompt-file <exact-prompt.txt>
+```
+
+`prepare` fills the deterministic context body in that lane's `prompt` before dispatch;
+it refuses to rewrite a lane already submitted/collected. Use a new follow-up lane for a
+changed request after dispatch. `render` only writes a prospective UTF-8 file; run `prepare`
+first when using that file for dispatch. The prompt contains the carried facts, corrections,
+unknowns and question scope, plus locators; local paths alone are insufficient. Exclusions
+do not inflate the receiving prompt. An independent reader compares relevance, correction
+meaning and question status with the originals before any paid task.
+
+`check_dispatch_context(directory, lane_id, prompt_file=None)` is the read-only Python entry.
+The CLI `check` returns JSON with `status: "ready"`, `prompt_sha256`, `context_digest`, lane
+and mode, without printing the prompt. Invalid/missing/empty fields, pending prior decisions,
+unclassified claims, changed bound sources, and a missing/stale rendered body exit 2.
+`--prompt-file` requires exact bytes equal to `lane.prompt`, including final newlines.
+These checks bind recorded context and bytes; they cannot prove semantic completeness.
+
+`provider_runs.py plan` applies this check only to new dispatch candidates. A blocked new
+lane makes `plan` exit 2 while its JSON still exposes existing-task origins and collected
+artifacts; the blocked lane appears in `held_no_auto_retry` with `blocked`/`error` and no prompt.
+`record prepared`
+stores its hashes in the event's `dispatch_context`; `record submitted` recomputes them and
+requires the latest prepared receipt to match. Source, prior-decision, question or prompt
+drift requires checking the new context and recording `prepared` again. Re-preparation is
+allowed while prepared/deferred/failed_unknown; existing running tasks keep their original
+origin and historical reads do not revalidate today's context against old receipts. The
+coordinator must send the exact prepared file to the provider and read back the sent content;
+a local receipt does not establish that the provider received it. No command authorizes cost.
+
 ## Seed source handoff
 
 When the user points to a particular article, PDF or dataset, archive that exact original through the direct-source lane **before** submitting an external provider task. Put its URL, title or document identity, date if known, and the relevant entity codes in `dispatch_context`; include the context in every exact lane prompt. An isolated provider does not inherit the coordinator's browser tab, local download or the user's message attachment.

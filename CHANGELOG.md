@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **deep-research** (v2.14.0): Bind new research dispatch to the exact transmitted prompt and selected prior conclusions, corrections, unknowns and reopening evidence; reject stale or incomplete continuation bodies before preparation/submission while preserving existing-task recovery.
+
 - **claude-code-hooks** (`daymade-claude-code` v5.1.8 → v5.1.9): Route repository-level recovery incidents to the owning triage reference and remove its derived fact count.
 
 - **claude-code-hooks** (`daymade-claude-code` v5.1.7 → v5.1.8): Triage input syntax, replay deadlines and consumer receipt failures separately; verify native result shape and the original obligation's completion before reporting recovery.

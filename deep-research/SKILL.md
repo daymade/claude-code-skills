@@ -153,6 +153,13 @@ When continuing an existing question, first restore its supported conclusions, r
 corrections, remaining unknowns and reopening conditions under
 [incremental follow-up](references/research-asset-contract.md#incremental-follow-up).
 Passing one previous report to an executor does not by itself establish that this state was carried forward.
+For new dispatches using existing claims or selected prior research, fill the optional
+`study.json.continuation` contract, run `dispatch_context.py prepare` for each new lane, and
+bind the exact UTF-8 prompt with `record ... prepared --prompt-file`. The
+[dispatch check](references/provider-run-contract.md#continuation-dispatch-check) rejects
+undecided prior hits, unclassified claims, closed questions without a dated reopening basis,
+and missing context in the actual prompt. Initial studies and queries of existing tasks
+keep their current paths. An independent reader still checks relevance and semantic continuity.
 
 For every study, use the portable [provider-run contract](references/provider-run-contract.md):
 one question map, exact prompts, and a distinct `lane_id` per provider × actual mode, including a

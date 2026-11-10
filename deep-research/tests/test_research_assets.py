@@ -11,6 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "scripts" / "research_assets.py"
 RUNS = ROOT / "scripts" / "provider_runs.py"
+CONTEXT = ROOT / "scripts" / "dispatch_context.py"
 
 
 class ResearchAssetsTest(unittest.TestCase):
@@ -84,6 +85,26 @@ class ResearchAssetsTest(unittest.TestCase):
                         "--text", "The filing shows a change", "--status", "supported",
                         "--source-id", sid, "--locator", "page 4, table 2",
                         "--boundary", "An end-date holding does not date the trade")
+
+    def prepare_current_context(self, lane_id):
+        """A later route must carry the study's already recorded findings."""
+        path = self.study / "study.json"
+        spec = json.loads(path.read_text())
+        claims = self.study / "claims.jsonl"
+        spec["continuation"] = {
+            "schema_version": 1,
+            "sources": [{"source_id": "current", "path": "claims.jsonl",
+                         "sha256": hashlib.sha256(claims.read_bytes()).hexdigest()}],
+            "claims": [{"context_id": row["claim_id"], "source_id": "current",
+                        "claim_id": row["claim_id"], "disposition": "carry"}
+                       for row in map(json.loads, claims.read_text().splitlines())],
+            "questions": [{"task_id": question["id"], "status": "unknown",
+                           "reason": "The additional route's perspective has not been obtained."}
+                          for question in spec["decision_questions"]],
+        }
+        path.write_text(json.dumps(spec))
+        prepared = self.cli(CONTEXT, "prepare", self.study, lane_id)
+        self.assertEqual(prepared.returncode, 0, prepared.stderr)
 
     def test_today_shape_fails_then_single_route_with_original_passes_and_reuses(self):
         # A prose answer and temporary evidence without a study cannot pass.
@@ -771,6 +792,7 @@ class ResearchAssetsTest(unittest.TestCase):
         spec["request_mode_contract"]["modes"].append({"request_id": "R2", "provider": "vendor",
             "mode": "native-research", "lane_ids": ["vendor"]})
         spec_path.write_text(json.dumps(spec))
+        self.prepare_current_context("vendor")
         self.assertEqual(self.cli(RUNS, "record", self.study, "vendor", "prepared").returncode, 0)
         self.assertEqual(self.cli(RUNS, "record", self.study, "vendor", "failed_unknown",
                                   "--note", "Task identity cannot be established; no resubmission").returncode, 0)
@@ -808,6 +830,7 @@ class ResearchAssetsTest(unittest.TestCase):
         spec["request_mode_contract"]["modes"].append({"request_id": "R2", "provider": "vendor",
             "mode": "native-research", "lane_ids": ["vendor"]})
         path.write_text(json.dumps(spec))
+        self.prepare_current_context("vendor")
         self.assertEqual(self.cli(RUNS, "record", self.study, "vendor", "prepared").returncode, 0)
         self.assertEqual(self.cli(RUNS, "record", self.study, "vendor", "deferred",
                                   "--note", "Autonomous plugins cannot enforce authorized spend").returncode, 0)

@@ -216,6 +216,38 @@ class ProviderRunsTest(unittest.TestCase):
         self.assertEqual([x["lane_id"] for x in board["held_no_auto_retry"]], ["third-deep"])
         self.assertEqual(board["held_no_auto_retry"][0]["note"], "Route unavailable")
 
+    def test_mixed_plan_keeps_existing_origins_visible_when_new_context_is_blocked(self):
+        spec = json.loads((self.study / "study.json").read_text())
+        spec["lanes"].append({"lane_id": "other-done", "provider": "other", "mode": "research",
+                              "task_id": "Q1", "prompt": "Preserved collected request"})
+        (self.study / "study.json").write_text(json.dumps(spec))
+        self.assertEqual(self.cli("record", self.study, "vendor-deep", "prepared").returncode, 0)
+        self.assertEqual(self.cli("record", self.study, "vendor-deep", "submitted",
+                                  "--origin-task-id", "paid-existing").returncode, 0)
+        self.assertEqual(self.cli("record", self.study, "vendor-deep", "running",
+                                  "--origin-task-id", "paid-existing").returncode, 0)
+        self.assertEqual(self.cli("record", self.study, "other-done", "collected", "--imported",
+                                  "--origin-task-id", "finished-existing", "--file", self.report).returncode, 0)
+        spec["continuation"] = None  # Only the still-planned vendor-tools lane needs this check.
+        (self.study / "study.json").write_text(json.dumps(spec))
+        result = self.cli("plan", self.study)
+        self.assertEqual(result.returncode, 2)
+        board = json.loads(result.stdout)
+        self.assertEqual(board["active_query_existing_origin"][0]["resume_origin"], {"task_id": "paid-existing"})
+        self.assertEqual(board["collected"][0]["origin"], {"task_id": "finished-existing"})
+        blocked = board["held_no_auto_retry"][0]
+        self.assertEqual(blocked["lane_id"], "vendor-tools")
+        self.assertTrue(blocked["blocked"])
+        self.assertIn("continuation.schema_version", blocked["error"])
+        self.assertNotIn("prompt", blocked)
+        self.assertEqual(board["dispatch_context_errors"][0]["lane_id"], "vendor-tools")
+        queued = [card for group in board["parallel_groups"] for surface in group for card in surface["lanes"]]
+        self.assertEqual([card["lane_id"] for card in queued], ["vendor-deep"])
+        self.assertTrue(all("prompt" not in card for card in queued))
+        spec["lanes"] = [lane for lane in spec["lanes"] if lane["lane_id"] != "vendor-tools"]
+        (self.study / "study.json").write_text(json.dumps(spec))
+        self.assertEqual(self.cli("plan", self.study).returncode, 0)
+
     def test_parallel_plan_rejects_invalid_surface_and_concurrency(self):
         bad_limit = self.cli("plan", self.study, "--max-parallel", "0")
         self.assertEqual(bad_limit.returncode, 2)
