@@ -53,7 +53,7 @@ before filling the explicit file argument below.
 uv run scripts/fix_transcription.py --init
 
 # Stage 1 for one project domain. --apply-domain trusts that explicitly
-# selected, human-curated project domain at every risk level.
+# selected, human-curated domain; occurrence ambiguity and context vetoes defer.
 uv run scripts/fix_transcription.py \
   --input meeting.md --stage 1 \
   --domain myproject --apply-domain --json

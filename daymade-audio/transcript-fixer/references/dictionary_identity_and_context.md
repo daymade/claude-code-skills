@@ -123,6 +123,17 @@ Use these wholly synthetic contrasts, without adding their mappings:
 | `苓可公司预算35万` / a roster variant proposes `苓可`→`Nora` | Keep the company occurrence unless source evidence identifies the company wording. Rejecting this candidate does not disable the person's confirmed variant elsewhere. |
 | `让岑若正有这个能力` / a short rule proposes `岑若`→`岑若辰` | Do not manufacture `岑若辰正`. Judge the full `岑若正` name as its own occurrence; preserve it pending identity evidence. A short-match `kept_original` verdict does not settle the longer name's spelling. |
 
+Stage 1 matches registered variants against the source once: the longest variant
+at an occurrence wins, including when deferred, and replacement output is not
+matched again. For a same-initial, 2/3-character CJK variant expanded by one
+character, an adjacent standalone CJK tail raises the occurrence to review even
+with `--apply-domain`; its queue provenance is
+`corrections_dict:uncovered_cjk_tail`. A known multi-character following word
+(including company suffixes), `的/地/得`, punctuation or whitespace supplies a
+boundary; missing segmentation leaves an adjacent CJK tail deferred. This narrow
+guard preserves raw text rather than identifying a person or removing a tail.
+`--apply-all` remains an explicit override of risk deferral.
+
 For a safe-mode false positive, record `kept_original` with its occurrence reason.
 If the full name remains uncertain, enqueue the complete literal span separately;
 retain its context/offset and the original speaker, timestamp and numbers. Keep

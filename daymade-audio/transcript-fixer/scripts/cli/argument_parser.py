@@ -223,12 +223,12 @@ def create_argument_parser() -> argparse.ArgumentParser:
         "--apply-domain",
         action="store_true",
         dest="apply_domain",
-        help="Trust the rules of the domain you explicitly passed via --domain: apply them at "
-             "every risk level, while keeping safe-mode deferral for everything else (people "
+        help="Trust the rules of the domain you explicitly passed via --domain, while keeping "
+             "deferral for ambiguous occurrences, context vetoes and other rules (people "
              "roster, context rules). Rationale: rules added under a project domain were "
              "hand-confirmed for exactly this kind of transcript, so domain match = trust. "
-             "Narrower than --apply-all; no-op without --domain. Batch workflows go from three "
-             "passes (safe -> review sidecar -> --apply-all rerun) to one."
+             "Narrower than --apply-all; no-op without a specific --domain. Inspect deferred "
+             "matches before accepting a correction."
     )
     parser.add_argument(
         "--changes-file",
