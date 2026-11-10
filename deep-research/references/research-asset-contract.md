@@ -84,7 +84,7 @@ say which questions were checked and which were not; do not repeat the entire ba
 as if it were a new finding. One-off research retains the requested report format and does not
 need a cumulative-state artifact.
 
-Before dispatch, an independent reader compares the question, selected originals, claim
+Before dispatch, the lead agent compares the question, selected originals, claim
 classifications and actual prompt: are relevant prior findings carried, exclusions justified,
 corrections supported, and only unknown or legitimately reopened questions being researched?
 The structural check can verify those recorded bytes, not whether the selection is semantically complete.

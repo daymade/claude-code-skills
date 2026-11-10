@@ -159,7 +159,7 @@ bind the exact UTF-8 prompt with `record ... prepared --prompt-file`. The
 [dispatch check](references/provider-run-contract.md#continuation-dispatch-check) rejects
 undecided prior hits, unclassified claims, closed questions without a dated reopening basis,
 and missing context in the actual prompt. Initial studies and queries of existing tasks
-keep their current paths. An independent reader still checks relevance and semantic continuity.
+keep their current paths. The lead agent still checks relevance and semantic continuity.
 
 For every study, use the portable [provider-run contract](references/provider-run-contract.md):
 one question map, exact prompts, and a distinct `lane_id` per provider × actual mode, including a
