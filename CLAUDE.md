@@ -329,6 +329,8 @@ For build reuse across source refs or a target redeployed during acceptance, loa
 [delivery verification procedure](frontend-visual-qa/references/delivery-verification.md).
 For changed asynchronous loading or saving, or nested zoomable workspaces, use its
 [journey and state matrix](frontend-visual-qa/references/journey-and-page-contracts.md#journey-and-state-matrix).
+For collection readiness, exact report reading or retained drafts and return state, use its
+[collection and context checks](frontend-visual-qa/references/journey-and-page-contracts.md#collection-readiness-and-retained-context).
 For save or confirmation controls replaced by a result, follow its
 [action-target transition check](frontend-visual-qa/references/journey-and-page-contracts.md#action-targets-after-confirmation).
 For repeated journey positions or measured wheel sensitivity, use its
@@ -997,6 +999,8 @@ Before selecting recovery material for a named branch or worktree, apply
 [Preservation before retirement](git-safety-net/references/merge_verification.md#preservation-before-retirement).
 For a linked checkout, follow the owning
 [worktree-retirement procedure](git-safety-net/references/merge_verification.md#worktree-retirement--prove-the-checkout-is-disposable-before-removal).
+For interrupted preservation, initialized submodules or borrowed object stores, use its
+[preservation helper](git-safety-net/references/worktree-retirement-helper.md).
 When current content differs from an older published review, use that reference's
 [historical publication example](git-safety-net/references/merge_verification.md#worked-example--old-review-content-landed-through-another-ref)
 before deciding supersession; historical equality alone does not establish current intent.
