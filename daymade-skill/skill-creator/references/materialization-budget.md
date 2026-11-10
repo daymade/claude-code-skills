@@ -107,8 +107,7 @@ or cache usage, enforce this reservation, or stop those external services.
 
 ## Runnable small example
 
-`materialize_agent` supplies the existing `--summary` on `prepare`, `run`, `finish`,
-`recover`, `register-output` and `retire` for smaller tool-visible stdout. It adds
+`materialize_agent` supplies the existing `--summary` for smaller tool-visible stdout. It adds
 the flag after the operation unless already present before the child `--`;
 `--summary` after that separator remains a child argument. Missing or unsupported
 operations retain the entry's or owner's error behavior.

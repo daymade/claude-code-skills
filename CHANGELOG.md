@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-creator** (`daymade-skill` v1.78.0 → v1.78.1): Keep materialization output and compatibility in the owning SOP, remove the handwritten operation inventory, and align repository entry triggers with Agent materialization and long-list acceptance.
+
 - **frontend-visual-qa** (v1.21.39 → v1.21.40): Verify first-entry critical controls and actual nested-list scroll movement while preserving ordinary table scrolling and source reading checks.
 - **skill-creator** (`daymade-skill` v1.77.3 → v1.78.0): Add the summary-first `materialize_agent` entry while preserving full receipts, child logs and the existing materialization interfaces.
 
