@@ -13,11 +13,16 @@ COMMANDS = {
     "release_readiness": "scripts.release_readiness",
     "source_contract": "scripts.source_contract",
     "materialize": "scripts.materialize",
+    "materialize_agent": "scripts.materialize",
     "delivery_identity": "scripts.delivery_identity",
     "quick_validate": "scripts.quick_validate",
     "skill_read_plan": "scripts.skill_read_plan",
     "capture_command": "scripts.capture_command",
 }
+
+MATERIALIZE_SUMMARY_OPERATIONS = frozenset({
+    "prepare", "run", "finish", "recover", "register-output", "retire",
+})
 
 
 def fail(message: str, code: int = 2) -> int:
@@ -48,6 +53,10 @@ def main(argv: list[str] | None = None) -> int:
         return fail(f"unknown command {command!r}; use --help")
     if not owner_args:
         return fail(f"arguments for {command} are required; use {command} --help")
+    if command == "materialize_agent" and owner_args[0] in MATERIALIZE_SUMMARY_OPERATIONS:
+        separator = owner_args.index("--") if "--" in owner_args else len(owner_args)
+        if "--summary" not in owner_args[:separator]:
+            owner_args = [owner_args[0], "--summary", *owner_args[1:]]
 
     root = Path(__file__).resolve().parent.parent
     module = COMMANDS[command]

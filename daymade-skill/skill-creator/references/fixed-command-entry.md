@@ -34,14 +34,28 @@ not establish that its contents reached the reader.
 
 Read [release readiness](release-readiness.md) before attesting a release, and
 [materialization budget](materialization-budget.md) before preparing or running
-input copies. Use `source_contract check-path` before source edits and
+input copies. For Agent-facing calls, select `materialize_agent`:
+
+```bash
+python3 "<skill-creator-path>/scripts/creator.py" materialize_agent prepare \
+  --manifest "<absolute-input-manifest.json>" --root "<absolute-new-task-root>"
+```
+
+This alias uses the existing materialize owner and supplies its `--summary` for
+`prepare`, `run`, `finish`, `recover`, `register-output` and `retire` unless that
+flag already appears before the child `--` separator. Arguments after `--` remain
+child arguments. The summary projects selected fields; it has no hard byte limit.
+The full receipt and child logs remain on disk. `materialize` and direct
+`scripts/materialize.py` invocation keep full JSON by default, and the Python API
+is unchanged. Use `source_contract check-path` before source edits and
 `source_contract audit` for source/install delivery checks as specified in
 SKILL.md. The entry does not select, prepare or run an operation on its own.
 
 Select only a registered tool name. The entry resolves its own file, including a
 symlink, to locate the owner root and starts exactly one child:
-`uv run --frozen --project <owner-root> python -m scripts.<selected-tool>`.
-Pass the remaining arguments unchanged; retain the child's stdout, stderr and
+`uv run --frozen --project <owner-root> python -m <registered-owner-module>`.
+Apart from `materialize_agent`'s summary flag, pass the remaining arguments
+unchanged; retain the child's stdout, stderr and
 exit code. Keep direct tool invocation supported.
 
 Expect `uv` on PATH. Let it prepare the normal project-local `.venv` using the

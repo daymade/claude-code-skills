@@ -11,9 +11,11 @@ description: >-
 For read-only work that needs no input copy, read the required objects directly
 with `git show <commit>:<path>`.
 
-Use `scripts/materialize.py` on POSIX with Python 3.10+ and Git. It uses the standard
-library and local Git object reads. It creates no Git history, background service,
-system hook or periodic deletion job.
+For Agent calls, use `python3 "<skill-creator-path>/scripts/creator.py" materialize_agent`
+with the absolute skill-creator path; see the [fixed entry](fixed-command-entry.md).
+It runs the existing `scripts/materialize.py` owner on POSIX with Python 3.10+ and
+Git. That owner uses the standard library and local Git object reads. It creates
+no Git history, background service, system hook or periodic deletion job.
 
 ## Declare scope before preparation
 
@@ -105,14 +107,22 @@ or cache usage, enforce this reservation, or stop those external services.
 
 ## Runnable small example
 
-Use `--summary` on `prepare`, `run`, `finish` or `recover` for smaller tool-visible
-stdout. It projects recorded state and byte limits, the full receipt's path, the
+`materialize_agent` supplies the existing `--summary` on `prepare`, `run`, `finish`,
+`recover`, `register-output` and `retire` for smaller tool-visible stdout. It adds
+the flag after the operation unless already present before the child `--`;
+`--summary` after that separator remains a child argument. Missing or unsupported
+operations retain the entry's or owner's error behavior.
+
+The summary projects recorded state and byte limits, the full receipt's path, the
 latest recorded run state/return code when present, and the pre-finish outcome.
 It also projects the selected `capacity_policy` and `capacity` observations when
 recorded, without echoing the configuration path.
 The complete receipt remains in `root/.materialization.json`; inputs, child argv,
-path inventories and cleanup lists are not echoed in summary mode. Default stdout
-still returns the full JSON. Exit codes remain unchanged: a child exiting 7 still
+path inventories and cleanup lists are not echoed in summary mode. Child stdout
+and stderr remain in `artifacts/run-NNNN/` logs. The original `creator.py materialize`
+entry and direct `scripts/materialize.py` invocation still return full JSON by
+default; callers can select `--summary` explicitly there. The Python API is
+unchanged. Exit codes remain unchanged: a child exiting 7 still
 returns 23 from `run`, with 7 in the summary's `last_run.returncode`. A missing
 return code stays absent, never an invented success. This mode limits selected
 fields, not arbitrary path lengths or results aggregated by an outer tool call.
@@ -140,16 +150,16 @@ manifest = {
 path = pathlib.Path(os.environ['MATERIALIZATION_WORKSPACE']) / 'input-manifest.json'
 path.write_text(json.dumps(manifest))
 PY
-uv run --frozen python -m scripts.materialize prepare \
-  --summary --manifest "$materialization_workspace/input-manifest.json" \
+python3 scripts/creator.py materialize_agent prepare \
+  --manifest "$materialization_workspace/input-manifest.json" \
   --root "$materialization_workspace/task"
 materialization_exit=0
-uv run --frozen python -m scripts.materialize run \
-  --summary --root "$materialization_workspace/task" --owner smoke-session --arm with_skill \
+python3 scripts/creator.py materialize_agent run \
+  --root "$materialization_workspace/task" --owner smoke-session --arm with_skill \
   -- python -c 'from pathlib import Path; print(Path("daymade-skill/skill-creator/SKILL.md").is_file())' \
   || materialization_exit=$?
-uv run --frozen python -m scripts.materialize finish \
-  --summary --root "$materialization_workspace/task" --owner smoke-session
+python3 scripts/creator.py materialize_agent finish \
+  --root "$materialization_workspace/task" --owner smoke-session
 printf 'run exit: %s\n' "$materialization_exit"
 ```
 
@@ -259,10 +269,10 @@ After an uncatchable runner death, a stale lock can remain. Once the recorded
 runner PID and child group are confirmed absent, use:
 
 ```bash
-uv run --frozen python -m scripts.materialize recover \
-  --summary --root "$materialization_workspace/task" --owner smoke-session
-uv run --frozen python -m scripts.materialize finish \
-  --summary --root "$materialization_workspace/task" --owner smoke-session
+python3 scripts/creator.py materialize_agent recover \
+  --root "$materialization_workspace/task" --owner smoke-session
+python3 scripts/creator.py materialize_agent finish \
+  --root "$materialization_workspace/task" --owner smoke-session
 ```
 
 `recover` checks the stored lock owner and runner PID, then removes only that stale
@@ -321,8 +331,8 @@ manifest = {
 }
 (workspace / 'output-manifest.json').write_text(json.dumps(manifest))
 PY
-uv run --frozen python -m scripts.materialize register-output \
-  --summary --root "$materialization_workspace/task" --owner smoke-session \
+python3 scripts/creator.py materialize_agent register-output \
+  --root "$materialization_workspace/task" --owner smoke-session \
   --manifest "$materialization_workspace/output-manifest.json"
 uv run --frozen python - <<'PY'
 import os, pathlib
@@ -331,8 +341,8 @@ assert 'Skill Creator' in page.read_text()
 print('preview consumed')
 PY
 # For a real browser preview, finish every reader and stop its own server first.
-uv run --frozen python -m scripts.materialize retire \
-  --summary --root "$materialization_workspace/task" --owner smoke-session \
+python3 scripts/creator.py materialize_agent retire \
+  --root "$materialization_workspace/task" --owner smoke-session \
   --consumer preview-reader --consumed
 ```
 

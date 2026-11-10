@@ -487,6 +487,25 @@ reacquire an inspected frame or keep that position unverified. Observe offsets;
 do not assign `scrollLeft` or `currentTime`, or change CSS to stage a result.
 This is a journey-specific auditor check, not an automatic sweep verdict.
 
+### Nested vertical lists use the same fresh input-target check
+
+Apply the geometry and hit check above to the intended list and its actual
+scroll owner; the `closest <pre>` predicate remains specific to PRE reading.
+Record the list and relevant scrolling ancestors' `scrollTop`, `scrollHeight`
+and `clientHeight` before and after ordinary vertical wheel input at an explicit
+in-bounds point. A hit inside the list does not prove that this scroll owner
+moved: a nested child or the page can receive the movement instead. Discard old
+coordinates after scrolling or layout changes and inspect the reached content.
+
+For an attempt that should move the list within its range, a successful tool
+receipt with unchanged offsets leaves the input unverified. It does not prove
+that a bottom control disappeared, nor establish a bottom-state test: the actual
+owner's offsets must establish the reached position. Re-target from fresh
+geometry, retry ordinary input and read back the result before judging that
+state. If a retry changes both the pointer position and wheel delta, its success
+does not isolate hover or delta size as the cause. Observe offsets; do not assign
+`scrollTop` to stage the journey.
+
 ### Separate viewport movement from layout movement
 
 For confirmation transitions and moving click targets, compare observations in

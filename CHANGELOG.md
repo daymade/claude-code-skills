@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.21.39 → v1.21.40): Verify first-entry critical controls and actual nested-list scroll movement while preserving ordinary table scrolling and source reading checks.
+- **skill-creator** (`daymade-skill` v1.77.3 → v1.78.0): Add the summary-first `materialize_agent` entry while preserving full receipts, child logs and the existing materialization interfaces.
+
 - **prior-work-retrieval** (`daymade-claude-code` v5.1.6 → v5.1.7): Match complete English code/codebase tokens so Codex and code identifiers do not trigger prior-work retrieval.
 
 - **report-with-html** (v1.6.0 → v1.6.1): Keep preview limits with their executable owner and route existing-page hosting and missing-asset recovery from repository instructions. Runtime behavior is unchanged.
