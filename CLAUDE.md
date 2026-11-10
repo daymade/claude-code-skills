@@ -145,8 +145,9 @@ For permission-sensitive fixtures, use Skill Creator's
 For resumable writes to human-edited state, use its
 [interrupted-write controls](daymade-skill/skill-creator/references/stateful-script-verification.md#interrupted-writes-and-later-human-changes).
 
-For its audit, release, source-contract or materialization commands from another
-working directory, use the [fixed command entry](daymade-skill/skill-creator/references/fixed-command-entry.md).
+For its audit, release or source-contract commands from another working directory,
+or Agent-facing materialization from any directory, use the
+[fixed command entry](daymade-skill/skill-creator/references/fixed-command-entry.md).
 For security scans, use its [absolute owner-script recipe](daymade-skill/skill-creator/references/publishing-and-packaging.md#step-6-security-review).
 
 Before a command that may exceed the response budget, enter the standalone
@@ -307,7 +308,8 @@ For persistent Python service installation, environment reuse or startup, follow
 
 ### Rendered UI delivery acceptance
 
-For rendered UI freshness, multiline request/log tables, delayed editor/batch responses or deployment acceptance, enter
+For rendered UI freshness, long-list entry controls and actual scroll movement,
+multiline request/log tables, delayed editor/batch responses or deployment acceptance, enter
 [frontend-visual-qa](frontend-visual-qa/SKILL.md).
 For publication-wide clutter or AI Slop despite passing local checks, including
 controls, deks and expanded summaries, use its
