@@ -665,6 +665,8 @@ For an inbound coordination envelope, a native reply, original-input capture or 
 [receive, reply and closure](peer-message/references/local-coordination.md#收件回信和关闭).
 For a known inbound script or native coordination envelope ID in Codex, use the
 [original-envelope receive recipe](peer-message/references/local-coordination.md#从-codex-入站原件接收).
+If that cache does not cover the known inbound, use its
+[original host-event recovery](peer-message/references/local-coordination.md#入站缓存缺失时读取原始宿主事件).
 For oversized discovery responses or complete-title export, use its
 [discovery-output contract](peer-message/references/protocol-and-discovery.md#发现输出的范围).
 Current product availability, provenance, and inbound-control mechanics belong in
