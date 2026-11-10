@@ -62,8 +62,13 @@ question and relevant prior originals before dispatch. Read the existing claims,
 project state to separate supported conclusions, resolved questions, corrections, remaining
 unknowns and the evidence or user correction that would reopen a closed question. Carry this
 context into the exact follow-up prompt, with its source locators and dates. Use the existing
-study records or owning project state; do not create a second cumulative ledger or change
-the asset schema to satisfy this instruction.
+study records or owning project state; do not create a second cumulative ledger.
+For a new dispatch, record its source/claim classifications and question status in the optional
+`study.json.continuation` contract under the [continuation dispatch check](provider-run-contract.md#continuation-dispatch-check).
+This is a contract for this dispatch, not a new cumulative knowledge store. Use `prepare` to put
+the deterministically rendered facts, corrections and unknowns into each actual lane prompt;
+paths and hashes alone do not transfer the prior conclusions. Classifications excluded with
+a reason stay in the study and are omitted from the receiver's prompt.
 
 Do not repeat a resolved search without new evidence, a freshness need or a user correction
 that could change its answer. Preserve unresolved claims as unknown; one neighboring question
@@ -79,6 +84,10 @@ say which questions were checked and which were not; do not repeat the entire ba
 as if it were a new finding. One-off research retains the requested report format and does not
 need a cumulative-state artifact.
 
+Before dispatch, the lead agent compares the question, selected originals, claim
+classifications and actual prompt: are relevant prior findings carried, exclusions justified,
+corrections supported, and only unknown or legitimately reopened questions being researched?
+The structural check can verify those recorded bytes, not whether the selection is semantically complete.
 Before closing the follow-up, the lead agent compares its prompt and result with the prior
 originals: were applicable corrections carried forward, were resolved and unknown questions
 kept distinct, and is every claimed change supported? The local scripts check file and record

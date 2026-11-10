@@ -426,7 +426,7 @@
       "description": "Generate evidence-tracked research reports with reusable source and claim records, original-source verification, and evidence-family tracking. Coordinate provider-specific Skills across selected modes, retain original artifacts, and synthesize by decision; select depth and routes by the question.",
       "source": "./deep-research",
       "strict": false,
-      "version": "2.13.1",
+      "version": "2.14.0",
       "category": "documentation",
       "keywords": [
         "research",
