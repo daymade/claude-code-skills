@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **stepfun-tts** (`daymade-audio` v1.58.1): Correct the China HTTP normalization, subtitle and model-specific label contracts. Document the observed 2.5 preview reference/text binding without adding hidden uploads or retries.
 - **debugging-network-issues** (v1.11.10 → v1.11.11): Reuse a compatible successful transfer before inventing another. Bound concurrency at both levels.
 
 - **terraform-skill** (v1.5.14 → v1.5.15): Preserve verified application facts across cleanup failures, distinguish recovery after completed or partial apply, and bind promotion to artifact identity and explicit controller compatibility.

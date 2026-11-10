@@ -2,11 +2,15 @@
 
 ## Authority and scope
 
-The following official references were checked on 2026-11-10. Their limits are
-service contracts, not local allowlists; use the account's current endpoint and
-catalogue. The wrapper does not replace a rejected model, key or voice.
+Match the official contract to the account's endpoint and model. The China and
+global references differ; fields omitted from one reference are not a universal
+service restriction. Their limits are service contracts, not local allowlists.
+The wrapper does not replace a rejected model, key or voice.
 
-- [HTTP speech](https://platform.stepfun.ai/docs/en/api-reference/audio/create-audio)
+- [China HTTP speech](https://platform.stepfun.com/docs/zh/api-reference/audio/create-audio),
+  [preview](https://platform.stepfun.com/docs/zh/api-reference/audio/voices-preview)
+  and [reference upload](https://platform.stepfun.com/docs/zh/api-reference/files/create)
+- [Global HTTP speech](https://platform.stepfun.ai/docs/en/api-reference/audio/create-audio)
 - [WebSocket speech](https://platform.stepfun.ai/docs/en/api-reference/audio/ws-audio)
 - [Create voice](https://platform.stepfun.ai/docs/en/api-reference/audio/create-voice),
   [preview](https://platform.stepfun.ai/docs/en/api-reference/audio/voices-preview),
@@ -40,14 +44,26 @@ The developer guide explicitly pairs 2.5 cloning with natural-language delivery
 control. Global guidance and local directions can therefore accompany a clone;
 they do not establish identity or expression quality by themselves.
 
-Current HTTP fields include model/input/voice, language, response_format, speed,
-volume, instruction, sample_rate, pronunciation_map, stream_format,
-markdown_filter and return_url. See the linked official reference for limits and
-current formats/languages, and
+The global HTTP reference includes model/input/voice, language, response_format,
+speed, volume, instruction, sample_rate, pronunciation_map, stream_format,
+markdown_filter and return_url. The China HTTP contract additionally specifies:
+
+- `text_normalization`: `standard` (default) or `enhanced`; enhanced normalization
+  handles number, unit, English and symbol readings more thoroughly. This is
+  reading preparation, not word emphasis. Use the native body or `extra`.
+- `timestamp=true`: requires either `return_url=true` or
+  `stream_format="sse"`; a bare audio response cannot carry subtitles and returns
+  HTTP 400 for this combination. URL JSON carries `data.subtitles`; SSE carries
+  `response.subtitle` events. Word times are milliseconds accumulated across
+  sentences; alignment items may be empty.
+- `voice_label`: only one of language, emotion or style may be set on supported
+  legacy models. It is rejected by 2.5 and 3; use `instruction` / `()` on those
+  contextual models instead.
+
+See the matching official reference for model limits and formats/languages, and
 [build_speech_request](../scripts/stepfun_native/http.py) for typed Python
-arguments. `timestamp` and `voice_label` remain pass-through compatibility
-arguments; they are not listed as contextual controls by that current global
-reference. A server may reject them for a selected model.
+arguments. These documented constraints do not make the thin wrapper a field or
+model allowlist; its native channels also preserve new fields.
 
 ```python
 # tts is the module loaded by llmreg.wrapper_for("stepfun-tts").tts_generate.
@@ -86,6 +102,10 @@ server sends them. return_url changes the response to JSON; it is not an audio
 buffer. The CLI writes a response record and raw body beside audio unless
 `--record` specifies another location. Headers may contain account information;
 keep real records out of public examples.
+
+Missing `usage` or an unchanged wallet balance does not prove a call was free.
+Balance observations can lag or include other calls; keep the charge unknown
+unless billing evidence binds it to the request, and apply the caller's budget.
 
 HTTP errors retain their complete body and headers. There is no automatic retry
 or model/voice fallback. Inspect ok/status and the native error before choosing
@@ -141,8 +161,19 @@ voice_id = created["json"]["id"]
 `upload_file` accepts a local file/path tuple or URL plus native fields.
 `create_voice`, `preview_voice`, `list_voices` and `system_voices` expose the
 official routes with full request/query extension channels. Preview returns
-sample audio without creating a persistent voice. Inspect the full JSON rather
-than assuming synthesis's binary shape. `file_operation` exposes list,
+base64 WAV sample audio without creating a persistent voice. Inspect the full
+JSON rather than assuming synthesis's binary shape.
+
+An observed 2.5 preview restriction binds reference audio to its first
+`sample_text`: changing that text was rejected for the same WAV bytes even after
+a new upload returned a different `file_id`. This was verified on one account;
+the binding/cache key and behavior on other accounts or models are unknown.
+Re-uploading identical audio is therefore not a reliable way to reset a preview.
+Keep the native error and use a supported, authorized voice lifecycle for further
+text comparisons. The caller must choose that recovery explicitly; the wrapper
+does not hide uploads, mutate reference bytes, create an asset or retry.
+
+`file_operation` exposes list,
 retrieve, content and delete; deletion is caller-directed and never an automatic
 post-generation cleanup. The native HTTP entry remains available for new
 lifecycle fields or routes.
