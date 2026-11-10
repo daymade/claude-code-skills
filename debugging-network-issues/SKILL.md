@@ -257,6 +257,30 @@ Read the result as a four-way test — all four outcomes are reachable, and thre
 
 If no prior known-good measurement exists to compare against — the common case in a first incident — you can still make progress without one, because the question "did this change?" has a cheaper substitute: **measure the same path from somewhere else.** A second client on a different network, or the host measuring *itself* over loopback, brackets the problem without any history. Then record today's number as the baseline you did not have; the second occurrence of this incident is much cheaper than the first, and only if someone writes the number down.
 
+**Reuse a compatible successful transfer before inventing another.** For an upload,
+check the existing successful command/configuration and its observed result first.
+Match direction, route, object sizes, tool/SDK version, account permissions and
+resume/completion semantics; reuse the compatible parts without copying credentials
+or weakening overwrite protection. Treat a successful configuration as a starting
+point to validate, not proof of today's capacity or a permanent optimum.
+
+**Bound concurrency at both levels.** Record simultaneous files × in-flight parts
+per file as the approximate part-request budget, plus retries and other traffic.
+Vary one level at a time within the existing resource/permission limits. Compare
+matched workload windows using newly acknowledged, non-duplicated payload bytes
+divided by actual elapsed wall time; record units, window and errors. A sender's
+queued bytes, cumulative totals including old work, or a short burst against a
+degraded historical baseline cannot establish sustained benefit. Keep the simplest
+configuration that improves the measured job without added failures; if the
+benefit disappears or errors rise, restore the known working configuration.
+
+Keep transfer evidence separate: part acknowledgements establish progress; a
+successful completion response needs object-length/completeness verification;
+matching remote size/type/metadata does not establish a whole-content digest.
+Use the original job's required integrity check and user-visible result before
+calling it delivered. Do not turn a throughput probe into an unnecessary full
+redownload or duplicate payload backup.
+
 **Finally, audit what the wrong assumption already broke.** A degraded link does not just make things slow — it silently invalidates every timeout you calibrated on the fast path, and those timeouts produce *corrupt artifacts that look like successes*. Before declaring the incident over, re-verify anything transferred during the degraded window; see trap 18 and Step 7.
 
 **Replay the original workload before changing its semantics.** After a path or
