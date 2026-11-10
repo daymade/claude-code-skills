@@ -1770,7 +1770,7 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
         if dry_run:
             print("   (DRY RUN — no files will be written)")
         elif review_mode and getattr(args, "apply_domain", False) and domains:
-            print(f"   (SAFE MODE + trusted domain '{', '.join(domains)}' — its rules apply at every risk level; roster/other rules still defer to *_needs_review.md.)")
+            print(f"   (SAFE MODE + trusted domain '{', '.join(domains)}' — domain rules are trusted; ambiguous occurrences and roster/other rules still defer to *_needs_review.md.)")
         elif review_mode:
             print("   (SAFE MODE [default] — only low-risk auto-applied; medium/high → *_needs_review.md. Pass --apply-all to apply every level.)")
         else:

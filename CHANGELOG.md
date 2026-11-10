@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **transcript-fixer** (`daymade-audio` v1.57.8 → v1.57.9): Prefer complete overlapping entity variants and defer ambiguous short-name expansions rather than produce an unverified name with a residual suffix.
+
 - **frontend-visual-qa** (v1.21.39 → v1.21.40): Verify first-entry critical controls and actual nested-list scroll movement while preserving ordinary table scrolling and source reading checks.
 - **skill-creator** (`daymade-skill` v1.77.3 → v1.78.0): Add the summary-first `materialize_agent` entry while preserving full receipts, child logs and the existing materialization interfaces.
 

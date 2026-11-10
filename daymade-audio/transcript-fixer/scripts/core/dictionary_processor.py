@@ -17,7 +17,7 @@ import re
 import sys
 import logging
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional, TypeAlias
+from typing import Dict, Iterable, List, Tuple, Optional, TypeAlias
 from dataclasses import dataclass
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -482,24 +482,17 @@ class DictionaryProcessor:
            skip and count it; --apply-all switches this check off.
         These are the match-time layer of references/false_positive_guide.md.
         """
-        changes = []
-        corrected = text
-
-        for wrong, correct in self.corrections.items():
-            if wrong not in corrected:
-                continue
-
-            # All rules go through position-aware replacement to get
-            # the superset check. Short rules additionally get the
-            # boundary check against common words.
-            needs_boundary_check = len(wrong) <= 3
-            corrected, new_changes = self._apply_with_safety_checks(
-                corrected, wrong, correct, needs_boundary_check,
-                review_mode=review_mode, straddle_check=boundary_check,
-            )
-            changes.extend(new_changes)
-
-        return corrected, changes
+        # Match the source once. At a shared start the longest registered
+        # variant owns the occurrence, even when its risk defers it. Shorter
+        # rules must not rewrite its prefix, nor may a later rule reprocess
+        # the output of an earlier replacement.
+        variants = sorted((key for key in self.corrections if key), key=len, reverse=True)
+        if not variants:
+            return text, []
+        matches = re.finditer("|".join(re.escape(key) for key in variants), text)
+        return self._apply_with_safety_checks(
+            text, matches, review_mode=review_mode, straddle_check=boundary_check,
+        )
 
     def _find_occurrences(self, text: str, target: str) -> List[int]:
         """Find all line numbers where target appears in text."""
@@ -517,9 +510,7 @@ class DictionaryProcessor:
     def _apply_with_safety_checks(
         self,
         text: str,
-        wrong: str,
-        correct: str,
-        check_boundaries: bool,
+        matches: Iterable[re.Match[str]],
         review_mode: bool = False,
         straddle_check: bool = True,
     ) -> Tuple[str, List[Change]]:
@@ -535,7 +526,9 @@ class DictionaryProcessor:
 
         3. Word-boundary straddle check (every rule): a fragment of real
            words by script is skipped and counted (see straddles_word_boundary).
-        4. Risk classification: low/medium/high based on confidence and
+        4. An unsegmented CJK tail after a short, name-shaped expansion makes
+           the occurrence ambiguous, including in a trusted domain.
+        5. Risk classification: low/medium/high based on confidence and
            common-word membership. In review_mode, high/medium changes are
            tracked but not applied.
         """
@@ -543,11 +536,10 @@ class DictionaryProcessor:
         result_parts = []
         search_start = 0
 
-        while search_start < len(text):
-            pos = text.find(wrong, search_start)
-            if pos == -1:
-                result_parts.append(text[search_start:])
-                break
+        for match in matches:
+            pos = match.start()
+            wrong = match.group()
+            correct = self.corrections[wrong]
 
             # Safety layer 1: superset check.
             # If to_text contains from_text, the replacement could create
@@ -562,7 +554,7 @@ class DictionaryProcessor:
                 continue
 
             # Safety layer 2: boundary check (short rules only).
-            if check_boundaries and self._is_inside_longer_word(
+            if len(wrong) <= 3 and self._is_inside_longer_word(
                 text, pos, wrong
             ):
                 result_parts.append(text[search_start:pos + len(wrong)])
@@ -593,13 +585,20 @@ class DictionaryProcessor:
             # Safe to replace (or record for review)
             line_num = text[:pos].count('\n') + 1
             risk = self._assess_risk(wrong, correct)
+            rule_name = "corrections_dict"
+            if self._has_uncovered_cjk_tail(text, pos, wrong, correct):
+                # Domain trust identifies the rule, not this occurrence.
+                # Retain the raw text and its whole-line queue context rather
+                # than inventing a longer name or silently deleting its tail.
+                risk = "high" if risk == "high" else "medium"
+                rule_name += ":uncovered_cjk_tail"
 
             changes.append(Change(
                 line_number=line_num,
                 from_text=wrong,
                 to_text=correct,
                 rule_type="dictionary",
-                rule_name="corrections_dict",
+                rule_name=rule_name,
                 risk=risk,
             ))
 
@@ -613,7 +612,35 @@ class DictionaryProcessor:
             result_parts.append(correct)
             search_start = pos + len(wrong)
 
+        result_parts.append(text[search_start:])
         return "".join(result_parts), changes
+
+    @staticmethod
+    def _has_uncovered_cjk_tail(text: str, pos: int, wrong: str, correct: str) -> bool:
+        """Flag a possible name tail, without deciding anybody's identity.
+
+        Scope is a same-initial, 2/3-character CJK form expanded by one
+        character. A following standalone CJK character has no positive word
+        boundary evidence; a known multi-character following word (including
+        company suffixes) does. Structural particles are explicit boundaries.
+        Missing segmentation leaves the ambiguous occurrence deferred.
+        """
+        def is_cjk(value: str) -> bool:
+            return bool(re.fullmatch(r"[\u3400-\u4dbf\u4e00-\u9fff]+", value))
+
+        if not (2 <= len(wrong) <= 3 and len(correct) == len(wrong) + 1
+                and wrong[0] == correct[0] and is_cjk(wrong) and is_cjk(correct)):
+            return False
+        end = pos + len(wrong)
+        if end == len(text) or not is_cjk(text[end]):
+            return False
+        if text[end] in "的地得":
+            return False
+        segmenter = _get_segmenter()
+        if segmenter is None:
+            return True
+        following = segmenter.lcut(text[end:end + _STRADDLE_WINDOW], HMM=False)
+        return not following or len(following[0]) < 2
 
     @staticmethod
     def _already_corrected(
