@@ -93,6 +93,15 @@ or the current live config. Those validate a different system.
 - Let staging test a clean local candidate before it is merged.
 - Record a staging receipt only after apply and every required live verifier passes. A recorder callable
   by itself must rerun or cryptographically consume that evidence; it cannot mint a receipt from plan text.
+- When the release contract requires promotion of the same artifact, consume the exact image/archive
+  content identity verified in staging. Validate environment-specific runtime configuration separately;
+  source SHA equality, a mutable image tag or a build-cache hit does not prove artifact equality. If
+  environment values are compiled into the artifact, fix that boundary before removing a required build.
+- Preserve the producing controller revision as provenance; decide consumer compatibility from an
+  explicit reviewed contract for the relevant build, verifier, schema and runtime inputs. A cleanup-only
+  controller repair need not invalidate unchanged application proof, while changed verification or
+  runtime inputs must invalidate the affected proof. Missing compatibility evidence remains unknown;
+  neither eternal controller-SHA equality nor a growing list of incident run IDs is a compatibility model.
 - Before production, freshly fetch/read the authoritative remote branch and prove the candidate commit is
   in its history. Reject fetch failure; never fall back to a cached remote-tracking ref.
 - Verify production authorization at the last reversible point, including existing standing or exact

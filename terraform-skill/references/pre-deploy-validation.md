@@ -339,6 +339,28 @@ A zero exit from `terraform apply` proves only that Terraform completed its oper
 environment-specific live verifiers next. Record the staging/promotion receipt only after they all pass,
 and bind it to the saved-plan digest, exact source/artifact identities, verifier set, and timestamp.
 
+Record apply, live verification, deployed identity, evidence storage and executor cleanup as separate
+facts bound to that candidate. Preserve verified application facts when later cleanup fails; keep the
+cleanup failure and the workflow's failure visible. Neither a green job nor `terraform apply` alone
+can replace the required application proof, and retained proof does not authorize deleting an unknown
+executor or bypassing the next environment's isolation requirements.
+
+Choose recovery from the independently observed side effects:
+
+| Established state | Recovery through the canonical release entry |
+|---|---|
+| Application, required live verifiers and identity passed; cleanup failed | Retain the original application proof and retry only safe cleanup. Recheck exact executor identity and in-flight work before deletion; satisfy any required retirement/isolation proof before promotion. Do not rebuild or reapply the unchanged application just to obtain a green workflow. |
+| Apply completed; a post-apply verifier failed | Keep the application unaccepted. Read back current identity/configuration and rerun only the missing verification when its bound inputs still match. Do not replay the consumed plan or repeat the completed apply. |
+| Apply partially completed, or its effects are unknown | Inspect actual state and live resources, then form a fresh, scoped recovery plan under the normal review/authorization contract. Do not infer that a nonzero wrapper exit means no mutation occurred. |
+
+Check the publisher's existing supported modes and applicable authorization before treating a missing
+continuation entry as a blocker. Use a supported retained-executor or other authorized path when it
+can complete the original business outcome while preserving required isolation and evidence. Do not
+make controller repair a prerequisite when that path exists. Repair a necessary action's blocker only
+when no supported path can perform it; continue independent authorized work. Never substitute manual
+apply, change plan timestamps or silently ignore failure. Use section 5's fresh-plan contract for an
+expired plan that has not been applied.
+
 Before production, freshly read the authoritative remote branch and prove the candidate commit belongs
 to it; cached tracking refs are not provenance. After apply, independently read back deployed identity,
 service health, and the real user path. Post-deploy checks remain necessary, but they are detection and
