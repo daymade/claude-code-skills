@@ -250,7 +250,7 @@ with open(p, 'w') as f:
     # symlinks; this idempotent pass covers manifest/version/topology changes.
     local source_syncer="$CLAUDE_PROFILES_CONFIG_DIR/sync-local-skill-sources.py"
     if command -v python3 >/dev/null 2>&1 && [ -f "$source_syncer" ]; then
-        python3 "$source_syncer" --apply --quiet >/dev/null
+        python3 "$source_syncer" --apply --quiet >/dev/null || return $?
     fi
 
     # plugins: build per-profile structure + per-profile known_marketplaces.json
@@ -259,7 +259,7 @@ with open(p, 'w') as f:
     if command -v python3 >/dev/null 2>&1 && [ -f "$syncer" ]; then
         echo ""
         echo "[INIT] syncing per-profile plugin marketplaces ..."
-        python3 "$syncer"
+        python3 "$syncer" || return $?
     else
         echo "[WARN] plugin sync SKIPPED: python3 or claude-plugins-sync.py missing ($syncer)." >&2
         echo "       per-profile known_marketplaces.json was NOT built — marketplaces may report 'corrupted installLocation'." >&2
@@ -333,12 +333,12 @@ _claude-profile-launch() {
     # quiet on this hot path, but errors stay on stderr (not /dev/null) so failures show.
     local source_syncer="$CLAUDE_PROFILES_CONFIG_DIR/sync-local-skill-sources.py"
     if command -v python3 >/dev/null 2>&1 && [ -f "$source_syncer" ]; then
-        python3 "$source_syncer" --apply --quiet >/dev/null
+        python3 "$source_syncer" --apply --quiet >/dev/null || return $?
     fi
 
     local syncer="$CLAUDE_PROFILES_CONFIG_DIR/claude-plugins-sync.py"
     if command -v python3 >/dev/null 2>&1 && [ -f "$syncer" ]; then
-        python3 "$syncer" --profile "$profile" >/dev/null
+        python3 "$syncer" --profile "$profile" >/dev/null || return $?
     else
         echo "[WARN] plugin sync SKIPPED: python3 or claude-plugins-sync.py missing ($syncer) — marketplaces may report 'corrupted installLocation'." >&2
     fi

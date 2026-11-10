@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **claude-switch-models-setup** (`daymade-claude-code` v5.1.9 → v5.1.10): Preserve malformed required plugin registries, report preparation failures before native launch, and serialize both sync helpers without expiring live or unknown lock owners.
+
 - **stepfun-tts** (`daymade-audio` v1.58.1): Correct the China HTTP normalization, subtitle and model-specific label contracts. Document the observed 2.5 preview reference/text binding without adding hidden uploads or retries.
 - **debugging-network-issues** (v1.11.10 → v1.11.11): Reuse a compatible successful transfer before inventing another. Bound concurrency at both levels.
 

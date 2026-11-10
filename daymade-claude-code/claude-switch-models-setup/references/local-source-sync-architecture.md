@@ -49,6 +49,10 @@ global prompt. The sync scripts exist for topology repair, not day-to-day editin
 
 Both Python sync scripts take the same cross-process lock — a lock directory kept in the Claude config dir, deliberately OUTSIDE the plugins directory so the sync never mirrors the lock itself into profiles — before changing marketplace JSON, installed plugin metadata, or cache symlinks. This matters because power users may open several tmux panes or terminal windows at once; without one shared lock, simultaneous `claude-profile ...` launches can race on cache symlink creation or `known_marketplaces.json` temp-file replacement.
 
+The updated helpers serialize lock recovery with a persistent private `.daymade-skill-sync.lock.guard` kernel lock. They reclaim a directory marker only when its recorded PID is confirmed dead; live, missing, malformed or unreadable ownership times out without deleting the marker. Deploy both helpers together; an older helper does not participate in the kernel guard.
+
+Malformed required marketplace/settings JSON is preserved and makes plugin sync return nonzero. Profile initialization and launch propagate required synchronization failure before invoking the native CLI, independently of the caller's shell `errexit` setting. An absent marketplace registry remains a successful no-op for a host without marketplaces.
+
 Profile state uses `.claude.json` inside each `CLAUDE_CONFIG_DIR`. Older `claude.json` files may still exist as harmless legacy files, but modern Claude Code will not use them as the profile state file.
 
 ## Source Repo Discovery
