@@ -71,9 +71,11 @@ Env overrides (match claude-profiles.sh):
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import shutil
+import stat
 import sys
 import time
 from contextlib import contextmanager
@@ -88,7 +90,6 @@ MARKER = "/plugins/marketplaces/"
 MIGRATE_REAL_SHARED_ITEMS = {"installed_plugins.json", "plugin-catalog-cache.json"}
 SYNC_LOCK_NAME = ".daymade-skill-sync.lock"
 SYNC_LOCK_TIMEOUT_SECONDS = 120
-SYNC_LOCK_STALE_SECONDS = 600
 
 DRY = "--dry-run" in sys.argv or "-n" in sys.argv
 
@@ -101,7 +102,7 @@ def err(*a):
     print(*a, file=sys.stderr)
 
 
-def process_alive(pid: int) -> bool:
+def process_alive(pid: int) -> bool | None:
     try:
         os.kill(pid, 0)
         return True
@@ -109,44 +110,82 @@ def process_alive(pid: int) -> bool:
         return False
     except PermissionError:
         return True
+    except (OSError, OverflowError):
+        return None
+
+
+def lock_owner(lock_dir: Path):
+    """Return a stable directory/PID binding; missing or unreadable is unknown."""
+    try:
+        before = lock_dir.lstat()
+        marker = lock_dir / "pid"
+        proof = marker.lstat()
+        if (not stat.S_ISDIR(before.st_mode) or before.st_uid != os.getuid()
+                or set(p.name for p in lock_dir.iterdir()) != {"pid"}
+                or not stat.S_ISREG(proof.st_mode) or proof.st_nlink != 1
+                or proof.st_uid != os.getuid()):
+            return None
+        text = marker.read_text(encoding="utf-8").strip()
+        after = lock_dir.lstat()
+        if ((before.st_dev, before.st_ino) != (after.st_dev, after.st_ino)
+                or not text.isascii() or not text.isdecimal() or int(text) <= 0):
+            return None
+        return (before.st_dev, before.st_ino), int(text)
+    except (OSError, UnicodeError, ValueError):
+        return None
 
 
 @contextmanager
 def sync_lock():
-    # The lock must live OUTSIDE <base>/plugins: shared_item_names() scans that
-    # directory while the lock is held, so a lock inside it would get symlinked
-    # into every profile and go dangling once released.
+    # Retain the directory/PID marker for older helpers. The stable kernel lock
+    # serializes recovery and release between the current pair of sync helpers.
     lock_dir = BASE / SYNC_LOCK_NAME
-    start = time.time()
-    acquired = False
-    while True:
-        try:
-            lock_dir.mkdir()
-            (lock_dir / "pid").write_text(str(os.getpid()), encoding="utf-8")
-            acquired = True
-            break
-        except FileExistsError:
-            stale = False
-            try:
-                age = time.time() - lock_dir.stat().st_mtime
-                pid_text = (lock_dir / "pid").read_text(encoding="utf-8").strip()
-                stale = age > SYNC_LOCK_STALE_SECONDS or (
-                    pid_text.isdigit() and not process_alive(int(pid_text))
-                )
-            except OSError:
-                stale = time.time() - start > SYNC_LOCK_TIMEOUT_SECONDS
-            if stale:
-                shutil.rmtree(lock_dir, ignore_errors=True)
-                continue
-            if time.time() - start > SYNC_LOCK_TIMEOUT_SECONDS:
-                raise TimeoutError(f"timed out waiting for sync lock: {lock_dir}")
-            time.sleep(0.2)
+    guard = BASE / (SYNC_LOCK_NAME + ".guard")
+    start = time.monotonic()
+    fd = os.open(guard, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    acquired = None
     try:
+        proof = os.fstat(fd)
+        if (not stat.S_ISREG(proof.st_mode) or proof.st_nlink != 1
+                or proof.st_uid != os.getuid() or proof.st_mode & 0o077):
+            raise RuntimeError(f"sync guard must be a private regular file: {guard}")
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() - start >= SYNC_LOCK_TIMEOUT_SECONDS:
+                    raise TimeoutError(f"timed out waiting for sync lock: {lock_dir}")
+                time.sleep(0.2)
+        visible = guard.lstat()
+        if (visible.st_dev, visible.st_ino) != (proof.st_dev, proof.st_ino):
+            raise RuntimeError(f"sync guard changed while waiting: {guard}")
+        while True:
+            try:
+                lock_dir.mkdir(mode=0o700)
+                (lock_dir / "pid").write_text(str(os.getpid()), encoding="utf-8")
+                acquired = lock_owner(lock_dir)
+                if acquired is None:
+                    raise RuntimeError(f"sync lock identity unavailable: {lock_dir}")
+                break
+            except FileExistsError:
+                owner = lock_owner(lock_dir)
+                if owner is not None and process_alive(owner[1]) is False:
+                    if lock_owner(lock_dir) == owner:
+                        shutil.rmtree(lock_dir)
+                        continue
+                if time.monotonic() - start >= SYNC_LOCK_TIMEOUT_SECONDS:
+                    raise TimeoutError(f"timed out waiting for sync lock: {lock_dir}")
+                time.sleep(0.2)
         yield
     finally:
-        if acquired:
-            shutil.rmtree(lock_dir, ignore_errors=True)
-
+        try:
+            if acquired is not None:
+                if lock_owner(lock_dir) != acquired or set(p.name for p in lock_dir.iterdir()) != {"pid"}:
+                    raise RuntimeError(f"sync lock changed; retained: {lock_dir}")
+                shutil.rmtree(lock_dir)
+        finally:
+            os.close(fd)
 
 def shared_item_names():
     """Items under <base>/plugins to share (symlink) into each profile.
@@ -187,7 +226,11 @@ def collect_canonical():
     entries = {}
     # default: let JSONDecodeError/OSError propagate (caller refuses to write on failure)
     with open(BASE_PLUGINS / KM, encoding="utf-8") as fh:
-        _merge_entries(entries, json.load(fh))
+        canonical = json.load(fh)
+    if (not isinstance(canonical, dict)
+            or any(not isinstance(entry, dict) for entry in canonical.values())):
+        raise ValueError(f"{BASE_PLUGINS / KM}: expected a marketplace object with object entries")
+    _merge_entries(entries, canonical)
     # profiles: supplementary — tolerate unreadable ones
     if PROFILES_DIR.is_dir():
         for pd in sorted(PROFILES_DIR.iterdir()):
@@ -318,6 +361,8 @@ def read_default_enabled_plugins():
     settings_path = BASE / SETTINGS
     with open(settings_path, encoding="utf-8") as fh:
         settings = json.load(fh)
+    if not isinstance(settings, dict):
+        raise ValueError(f"{settings_path}: settings root must be an object")
     enabled = settings.get("enabledPlugins")
     if enabled is None:
         enabled = {}
@@ -479,25 +524,25 @@ def _target_profile():
 
 def main():
     with sync_lock():
-        _main_locked()
+        return _main_locked()
 
 
 def _main_locked():
     if not (BASE_PLUGINS / KM).exists():
         log(f"No canonical {KM} at {BASE_PLUGINS}; nothing to do.")
-        return
+        return 0
 
     try:
         canonical = collect_canonical()
-    except (json.JSONDecodeError, OSError) as e:
+    except (json.JSONDecodeError, OSError, ValueError) as e:
         # NO FALLBACK: refuse to sync rather than overwrite the default KM with a partial set.
         err(f"ERROR: default {KM} unreadable ({e}); refusing to sync. Fix/restore it first.")
-        return
+        return 2
     try:
         default_enabled = read_default_enabled_plugins()
     except (json.JSONDecodeError, OSError, ValueError) as e:
         err(f"ERROR: default {SETTINGS} unreadable ({e}); refusing to sync. Fix/restore it first.")
-        return
+        return 2
     log(f"canonical: {len(canonical)} marketplace(s) (union of default + profiles)")
 
     # 0) adoption: bring profile-only enabledPlugins keys back into main BEFORE mirroring,
@@ -522,7 +567,8 @@ def _main_locked():
             write_profile_settings(profile_dir, default_enabled)
 
     log("Done." + (" (dry-run)" if DRY else ""))
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

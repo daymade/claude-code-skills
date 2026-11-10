@@ -67,10 +67,10 @@ class NativeCommandTests(unittest.TestCase):
         )
         destination.chmod(0o700)
 
-    def run_profile(self, shell, *, callback=True, profile="synthetic", command=None):
+    def run_profile(self, shell, *, callback=True, profile="synthetic", command=None, errexit=True):
         argv = (["claude-profile-with-command", str(self.callback) if command is None else command]
                 if callback else ["claude-profile"])
-        code = "set -e\nsource " + shlex.quote(str(self.entry)) + "\n" + shlex.join([*argv, profile, *self.arguments])
+        code = ("set -e\n" if errexit else "") + "source " + shlex.quote(str(self.entry)) + "\n" + shlex.join([*argv, profile, *self.arguments])
         return subprocess.run([shell, "-c", code], env=self.env, input="unchanged input\n",
                               text=True, capture_output=True, timeout=10)
 
@@ -157,14 +157,17 @@ class NativeCommandTests(unittest.TestCase):
                         self.assertFalse(self.sync_log.exists())
 
     def test_setup_failure_does_not_continue_into_either_native_entry(self):
-        (self.helpers / "sync-local-skill-sources.py").write_text("raise SystemExit(9)\n")
-        for shell in self.shells():
-            for callback in (False, True):
-                with self.subTest(shell=shell, callback=callback):
-                    result = self.run_profile(shell, callback=callback)
-                    self.assertEqual(result.returncode, 9, result.stderr)
-                    self.assertFalse(self.native_log.exists())
-                    self.assertFalse(self.events.exists())
+        for failed in ("sync-local-skill-sources.py", "claude-plugins-sync.py"):
+            for name in ("sync-local-skill-sources.py", "claude-plugins-sync.py"):
+                (self.helpers / name).write_text("raise SystemExit(" + ("9" if name == failed else "0") + ")\n")
+            for shell in self.shells():
+                for callback in (False, True):
+                    for errexit in (False, True):
+                        with self.subTest(helper=failed, shell=shell, callback=callback, errexit=errexit):
+                            result = self.run_profile(shell, callback=callback, errexit=errexit)
+                            self.assertEqual(result.returncode, 9, result.stderr)
+                            self.assertFalse(self.native_log.exists())
+                            self.assertFalse(self.events.exists())
 
 
 if __name__ == "__main__":
