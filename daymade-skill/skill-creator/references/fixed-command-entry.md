@@ -34,20 +34,9 @@ not establish that its contents reached the reader.
 
 Read [release readiness](release-readiness.md) before attesting a release, and
 [materialization budget](materialization-budget.md) before preparing or running
-input copies. For Agent-facing calls, select `materialize_agent`:
-
-```bash
-python3 "<skill-creator-path>/scripts/creator.py" materialize_agent prepare \
-  --manifest "<absolute-input-manifest.json>" --root "<absolute-new-task-root>"
-```
-
-This alias uses the existing materialize owner and supplies its `--summary` for
-`prepare`, `run`, `finish`, `recover`, `register-output` and `retire` unless that
-flag already appears before the child `--` separator. Arguments after `--` remain
-child arguments. The summary projects selected fields; it has no hard byte limit.
-The full receipt and child logs remain on disk. `materialize` and direct
-`scripts/materialize.py` invocation keep full JSON by default, and the Python API
-is unchanged. Use `source_contract check-path` before source edits and
+input copies. For Agent-facing calls, select `materialize_agent`; that SOP owns
+its output modes, receipt/log readback, compatibility and complete workflow.
+Use `source_contract check-path` before source edits and
 `source_contract audit` for source/install delivery checks as specified in
 SKILL.md. The entry does not select, prepare or run an operation on its own.
 
