@@ -2103,25 +2103,26 @@ Falsification-first methodology for network, streaming, and protocol-layer bugs 
 
 ---
 
-### **stepfun-tts** - StepFun StepAudio 2.5 Contextual TTS
+### **stepfun-tts** - StepFun Contextual TTS and Voice Cloning
 
 > **Install**: `claude plugin install daymade-audio@daymade-skills` (suite-only — invoked as `daymade-audio:stepfun-tts`)
 
-Generate Chinese / Japanese speech with `stepaudio-2.5-tts`. Captures the two non-obvious TTS pitfalls that cost hours otherwise: `voice_label` removal (replaced by natural-language `instruction`) and stricter 2.5-era censorship (死/消失/political terms).
+Generate expressive speech and use cloned voices through native HTTP, SSE and WebSocket interfaces. The [API reference](daymade-audio/stepfun-tts/references/api_reference.md) distinguishes current official controls from historical observations and unverified listening effects.
 
 **When to use:**
 - Chinese / Japanese TTS with emotional and prosody control (whisper, pause, stress, mid-sentence pivot)
-- Batch-generating game / app voice lines with per-line `censorship_block` fallback
+- Batch-generating independent game / app voice lines with per-line censorship reporting
+- Uploading reference audio, creating or previewing voices, and inspecting voice inventory
 - Migration from `step-tts-2` to `stepaudio-2.5-tts` (`voice_label` → `instruction` breaking change)
 - Hitting StepFun censorship blocks on previously-fine content
 
 **Key features:**
-- `stepaudio-2.5-tts` with `instruction` (≤200 chars natural-language mood) + inline `()` prosody
-- Bundled `tts_generate.py` (with `--batch <jsonl>`) and `ab_compare.sh`
-- API key resolution: `$STEPFUN_API_KEY` → `${CLAUDE_PLUGIN_DATA}/config.json` fallback
-- Censorship rewrite playbook in `references/migration_from_v2.md`
+- Complete native request/extra channels and preserved raw responses/events
+- Compatible text/batch CLI, full JSON request input and offline request inspection
+- Standard-library HTTP; optional native WebSocket client
+- [Expression controls, lifecycle examples and evidence limits](daymade-audio/stepfun-tts/references/api_reference.md)
 
-**Requirements**: StepFun API key, "Normal" tier (https://platform.stepfun.com/). For ASR / transcription, use the sibling `stepfun-asr` skill below.
+**Requirements**: StepFun credentials and the corresponding account endpoint; see [setup](daymade-audio/stepfun-tts/SKILL.md#authentication-and-prerequisites). For ASR / transcription, use the sibling `stepfun-asr` skill below.
 
 ---
 
@@ -3956,8 +3957,8 @@ Use **terraform-skill** when your `terraform apply` fails at a provisioner step,
 ### For Network, Streaming & Protocol-Layer Debugging
 Use **debugging-network-issues** when symptoms do not match the obvious cause: HTTP/2 `RST_STREAM`, SSE stalls at exactly 60s/100s/130s, "works sometimes but not always" failures, client-side proxy/VPN/TUN misrouting with `ERR_CONNECTION_CLOSED` or `SSL_ERROR_SYSCALL`, or anything that looks like an idle-timeout or rule-override incident through CDN / proxy / CGNAT / TUN chains. The skill replaces assumption-stacking with **layered isolation experiments** — running the same logical request through three or more paths that differ by one hop — plus a counter-review pattern for shipping fixes only after the hypothesis has been falsified, not just confirmed. The cognitive-trap catalog includes reverse-path / directional asymmetry and proxy-node DNS ≠ client DNS.
 
-### For Chinese TTS (StepFun StepAudio 2.5)
-Use **stepfun-tts** for Chinese / Japanese voice synthesis with emotional control via `instruction` + inline `()` prosody. Captures the two breaking changes that ambush new StepAudio 2.5 users: `voice_label` removal and stricter 2.5-era censorship rules. Pair with `step-tts-2` as a per-line fallback for content that triggers censorship.
+### For Speech Synthesis and Voice Cloning
+Use [stepfun-tts](daymade-audio/stepfun-tts/SKILL.md) for contextual speech, clone lifecycle and native streaming. Preserve rejected content and identity choices rather than automatically switching models or voices.
 
 ### For Long-Audio Transcription (StepFun StepAudio 2.5)
 Use **stepfun-asr** for transcribing up to 30-minute Chinese / English audio in a single SSE call (32K context, ~85-101× RTF, no client-side chunking). Hides the #1 trap — the model does NOT live on `/v1/audio/transcriptions`; the wrong endpoint returns a misleading "model not supported" error. Combine with **transcript-fixer** for ASR error correction or with **meeting-minutes-taker** to turn long recordings into structured minutes.
@@ -4028,7 +4029,7 @@ Each skill includes:
 - **douban-skill**: See `douban-skill/SKILL.md` for the export workflow and `douban-skill/references/troubleshooting.md` for the complete log of 7 tested scraping approaches and why each failed
 - **terraform-skill**: See `terraform-skill/SKILL.md` for the full catalogue of operational traps organised by exact error → root cause → copy-paste fix
 - **debugging-network-issues**: See `debugging-network-issues/SKILL.md` for the falsification-first workflow, `debugging-network-issues/references/layered-isolation-experiment.md` for the multi-hop isolation pattern, `debugging-network-issues/references/case-sse-rst-130s.md` for the SSE production case study, and `debugging-network-issues/references/case-proxy-tun-cname-override.md` for the client-side proxy/TUN CNAME-rule-override case study
-- **stepfun-tts**: See `stepfun-tts/SKILL.md` for the Contextual TTS decision tree and `stepfun-tts/references/migration_from_v2.md` for the `voice_label` → `instruction` migration playbook plus the censorship rewrite list
+- **stepfun-tts**: See [the Skill](daymade-audio/stepfun-tts/SKILL.md) for current operations and [the migration reference](daymade-audio/stepfun-tts/references/migration_from_v2.md) for existing step-tts-2 corpora
 - **stepfun-asr**: See `stepfun-asr/SKILL.md` for the SSE-endpoint workflow and the four ASR-side traps (wrong endpoint, Plan-vs-Normal key, repetition hallucination, SSE `error` event). `stepfun-asr/references/api_reference.md` documents the exact JSON request body and SSE event contract for raw HTTP integration
 - **llm-eval-harness**: See `llm-eval-harness/references/evaluation_disciplines.md` for the reasoning behind each discipline (env-var keys, thinking-aware throughput, proxy isolation, probabilistic protocol verdicts) and `llm-eval-harness/references/quality_blind_judge.md` for the independent blind-judge quality method
 - **meme-creator**: See `meme-creator/SKILL.md` for the pipeline and `meme-creator/references/tracking-playbook.md` for the CSRT failure taxonomy and manual-keyframe fallback
@@ -4067,7 +4068,7 @@ Each skill includes:
 - **Python 3.10+** (for the four local history read/continue skills): bundled standard-library readers and validators
 - **uv + Scrapling CLI** (for scrapling-skill): `uv tool install 'scrapling[shell]'` and `scrapling install` for browser-backed fetches
 - **Node.js 18+ + curl + unzip** (for ima-copilot): `npx skills` is fetched on demand from the npm registry; IMA OpenAPI credentials from [https://ima.qq.com/agent-interface](https://ima.qq.com/agent-interface)
-- **StepFun API key** (for stepfun-tts and stepfun-asr — must be "Normal" tier, Plan keys silently fail on audio endpoints): Available at [https://platform.stepfun.com/](https://platform.stepfun.com/) → API Keys
+- **StepFun API key**: Follow the account and endpoint requirements in the selected speech Skill; obtain credentials from [the StepFun platform](https://platform.stepfun.com/)
 - **uv + an endpoint API key** (for llm-eval-harness): `openai` and `aiohttp` are auto-installed via `uv run --with`; the key is passed by env-var name only
 - **FFmpeg + uv** (for meme-creator): `brew install ffmpeg`; bundled scripts resolve their own Python deps via `uv run`; `yt-dlp` only when the source is a URL
 

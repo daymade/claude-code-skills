@@ -1,233 +1,180 @@
 #!/usr/bin/env python3
+"""StepFun speech convenience entry and native HTTP/WebSocket access.
+
+Legacy synthesize(api_key=..., text=...) and single/batch CLI calls remain valid.
+request/extra preserve native fields; conflicting explicit values fail before I/O.
+Protocol details live in stepfun_native.http and stepfun_native.ws.
 """
-stepaudio-2.5-tts synthesis — single line or batch.
-
-Endpoint: POST https://api.stepfun.com/v1/audio/speech
-
-Key things this script handles that naive implementations miss:
-- Does NOT send voice_label (would trigger "voice_label is not supported for v2 models")
-- Puts emotion/prosody into `instruction` (natural-language, ≤200 chars)
-- Preserves inline `()` directives in the text — these are consumed by the TTS as directions, not read aloud
-- Per-line censorship_block fallback: log and skip, don't fail the whole batch
-- Reads API key from $STEPFUN_API_KEY or $CLAUDE_PLUGIN_DATA/config.json
-
-Usage:
-    # Single line
-    python3 tts_generate.py --text "你好，我是蕾格。" --out /tmp/hello.mp3 \\
-        --instruction "温暖的希望感，语气鼓励"
-
-    # Batch from JSONL (one JSON object per line: {"id": "...", "text": "...", "instruction": "..."})
-    python3 tts_generate.py --batch lines.jsonl --out-dir /tmp/voices/
-
-    # With inline prosody directives in the text itself
-    python3 tts_generate.py --text "你好(停顿一下)我是蕾格(轻声)" --out /tmp/hello.mp3
-"""
-
 from __future__ import annotations
 
 import argparse
+import base64
+import hashlib
+import importlib
+import importlib.util
 import json
 import os
 import sys
 import time
-import urllib.error
-import urllib.request
 from pathlib import Path
-from typing import Any, Iterable
-
-API_URL = "https://api.stepfun.com/v1/audio/speech"
-MODEL = "stepaudio-2.5-tts"
-DEFAULT_VOICE = "shuangkuaijiejie"  # 爽快姐姐 — verified in the 2026-04 test pass
 
 
-def load_api_key() -> str:
-    """Env first, then ${CLAUDE_PLUGIN_DATA}/config.json. Fail fast — no placeholder fallback."""
-    k = os.environ.get("STEPFUN_API_KEY", "").strip()
-    if k:
-        return k
-    plugin_data = os.environ.get("CLAUDE_PLUGIN_DATA", "").strip()
-    if plugin_data:
-        cfg = Path(plugin_data) / "config.json"
-        if cfg.exists():
-            try:
-                k = json.loads(cfg.read_text()).get("api_key", "").strip()
-                if k:
-                    return k
-            except json.JSONDecodeError:
-                pass
-    print(
-        "ERROR: no API key found.\n"
-        "  Set $STEPFUN_API_KEY, or create ${CLAUDE_PLUGIN_DATA}/config.json with {\"api_key\": \"...\"}\n"
-        "  Get a key at https://platform.stepfun.com/ → API Keys",
-        file=sys.stderr,
-    )
-    sys.exit(2)
+def _native_package():
+    # llmreg loads this file directly, without adding scripts/ to sys.path.
+    directory = Path(__file__).resolve().with_name("stepfun_native")
+    name = "_stepfun_native_" + hashlib.sha256(str(directory).encode()).hexdigest()[:16]
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, directory / "__init__.py",
+                                                     submodule_search_locations=[str(directory)])
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[name] = module
+        spec.loader.exec_module(module)
+    return name
 
 
-def synthesize(
-    *,
-    api_key: str,
-    text: str,
-    instruction: str | None = None,
-    voice: str = DEFAULT_VOICE,
-    speed: float = 1.0,
-    volume: float = 1.0,
-    response_format: str = "mp3",
-    timeout: int = 300,
-    model: str = MODEL,
-    extra: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    """
-    Call /v1/audio/speech (default model stepaudio-2.5-tts).
-
-    Returns {ok, status, audio_bytes? | json?, err?, censored?}.
-    `extra` is merged into the request body as-is — e.g. {"timestamp": True, "return_url": True,
-    "sample_rate": 24000} makes the server answer with a JSON envelope ({"data": {"url",
-    "subtitles"}}) instead of audio bytes; that envelope comes back under `json`. Parameters are
-    not billed, so callers never have to strip them. censored=True signals a censorship_block
-    which callers should handle individually rather than aborting a batch.
-    """
-    body: dict[str, Any] = {
-        "model": model,
-        "input": text,
-        "voice": voice,
-        "response_format": response_format,
-        "speed": speed,
-        "volume": volume,
-    }
-    if instruction:
-        _limit = 500 if model.startswith("stepaudio-3") else 200
-        if len(instruction) > _limit:
-            return {"ok": False, "status": 0, "err": f"instruction too long: {len(instruction)} > {_limit} chars (model={model})"}
-        body["instruction"] = instruction
-    body.update(extra or {})
-    wants_json = bool((extra or {}).get("return_url") or (extra or {}).get("timestamp"))
-
-    req = urllib.request.Request(
-        API_URL,
-        data=json.dumps(body).encode(),
-        method="POST",
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            payload = resp.read()
-            ctype = (resp.headers.get("Content-Type") or "").lower()
-            if wants_json or "json" in ctype:
-                try:
-                    return {"ok": True, "status": resp.status, "json": json.loads(payload.decode("utf-8"))}
-                except (ValueError, UnicodeDecodeError) as exc:
-                    return {"ok": False, "status": resp.status,
-                            "err": f"expected a JSON envelope (content-type={ctype!r}): {exc}"}
-            return {"ok": True, "status": resp.status, "audio_bytes": payload}
-    except urllib.error.HTTPError as e:
-        raw = e.read().decode(errors="replace")
-        # Detect censorship_block so caller can decide whether to skip
-        censored = "censorship_block" in raw or "blocked" in raw.lower()
-        # Detect the known voice_label migration error and make the message actionable
-        if "voice_label is not supported" in raw:
-            hint = (
-                "\n  HINT: this Contextual TTS model does not accept voice_label. "
-                "Put emotion/prosody into `instruction` (natural language) instead."
-            )
-            raw = raw + hint
-        return {"ok": False, "status": e.code, "err": raw[:500], "censored": censored}
+_package = _native_package()
+http = importlib.import_module(_package + ".http")
+ws = importlib.import_module(_package + ".ws")
+UNSET = http.UNSET
+API_URL, MODEL, DEFAULT_VOICE = http.API_URL, http.MODEL, http.DEFAULT_VOICE
+synthesize = http.synthesize
+build_speech_request = http.build_speech_request
+open_speech_response = http.open_speech_response
+upload_file = http.upload_file
+create_voice = http.create_voice
+preview_voice = http.preview_voice
+list_voices = http.list_voices
+system_voices = http.system_voices
+file_operation = http.file_operation
 
 
-def read_batch(path: Path) -> Iterable[dict[str, Any]]:
-    for line in path.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        yield json.loads(line)
+def load_api_key():
+    key = os.environ.get("STEPFUN_API_KEY", "").strip()
+    if not key:
+        print("ERROR: set STEPFUN_API_KEY in the calling environment; no credential fallback.", file=sys.stderr)
+        raise SystemExit(2)
+    return key
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser(description="stepaudio-2.5-tts single-line or batch synthesis")
-    g = ap.add_mutually_exclusive_group(required=True)
-    g.add_argument("--text", help="Single text to synthesize")
-    g.add_argument("--batch", type=Path, help="JSONL file: {id, text, instruction?} per line")
-    ap.add_argument("--out", help="Output mp3 path (single mode)")
-    ap.add_argument("--out-dir", type=Path, help="Output directory (batch mode)")
-    ap.add_argument("--instruction", help="Global tone directive (natural language, ≤200 chars)")
-    ap.add_argument("--voice", default=DEFAULT_VOICE, help=f"Voice ID (default: {DEFAULT_VOICE})")
-    ap.add_argument("--speed", type=float, default=1.0)
-    ap.add_argument("--volume", type=float, default=1.0)
-    ap.add_argument("--delay-ms", type=int, default=400, help="Sleep between batch requests to avoid throttling")
-    args = ap.parse_args()
+def read_batch(path):
+    for line in Path(path).read_text().splitlines():
+        if line.strip() and not line.lstrip().startswith("#"):
+            yield json.loads(line)
 
-    api_key = load_api_key()
 
-    if args.text:
-        if not args.out:
-            print("ERROR: --out is required with --text", file=sys.stderr)
-            return 2
-        result = synthesize(
-            api_key=api_key,
-            text=args.text,
-            instruction=args.instruction,
-            voice=args.voice,
-            speed=args.speed,
-            volume=args.volume,
-        )
+def _json_argument(value):
+    if value is None:
+        return None
+    return json.loads(Path(value[1:]).read_text() if value.startswith("@") else value)
+
+
+def _json_default(value):
+    if isinstance(value, bytes):
+        return {"encoding": "base64", "data": base64.b64encode(value).decode("ascii")}
+    raise TypeError(type(value).__name__)
+
+
+def _save_result(result, out, record=None):
+    out = Path(out)
+    target = Path(record) if record else out.with_name(out.name + ".response.json")
+    metadata = {key: value for key, value in result.items() if key not in ("audio_bytes", "raw_body")}
+    if result.get("ok") and "audio_bytes" in result:
+        out.write_bytes(result["audio_bytes"])
+        print(f"OK wrote {out} ({len(result['audio_bytes'])} bytes)")
+    raw = result.get("raw_body")
+    if raw is not None:
+        if raw == result.get("audio_bytes") and result.get("ok"):
+            metadata["raw_body_file"] = os.path.relpath(out.resolve(), target.parent.resolve())
+        else:
+            raw_path = out.with_name(out.name + ".response-body")
+            raw_path.write_bytes(raw)
+            metadata["raw_body_file"] = os.path.relpath(raw_path.resolve(), target.parent.resolve())
+    target.write_text(json.dumps(metadata, ensure_ascii=False, indent=2, allow_nan=False,
+                                 default=_json_default) + "\n")
+    print(f"Native response record: {target}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--text")
+    mode.add_argument("--batch", type=Path, help="JSONL: id plus text or full native request")
+    mode.add_argument("--request", type=Path, help="Complete native speech JSON body")
+    parser.add_argument("--extra", help="Native JSON object, or @path/to/file.json")
+    parser.add_argument("--out")
+    parser.add_argument("--out-dir", type=Path)
+    parser.add_argument("--record", type=Path, help="Single-call response metadata path")
+    parser.add_argument("--endpoint", default=API_URL)
+    parser.add_argument("--timeout", type=float, default=300)
+    parser.add_argument("--delay-ms", type=int, default=400)
+    parser.add_argument("--dry-run", action="store_true", help="Print actual native request; no key or network")
+    for name in ("model", "voice", "instruction", "language", "response-format", "stream-format"):
+        parser.add_argument("--" + name, default=UNSET)
+    for name in ("speed", "volume"):
+        parser.add_argument("--" + name, type=float, default=UNSET)
+    parser.add_argument("--sample-rate", type=int, default=UNSET)
+    parser.add_argument("--pronunciation-map", default=UNSET, help="Native JSON pronunciation_map object")
+    for name in ("markdown-filter", "return-url", "timestamp"):
+        parser.add_argument("--" + name, action=argparse.BooleanOptionalAction, default=UNSET)
+    args = parser.parse_args()
+    names = ("model", "voice", "instruction", "language", "response_format", "stream_format",
+             "speed", "volume", "sample_rate", "pronunciation_map", "markdown_filter", "return_url", "timestamp")
+    typed = {name: getattr(args, name) for name in names}
+    if typed["pronunciation_map"] is not UNSET:
+        typed["pronunciation_map"] = _json_argument(typed["pronunciation_map"])
+    extra = _json_argument(args.extra)
+
+    def body_for(item):
+        fields = {**typed, **{name: item[name] for name in names if name in item}}
+        if "text" in item:
+            fields["text"] = item["text"]
+        return build_speech_request(request=item.get("request"),
+                                    extra=http.merge_request(extra, extra=item.get("extra")), **fields)
+
+    if args.batch is None:
+        if not args.dry_run and not args.out:
+            parser.error("--out is required")
+        item = {"request": json.loads(args.request.read_text())} if args.request else {"text": args.text}
+        body = body_for(item)
+        if args.dry_run:
+            print(json.dumps(body, ensure_ascii=False, allow_nan=False))
+            return 0
+        result = synthesize(api_key=load_api_key(), request=body, endpoint=args.endpoint, timeout=args.timeout)
+        _save_result(result, args.out, args.record)
         if not result["ok"]:
             print(f"FAIL status={result['status']}: {result.get('err', '')}", file=sys.stderr)
-            return 1
-        Path(args.out).write_bytes(result["audio_bytes"])
-        print(f"OK wrote {args.out} ({len(result['audio_bytes'])} bytes)")
-        return 0
+        return 0 if result["ok"] else 1
 
-    # Batch mode
-    if not args.out_dir:
-        print("ERROR: --out-dir is required with --batch", file=sys.stderr)
-        return 2
-    args.out_dir.mkdir(parents=True, exist_ok=True)
-    success = 0
-    censored: list[str] = []
-    failed: list[tuple[str, str]] = []
-
+    if not args.dry_run and args.out_dir is None:
+        parser.error("--out-dir is required with --batch")
+    if args.out_dir:
+        args.out_dir.mkdir(parents=True, exist_ok=True)
+    key = None if args.dry_run else load_api_key()
+    failed, censored = [], []
     for item in read_batch(args.batch):
-        line_id = item.get("id")
-        text = item.get("text")
-        if not line_id or not text:
-            print(f"skip (missing id/text): {item}", file=sys.stderr)
+        identifier = item.get("id")
+        if not isinstance(identifier, str) or not identifier or Path(identifier).name != identifier or identifier in (".", ".."):
+            raise ValueError("Each batch item requires a safe, non-empty id")
+        body = body_for(item)
+        if args.dry_run:
+            print(json.dumps({"id": identifier, "request": body}, ensure_ascii=False, allow_nan=False))
             continue
-        instr = item.get("instruction", args.instruction)
-        result = synthesize(
-            api_key=api_key,
-            text=text,
-            instruction=instr,
-            voice=item.get("voice", args.voice),
-            speed=item.get("speed", args.speed),
-            volume=item.get("volume", args.volume),
-        )
-        out_path = args.out_dir / f"{line_id}.mp3"
-        if result["ok"]:
-            out_path.write_bytes(result["audio_bytes"])
-            print(f"  ✓ {line_id} ({len(result['audio_bytes'])} bytes)")
-            success += 1
-        elif result.get("censored"):
-            print(f"  ⚠ {line_id} CENSORED — skipped (consider rewriting or fallback to step-tts-2)")
-            censored.append(line_id)
-        else:
-            err = result.get("err", "")[:160]
-            print(f"  ✗ {line_id} status={result['status']}: {err}", file=sys.stderr)
-            failed.append((line_id, err))
+        result = synthesize(api_key=key, request=body, endpoint=args.endpoint, timeout=args.timeout)
+        extension = body.get("response_format", "mp3")
+        if not isinstance(extension, str) or not extension.isalnum():
+            extension = "audio"
+        _save_result(result, args.out_dir / f"{identifier}.{extension}")
+        if result.get("censored"):
+            censored.append(identifier)
+            print(f"CENSORED {identifier}: no audio generated; no automatic fallback")
+        elif not result["ok"]:
+            failed.append(identifier)
+            print(f"FAIL {identifier}: {result.get('err', '')}", file=sys.stderr)
         time.sleep(args.delay_ms / 1000)
-
-    print("")
-    print(f"Done: {success} ok, {len(censored)} censored, {len(failed)} failed")
     if censored:
-        print(f"  Censored IDs: {', '.join(censored)}")
-    if failed:
-        print("  Failed IDs:")
-        for lid, err in failed:
-            print(f"    {lid}: {err}")
-    return 0 if not failed else 1
+        print("Censored IDs: " + ", ".join(censored))
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

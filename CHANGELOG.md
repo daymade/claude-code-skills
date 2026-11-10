@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **stepfun-tts** (`daymade-audio` v1.58.0): Expose native speech requests, voice/file lifecycle, SSE and WebSocket events while retaining the text/batch CLI. Preserve raw responses and fail on conflicting identities; align control and cloning guidance with current official sources. Offline transport contracts do not establish listening quality.
+
 - **deep-research** (v2.14.0): Bind new research dispatch to the exact transmitted prompt and selected prior conclusions, corrections, unknowns and reopening evidence; reject stale or incomplete continuation bodies before preparation/submission while preserving existing-task recovery.
 
 - **claude-code-hooks** (`daymade-claude-code` v5.1.8 → v5.1.9): Route repository-level recovery incidents to the owning triage reference and remove its derived fact count.

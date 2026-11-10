@@ -1,6 +1,6 @@
 # stepaudio-2.5-tts — Known Issues and Non-Obvious Behavior
 
-> **版本框定**：本文件全部条目为 2.5 时代（2026-04）实测证据。当前默认模型是 `stepaudio-3-tts`（2026-09-16 起）；这些条目多数与模型版本无关（端点形状 / key 类型 / SSE 行为），但与 censorship、幻觉等模型行为相关的条目在 v3 上未经回归实测。
+> Historical observations from the 2.5 test pass. Read the [current API reference](api_reference.md) for supported routes and controls; these cases do not establish current model, key or voice support.
 
 
 Collected from end-to-end testing 2026-04-23. These are things that burned real time to discover; they are not in the official docs.
@@ -31,7 +31,7 @@ See `migration_from_v2.md` for the full blocking→fallback workflow.
 Example from the reference project:
 - `...你能看到我吗？` (10 chars)
 - step-tts-2: 1.24s
-- stepaudio-2.5-tts: 2.57s (**+107%**)
+- stepaudio-2.5-tts: 2.57s
 
 **Cause:** The new model adds a pre-breath, pauses on `...` ellipses, and gives the line emotional weight — all of which lengthens delivery.
 
@@ -54,12 +54,9 @@ The API rejects >1000 char inputs with a 400 error. Split at sentence boundaries
 
 Non-obvious caveat when probing the limit: don't use highly-repetitive test text. The TTS itself accepts repetitive 800-char inputs and produces normal audio, but if you then transcribe that audio with `stepaudio-2.5-asr` for round-trip verification, the ASR can hallucinate 3-4× character expansion (a known ASR-side bug, see the `stepfun-asr` skill's `known_issues.md`). Use varied real-world text for cap-probing tests.
 
-## Voice cloning — not tested in this skill
+## Account and cloning failures
 
-Zero-shot voice cloning (`9.9 元/音色`) is advertised as a headline feature but was not verified in this skill's test pass. If you need voice cloning, check the StepFun docs at https://platform.stepfun.com/docs/zh/api-reference/audio/create-voice and validate on your own data — don't assume the quality claims without a listen test.
-
-## "Plan key" vs "Normal key" — silent audio failure
-
-StepFun sells a cheap "Plan" subscription for text models (step_plan endpoint). **Plan keys cannot call audio endpoints.** This silently manifests as 4xx errors that don't mention auth at all.
-
-If you hit auth-shaped failures and your account has a Plan subscription, verify you're using a Normal key (different value, obtained separately in the StepFun console under the same "API Keys" page).
+Use the [current lifecycle and endpoint guidance](api_reference.md#voice-and-file-lifecycle)
+when cloning or diagnosing account entitlement. The old test pass did not verify
+clone sound quality. Preserve the native error and check the actual account route;
+do not infer a universal key restriction or silently substitute another identity.
