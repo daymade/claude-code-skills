@@ -2,28 +2,23 @@
 
 Read this file before adding reusable corrections, resolving names, editing the people roster, or maintaining a domain context file.
 
-## Contents
-
-- Dictionary-addition decision matrix and corpus probes
-- Project-domain isolation
-- People-roster precedence and variant families
-- Minimum occurrence checks for name candidates
-- Domain correction contexts
-
 ### Dictionary Addition After Fixing
 
 After native AI correction, review all applied fixes and decide which to save. Use this decision matrix:
 
 | Pattern type | Example | Action |
 |-------------|---------|--------|
-| Non-word → correct term | 克劳锐→Claude, cloucode→Claude Code | ✅ Add (zero false positive risk) |
+| Non-word → correct term | 克劳锐→Claude, cloucode→Claude Code | Add for a verified recurring ASR error. |
 | Rare word → correct term | 拉行链→LangChain, 哈金费斯→Hugging Face | ✅ Add (verify it's not a real word first) |
 | Person/company name ASR error | 卡帕西→Karpathy, Anthropics→Anthropic | For an **important recurring** person/entity and a recurring deterministic garble, use the **people roster** or `--add --domain` as described below. A one-off or rare sentence-local name error is a file-only edit; do not create a reusable rule. |
 | Common word → context word | 争→蒸, 减→剪, affect→effect | ❌ Never add as a rule — record the trap + its disambiguating cue in the domain's context file instead (see "Domain Correction Contexts") |
+| Correction valid only in a recurring phrase | Phrase-scoped wording | Use a database context rule through the [CLI reference](script_parameters.md#fix_transcriptionpy). |
+| Confirmed-correct entity repeatedly reopened | A verified spelling | Use a confirmed-correct record in the [domain context](domain_context_guide.md#format). |
+| One-off sentence-local wording | An isolated dictation error | Edit the file only; do not add a reusable rule. |
 | Real brand → different brand | Xcode→Claude Code, Clover→Claude | ❌ Skip (real words in other contexts) |
 | Real name → different real name | `李明`→`黎明` (two real people in different projects) | ❌ Never a rule — same hazard as real brand → brand, but it corrupts a real person's name. Domain context trap with a disambiguating cue instead (see [native_ai_full_workflow.md](native_ai_full_workflow.md)) |
 
-**The middle path, and it applies to exactly one of the ❌ rows.** The
+**The common-word exception.** The
 *common word → context word* row (`争`→`蒸`) forbids a **bare** common word as a
 rule, because it fires everywhere the word is legitimately used. It does not
 forbid the same fix carried by enough surrounding text that the phrase only
@@ -123,8 +118,24 @@ Use these wholly synthetic contrasts, without adding their mappings:
 | `苓可公司预算35万` / a roster variant proposes `苓可`→`Nora` | Keep the company occurrence unless source evidence identifies the company wording. Rejecting this candidate does not disable the person's confirmed variant elsewhere. |
 | `让岑若正有这个能力` / a short rule proposes `岑若`→`岑若辰` | Do not manufacture `岑若辰正`. Judge the full `岑若正` name as its own occurrence; preserve it pending identity evidence. A short-match `kept_original` verdict does not settle the longer name's spelling. |
 
-Stage 1 matches registered variants against the source once: the longest variant
-at an occurrence wins, including when deferred, and replacement output is not
+For a safe-mode false positive, record `kept_original` with its occurrence reason.
+If the full name remains uncertain, enqueue the complete literal span separately;
+retain its context/offset and the original speaker, timestamp and numbers. Keep
+ordinary wording on the [written-wording route](review_queue_dashboard.md#written-evidence-for-ordinary-wording)
+when supported, or pending when not. Do not turn a one-off adjudication into a bare
+dictionary replacement or use `--apply-all` to silence a disagreement.
+
+### Stage 1 variant matching
+
+`--apply-domain` trusts rules from the explicitly selected domains for ordinary
+risk scoring; without a specific domain selection it adds no trust. Match-time
+refusals remain active; text-context vetoes follow the
+[Domain Context Guide](domain_context_guide.md#format).
+The occurrence guard below can still defer a trusted rule.
+
+Stage 1 matches registered variants against the source once. At the leftmost
+matching position, the longest variant starting there wins, including when
+deferred, and replacement output is not
 matched again. For a same-initial, 2/3-character CJK variant expanded by one
 character, an adjacent standalone CJK tail raises the occurrence to review even
 with `--apply-domain`; its queue provenance is
@@ -132,14 +143,7 @@ with `--apply-domain`; its queue provenance is
 (including company suffixes), `的/地/得`, punctuation or whitespace supplies a
 boundary; missing segmentation leaves an adjacent CJK tail deferred. This narrow
 guard preserves raw text rather than identifying a person or removing a tail.
-`--apply-all` remains an explicit override of risk deferral.
-
-For a safe-mode false positive, record `kept_original` with its occurrence reason.
-If the full name remains uncertain, enqueue the complete literal span separately;
-retain its context/offset and the original speaker, timestamp and numbers. Keep
-ordinary wording on the [written-wording route](review_queue_dashboard.md#written-evidence-for-ordinary-wording)
-when supported, or pending when not. Do not turn a one-off adjudication into a bare
-dictionary replacement or use `--apply-all` to silence a disagreement.
+Explicit override options are defined in the [CLI reference](script_parameters.md#fix_transcriptionpy).
 
 ### Why this beats a one-off script (the core value, do not skip)
 

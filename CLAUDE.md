@@ -511,7 +511,9 @@ For a failed queue operation, enter
 before choosing the continuation route.
 For same-line repeats or a legacy row needing an explicit slot, follow
 [occurrence anchoring](daymade-audio/transcript-fixer/references/review_queue_dashboard.md#same-line-occurrence-anchoring).
-For company slots or a short match inside a longer name, follow
+For Stage 1 domain trust, overlapping variants or deferred short-name expansions, follow
+[variant matching](daymade-audio/transcript-fixer/references/dictionary_identity_and_context.md#stage-1-variant-matching).
+For company slots or human adjudication of a short match inside a longer name, follow
 [minimum occurrence checks](daymade-audio/transcript-fixer/references/dictionary_identity_and_context.md#minimum-occurrence-checks-for-name-candidates).
 For finite written wording evidence, follow
 [written wording evidence](daymade-audio/transcript-fixer/references/review_queue_dashboard.md#written-evidence-for-ordinary-wording).
