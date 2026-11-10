@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **stepfun-tts** (`daymade-audio` v1.58.0): Expose native speech requests, voice/file lifecycle, SSE and WebSocket events while retaining the text/batch CLI. Preserve raw responses and fail on conflicting identities; align control and cloning guidance with current official sources. Offline transport contracts do not establish listening quality.
+- **frontend-visual-qa** (v1.21.41 → v1.21.42): Check direct entry before warm returns so another route's stylesheet cannot mask an unstyled shared navigation; retain separate visual, interaction and delivery conclusions.
 - **git-safety-net** (v1.27.1 → v1.28.0): Add resumable, preparation-only recovery for clean linked worktrees and their initialized submodules. Reuse completed recovery carriers, scope borrowed objects to required dependencies, and verify current state before separately authorized removal. Change type: additive script capability; existing retirement gates remain in force.
 - **frontend-visual-qa** (v1.21.40 → v1.21.41): Calibrate collection readiness, exact original reading, return context, scope-bound drafts and real Escape against hidden retained content with synthetic healthy and faulty browser journeys. Change type: sampled acceptance-recipe extension.
 

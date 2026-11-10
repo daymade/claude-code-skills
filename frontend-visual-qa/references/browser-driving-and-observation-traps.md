@@ -114,6 +114,31 @@ second-order trap: the reader checks the *stale* one, concludes "this is the old
 version", and dismisses a change that did ship. If an artifact carries a version
 in more than one place, they must be written together.
 
+### Cold entry before warm return
+
+For an unstyled-page complaint or a change to shared route styles, have the auditor
+open the exact target first through the project's authorized browser harness,
+then compare a return after visiting an adjacent route. Keep the actor, data,
+viewport and source identity fixed. Here "cold entry" means the target has not
+inherited another feature route's styles; it does not claim every HTTP cache is cold.
+
+**Failing case:** a shared navigation renders as plain text on direct entry, but
+looks correct after another page has loaded its stylesheet. A screenshot taken
+only after that visit masks the defect. CSS rules existing in the bundle, all
+links appearing in the DOM, or a successful warm return cannot clear direct entry.
+
+Record the first-entry pixels and the affected region's computed layout before
+visiting another feature. Then visit the adjacent consumer, return, and compare
+the same region. If styling appears only on return, inspect stylesheet ownership
+and imports; after an authorized fix, rerun direct entry before the warm path.
+Do not navigate around until the target looks right and preserve only that result.
+
+**Healthy control:** direct entry already has the intended navigation, spacing and
+current-item treatment, and the same relationships survive the adjacent-route
+return. That supports the observed visual contract; clicks, permissions and delivery
+identity retain their separate checks. Stop at the reported target and affected
+shared consumers, without turning this into every-route cache testing.
+
 Record this state from the rendered page:
 
 ```js
