@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **prior-work-retrieval** (`daymade-claude-code` v5.1.6 → v5.1.7): Match complete English code/codebase tokens so Codex and code identifiers do not trigger prior-work retrieval.
+
 - **report-with-html** (v1.6.0 → v1.6.1): Keep preview limits with their executable owner and route existing-page hosting and missing-asset recovery from repository instructions. Runtime behavior is unchanged.
 
 - **transcript-fixer** (`daymade-audio` v1.57.7 → v1.57.8): Route reviewed-file continuation through execution-blocker inspection before choosing more audio evidence, and align the repository entry with the finite written-wording contract.
