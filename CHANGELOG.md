@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.21.40 → v1.21.41): Check direct entry before warm returns so another route's stylesheet cannot mask an unstyled shared navigation; retain separate visual, interaction and delivery conclusions.
+
 - **deep-research** (v2.14.0): Bind new research dispatch to the exact transmitted prompt and selected prior conclusions, corrections, unknowns and reopening evidence; reject stale or incomplete continuation bodies before preparation/submission while preserving existing-task recovery.
 
 - **claude-code-hooks** (`daymade-claude-code` v5.1.8 → v5.1.9): Route repository-level recovery incidents to the owning triage reference and remove its derived fact count.
