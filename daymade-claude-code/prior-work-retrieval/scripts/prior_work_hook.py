@@ -52,7 +52,7 @@ PRIOR_WORK_STRONG_SIGNAL = re.compile(
     r"(?:别|不要|不想|不希望)(?:你)?\s*(?:重复|重新|重造|再造)|"
     r"复用|重用|沿用|类似的问题|类似问题|当时用的|"
     r"什么来着|叫什么来着|哪个来着|用的是?哪个|"
-    r"项目最近进展|会议逐字稿|微信记录|prior work|previous work|existing code(?:base)?\b|"
+    r"项目最近进展|会议逐字稿|微信记录|prior work|previous work|existing code(?:base)?s?\b|"
     r"reuse|did this before|"
     # `history` only counts with a carrier in front of it. Bare `history`
     # matched `git history`, `browser history`, and this repo's own

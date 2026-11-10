@@ -321,6 +321,7 @@ class PriorWorkHookTests(unittest.TestCase):
                 "codex_interactive_observer_bindings / interactive_observer path."
             ),
             "Inspect existing code_identifier metadata only.",
+            "Inspect existing codebases_identifier metadata only.",
             "Review existing CODEX configuration only.",
         ]
         for prompt in negatives:
@@ -332,6 +333,10 @@ class PriorWorkHookTests(unittest.TestCase):
             "Please inspect existing codebase before implementation.",
             "Review EXISTING CODE before changing behavior.",
             "Reuse the EXISTING CODEBASE for this parser.",
+            "Please inspect existing codes before implementation.",
+            "Please inspect existing codebases before implementation.",
+            "Please inspect EXISTING CODES before implementation.",
+            "Please inspect EXISTING CODEBASES before implementation.",
         ]
         for prompt in positives:
             with self.subTest(prompt=prompt):
