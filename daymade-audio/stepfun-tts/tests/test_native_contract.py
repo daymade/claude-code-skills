@@ -151,6 +151,19 @@ class HTTPContractTest(unittest.TestCase):
             self.assertEqual(response.read(2), b"sy")
             self.assertEqual(response.read(), b"nthetic-audio")
 
+    def test_malformed_sse_audio_retains_the_native_failure_envelope(self):
+        self.mime = "text/event-stream"
+        for value in (None, 17, ["YQ=="]):
+            with self.subTest(audio=value):
+                packet = {"type": "speech.audio.delta", "audio": value}
+                self.payload = ("data: " + json.dumps(packet) + "\n\ndata: [DONE]\n\n").encode()
+                result = entry.synthesize(api_key=KEY, text="字", stream_format="sse")
+                self.assertFalse(result["ok"])
+                self.assertEqual(result["status"], 200)
+                self.assertEqual(result["raw_body"], self.payload)
+                self.assertEqual(result["events"][0]["data"], packet)
+                self.assertEqual(result["headers"]["X-Request-Id"], "trace-fixture")
+
     def test_http_error_is_complete_and_never_retries_another_identity(self):
         raw = json.dumps({"error": {"type": "voice_id_invalid", "message": "x" * 2000}}).encode()
         self.error = urllib.error.HTTPError(HTTP.API_URL, 400, "fixture", {"Content-Type": "application/json"}, io.BytesIO(raw))
@@ -294,6 +307,16 @@ class EntryContractTest(unittest.TestCase):
                                 capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["input"], "正文")
+
+    def test_batch_row_fields_keep_precedence_over_global_cli_defaults(self):
+        with tempfile.TemporaryDirectory() as directory:
+            batch = Path(directory, "batch.jsonl")
+            batch.write_text(json.dumps(dict(id="fixture", text="正文", voice="voice-row")))
+            result = subprocess.run([sys.executable, str(SCRIPT), "--batch", str(batch),
+                                     "--voice", "voice-global", "--dry-run"],
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads(result.stdout)["request"]["voice"], "voice-row")
 
     def test_cli_keeps_json_body_and_cross_directory_record_binding(self):
         with tempfile.TemporaryDirectory() as directory:

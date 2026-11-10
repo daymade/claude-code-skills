@@ -58,6 +58,7 @@ body, lifecycle and event examples.
 - Use `--batch input.jsonl --out-dir /absolute/new-output` for independent
   voice lines. A censored line is reported and skipped while the batch continues;
   other failures return failure. No model or voice is changed automatically.
+  Global CLI options serve as batch defaults; explicit row fields take precedence.
 - Use [the native reference](references/api_reference.md) for HTTP streaming,
   WebSocket events, upload, clone, preview and inventory operations.
 

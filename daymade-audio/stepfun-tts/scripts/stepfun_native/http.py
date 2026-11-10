@@ -133,7 +133,7 @@ def _read_result(response, *, endpoint, request):
             result.update(audio_bytes=b"".join(audio), stream_complete=complete)
             if errors or not complete:
                 result.update(ok=False, err="Speech stream error" if errors else "Speech stream ended without completion")
-        except (ValueError, UnicodeError, KeyError) as exc:
+        except (ValueError, UnicodeError, KeyError, TypeError) as exc:
             result.update(ok=False, err=f"Invalid speech event stream: {exc}")
     elif "json" in content_type:
         try:

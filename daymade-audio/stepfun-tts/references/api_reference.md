@@ -72,6 +72,9 @@ This is an input-design example, not a verified audible result. Full
 Typed arguments and `extra` add native fields without a whitelist. A duplicate
 with a different explicit value raises before I/O; equal duplicates are accepted.
 Unknown future fields are forwarded, not represented as tested capabilities.
+In the compatible batch CLI, global options serve as defaults and row fields
+take precedence. Conflict checking applies when composing native request,
+typed and extra channels after that explicit per-row selection.
 
 ## Native responses and streaming
 

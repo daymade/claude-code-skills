@@ -98,7 +98,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--text")
-    mode.add_argument("--batch", type=Path, help="JSONL: id plus text or full native request")
+    mode.add_argument("--batch", type=Path,
+                      help="JSONL: id plus text or full request; row fields override global option defaults")
     mode.add_argument("--request", type=Path, help="Complete native speech JSON body")
     parser.add_argument("--extra", help="Native JSON object, or @path/to/file.json")
     parser.add_argument("--out")
