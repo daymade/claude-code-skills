@@ -599,6 +599,11 @@ manifest and recheck both the tip and retained carrier immediately before deleti
 containment after a squash is not this exact-object exemption. Unique WIP, ignored files, independent
 clone metadata and submodule objects still need their existing preservation checks.
 
+For a clean linked worktree with initialized submodules or borrowed module objects, use
+[the resumable worktree preparation helper](references/worktree-retirement-helper.md).
+It checkpoints recovery stages and reuses verified carriers; it never removes the target or
+replaces Mode E's containment, ownership, occupancy and action-time checks.
+
 ```bash
 # Only when the preservation decision requires a recovery export.
 SKILL_ROOT="<absolute-loaded-git-safety-net-directory>"
@@ -780,6 +785,7 @@ never tell a user to run bare `git_verify_branch_merged.sh` unless `command -v` 
 | `scripts/git_export_before_drop.sh --verify-current BUNDLE` | Fail if any bundled ref moved or disappeared since export | Nothing (read-only) |
 | `scripts/git_verify_closeout.py --repo PATH --expected-common-dir PATH --target-manifest TSV --expected-manifest-sha256 SHA256 [postcondition options]` | Verify only requested resource postconditions against the first frozen original manifest: ref absence or explicit caller retention, exact path/worktree absence, and optional primary-main/cleanliness conditions. JSON keeps business content delivery unassessed; initial-inventory completeness, semantic delivery, publication, and deletion authority remain with the caller | Nothing (read-only, no fetch or writes to refs, objects, index, worktrees, or files) |
 | `scripts/git_prepare_clone_retirement.sh --clone PATH --survivor PATH --out DIR [--full-backup]` | Default: prove every clone object retained by an independent survivor's refs, record exact recovery identities and copy only unique metadata. Refuse gaps rather than silently creating a full bundle; `--full-backup` explicitly retains the self-contained export branch. Run `--verify-current DIR` after standalone occupancy and immediately before the authorized removal/move. | Writes only the new external evidence directory and any necessary metadata/export; disables lazy fetch/fsmonitor; never moves/deletes or changes refs |
+| `scripts/git_prepare_worktree_retirement.py prepare --worktree PATH --out DIR [--resume]` | Prepare/reuse scoped root and module recovery carriers plus ignored-file inventory. Follow [the helper's prerequisites, final verification and recovery readback](references/worktree-retirement-helper.md). | Writes only external evidence; never changes source refs or removes a worktree |
 
 These helpers run from the repository root. They use read-only enumeration/configuration commands such as
 `find`, `config`, `symbolic-ref`, `submodule status`, `status`, `cat-file`, `rev-list`, `rev-parse`,
