@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **terraform-skill** (v1.5.14 → v1.5.15): Preserve verified application facts across cleanup failures, distinguish recovery after completed or partial apply, and bind promotion to artifact identity and explicit controller compatibility.
+- **git-safety-net** (v1.27.1 → v1.28.0): Add resumable, preparation-only recovery for clean linked worktrees and their initialized submodules. Reuse completed recovery carriers, scope borrowed objects to required dependencies, and verify current state before separately authorized removal. Change type: additive script capability; existing retirement gates remain in force.
+- **frontend-visual-qa** (v1.21.40 → v1.21.41): Calibrate collection readiness, exact original reading, return context, scope-bound drafts and real Escape against hidden retained content with synthetic healthy and faulty browser journeys. Change type: sampled acceptance-recipe extension.
 
 - **deep-research** (v2.14.0): Bind new research dispatch to the exact transmitted prompt and selected prior conclusions, corrections, unknowns and reopening evidence; reject stale or incomplete continuation bodies before preparation/submission while preserving existing-task recovery.
 

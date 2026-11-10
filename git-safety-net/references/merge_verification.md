@@ -987,10 +987,14 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
    bundle does not contain them.
    For every local submodule repository threatened by removal, obtain preservation authority for
    that exact repository and preserve it independently. A superproject bundle records a gitlink,
-   not the module's objects. Freeze its HEAD, refs/symbolic targets, reflogs and all local objects
-   (`git -C <module> cat-file --batch-all-objects --batch-check`), including reflog-only and
-   unreachable objects. Create and verify a module HEAD/ref bundle and an external copy of its
-   complete resolved Git/common metadata and object stores; scope those copies to the exact
+   not the module's objects. Freeze its HEAD, refs/symbolic targets, reflogs and all physically
+   owned loose/packed objects, including reflog-only and unreachable objects, plus their required
+   dependency closure. With alternates, `cat-file --batch-all-objects` also enumerates the borrowed
+   store; do not treat unrelated borrowed objects as threatened module-owned payload.
+   [The resumable helper](worktree-retirement-helper.md) prepares and verifies complete metadata
+   plus one self-contained object carrier for supported module layouts, reusing completed stages
+   after interruption. The manual alternative is a module HEAD/ref bundle plus an external copy
+   of complete resolved Git/common metadata and object stores. Scope preservation to the exact
    threatened, authorized module repositories, not unrelated primary-checkout files or the
    superproject's entire common directory. A ref bundle alone omits unreachable objects and
    reflog records. Verify copied paths, entry types, modes and hashes, then read back
