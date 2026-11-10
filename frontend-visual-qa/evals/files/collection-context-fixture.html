@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Collection context calibration</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; color: #202a34; background: #f5f7fa; font: 16px/1.5 Arial, sans-serif; }
+  header, main { max-width: 1100px; margin: auto; padding: 20px; }
+  nav { display: flex; gap: 12px; align-items: center; }
+  button, select, input { font: inherit; padding: 8px 12px; }
+  button { cursor: pointer; }
+  button[aria-pressed=true] { background: #173f70; color: white; }
+  #collection, #reader { background: white; padding: 20px; border: 1px solid #ccd5df; }
+  #list { height: 300px; overflow: auto; border: 1px solid #ccd5df; margin-top: 16px; }
+  ul { list-style: none; padding: 0; margin: 0; }
+  li { min-height: 110px; padding: 12px; border-bottom: 1px solid #dde3eb; }
+  li[aria-current=true] { box-shadow: inset 4px 0 #173f70; background: #edf4ff; }
+  .summary { margin: 8px 0 0; }
+  #editor { position: fixed; inset: 20% 25% auto; padding: 24px; background: white; border: 2px solid #173f70; }
+  #editor input { display: block; width: 100%; margin: 10px 0 20px; }
+  .retained-tree { display: none; }
+  [hidden] { display: none !important; }
+</style>
+<header>
+  <h1>Research collection</h1>
+  <p>Isolated calibration: all scopes, records and text are synthetic.</p>
+  <nav aria-label="Scope">
+    <button id="scope-cedar" aria-pressed="true">Cedar scope</button>
+    <button id="scope-amber" aria-pressed="false">Amber scope</button>
+    <button id="edit">Edit task</button>
+  </nav>
+</header>
+<main>
+  <section id="collection" aria-label="Collection">
+    <h2 id="scope-label">Cedar scope</h2>
+    <label>Filter <select id="filter"><option value="all">All records</option><option value="tracked">Tracked records</option></select></label>
+    <p id="selection">No record selected</p>
+    <p id="summary-phase" role="status">Reading summaries</p>
+    <div id="list" tabindex="0" aria-label="Scrollable records"><ul id="rows"></ul></div>
+  </section>
+  <section id="reader" aria-label="Report reader" hidden>
+    <button id="return">Return to collection</button>
+    <h2 id="report-title"></h2>
+    <p id="report-key"></p>
+    <p id="report-body"></p>
+  </section>
+</main>
+<section id="editor" role="dialog" aria-modal="true" aria-labelledby="editor-title" hidden>
+  <h2 id="editor-title">Task draft</h2>
+  <label>Task name <input id="draft" autocomplete="off"></label>
+  <button id="close">Close and keep draft</button>
+  <button id="discard">Discard draft</button>
+</section>
+<div class="retained-tree" aria-hidden="true">
+  <section role="dialog" aria-modal="true" id="cached-modal">Inactive cached decision</section>
+  <article id="cached-report">Cached report sentinel: this is not current content.</article>
+</div>
+<script>
+  const fault = new URLSearchParams(location.search).get('fault');
+  const byId = id => document.getElementById(id);
+  const scopes = {
+    cedar: Array.from({ length: 12 }, (_, index) => ({
+      id: `cedar-${index + 1}`, report: `report-cedar-${index + 1}`,
+      title: 'Quarterly review', tracked: index < 10,
+      summary: `Cedar record ${index + 1}: compare the current shipment with the prior plan.`,
+      body: `Cedar original ${index + 1}: shipment is ${40 + index} units; the prior plan is 50 units.`
+    })),
+    amber: [{ id: 'amber-1', report: 'report-amber-1', title: 'Quarterly review', tracked: true,
+      summary: 'Amber record 1: follow the deferred inspection.', body: 'Amber original 1: inspection is deferred until Friday.' }]
+  };
+  let scope = 'cedar';
+  let selected = null;
+  let returnState;
+  let summaryEpoch = 0;
+  const drafts = new Map();
+  const draftKey = () => fault === 'scope-draft' ? 'shared' : scope;
+  function renderRows() {
+    const epoch = ++summaryEpoch;
+    byId('rows').replaceChildren();
+    byId('summary-phase').textContent = 'Reading summaries';
+    for (const record of scopes[scope].filter(record => byId('filter').value !== 'tracked' || record.tracked)) {
+      const row = document.createElement('li');
+      row.dataset.record = record.id;
+      row.setAttribute('aria-current', String(record.id === selected));
+      const open = document.createElement('button');
+      open.textContent = `Read ${record.id}: ${record.title}`;
+      open.addEventListener('click', () => openReport(record));
+      const summary = document.createElement('p');
+      summary.className = 'summary';
+      summary.textContent = 'Reading summary';
+      row.append(open, summary);
+      byId('rows').append(row);
+    }
+    setTimeout(() => {
+      if (epoch !== summaryEpoch) return;
+      for (const row of byId('rows').children) {
+        const record = scopes[scope].find(record => record.id === row.dataset.record);
+        row.querySelector('.summary').textContent = fault === 'summaries'
+          ? 'Could not read summary. Retry.' : record.summary;
+      }
+      byId('summary-phase').textContent = 'Summary requests settled';
+    }, 100);
+  }
+  function openReport(record) {
+    selected = record.id;
+    byId('selection').textContent = `Selected: ${selected}`;
+    for (const row of byId('rows').children) row.setAttribute('aria-current', String(row.dataset.record === selected));
+    returnState = { scroll: byId('list').scrollTop, filter: byId('filter').value };
+    const original = fault === 'identity' ? scopes[scope][0] : record;
+    byId('report-title').textContent = original.title;
+    byId('report-key').textContent = `Original: ${original.report}`;
+    byId('report-body').textContent = original.body;
+    const url = new URL(location.href);
+    url.searchParams.set('report', original.report);
+    history.replaceState(null, '', url);
+    byId('collection').hidden = true;
+    byId('reader').hidden = false;
+    byId('return').focus();
+  }
+  function closeReport() {
+    byId('reader').hidden = true;
+    byId('collection').hidden = false;
+    const url = new URL(location.href);
+    url.searchParams.delete('report');
+    history.replaceState(null, '', url);
+    if (fault === 'return') {
+      byId('filter').value = 'all';
+      selected = null;
+      byId('selection').textContent = 'No record selected';
+      renderRows();
+      byId('list').scrollTop = 0;
+    } else {
+      byId('filter').value = returnState.filter;
+      byId('list').scrollTop = returnState.scroll;
+      byId('rows').querySelector(`[data-record="${selected}"] button`).focus({ preventScroll: true });
+    }
+  }
+  function closeEditor(discard = false) {
+    if (discard && fault !== 'discard') drafts.delete(draftKey());
+    if (!discard && fault === 'close-draft') drafts.delete(draftKey());
+    byId('editor').hidden = true;
+    byId('edit').focus();
+  }
+  for (const next of Object.keys(scopes)) byId(`scope-${next}`).addEventListener('click', () => {
+    closeEditor();
+    scope = next;
+    selected = null;
+    for (const key of Object.keys(scopes)) byId(`scope-${key}`).setAttribute('aria-pressed', String(key === scope));
+    byId('scope-label').textContent = `${scope[0].toUpperCase() + scope.slice(1)} scope`;
+    byId('selection').textContent = 'No record selected';
+    byId('filter').value = 'all';
+    byId('reader').hidden = true;
+    byId('collection').hidden = false;
+    renderRows();
+  });
+  byId('filter').addEventListener('change', renderRows);
+  byId('return').addEventListener('click', closeReport);
+  byId('edit').addEventListener('click', () => {
+    byId('draft').value = drafts.get(draftKey()) || '';
+    byId('editor').hidden = false;
+    byId('draft').focus();
+  });
+  byId('draft').addEventListener('input', () => drafts.set(draftKey(), byId('draft').value));
+  byId('close').addEventListener('click', () => closeEditor());
+  byId('discard').addEventListener('click', () => closeEditor(true));
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    if (fault === 'hidden-escape' && document.querySelector('[role="dialog"]')) return;
+    if (!byId('editor').hidden) closeEditor();
+    else if (!byId('reader').hidden) closeReport();
+  });
+  renderRows();
+</script>
+</html>
