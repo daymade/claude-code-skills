@@ -125,7 +125,7 @@ separate outcomes that a row-count or DOM-presence assertion conflates:
 
 | State or action | Observe through the ordinary UI | Counterexample to reject |
 |---|---|---|
-| Collection rows have arrived | Read the promised summary for each expected item; distinguish true missing data from a failed read. | Ten rows exist, but all ten summaries say the read failed. This is not ten usable summaries or a healthy empty collection. |
+| Collection rows have arrived | Read the promised summary for each expected item; distinguish true missing data from a failed read. | Rows exist, but their summaries say the read failed. This is neither usable summary content nor a healthy empty collection. |
 | Open a report with a repeated title | Check the requested report identity, its readable body and addressability where promised. | A readable report with the same title belongs to another record. |
 | Return to the collection | Compare the selected record, filter, actual scroll owner and focus against the bound return policy. | The exact report opens correctly, but returning clears the filter and moves the reader to the top. |
 | Close, discard, then change scope | Exercise each action separately under the product's draft policy. | Closing loses unfinished input; explicit discard resurrects it; another scope inherits it. Preserving everything indiscriminately also fails. |
@@ -146,8 +146,8 @@ project** with an installed Chromium, run
 project's `playwright`, `@playwright/test` or `playwright-core` dependency from the
 working directory. Missing renderer/dependency fails explicitly; this command does
 not install one. Set `COLLECTION_CONTEXT_EVIDENCE_DIR` to retain screenshots and
-observations. The same output-level assertions accept three healthy journeys and
-reject seven deliberately faulty controls. The fixture declares one draft policy;
+observations. The same output-level assertions distinguish healthy journeys from
+deliberately faulty controls. The fixture declares its draft policy;
 it does not impose that policy on another application or certify its semantics.
 These source-development resources are excluded from the runtime package and are
 not prerequisites for ordinary audits or evidence of a deployed product passing.

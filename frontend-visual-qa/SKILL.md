@@ -245,6 +245,10 @@ run final evidence on the original URL. The detailed page-state probe,
 §2–§5. Record the final URL and dimensions before CSS diagnosis, then restore
 the user's expected viewport when finished.
 
+For unstyled-page complaints or shared route-style changes, run the
+[cold-entry then warm-return check](references/browser-driving-and-observation-traps.md#cold-entry-before-warm-return)
+before accepting a correctly styled return visit.
+
 For a data-bearing Demo that promises existing activity but renders zero/empty,
 load the reference's
 [Data-bearing Demo states](references/browser-driving-and-observation-traps.md#data-bearing-demo-states)
