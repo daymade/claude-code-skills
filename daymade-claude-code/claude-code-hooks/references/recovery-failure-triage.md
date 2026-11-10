@@ -37,10 +37,9 @@ manufacture a new ACK to make the mixed observation pass.
 
 ## Prove the original obligation cleared
 
-Distinguish three facts: source preparation completed, the intended consumer
-received the delivery, and the native observation can be attributed to the
-invocation. A producer's `ready` label or exit zero establishes neither of the
-latter facts by itself.
+Distinguish source preparation, receipt by the intended consumer and attribution
+of the native observation to the invocation. A producer's `ready` label or exit
+zero does not establish consumer receipt or invocation attribution by itself.
 
 For coverage-based recovery, query equality and evidence coverage are different
 questions. Follow the owning rule's exact coverage contract. A wider count alone
