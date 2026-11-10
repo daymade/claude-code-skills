@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **peer-message** (v1.25.4 → v1.25.5): Recover a cache-missing native inbound from its exact original host event through the installed history reader; preserve the complete carrier and existing receive integrity and expiry checks.
+
 - **transcript-fixer** (daymade-audio v1.57.9 -> v1.57.10): align domain-trust and guard documentation with the existing runtime; route startup and Native instructions to the owning contracts, and remove derived navigation and guard counts.
 
 - **transcript-fixer** (`daymade-audio` v1.57.8 → v1.57.9): Prefer complete overlapping entity variants and defer ambiguous short-name expansions rather than produce an unverified name with a residual suffix.
