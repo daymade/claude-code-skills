@@ -72,6 +72,7 @@ python-unittest  daymade-audio/asr-transcribe-to-text/tests
 python-unittest  daymade-audio/asr-transcribe-to-text/scripts/review-workbench/tests
 node-test        daymade-audio/asr-transcribe-to-text/scripts/review-workbench/tests
 python-unittest  daymade-audio/transcript-fixer/tests
+python-unittest  daymade-audio/stepfun-tts/tests
 python-unittest  feishu-doc-scraper/tests
 python-unittest  ima-copilot/tests
 python-unittest  peer-message/tests

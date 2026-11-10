@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **stepfun-tts** (`daymade-audio` v1.58.0): Expose native speech requests, voice/file lifecycle, SSE and WebSocket events while retaining the text/batch CLI. Preserve raw responses and fail on conflicting identities; align control and cloning guidance with current official sources. Offline transport contracts do not establish listening quality.
 - **frontend-visual-qa** (v1.21.41 → v1.21.42): Check direct entry before warm returns so another route's stylesheet cannot mask an unstyled shared navigation; retain separate visual, interaction and delivery conclusions.
 - **frontend-visual-qa** (v1.21.43): Route collection and retained-context checks from project instructions and remove derived fixture counts from the acceptance recipe. Route interrupted worktree preservation to its existing helper.
 

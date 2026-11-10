@@ -2118,25 +2118,26 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 
 ---
 
-### **stepfun-tts** - 阶跃 StepAudio 2.5 Contextual TTS
+### **stepfun-tts** - 阶跃情境语音合成与声音克隆
 
 > **安装**：`claude plugin install daymade-audio@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-audio:stepfun-tts`）
 
-用 `stepaudio-2.5-tts` 做中文 / 日语语音合成。封装了 TTS 部分两个会浪费时间的非显然坑：`voice_label` 被移除（改用自然语言 `instruction`）以及 2.5 时代更严格的审查（死/消失/政治敏感词）。
+通过原生 HTTP、SSE 和 WebSocket 使用表达控制与克隆音色。[API 参考](daymade-audio/stepfun-tts/references/api_reference.md) 区分现行官方能力、历史观察和仍需试听验证的效果。
 
 **使用场景：**
 - 带情感和韵律控制的中 / 日语 TTS（耳语、停顿、加重、句中情绪转折）
-- 批量生成游戏 / 应用语音条目，每条单独处理 `censorship_block` 兜底
+- 批量生成独立游戏 / 应用语音条目，逐条报告审查失败
+- 上传参考音频，创建、预览音色并查询音色清单
 - 从 `step-tts-2` 迁移到 `stepaudio-2.5-tts`（`voice_label` → `instruction` 是破坏性变更）
 - 之前能合成的内容现在被审查拦截
 
 **主要功能：**
-- `stepaudio-2.5-tts`：用 `instruction`（≤200 字自然语言情绪）+ 文中 `()` 行内韵律
-- 内置 `tts_generate.py`（含 `--batch <jsonl>`）、`ab_compare.sh`
-- API key 解析顺序：`$STEPFUN_API_KEY` → `${CLAUDE_PLUGIN_DATA}/config.json` 兜底
-- `references/migration_from_v2.md` 给出审查拦截的改写策略
+- 完整原生 request/extra 通道，保留原始响应与流事件
+- 兼容原有文本 / 批处理 CLI，支持完整 JSON 请求与离线输入检查
+- HTTP 使用标准库；WebSocket 使用可选原生客户端
+- [表达控制、音色生命周期示例与验证边界](daymade-audio/stepfun-tts/references/api_reference.md)
 
-**要求**：StepFun API key 的 "Normal" 等级（https://platform.stepfun.com/）。如需 ASR / 转写，使用下方的姊妹技能 `stepfun-asr`。
+**要求**：StepFun 凭据及对应账户端点，见[配置入口](daymade-audio/stepfun-tts/SKILL.md#authentication-and-prerequisites)。如需 ASR / 转写，使用下方的姊妹技能 `stepfun-asr`。
 
 ---
 
@@ -3884,8 +3885,8 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 ### 网络、流式与协议层调试
 使用 **debugging-network-issues** 应对症状和"显然原因"对不上的场景：HTTP/2 `RST_STREAM`、SSE 在 60s/100s/130s 整点卡死、"时灵时不灵"故障、客户端代理/VPN/TUN 错路由导致的 `ERR_CONNECTION_CLOSED` 或 `SSL_ERROR_SYSCALL`、或 CDN / 代理 / CGNAT / TUN 链路上的空闲超时/规则覆盖事件。Skill 用**分层隔离实验**（同一逻辑请求走三条以上、每条仅差一跳的路径）替代假设堆叠，再加一套反审查模式——只在假设被**证伪**而不是单纯被"证实"之后才上 fix。认知陷阱清单含反向路径/方向不对称，以及代理节点 DNS ≠ 客户端 DNS。
 
-### 中文 TTS（StepFun 阶跃 StepAudio 2.5）
-使用 **stepfun-tts** 进行中 / 日语语音合成（通过 `instruction` + 行内 `()` 控制情绪与韵律）。封装了让 StepAudio 2.5 新用户必踩的两个 TTS 破坏性变更：`voice_label` 移除和 2.5 时代更严的审查规则。可把 `step-tts-2` 作为单条审查兜底来组合使用。
+### 语音合成与声音克隆
+使用 [stepfun-tts](daymade-audio/stepfun-tts/SKILL.md) 操作情境语音、音色生命周期与原生流接口。保留被拒文案及身份选择，不自动更换模型或音色。
 
 ### 长音频转写（StepFun 阶跃 StepAudio 2.5）
 使用 **stepfun-asr** 单次 SSE 调用转写最长 30 分钟的中 / 英文音频（32K context、~85-101× RTF、无需客户端切片）。封装了 #1 大坑——模型**不在** `/v1/audio/transcriptions`，错端点返回误导性的 "model not supported" 错误。可与 **transcript-fixer** 组合做 ASR 纠错，或与 **meeting-minutes-taker** 把长录音变成结构化纪要。
@@ -3956,7 +3957,7 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 - **douban-skill**：参见 `douban-skill/SKILL.md` 了解导出工作流，参见 `douban-skill/references/troubleshooting.md` 查看 7 种被测抓取方案及失败原因的完整日志
 - **terraform-skill**：参见 `terraform-skill/SKILL.md` 查看按确切报错 → 根本原因 → 复制粘贴修复组织的实操陷阱完整目录
 - **debugging-network-issues**：参见 `debugging-network-issues/SKILL.md` 了解证伪优先工作流，参见 `debugging-network-issues/references/layered-isolation-experiment.md` 了解多跳隔离模式，参见 `debugging-network-issues/references/case-sse-rst-130s.md` 查看 SSE 生产案例，参见 `debugging-network-issues/references/case-proxy-tun-cname-override.md` 查看客户端代理/TUN CNAME 规则覆盖案例
-- **stepfun-tts**：参见 `stepfun-tts/SKILL.md` 了解 Contextual TTS 决策树，参见 `stepfun-tts/references/migration_from_v2.md` 查看 `voice_label` → `instruction` 迁移手册和审查改写清单
+- **stepfun-tts**：现行操作见 [Skill](daymade-audio/stepfun-tts/SKILL.md)，已有 step-tts-2 语料迁移见[迁移参考](daymade-audio/stepfun-tts/references/migration_from_v2.md)
 - **stepfun-asr**：参见 `stepfun-asr/SKILL.md` 了解 SSE 端点工作流和 ASR 侧四个坑（错端点、Plan vs Normal key、重复幻觉、SSE `error` 事件）。`stepfun-asr/references/api_reference.md` 给出原始 HTTP 集成所需的 JSON 请求体和 SSE 事件契约
 - **llm-eval-harness**：参见 `llm-eval-harness/references/evaluation_disciplines.md` 了解每条纪律背后的推理（环境变量传 key、thinking-aware 吞吐、代理隔离、概率化协议判定），以及 `llm-eval-harness/references/quality_blind_judge.md` 了解独立盲审质量方法
 - **meme-creator**：参见 `meme-creator/SKILL.md` 了解完整流程，及 `meme-creator/references/tracking-playbook.md` 了解 CSRT 失效分类与手工关键帧接管
@@ -3994,7 +3995,7 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 - **Python 3.10+**（用于四个本地历史读取／续做 Skill）：内置标准库 reader 与 validator
 - **uv + Scrapling CLI**（用于 scrapling-skill）：`uv tool install 'scrapling[shell]'`，浏览器抓取前运行 `scrapling install`
 - **Node.js 18+ + curl + unzip**（用于 ima-copilot）：`npx skills` 按需从 npm registry 拉取；IMA OpenAPI 凭据从 [https://ima.qq.com/agent-interface](https://ima.qq.com/agent-interface) 获取
-- **StepFun API key**（用于 stepfun-tts 和 stepfun-asr——必须是 "Normal" 等级，Plan key 调音频端点会无声失败）：在 [https://platform.stepfun.com/](https://platform.stepfun.com/) → API Keys 获取
+- **StepFun API key**：按所用语音 Skill 核对账户和端点，从[阶跃平台](https://platform.stepfun.com/)获取凭据
 - **uv + 被测端点的 API key**（用于 llm-eval-harness）：`openai` 和 `aiohttp` 通过 `uv run --with` 自动安装；key 仅按环境变量名传入
 - **FFmpeg + uv**（用于 meme-creator）：`brew install ffmpeg`；随包脚本通过 `uv run` 自行解析 Python 依赖；源是 URL 时才需要 `yt-dlp`
 
