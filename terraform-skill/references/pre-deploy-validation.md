@@ -353,10 +353,13 @@ Choose recovery from the independently observed side effects:
 | Apply completed; a post-apply verifier failed | Keep the application unaccepted. Read back current identity/configuration and rerun only the missing verification when its bound inputs still match. Do not replay the consumed plan or repeat the completed apply. |
 | Apply partially completed, or its effects are unknown | Inspect actual state and live resources, then form a fresh, scoped recovery plan under the normal review/authorization contract. Do not infer that a nonzero wrapper exit means no mutation occurred. |
 
-Use only recovery modes the publisher actually implements. A missing continuation entry blocks that
-live action; preserve the evidence and repair the owning controller rather than substituting manual
-apply, changing plan timestamps or silently ignoring the failure. Use section 5's fresh-plan contract
-for an expired plan that has not been applied.
+Check the publisher's existing supported modes and applicable authorization before treating a missing
+continuation entry as a blocker. Use a supported retained-executor or other authorized path when it
+can complete the original business outcome while preserving required isolation and evidence. Do not
+make controller repair a prerequisite when that path exists. Repair a necessary action's blocker only
+when no supported path can perform it; continue independent authorized work. Never substitute manual
+apply, change plan timestamps or silently ignore failure. Use section 5's fresh-plan contract for an
+expired plan that has not been applied.
 
 Before production, freshly read the authoritative remote branch and prove the candidate commit belongs
 to it; cached tracking refs are not provenance. After apply, independently read back deployed identity,
