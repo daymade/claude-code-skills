@@ -314,6 +314,31 @@ class PriorWorkHookTests(unittest.TestCase):
             with self.subTest(prompt=prompt):
                 self.assertEqual(hook.classify_prompt(prompt, False), "none")
 
+    def test_existing_code_signal_requires_a_complete_asset_word(self) -> None:
+        negatives = [
+            (
+                "Read-only audit. Evidence value: Existing "
+                "codex_interactive_observer_bindings / interactive_observer path."
+            ),
+            "Inspect existing code_identifier metadata only.",
+            "Review existing CODEX configuration only.",
+        ]
+        for prompt in negatives:
+            with self.subTest(prompt=prompt):
+                self.assertEqual(hook.classify_prompt(prompt, False), "none")
+
+        positives = [
+            "Reuse the existing code for this parser.",
+            "Please inspect existing codebase before implementation.",
+            "Review EXISTING CODE before changing behavior.",
+            "Reuse the EXISTING CODEBASE for this parser.",
+        ]
+        for prompt in positives:
+            with self.subTest(prompt=prompt):
+                self.assertEqual(
+                    hook.classify_prompt(prompt, False), "required_prior_signal"
+                )
+
     @staticmethod
     def exact_candidate_recheck_prompt(
         previous: str = "a" * 40,
