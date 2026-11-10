@@ -876,6 +876,28 @@ its own component checks while the page reads as a disaster:
   not the sighted reader; if the audit cannot say what a number means from the
   rendered page alone, neither can the user.
 
+### Long lists and first-viewport controls
+
+When the task promises first-viewport discovery or controls that remain available
+while browsing a long list, name those controls before auditing: for example, a
+fold/expand action and its count. Do not require every list item above the fold.
+Use representative long data and the agreed viewport. At the ordinary entry,
+before any scrolling or automatic positioning, inspect the named controls' full
+labels, current bounds, clipping ancestors and topmost hit targets. DOM presence
+alone cannot pass a control buried after the last row. Do not assign `scrollTop`
+or call `scrollIntoView()` to manufacture a first-viewport pass.
+
+When continued availability during scrolling is promised, use the
+[nested-list input check](browser-driving-and-observation-traps.md#nested-vertical-lists-use-the-same-fresh-input-target-check)
+to reach the actual list end through ordinary scrolling and inspect the named
+controls there. When a declared control folds or expands items, exercise it and
+reconcile its displayed counts with the represented subsets. Keep a healthy long
+list whose ordinary rows extend below the viewport as a control. Reject a
+promised entry control placed after those rows; making it visible only after
+scrolling does not repair the entry failure. If a scroll attempt that should move
+the list has no verified displacement, keep that reached-state check unverified
+instead of reporting that the bottom has lost its controls.
+
 ## Design-System Artifacts
 
 First distinguish a static reference from a live artifact.
