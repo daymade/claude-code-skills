@@ -81,27 +81,11 @@ Follow [the required native sequence](native_ai_full_workflow.md) for action-tim
 
 ## Dictionary and identity safety
 
-Read [references/false_positive_guide.md](false_positive_guide.md) and [references/dictionary_identity_and_context.md](dictionary_identity_and_context.md) before adding a rule.
+Choose the dictionary, roster, context or file-only destination using the [canonical decision matrix](dictionary_identity_and_context.md#dictionary-addition-after-fixing). Read its [people-roster constraints](dictionary_identity_and_context.md#people-roster-long-term-person-name-ssot) before recording identity variants.
 
-| Pattern | Destination |
-|---|---|
-| Stable non-word or unique garble → canonical term | `--add ... --domain <project>` |
-| Important recurring person and observed ASR variants | People roster |
-| Correction right only inside a specific recurring phrase | `--add-context-rule PATTERN REPLACEMENT --domain <project>` (regex, domain-scoped; omit `--domain` for global) |
-| Common/real word wrong only under a cue | Domain context trap, never a bare rule (a bare number or a single surname + 老师/总 is refused at roster load and by `--add` / `--import`, `--force` included) |
-| Real name → different real name | Domain context + human/audio verification, never a bare rule |
-| Confirmed-correct entity repeatedly reopened | Confirmed-correct context record |
-| One-off sentence-local wording | Edit only; do not add |
+Before adding a rule, read [Defense layers and guard state](false_positive_guide.md#defense-layers-and-guard-state). Domain trust, overlap selection and entity-tail deferral follow [Stage 1 variant matching](dictionary_identity_and_context.md#stage-1-variant-matching).
 
-Stage 1's match-time layer (see [references/false_positive_guide.md](false_positive_guide.md)) also refuses a dictionary match on its own before risk scoring through the superset check (the corrected form is already in place), the common-word boundary check for short rules, and the word-boundary check. That last one asks, by script, whether the match is a fragment of real words: an ASCII match with an ASCII letter directly beside it is inside a longer word (`Cloud` in `iCloud`; digits do not count, so `cloud3` still corrects); a CJK match is refused only when every segment of a dictionary-only jieba cut that overlaps it is a multi-character word and one of them crosses the match boundary (新一 in 更新|一下, 问题记 in 问题|记录, 同龄 in 同龄人) — one single-character segment under the match (巨|神智|能, 叫|新|一下|单) means an unknown fragment and the match proceeds. Refusals are counted as `Refused at word boundaries` and in the JSON `boundary_refused`, listed in the Stage 1 summary, and never deferred. The CJK half needs jieba; without it the check silently would not run, so it now says so — stderr warning, `CHECK OFF` in the summary, and `boundary_check_active: false` in the JSON, because `boundary_refused: 0` alone cannot tell a clean run from a disarmed one. A context rule (`--add-context-rule`) skips this check but still goes through risk scoring, so in safe mode its match is deferred to the review queue rather than applied — accept it there, or run `--apply-all`, which switches the check off and applies every match; `--apply-domain` keeps the check.
-
-A context trap is a cue, not permission to replace blindly. Annotations in a domain context file are **machine-readable vetoes that Stage 1 enforces** (when the domain is named via `--domain` — a whole-library run has no owner to veto with): a trap marked `禁裸词`/`禁入词典` demotes any dictionary rule with the same FROM to review, and a confirmed-correct （勿修） record demotes any rule whose FROM is that token — demotion beats `--apply-domain` trust-flattening, so a real-word rule (the 绿点→绿电 class: right in business context, wrong in UI context) can stay in the dictionary without firing blindly. `--apply-all` remains the operator's explicit override. Without the veto the only escape was `--report-false-positive`, which disables the rule in the contexts where it is right too. `--scan-traps` supports canonical `→` and legacy `≈` mappings with the same directional contract: left is observed ASR, right is intended text. Wrap an exact FROM phrase containing spaces in backticks:
-
-~~~markdown
-- **`CC 思维链`/`CC 思维连` → 目标术语** — only under the domain's documented cue
-~~~
-
-This demonstrates an exact ASR phrase candidate, not a person-name candidate. The domain context remains the authority for the real target and cue; the scanner only locates the literal FROM forms.
+For text-context vetoes and exact FROM phrases containing spaces, use the [Domain Context Guide](domain_context_guide.md#format).
 
 Before adding any real-word-shaped rule, measure the project corpus:
 

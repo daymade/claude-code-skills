@@ -4,13 +4,7 @@ Format and template for per-domain correction context files.
 
 ## What problem this solves
 
-Choose the home for each error class:
-
-| Error class | Example | Home | Why |
-|---|---|---|---|
-| Deterministic, non-word | `克劳锐`→`Claude` | Dictionary (`--add --domain`) | Zero false-positive risk; a rule fires the same way every time |
-| Person names | garbled coworker/client names | People roster (`people.md`) | Names need relationship context and survive DB resets |
-| **Context-dependent homophones** | `减`→`剪` only when discussing clip production | **Domain context file** | A rule would corrupt other sentences (`减少` is real); only in-context judgment can decide |
+Choose the storage destination through the [dictionary decision matrix](dictionary_identity_and_context.md#dictionary-addition-after-fixing).
 
 A generic AI pass can leave context-dependent readings unresolved without a
 domain prior. The context file supplies that prior for native correction;
@@ -25,6 +19,11 @@ listed in [Environment Variables](script_parameters.md#environment-variables).
 Stage 1 uses that selected directory and does not merge traps from the default
 home directory when another directory is selected. A missing or empty domain
 file contributes no vetoes.
+
+Vetoes load only for domains explicitly selected with `--domain`; a whole-library
+run has no domain-context vetoes. With several selected domains, a same-FROM
+veto applies across their rule union, regardless of which selected domain owns
+the rule or the context file.
 
 `<domain>` matches the `--domain` name used for the dictionary, such as a
 project slug. Resolve this location before filling `--context-file` in the
