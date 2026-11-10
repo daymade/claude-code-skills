@@ -57,12 +57,13 @@ lost. It never overwrites a mismatched completed stage. A partial `.building-*`
 directory is retained, and resume creates a new stage for that incomplete work only;
 keep or retire those task-owned partial artifacts under the existing artifact gate.
 
-Run the standalone occupancy/ownership/scheduler checks, then `verify-current`, then
-make the already-authorized normal removal the next operation. It reads the checkpoint, verifies
+Run `verify-current` before the final standalone occupancy check. It reads the checkpoint, verifies
 recovery bytes and object closure, and compares current target, refs, module mapping,
 metadata, physical object identities and ignored inventory with the frozen state.
 Any change stops removal; preserve the new state and prepare a new evidence directory.
-This is not a lock against writers, so the final action-time checks remain necessary.
+This is not a lock against writers. After its Git probes finish, run the standalone
+occupancy check, reconfirm ownership, locks and scheduler use, then make the
+already-authorized normal removal the next operation with no intervening command.
 After removal, run `verify-recovery --out <same-directory>` and separately prove the
 target is absent and the primary checkout is unchanged. That mode verifies carriers;
 it does not claim removal occurred. Keep recovery-only evidence until authorized retirement.

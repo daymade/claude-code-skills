@@ -447,7 +447,7 @@ def verify(out: Path, current: bool) -> dict:
         now = scope_snapshot(Path(snapshot["target"]), snapshot["base_ref"], snapshot["recipes"])
         require(now == snapshot, "Target/ref/module/ignored inventory changed; do not remove")
     return {"status": "verified", "mode": "current" if current else "recovery", "stages": len(snapshot["scopes"]),
-            "next": "If standalone occupancy/ownership/scheduler checks just passed, make the already-authorized normal removal the next operation" if current else "Recovery carriers readable; removal itself has not been verified"}
+            "next": "Now run the final standalone occupancy check and reconfirm ownership/locks/scheduler use; if clear, make the already-authorized normal removal the next operation with no intervening command" if current else "Recovery carriers readable; removal itself has not been verified"}
 
 
 def prepare(target: Path, out: Path, base_ref: str, recipes: dict, resume: bool) -> dict:
