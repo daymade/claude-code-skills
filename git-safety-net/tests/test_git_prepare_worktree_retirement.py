@@ -329,6 +329,32 @@ class WorktreeRetirementTests(unittest.TestCase):
         self.git("-C", str(self.target), "config", "--worktree", "retirement.fixture", "new-overrides")
         self.assertEqual(self.run_tool("verify-current").returncode, 1)
 
+    def test_nested_ignored_file_freezes_tracked_directory_ancestors(self) -> None:
+        parent = self.target / "src/nested"
+        parent.mkdir(parents=True)
+        (parent / "tracked.txt").write_text("tracked source\n")
+        with (self.target / ".gitignore").open("a") as stream:
+            stream.write("*.cache\n")
+        self.commit(self.target, "tracked nested directory")
+        (parent / "analysis.cache").write_text("unique nested evidence\n")
+        state = self.prepare()
+        root = state["snapshot"]["scopes"][0]
+        self.assertEqual(root["ignored"]["src"]["type"], "directory")
+        self.assertEqual(root["ignored"]["src/nested"]["type"], "directory")
+        self.assertEqual((self.out / "root/ignored/src/nested/analysis.cache").read_text(),
+                         "unique nested evidence\n")
+        self.assertEqual(self.run_tool("verify-current").returncode, 0)
+        self.assertEqual(self.run_tool("verify-recovery").returncode, 0)
+        original_mode = parent.stat().st_mode & 0o7777
+        parent.chmod(0o700 if original_mode != 0o700 else 0o755)
+        self.assertEqual(self.run_tool("verify-current").returncode, 1)
+        parent.chmod(original_mode)
+        self.assertEqual(self.run_tool("verify-current").returncode, 0)
+        outside = self.root / "moved nested directory"
+        shutil.move(str(parent), outside)
+        parent.symlink_to(outside, target_is_directory=True)
+        self.assertEqual(self.run_tool("verify-current").returncode, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -249,6 +249,15 @@ def ignored(path: Path) -> dict:
         result[relative] = item
         if item["type"] == "directory":
             result.update({relative + "/" + name: value for name, value in inventory(candidate).items()})
+    # Git may list an ignored leaf beneath tracked directories without listing
+    # those structural parents. Freeze their real modes/types before copying.
+    for relative in list(result):
+        for parent in Path(relative).parents:
+            if parent == Path("."):
+                break
+            item = entry(path / parent)
+            require(item["type"] == "directory", "Ignored ancestor is indirect or not a directory")
+            result[parent.as_posix()] = item
     return dict(sorted(result.items()))
 
 
