@@ -60,7 +60,7 @@ class SelectionTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertEqual(self.targets([path]), contracts)
         # Actual changed_files from Linux job 124495725097: the instruction
-        # update previously promoted this transcript change to all 38 suites.
+        # update previously promoted this transcript change to all suites.
         paths = [".claude-plugin/marketplace.json", "CHANGELOG.md", "CLAUDE.md",
                  "README.md", "README.zh-CN.md", "daymade-audio/transcript-fixer/SKILL.md",
                  "daymade-audio/transcript-fixer/references/database_schema.md",
@@ -71,6 +71,7 @@ class SelectionTests(unittest.TestCase):
         self.assertFalse(result["full"])
         self.assertEqual({target for _, target in result["suites"]},
                          contracts | {"daymade-audio/transcript-fixer/tests",
+                                      "daymade-audio/stepfun-tts/tests",
                                       "daymade-audio/asr-transcribe-to-text/tests",
                                       "daymade-audio/asr-transcribe-to-text/scripts/review-workbench/tests"})
         self.assertFalse(result["html_reader"])
