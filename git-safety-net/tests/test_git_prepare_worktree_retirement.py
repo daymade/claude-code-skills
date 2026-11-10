@@ -269,6 +269,66 @@ class WorktreeRetirementTests(unittest.TestCase):
         (self.module / "scratch/link").symlink_to("other.txt")
         self.assertEqual(self.run_tool("verify-current").returncode, 1)
 
+    def test_native_worktree_config_enabled_is_preserved_and_mutations_block(self) -> None:
+        self.git("-C", str(self.primary), "config", "extensions.worktreeConfig", "true")
+        self.git("-C", str(self.module), "config", "extensions.worktreeConfig", "yes")
+        self.git("-C", str(self.target), "config", "--worktree", "retirement.fixture", "root-scoped")
+        self.git("-C", str(self.module), "config", "--worktree", "retirement.fixture", "module-scoped")
+        state = self.prepare()
+        for scope in state["snapshot"]["scopes"]:
+            self.assertEqual(scope["repo"]["worktree_config"], "enabled")
+            self.assertIn("config.worktree", scope["repo"]["metadata"])
+            source = Path(scope["repo"]["admin"]) / "config.worktree"
+            recovery = self.out / scope["name"] / "metadata/config.worktree"
+            self.assertEqual(source.read_bytes(), recovery.read_bytes())
+        self.assertEqual(self.run_tool("verify-current").returncode, 0)
+        self.assertEqual(self.run_tool("verify-recovery").returncode, 0)
+        self.git("-C", str(self.target), "config", "--worktree", "retirement.fixture", "later-human-value")
+        self.assertEqual(self.run_tool("verify-current").returncode, 1)
+        admin = Path(state["snapshot"]["scopes"][0]["repo"]["admin"])
+        (admin / "config.worktree").write_bytes((self.out / "root/metadata/config.worktree").read_bytes())
+        self.assertEqual(self.run_tool("verify-current").returncode, 0)
+        self.git("-C", str(self.primary), "config", "extensions.worktreeConfig", "false")
+        self.assertEqual(self.run_tool("verify-current").returncode, 1)
+
+    def test_native_worktree_config_missing_false_and_unsupported_controls(self) -> None:
+        missing = self.prepare()
+        self.assertEqual(missing["snapshot"]["scopes"][0]["repo"]["worktree_config"], "missing")
+        self.assertEqual(self.run_tool("verify-current").returncode, 0)
+        self.git("-C", str(self.primary), "config", "extensions.worktreeConfig", "off")
+        self.assertEqual(self.run_tool("verify-current").returncode, 1)
+        self.out = self.root / "disabled evidence"
+        disabled = self.prepare()
+        self.assertEqual(disabled["snapshot"]["scopes"][0]["repo"]["worktree_config"], "disabled")
+        self.assertEqual(self.run_tool("verify-current").returncode, 0)
+        self.git("-C", str(self.primary), "config", "--unset", "extensions.worktreeConfig")
+        self.assertEqual(self.run_tool("verify-current").returncode, 1)
+        # Enabled worktree config must not hide an include or promisor setting.
+        self.git("-C", str(self.primary), "config", "extensions.worktreeConfig", "true")
+        for key, value in (("include.path", str(self.root / "unused-include")),
+                           ("remote.fixture.promisor", "true")):
+            self.out = self.root / key
+            self.git("-C", str(self.target), "config", "--worktree", key, value)
+            self.assertNotEqual(self.run_tool("prepare").returncode, 0)
+            self.assertFalse(self.out.exists())
+            self.git("-C", str(self.target), "config", "--worktree", "--unset", key)
+        self.out = self.root / "other extension"
+        self.git("-C", str(self.primary), "config", "extensions.fixtureUnsupported", "true")
+        self.assertNotEqual(self.run_tool("prepare").returncode, 0)
+        self.assertFalse(self.out.exists())
+
+    def test_native_worktree_config_enabled_without_overrides_is_healthy(self) -> None:
+        self.git("-C", str(self.primary), "config", "extensions.worktreeConfig", "true")
+        admin = Path(self.git("-C", str(self.target), "rev-parse", "--absolute-git-dir").decode().strip())
+        self.assertFalse((admin / "config.worktree").exists())
+        state = self.prepare()
+        root = state["snapshot"]["scopes"][0]
+        self.assertEqual(root["repo"]["worktree_config"], "enabled")
+        self.assertNotIn("config.worktree", root["repo"]["metadata"])
+        self.assertEqual(self.run_tool("verify-current").returncode, 0)
+        self.git("-C", str(self.target), "config", "--worktree", "retirement.fixture", "new-overrides")
+        self.assertEqual(self.run_tool("verify-current").returncode, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

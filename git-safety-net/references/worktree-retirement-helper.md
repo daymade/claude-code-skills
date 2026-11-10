@@ -34,6 +34,10 @@ objects borrowed through alternates. It does not enumerate the alternate store's
 unrelated objects. Metadata plus one self-contained recovery object pack replaces
 repeated raw-store copies and bundles. Recovery Git configuration is newly generated;
 the original configuration and reflogs remain in `metadata/` for explicit restoration.
+Git's native `extensions.worktreeConfig` is supported: its missing, enabled or
+disabled state is frozen, and per-worktree `config.worktree` bytes are preserved.
+Changing either later blocks current verification; other extensions, includes and
+promisor settings still require manual handling.
 
 All ignored paths, entry types, modes, sizes, file hashes and symlink targets are
 frozen. Byte-identical entries at the same relative primary path use that retained
@@ -71,7 +75,8 @@ it does not claim removal occurred. Keep recovery-only evidence until authorized
 Exit 0 is a positive preparation/verification result, 1 is an unsafe or changed
 state, and 2 is invalid input or an execution failure. Missing/corrupt checkpoints
 remain failures. Primary targets, dirty/locked worktrees, shared or unresolved module
-stores, indirect Git/admin metadata, uninitialized modules with retained stores, partial/shallow/extended Git
-repositories, content filters, extension object stores and special file types require
+stores, indirect Git/admin metadata, uninitialized modules with retained stores, partial/shallow Git
+repositories or extensions other than native `worktreeConfig`,
+content filters, extension object stores and special file types require
 the manual Mode E path or resolution of that exact gap. Do not deinitialize modules
 or force deletion to bypass an unsupported state.

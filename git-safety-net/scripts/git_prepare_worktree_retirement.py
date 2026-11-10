@@ -181,7 +181,15 @@ def repo_snapshot(path: Path, admin: Path, module: bool) -> dict:
     clean(path)
     require(text_git(path, "rev-parse", "--show-object-format") == "sha1", "Only SHA-1 repositories are supported")
     config = text_git(path, "config", "--local", "--list").lower().splitlines()
-    require(not any(line.startswith("extensions.") or "promisor=" in line
+    worktree_config = "missing"
+    if any(line.partition("=")[0] == "extensions.worktreeconfig" for line in config):
+        value = text_git(path, "config", "--local", "--type=bool", "--get", "extensions.worktreeConfig")
+        require(value in ("true", "false"), "Invalid native worktree-config flag")
+        worktree_config = "enabled" if value == "true" else "disabled"
+    if worktree_config == "enabled" and (admin / "config.worktree").exists():
+        config += text_git(path, "config", "--worktree", "--list").lower().splitlines()
+    require(not any((line.startswith("extensions.")
+                     and line.partition("=")[0] != "extensions.worktreeconfig") or "promisor=" in line
                     or line.startswith("include.") or line.startswith("includeif.")
                     for line in config), "Partial/extended/included Git configuration needs manual handling")
     require(not (admin / "shallow").exists(), "Shallow repository needs manual handling")
@@ -225,7 +233,7 @@ def repo_snapshot(path: Path, admin: Path, module: bool) -> dict:
     return {"path": str(path), "admin": str(admin), "head": head, "head_name": head_name,
             "refs": refs, "metadata": metadata, "owned_objects": owned,
             "seeds": sorted(seeds), "closure": closure, "alternates": alternates,
-            "object_metadata": object_meta}
+            "object_metadata": object_meta, "worktree_config": worktree_config}
 
 
 def ignored(path: Path) -> dict:
