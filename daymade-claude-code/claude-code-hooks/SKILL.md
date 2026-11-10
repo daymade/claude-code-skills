@@ -1308,6 +1308,9 @@ approval or “already reminded” flag.
 
 ## Known pitfalls (read before debugging a misfiring hook)
 
+For owner crashes, deadline exhaustion or a successful recovery that remains
+pending, follow [recovery failure triage](references/recovery-failure-triage.md).
+
 Full catalog with symptom → cause → fix: [references/hook_pitfalls.md](references/hook_pitfalls.md).
 
 **The harness is the hidden variable — use `scripts/test_hook.sh`, don't hand-roll
