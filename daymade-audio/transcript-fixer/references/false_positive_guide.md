@@ -60,11 +60,21 @@ uv run scripts/fix_transcription.py --audit
 uv run scripts/fix_transcription.py --audit --domain manufacturing
 ```
 
-## The 4+ char real-word blind spot (important)
+## Screening 4+ character real phrases
 
-The risk classifier and the common-word list only catch short / listed words. A rule whose `from_text` is a **4+ character string that is itself valid Chinese** (`济南大学`→`暨南大学`, `关税证明`→`完税证明`, `老公说的`→`老郭说的`) is classified `low` and **auto-applies even in safe mode** — silently corrupting clean transcripts that legitimately contain that phrase. The common-word list cannot scale to this: Chinese has hundreds of thousands of valid multi-char phrases.
+In ordinary safe-mode risk scoring, a 4+ character FROM recognized as a valid
+Chinese phrase is promoted to medium risk unless its confidence is at least
+0.95 and its length is at least 5. Selected-domain trust and context-veto
+precedence follow [Stage 1 variant matching](dictionary_identity_and_context.md#stage-1-variant-matching).
+A real phrase can therefore still auto-apply; tokenization is not proof that
+this occurrence is an ASR error.
 
-`--audit` flags these with a `valid_phrase` warning, using a jieba heuristic (`is_likely_valid_phrase`): it reports rules whose `from_text` decomposes entirely into known dictionary words. **This is advisory and deliberately low-precision** — it also flags many legitimate ASR-garble rules (e.g. `一视同然`→`一视同仁`, where `from_text` happens to split into known tokens). When reviewing `valid_phrase` hits, the question to ask is *"is `from_text` itself a fluent, real phrase someone would actually say?"* — if yes, it's a dangerous rule (disable it); if it's garble that merely tokenizes cleanly, keep it. This is why the heuristic never gates auto-application: a false flag there would silently cut recall. Genuinely closing this class needs language-model-grade judgment.
+`--audit` uses the same jieba heuristic (`is_likely_valid_phrase`) to flag
+`valid_phrase` candidates whose FROM decomposes into known dictionary words.
+The audit warning is advisory: it also catches legitimate garbles such as
+`一视同然`→`一视同仁`. Judge whether FROM is a fluent phrase appropriate to the
+occurrence; keep a valid recurring ASR rule rather than disabling it solely
+because the heuristic flagged it.
 
 **Disabling audit hits is a human decision — never automate it.** When you act on `valid_phrase` (or any audit) results, review each candidate by hand; do NOT bulk-disable everything flagged. Roughly half a batch can be context-specific GOOD rules the audit mislabels, because neither jieba nor an LLM reviewer knows the dictionary owner's context — which products/terms they say often. `GDP 5.5→GPT 5.5` reads as "GDP is a common word" to any general reviewer, yet is a correct `GPT 5.5` ASR fix for an AI-heavy user; `长城任务→长程任务` (same pronunciation) is a correct "long-horizon task" fix. Even an LLM review pass (more accurate than jieba) mislabeled ~half a batch this way in practice. So: the audit surfaces candidates, the **owner** decides, and you back up the DB (`cp corrections.db corrections.db.bak-…`) before any disable so it is reversible.
 

@@ -508,8 +508,6 @@ double-check.
 
 ## Domain Correction Contexts (per-domain AI priors)
 
-The dictionary handles deterministic replacements; the people roster handles names. A third class of error can't safely live in either: **context-dependent homophones** — words that are only wrong in a particular discussion context. Think `减`→`剪` in a meeting about producing N video clips per day, or a finance call where a common word collides with a ticker nickname. A dictionary rule on a common word silently corrupts every other transcript, and a generic AI pass lacks the domain prior to fix it confidently — it either guesses wrong or leaves it for the human. (Real case: a transcript had four `减到 N 条` occurrences that all meant `剪到`; the AI pass suspected but wouldn't touch them without a domain prior, and the user had to fix them by hand.)
-
 During [native correction](native_ai_full_workflow.md), read the transcript's
 domain context before triaging. Use the [context location](domain_context_guide.md#location)
 and [format/template](domain_context_guide.md#format) maintained in the Domain
@@ -519,6 +517,4 @@ What must NOT go in a context file: hard replacement rules. `减→剪` as a rul
 
 Maintenance loop (mirrors the dictionary's `--add` habit): when a native session surfaces a **context-dependent** recurring error — you fixed it here, and it'll recur in this domain's future transcripts — append it to the domain's context file with its disambiguating cue. Deterministic non-word/name fixes keep going to `--add --domain` / the roster as before.
 
-**Machine-readable vetoes (consumed by Stage 1, since 2026-08):** two annotation classes in the context file act on the *dictionary*, not just on the reader. ① A trap whose bullet carries the literal marker `禁裸词` or `禁入词典` (**妙计 → 妙记（飞书妙记语境，禁裸词）**) demotes any dictionary rule with the same FROM to safe-mode deferral — the pair may only be corrected with its context judged, exactly the 绿点→绿电 class (a real-word rule right in some contexts, wrong in others). ② A confirmed-correct record (**X = 真实实体，勿修**) demotes any rule whose FROM is that token. Demotion beats `--apply-domain` trust-flattening; `--apply-all` remains the operator's explicit override. Two scope rules: the veto only fires when the domain is named via `--domain` (a whole-library run has no owner to veto with), and in a multi-domain union it applies by FROM across the whole union regardless of which named domain owns the rule. This is how a trap documented *after* a rule was added still stops the rule from firing — before this layer, only `--report-false-positive` (which disables the rule everywhere, including the contexts where it is right) could.
-
-Note: the cue prose itself is consumed by the **native workflow** (the agent reads the file); API mode (`--stage 2/3`, the backup channel) does not inject contexts yet; Stage 1 consumes only the two veto classes above, never the prose.
+Note: the cue prose itself is consumed by the **native workflow** (the agent reads the file); API mode (`--stage 2/3`, the backup channel) does not inject contexts yet; Stage 1 consumes only the [machine-readable annotations](domain_context_guide.md#format), never the cue prose.
