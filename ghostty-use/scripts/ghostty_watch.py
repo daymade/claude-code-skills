@@ -251,7 +251,9 @@ def parse_cwds(text, pids):
     return {pid: values[0] for pid, values in paths.items()}
 
 
-def observe(deadline=None, *, include_terminals=False):
+def observe(deadline=None, *, include_terminals=False, scope='ghostty'):
+    if scope not in ('ghostty', 'all-cli'):
+        raise ValueError('scope must be ghostty or all-cli')
     deadline = deadline or time.monotonic() + DEADLINE_SECONDS
     counters = {'ps_calls': 1, 'lsof_calls': 0, 'commands': 0, 'history_body_reads': 0}
     text = run_bounded(['/bin/ps', '-ww', '-axo', 'pid=,ppid=,tty=,command='], deadline, counters)
@@ -267,10 +269,11 @@ def observe(deadline=None, *, include_terminals=False):
         while current in procs and current not in roots and current not in chain:
             chain.add(current)
             current = procs[current]['ppid']
-        if current not in roots:
+        in_ghostty = current in roots
+        if not in_ghostty and scope == 'ghostty':
             continue
         terminal = row['tty'].startswith(('ttys', 'pts/'))
-        if include_terminals and terminal:
+        if include_terminals and terminal and in_ghostty:
             # The shallowest process represents a terminal surface. A surface
             # is a TTY, not a tab: splits and window membership remain unknown.
             depth = len(chain)
@@ -281,9 +284,8 @@ def observe(deadline=None, *, include_terminals=False):
         if identity is None:
             continue
         tool, sid, tokens, index = identity
-        if not terminal:
+        if not terminal and scope == 'ghostty':
             continue
-        cli_ttys.add(row['tty'])
         parent = procs.get(row['ppid'])
         wrapper = cli_identity(parent) if parent else None
         if (wrapper and wrapper[0] == tool and wrapper[3] == 1
@@ -293,6 +295,11 @@ def observe(deadline=None, *, include_terminals=False):
             continue
         if sid is not None:
             seen.add((tool, sid))
+        surface = row['tty'] if terminal else 'pid:' + str(pid)
+        cli_ttys.add(surface)
+        if include_terminals and not in_ghostty:
+            # Headless processes share "??"; keep their surfaces distinct by PID.
+            terminals[surface] = (0, row)
         candidates.append((row, tool, sid, tokens))
         if len(candidates) > MAX_SESSIONS:
             raise ValueError('Ghostty session count exceeds observation limit')
@@ -316,13 +323,20 @@ def observe(deadline=None, *, include_terminals=False):
             entry = {'tool': tool, 'cwd': cwds[row['pid']], 'cmdline': row['cmdline'],
                      'profile': 'unknown' if tokens is None else gs._detect_profile(row['cmdline']),
                      'tty': row['tty']}
+            if scope == 'all-cli':
+                ancestry, parent_pid = [], row['ppid']
+                while parent_pid in procs and parent_pid not in ancestry:
+                    ancestry.append(parent_pid)
+                    parent_pid = procs[parent_pid]['ppid']
+                entry.update(pid=row['pid'], ppid=row['ppid'], ancestor_pids=ancestry,
+                             terminal_owner='ghostty' if roots.intersection(ancestry) else 'non-ghostty')
             if sid is None:
                 entry.update(pid=row['pid'], reason=OPAQUE_REASON if tokens is None else 'CLI UUID absent from argv')
                 unresolved.append(entry)
             else:
                 entry['sid'] = sid
                 selected.append(entry)
-    result = {'sessions': selected, 'unresolved': unresolved,
+    result = {'sessions': selected, 'unresolved': unresolved, 'scope': scope,
               'ghostty_processes': len(roots), 'counters': counters}
     if include_terminals:
         inventory = [{'tty': tty, 'pid': row['pid'], 'cwd': cwds[row['pid']],
@@ -497,6 +511,10 @@ def _cycle(state, observer):
         if result['unresolved'] and previous:
             known = {(row['tool'], row['sid']) for row in observed}
             for row in previous['sessions']:
+                if previous.get('scope') == 'all-cli' and row.get('terminal_owner') != 'ghostty':
+                    # The original wider manual archive remains a recovery source;
+                    # unknown/non-Ghostty provenance is not automatic membership.
+                    continue
                 if (row['tool'], row['sid']) not in known:
                     observed.append(dict(row, membership='retained-unverified'))
                     retained += 1
@@ -523,7 +541,7 @@ def _cycle(state, observer):
             entry.update(status='unknown', error='not-observed', last_interaction=None, age_hours=None,
                          restore_command=by_id[(row['tool'], row['sid'])]['restore_command'])
             sessions.append(entry)
-        doc = {'kind': AUTO_KIND, 'captured_at': datetime.now(timezone.utc).isoformat(),
+        doc = {'kind': AUTO_KIND, 'scope': 'ghostty', 'captured_at': datetime.now(timezone.utc).isoformat(),
                'active_hours_threshold': gs.ACTIVE_HOURS, 'liveness': 'not-observed',
                'coverage': 'partial' if unknown else 'identified Ghostty descendants',
                'unresolved': result['unresolved'], 'retained_unverified': retained,

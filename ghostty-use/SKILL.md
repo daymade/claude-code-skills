@@ -1,17 +1,16 @@
 ---
 name: ghostty-use
 description: >-
-  Snapshots/restores Ghostty Claude Code/Codex tabs across reboots. Use before Mac updates
-  (保存终端会话/重启前备份终端), after restart to reopen original session IDs
-  (恢复之前的窗口/restore my ghostty tabs), audit survivors, or periodic change-only snapshots
-  (定期增量快照/没变化不记录). Also for unmanaged/legacy Codex account switches
-  (额度耗尽换号/换号后恢复全部 Codex); Minions native_runtime uses Account Manager.
-  Not for --resume, screenshots or tmux.
+  Snapshots local Codex/Claude CLI sessions across terminals and restores IDs in Ghostty
+  after reboot (保存会话/重启前备份/恢复窗口), audits survivors, and makes change-only
+  automatic backups (定期增量快照). Handles unmanaged Codex account switches
+  (额度耗尽换号); Minions native_runtime uses Account Manager. Not --resume help,
+  screenshots or tmux.
 ---
 
 # ghostty-use
 
-Capture identifiable Claude Code and Codex terminal sessions before a reboot and
+Capture identifiable local Claude Code and Codex CLI sessions before a reboot and
 reopen recorded IDs afterwards. Manual snapshots grade liveness; automatic backups
 store recovery metadata with explicit partial coverage and unknown liveness.
 
@@ -45,7 +44,7 @@ For missing Codex terminals without confirmed Ghostty ownership, load the instal
 
 | You just said / want | Run |
 |---|---|
-| Quitting for an update / reboot ("重启前保存会话") | `snapshot` |
+| Quitting for an update / reboot ("重启前保存会话") | `snapshot` (all local interactive CLIs); use `snapshot --scope ghostty` only for an explicitly Ghostty-only request |
 | Periodic backup, save only changes ("定期增量快照") | Read automatic-snapshots.md, then `ghostty_watch.py install --apply` |
 | Rebooted, want tabs back ("恢复之前的窗口") | Inspect snapshot coverage first. If absent, outdated or partial (unresolved TUIs or retained-unverified rows), follow [candidate selection](references/session_liveness.md#select-recovery-candidates-by-a-time-window) before reconstructing the selected manifest and restoring it |
 | "Was anything lost?" / suspicion after restore | `check`; when coverage is partial, follow [candidate selection](references/session_liveness.md#select-recovery-candidates-by-a-time-window) before claiming the set is complete |
@@ -101,9 +100,14 @@ Without `--all`, manual manifests select active sessions only; automatic manifes
 select their recorded set. Use `--all` to include waiting/quota/dead/stale/unknown rows.
 
 The snapshot lands in `~/.ghostty-session/snapshots/` (home-relative, survives reboot).
-Manual snapshots record Ghostty process descendants only. They persist resumable
-AI `sessions`, `unresolved` TUIs, `other_terminals` with cwd/process evidence, and
-the observed `terminal_inventory`. Other terminal emulators are excluded.
+Manual snapshots default to `--scope all-cli`: recognized interactive CLIs in
+Ghostty, other terminal emulators and headless terminal processes. Automatic
+backups remain Ghostty-only. A connection client such as ToDesk does not identify
+the terminal owner: inspect CLI processes, not the remote-access service.
+Snapshots persist resumable AI `sessions`, `unresolved` TUIs, `other_terminals`
+with cwd/process evidence, and the observed `terminal_inventory`. Use the saved
+scope and unresolved rows to state coverage; Ghostty-only totals cannot establish
+whole-machine session preservation. Non-AI commands remain evidence only.
 Treat a TTY as a terminal surface, not a tab: splits and window membership are
 unknown. If the user supplies a tab count, record it with `snapshot --expected-tabs <N>`;
 do not use matching session/TTY totals as proof of current-window coverage.

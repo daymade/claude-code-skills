@@ -133,6 +133,11 @@ active-only default. `--all`, `--only` and duplicate-free retries still work.
 
 ## Partial UUID coverage
 
+When the previous `latest.json` is an all-CLI manual snapshot, retain only its
+explicitly `terminal_owner=ghostty` rows as unverified automatic membership.
+Non-Ghostty or missing/empty provenance stays in the original manual archive;
+an unresolved Ghostty observation cannot promote it into automatic scope.
+
 Only Ghostty descendants are observed; unrelated Terminal sessions are excluded.
 Some native Codex TUIs do not expose a session UUID in argv. Resolve them with the
 shared bounded inventory resolver before recording remaining ambiguities as

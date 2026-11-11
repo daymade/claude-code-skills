@@ -62,6 +62,47 @@ def active_calendar(minutes, stream='com.apple.launchd.calendarinterval'):
 
 
 class ObserverTest(unittest.TestCase):
+    def test_all_cli_includes_other_terminal_and_headless_but_not_services(self):
+        graph = self.process_graph() + '\n' + '\n'.join([
+            '61 0 ?? codex resume 66666666-0000-7000-8000-000000000006',
+            '62 0 ?? claude --chrome-native-host',
+            '63 0 ?? codex exec synthetic-prompt',
+            '64 0 ?? codex app-server',
+            '65 0 ?? claude -p synthetic-prompt',
+            '66 0 ?? /Applications/ToDesk.app/Contents/MacOS/ToDesk_Service',
+        ])
+        def run(command, deadline, counters):
+            counters['commands'] += 1
+            return graph if command[0] == '/bin/ps' else ''.join(
+                'p' + pid + '\nn/tmp/demo\n' for pid in command[3].split(','))
+        with mock.patch.object(watch, 'run_bounded', side_effect=run):
+            observed = watch.observe(scope='all-cli', include_terminals=True)
+        self.assertEqual({r['pid'] for r in observed['sessions']}, {10, 20, 31, 61})
+        self.assertEqual(len({r['sid'] for r in observed['sessions']}), 4)
+        other = next(r for r in observed['sessions'] if r['pid'] == 31)
+        self.assertEqual(other['ancestor_pids'], [30])
+        self.assertEqual(other['terminal_owner'], 'non-ghostty')
+        self.assertEqual(observed['scope'], 'all-cli')
+        self.assertEqual(observed['counters']['history_body_reads'], 0)
+
+    def test_all_cli_without_ghostty_keeps_unresolved_headless_claude(self):
+        def run(command, deadline, counters):
+            if command[0] == '/bin/ps':
+                return '90 1 ?? claude\n91 1 ?? codex\n'
+            return 'p90\nn/tmp/one\np91\nn/tmp/two\n'
+        with mock.patch.object(watch, 'run_bounded', side_effect=run):
+            observed = watch.observe(scope='all-cli', include_terminals=True)
+        self.assertEqual({r['pid'] for r in observed['unresolved']}, {90, 91})
+        self.assertEqual(len(observed['terminal_inventory']), 2)
+        self.assertTrue(all(r['kind'] == 'ai' for r in observed['terminal_inventory']))
+        self.assertEqual(observed['ghostty_processes'], 0)
+
+    def test_invalid_scope_fails_before_observation(self):
+        with mock.patch.object(watch, 'run_bounded') as run:
+            with self.assertRaises(ValueError):
+                watch.observe(scope='everything')
+        run.assert_not_called()
+
     def test_terminal_inventory_keeps_other_shells_and_excludes_other_emulators(self):
         with mock.patch.object(watch, 'run_bounded', side_effect=self.fake_run):
             result = watch.observe(include_terminals=True)
@@ -303,6 +344,21 @@ class ObserverTest(unittest.TestCase):
 
 
 class SnapshotTest(unittest.TestCase):
+    def test_partial_automatic_cycle_does_not_import_other_terminal_membership(self):
+        self.latest.parent.mkdir(parents=True)
+        prior = {'scope': 'all-cli', 'sessions': [
+            session(S1, terminal_owner='ghostty'),
+            session(S2, terminal_owner='ghostty'),
+            session(S3, terminal_owner='non-ghostty'),
+            session('44444444-0000-7000-8000-000000000004'),
+            session('55555555-0000-7000-8000-000000000005', terminal_owner=None),
+            session('66666666-0000-7000-8000-000000000006', terminal_owner='')], 'unresolved': []}
+        self.latest.write_text(json.dumps(prior))
+        result = self.run_cycle([session(S1)], [unknown()])
+        saved = json.loads(self.latest.read_text())
+        self.assertEqual({r['sid'] for r in saved['sessions']}, {S1, S2})
+        self.assertEqual(result['retained_unverified'], 1)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='ghostty-watch-test-')
         self.addCleanup(self.temp.cleanup)
