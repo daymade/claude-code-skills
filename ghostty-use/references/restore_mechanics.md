@@ -19,6 +19,13 @@ current app and adapter before claiming a capability is unavailable.
 
 ## The working protocol
 
+Before the first GUI action, inspect the current host's available Kimi tools or
+existing `kimi-cu` entry and confirm whether post-restore history observation is
+possible. Report a missing observation channel before opening the batch. It does
+not block an authorized process-level restore; retain history readiness as
+unverified and never substitute a prohibited computer-use channel. The batch
+script checks process presence, not Kimi availability or readable history.
+
 1. Verify Accessibility first:
    `osascript -e 'tell application "System Events" to get UI elements enabled'` —
    `false` means keystrokes will silently do nothing useful; grant it before
@@ -67,6 +74,10 @@ The executing agent checks the same selected IDs at two distinct levels:
   screen does not. Titles alone do not prove every selected tab is ready. Working,
   compaction, quota or stalled indicators and historical error turns can coexist with
   readable history; distinguish them from an error screen that prevents loading.
+
+Report process presence, readable-history coverage and business-task continuation
+separately. A complete process count does not prove either of the latter; an
+open-only restore does not authorize sending a new prompt to continue old work.
 
 Inspect remaining loading/uncertain tabs within a bounded wait. Bind observations
 to the current tab and the process/manifest identity; a generic title or cwd is

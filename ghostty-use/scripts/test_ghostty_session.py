@@ -331,6 +331,17 @@ def entry(sid=S_CODEX, status="active"):
 
 
 class RecoveryWorkflowTest(unittest.TestCase):
+    def test_cross_terminal_live_id_is_not_reopened_and_readiness_is_separate(self):
+        sessions = [entry(S_CODEX)]
+        output = io.StringIO()
+        with mock.patch.object(gs, 'list_sessions', return_value=sessions) as observe, \
+                mock.patch.object(gs, '_paste_tab') as paste, redirect_stdout(output):
+            self.assertEqual(gs.cmd_restore(self.args(snapshot=self.snapshot(sessions))), 0)
+            self.assertEqual(gs.cmd_check(argparse.Namespace(snapshot=self.snapshot(sessions), strict=True)), 0)
+        paste.assert_not_called()
+        self.assertTrue(all(call.kwargs.get('scope') == 'all-cli' for call in observe.call_args_list))
+        self.assertIn('readable conversation history and task continuation are not verified', output.getvalue())
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="ghostty-recovery-")
         self.addCleanup(self.temp.cleanup)
