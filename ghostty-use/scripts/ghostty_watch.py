@@ -511,6 +511,10 @@ def _cycle(state, observer):
         if result['unresolved'] and previous:
             known = {(row['tool'], row['sid']) for row in observed}
             for row in previous['sessions']:
+                if previous.get('scope') == 'all-cli' and row.get('terminal_owner') != 'ghostty':
+                    # The original wider manual archive remains a recovery source;
+                    # unknown/non-Ghostty provenance is not automatic membership.
+                    continue
                 if (row['tool'], row['sid']) not in known:
                     observed.append(dict(row, membership='retained-unverified'))
                     retained += 1
@@ -537,7 +541,7 @@ def _cycle(state, observer):
             entry.update(status='unknown', error='not-observed', last_interaction=None, age_hours=None,
                          restore_command=by_id[(row['tool'], row['sid'])]['restore_command'])
             sessions.append(entry)
-        doc = {'kind': AUTO_KIND, 'captured_at': datetime.now(timezone.utc).isoformat(),
+        doc = {'kind': AUTO_KIND, 'scope': 'ghostty', 'captured_at': datetime.now(timezone.utc).isoformat(),
                'active_hours_threshold': gs.ACTIVE_HOURS, 'liveness': 'not-observed',
                'coverage': 'partial' if unknown else 'identified Ghostty descendants',
                'unresolved': result['unresolved'], 'retained_unverified': retained,

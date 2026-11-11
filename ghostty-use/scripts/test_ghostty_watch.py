@@ -344,6 +344,21 @@ class ObserverTest(unittest.TestCase):
 
 
 class SnapshotTest(unittest.TestCase):
+    def test_partial_automatic_cycle_does_not_import_other_terminal_membership(self):
+        self.latest.parent.mkdir(parents=True)
+        prior = {'scope': 'all-cli', 'sessions': [
+            session(S1, terminal_owner='ghostty'),
+            session(S2, terminal_owner='ghostty'),
+            session(S3, terminal_owner='non-ghostty'),
+            session('44444444-0000-7000-8000-000000000004'),
+            session('55555555-0000-7000-8000-000000000005', terminal_owner=None),
+            session('66666666-0000-7000-8000-000000000006', terminal_owner='')], 'unresolved': []}
+        self.latest.write_text(json.dumps(prior))
+        result = self.run_cycle([session(S1)], [unknown()])
+        saved = json.loads(self.latest.read_text())
+        self.assertEqual({r['sid'] for r in saved['sessions']}, {S1, S2})
+        self.assertEqual(result['retained_unverified'], 1)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='ghostty-watch-test-')
         self.addCleanup(self.temp.cleanup)
