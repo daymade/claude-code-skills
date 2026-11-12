@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **lark-cli-router** (v1.0.2): Complete authorized device login in a session-owned background worker, retain expiry and identity binding across continuation, and require domain verification after credential recovery.
 - **frontend-visual-qa** (v1.21.44): Judge illustrated fill-in grids by recognizable thumbnails, readable labels and usable entry fields; retain the dense-first-screen failure case without prescribing a universal row count or height.
 
 - **ghostty-use** (v1.13.0): Store snapshot source rows and lifecycle events without duplicate canonical views or inventory aggregates; derive reporting views and supported command totals on read while retaining legacy-input compatibility. Align documentation entry points with their canonical owners.
