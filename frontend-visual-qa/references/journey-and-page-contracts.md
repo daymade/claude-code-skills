@@ -250,6 +250,10 @@ preserve the product's own unknown/read-only boundary.
 
 #### Long-document reading positions
 
+For timed course prose with an original-video player, also use
+[course video reading](course-video-reading.md) for real playback, fixed-area
+offsets and orientation/state-retention checks. It includes healthy and injected-failure controls.
+
 When a change affects a long document's outline, active-section cue or source
 sidebar, the executing auditor selects relevant positions through the existing
 project harness. Keep the same document/version and actual scroll owner; use
