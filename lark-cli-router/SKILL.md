@@ -173,6 +173,12 @@ user/bot and missing-scope branch, and interpret the current CLI's auth status:
 lark-cli --profile "<authorized-profile>" auth status --json
 ```
 
+For a required, already-authorized login on an existing user profile, read
+[auth recovery](references/auth-recovery.md). Its nonblocking worker returns the
+authorization link immediately and saves completion without waiting for the
+user's reply; it binds the existing account and independently verifies auth.
+The selected domain guide's real target read remains required afterward.
+
 When completing an agent-initiated device flow, inspect the exit status and the
 granted and missing scopes as well as the success text. If a nonzero exit and
 success text coexist, do not restart the flow or declare success from the text

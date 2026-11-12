@@ -14,7 +14,7 @@
       "description": "Routes Feishu/Lark/Doubao operations through the version-matched guides embedded in lark-cli. Use for documents, wiki, sheets, Base, minutes, meetings, calendar, messaging, mail, tasks, approval, authentication, permissions and lark-cli troubleshooting.",
       "source": "./lark-cli-router",
       "strict": false,
-      "version": "1.0.1",
+      "version": "1.0.2",
       "category": "productivity",
       "keywords": [
         "feishu",
