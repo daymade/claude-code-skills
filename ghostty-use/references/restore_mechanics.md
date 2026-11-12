@@ -163,12 +163,16 @@ user data, not a locked contract.
 
 New manifests keep source rows, not duplicate canonical lists or aggregate
 counts. The writers and reader above own the format: terminal and retained
-counts, ordinary-terminal subsets and change-comparison views are computed when
-needed. Legacy manifests remain readable; the automatic reader checks legacy
+counts, ordinary-terminal subsets, automatic coverage/unobserved-liveness views
+and change-comparison views are computed when needed. Legacy manifests remain
+readable; the automatic reader checks legacy
 canonical copies when present, and new writes omit them. Unique legacy
 ordinary-terminal evidence without an inventory is preserved on reconstruction.
 Frozen reopen commands remain capture evidence because their profile environment
 may differ from the current mutable profile map.
+Manual per-session liveness results remain historical measurements: collection
+is not a simultaneous clock snapshot. Do not treat those results as current
+process presence or readable-history acceptance.
 
 Prefer invocation-local `--only`/`--exclude` for a changed restore selection so
 the original evidence survives. `--expected-tabs <N>` adds `expected_tab_count`

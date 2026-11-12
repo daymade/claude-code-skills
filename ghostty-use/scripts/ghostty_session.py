@@ -693,6 +693,14 @@ def cmd_snapshot(args):
 
 # ---------- check ----------
 
+def snapshot_coverage(doc):
+    if doc.get('kind') == 'automatic-recovery-snapshot':
+        partial = bool(doc.get('unresolved')) or any(
+            row.get('membership') == 'retained-unverified' for row in doc['sessions'])
+        return 'partial' if partial else 'identified Ghostty descendants'
+    return doc.get('coverage', 'manual')
+
+
 def load_snapshot(path, optional=False):
     path = path or os.path.join(SNAP_DIR, "latest.json")
     if not os.path.exists(path):
@@ -718,6 +726,12 @@ def load_snapshot(path, optional=False):
     if 'terminal_inventory' in doc:
         doc['terminal_surface_count'] = len(doc['terminal_inventory'])
         doc['other_terminals'] = [row for row in doc['terminal_inventory'] if row.get('kind') == 'other']
+    if doc.get('kind') == 'automatic-recovery-snapshot':
+        doc['coverage'] = snapshot_coverage(doc)
+        for row in doc['sessions']:
+            for key, value in (('status', 'unknown'), ('error', 'not-observed'),
+                               ('last_interaction', None), ('age_hours', None)):
+                row.setdefault(key, value)
     return doc
 
 

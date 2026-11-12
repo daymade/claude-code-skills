@@ -6,9 +6,9 @@ synthetic file tree under a temporary HOME. Run:
 
     python3 -m unittest test_ghostty_session -v
 
-Linux-safe: covers liveness reading, classification, and reopen-command
-generation only. Process enumeration (ps/lsof) is not exercised here; its
-live-machine calibration is recorded in references/session_liveness.md.
+Linux-safe fixtures cover liveness, identity, reconstruction, snapshot contracts
+and restore control flow. OS/GUI probes are mocked; live-machine acceptance is
+described in references/session_liveness.md and references/restore_mechanics.md.
 """
 import json
 import argparse

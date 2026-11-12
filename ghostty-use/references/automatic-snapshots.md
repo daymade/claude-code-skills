@@ -102,8 +102,11 @@ independently when one is expected. Read `status.last_cycle` (persisted in
 `watcher/last-cycle.json`) and `watcher/cycles.jsonl` as well: an unchanged successful round updates observation health without
 creating another snapshot archive. Failed rounds must report their own time and
 error without advancing `last_successful_observation_at`. Partial observations
-advance `last_observed_at` and report unresolved/retained counts; they do not claim
-complete coverage. `attempted_at`, `completed_at` and `last_snapshot_change_at`
+advance `last_observed_at` and report identity failures; they do not claim complete
+coverage. Inventory statistics are computed in `status.latest_snapshot`, not
+persisted in cycle telemetry. The persisted event keeps lifecycle state, snapshot
+action, source diagnostics and timestamps; coverage/change views are derived on read.
+`attempted_at`, `completed_at` and `last_snapshot_change_at`
 distinguish the latest attempt, completion and saved inventory change. The event
 log follows the [watcher's retention policy](../scripts/ghostty_watch.py).
 A foreground `probe` alone does not certify
@@ -129,8 +132,7 @@ detail also goes to bounded, timestamped stderr/error logs.
 The first scheduled observation upgrades a matching manual latest snapshot to
 an automatic manifest once. Later equal observations write health only. The default
 `latest.json` route points at the newest saved manifest; manual snapshot archives
-remain available. Automatic snapshots declare liveness `not-observed`, with
-`unknown` session status. Restore selection and retry options follow the
+remain available. Restore selection and retry options follow the
 [canonical quick start](../SKILL.md#quick-start).
 
 ## Partial UUID coverage
