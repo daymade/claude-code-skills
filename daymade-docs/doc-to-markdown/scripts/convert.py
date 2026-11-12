@@ -38,6 +38,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+from docx_numbering import pandoc_input
+
 
 @dataclass
 class ConversionResult:
@@ -1024,9 +1026,11 @@ def convert_with_pandoc(
                 extract_dir = assets_dir
             cmd.extend(["--extract-media", str(extract_dir)])
 
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=120
-        )
+        with pandoc_input(file_path) as reading_copy:
+            cmd[1] = str(reading_copy)
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=120
+            )
 
         if result.returncode != 0:
             return ConversionResult(

@@ -76,6 +76,12 @@ When converting DOCX via pandoc, these cleanups are applied automatically:
 | Escaped brackets (`\[...\]`) | → `[...]` | `test_escaped_brackets_fixed` |
 | Double-bracket links (`[[text]](url)`) | → `[text](url)` | `test_double_bracket_links_fixed` |
 
+For generated list labels, read [DOCX numbering](references/docx-numbering.md).
+Before Pandoc runs, `scripts/docx_numbering.py` supplies a temporary reading copy
+when a single-level definition omits its level index. The original stays unchanged.
+Validate the result against the original; text extraction alone cannot prove that
+Word's generated numbers survived.
+
 ## PDF Post-Processing (automatic)
 
 When converting PDF via pymupdf4llm, these cleanups are applied automatically (skip with `--no-postprocess`):
@@ -131,6 +137,7 @@ For the validator's command, prerequisites, result fields and exit handling, rea
 [Mechanical comparison](references/pdf-acceptance.md#mechanical-comparison).
 The CLI accepts PDF or DOCX source files; the remainder of that procedure covers
 PDF structural and recipient acceptance.
+For DOCX generated numbering and its limits, follow [DOCX numbering](references/docx-numbering.md).
 
 From this Skill's source checkout, run the validator's bidirectional controls with
 `python3 -m unittest discover -s tests -v` (Pandoc required). Default packages
