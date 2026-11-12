@@ -165,6 +165,25 @@ class NumberingTests(unittest.TestCase):
         self.assertIn(b'<w:lvl w:ilvl="2">', result)
         self.assertEqual(normalize_numbering_xml(result), result)
 
+    def test_multi_paragraph_item_binds_only_its_numbered_paragraph(self):
+        markdown = '1. First\n\n   Continuation of first item.\n\n2. Second\n'
+        subprocess.run(['pandoc', '-f', 'gfm', '-t', 'docx', '-o', str(self.source)],
+                       input=markdown, capture_output=True, text=True, check=True)
+        good = self.compare(markdown)
+        self.assertTrue(good.text_equal)
+        self.assertEqual(good.source_numbered_item_count, 2)
+        self.assertEqual(good.output_numbered_item_count, 2)
+        self.assertTrue(good.numbering_equal)
+        self.assertEqual(good.status, 'pass', good.errors)
+        # Removing a label must still fail; removing continuation text is a
+        # separate body-text defect even when both list ordinals survive.
+        missing = self.compare('First\n\nContinuation of first item.\n\n2. Second\n')
+        self.assertFalse(missing.numbering_equal)
+        self.assertEqual(missing.status, 'fail')
+        truncated = self.compare('1. First\n2. Second\n')
+        self.assertTrue(truncated.numbering_equal)
+        self.assertNotEqual(truncated.status, 'pass')
+
 
 if __name__ == '__main__':
     unittest.main()

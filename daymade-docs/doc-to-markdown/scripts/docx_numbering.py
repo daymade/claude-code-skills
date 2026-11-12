@@ -195,8 +195,11 @@ def markdown_numbering(blocks, text_of):
             kind, children = node.get("t"), node.get("c")
             if kind == "OrderedList":
                 for value, item in enumerate(children[1], start=children[0][0]):
-                    text = text_of([block for block in item
-                                    if block.get("t") not in ("OrderedList", "BulletList")])
+                    # One generated OOXML paragraph owns the label. Later
+                    # continuation paragraphs belong to body-text comparison.
+                    first = next((block for block in item
+                                  if block.get("t") not in ("OrderedList", "BulletList")), None)
+                    text = text_of(first)
                     records.append({"level": depth, "value": value,
                                     "text": re.sub(r"\s+", "", text)})
                     visit(item, depth + 1)
