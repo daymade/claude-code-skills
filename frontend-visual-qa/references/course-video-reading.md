@@ -33,7 +33,7 @@ retranscribing or reviewing an unchanged whole course.
 
 ## Known-answer calibration
 
-Open `evals/files/course-video-reader-fixture.html` with `?video=<URL-encoded local video URL>`.
+Open the bundled `assets/course-video-reader-fixture.html` with `?video=<URL-encoded local video URL>`.
 The fixture is synthetic, data-free reading content; choose a local playable video longer than
 8 seconds. It does not download or include a customer's recording.
 
