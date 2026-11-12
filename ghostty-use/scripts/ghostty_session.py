@@ -644,13 +644,10 @@ def write_snapshot(sessions, out_path=None, *, expected_tabs=None):
     doc = {"captured_at": datetime.now().isoformat(timespec="seconds"),
            "active_hours_threshold": ACTIVE_HOURS, "sessions": list(sessions),
            "unresolved": getattr(sessions, 'unresolved', []),
-           "other_terminals": getattr(sessions, 'other_terminals', []),
            "terminal_inventory": getattr(sessions, 'terminal_inventory', []),
            "scope": ("all-cli" if isinstance(sessions, SessionList) and sessions.observation.get('scope') == 'all-cli'
                      else "Ghostty process descendants" if isinstance(sessions, SessionList) else "unspecified"),
            "window_tab_mapping": "unknown"}
-    if isinstance(sessions, SessionList):
-        doc['terminal_surface_count'] = len(sessions.terminal_inventory)
     if expected_tabs is not None:
         doc['expected_tab_count'] = expected_tabs
     path = out_path or os.path.join(SNAP_DIR, f"snapshot-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}.json")
@@ -696,6 +693,14 @@ def cmd_snapshot(args):
 
 # ---------- check ----------
 
+def snapshot_coverage(doc):
+    if doc.get('kind') == 'automatic-recovery-snapshot':
+        partial = bool(doc.get('unresolved')) or any(
+            row.get('membership') == 'retained-unverified' for row in doc['sessions'])
+        return 'partial' if partial else 'identified Ghostty descendants'
+    return doc.get('coverage', 'manual')
+
+
 def load_snapshot(path, optional=False):
     path = path or os.path.join(SNAP_DIR, "latest.json")
     if not os.path.exists(path):
@@ -717,6 +722,16 @@ def load_snapshot(path, optional=False):
         if s["sid"] in seen:
             raise RecoveryError("snapshot contains duplicate session IDs")
         seen.add(s["sid"])
+    # Compatibility views are computed, never copied into new manifests.
+    if 'terminal_inventory' in doc:
+        doc['terminal_surface_count'] = len(doc['terminal_inventory'])
+        doc['other_terminals'] = [row for row in doc['terminal_inventory'] if row.get('kind') == 'other']
+    if doc.get('kind') == 'automatic-recovery-snapshot':
+        doc['coverage'] = snapshot_coverage(doc)
+        for row in doc['sessions']:
+            for key, value in (('status', 'unknown'), ('error', 'not-observed'),
+                               ('last_interaction', None), ('age_hours', None)):
+                row.setdefault(key, value)
     return doc
 
 
@@ -802,10 +817,12 @@ def cmd_reconstruct(args):
                              "indexed_rows": len(candidates), "rejected": rejected}, "sessions": sessions}
     # Preserve capture evidence; indexed reconstruction does not establish new
     # window membership or recover the unresolved/non-AI records by itself.
-    for field in ('unresolved', 'other_terminals', 'terminal_inventory', 'scope',
-                  'window_tab_mapping', 'terminal_surface_count', 'expected_tab_count'):
+    for field in ('unresolved', 'terminal_inventory', 'scope',
+                  'window_tab_mapping', 'expected_tab_count'):
         if doc and field in doc:
             rebuilt[field] = doc[field]
+    if doc and 'terminal_inventory' not in doc and 'other_terminals' in doc:
+        rebuilt['other_terminals'] = doc['other_terminals']  # unique legacy evidence
     if not sessions:
         raise RecoveryError("no verified recovery sessions selected; latest snapshot untouched")
     if args.dry_run:

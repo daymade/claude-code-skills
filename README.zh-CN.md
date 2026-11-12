@@ -555,9 +555,9 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 ---
 
-### **ghostty-use** - Ghostty 终端会话快照与恢复
+### **ghostty-use** - CLI 会话备份与 Ghostty 恢复
 
-通过[规范 Skill](ghostty-use/SKILL.md)保存和恢复已记录的 Ghostty CLI 会话。
+会话备份、采集范围与恢复入口见[规范 Skill](ghostty-use/SKILL.md)。
 定期元数据备份、未覆盖项和运行前提见
 [自动快照流程](ghostty-use/references/automatic-snapshots.md)。
 

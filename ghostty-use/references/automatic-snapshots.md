@@ -42,6 +42,9 @@ fixed interpreter directly. Reinstall updates the owned script copies and enable
 the same job without creating another label. The observer runs those byte-copies,
 not the skill source. Use the upgrade procedure below after a script update;
 changing a source-backed Skill entry alone does not update this runtime.
+The [snapshot output contract](restore_mechanics.md#snapshot-schema-output-contract)
+owns persisted-format compatibility. Refresh the managed script copies together;
+do not assume an older watcher can consume newly written automatic manifests.
 
 Use the read-only `install` plan for the currently requested definition and
 `status` for the loaded schedule. Install independently compares calendarinterval
@@ -99,8 +102,11 @@ independently when one is expected. Read `status.last_cycle` (persisted in
 `watcher/last-cycle.json`) and `watcher/cycles.jsonl` as well: an unchanged successful round updates observation health without
 creating another snapshot archive. Failed rounds must report their own time and
 error without advancing `last_successful_observation_at`. Partial observations
-advance `last_observed_at` and report unresolved/retained counts; they do not claim
-complete coverage. `attempted_at`, `completed_at` and `last_snapshot_change_at`
+advance `last_observed_at` and report identity failures; they do not claim complete
+coverage. Inventory statistics are computed in `status.latest_snapshot`, not
+persisted in cycle telemetry. The persisted event keeps lifecycle state, snapshot
+action, source diagnostics and timestamps; coverage/change views are derived on read.
+`attempted_at`, `completed_at` and `last_snapshot_change_at`
 distinguish the latest attempt, completion and saved inventory change. The event
 log follows the [watcher's retention policy](../scripts/ghostty_watch.py).
 A foreground `probe` alone does not certify
@@ -126,10 +132,8 @@ detail also goes to bounded, timestamped stderr/error logs.
 The first scheduled observation upgrades a matching manual latest snapshot to
 an automatic manifest once. Later equal observations write health only. The default
 `latest.json` route points at the newest saved manifest; manual snapshot archives
-remain available. Automatic snapshots declare liveness `not-observed`, with
-`unknown` session status. `restore` selects their whole recorded set by default,
-including waiting/quota sessions, while manual snapshots retain the existing
-active-only default. `--all`, `--only` and duplicate-free retries still work.
+remain available. Restore selection and retry options follow the
+[canonical quick start](../SKILL.md#quick-start).
 
 ## Partial UUID coverage
 

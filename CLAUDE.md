@@ -691,7 +691,6 @@ them instead of restating volatile protocol facts.
 
 For pre-reboot snapshots of local Claude Code / Codex CLI sessions across terminals,
 or restoring and reconciling their IDs in Ghostty, enter [`ghostty-use`](ghostty-use/SKILL.md).
-Its manual default covers non-Ghostty/headless CLIs; automatic backups remain Ghostty-only.
 Unmanaged/legacy manual Codex account
 switches start at its
 [account-owner selection](ghostty-use/references/codex-account-switch.md#choose-the-account-owner-first).

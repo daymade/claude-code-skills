@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **ghostty-use** (v1.13.0): Store snapshot source rows and lifecycle events without duplicate canonical views or inventory aggregates; derive reporting views and supported command totals on read while retaining legacy-input compatibility. Align documentation entry points with their canonical owners.
+
 - **ghostty-use** (v1.11.6 → v1.12.0): Snapshot all local interactive Codex/Claude CLIs by default, including non-Ghostty and headless terminals; retain Ghostty-only automatic backups, cross-terminal restore deduplication and explicit process/history acceptance boundaries.
 
 - **claude-switch-models-setup** (`daymade-claude-code` v5.1.9 → v5.1.10): Preserve malformed required plugin registries, report preparation failures before native launch, and serialize both sync helpers without expiring live or unknown lock owners.

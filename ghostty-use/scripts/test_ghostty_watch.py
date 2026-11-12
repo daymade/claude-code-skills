@@ -344,6 +344,69 @@ class ObserverTest(unittest.TestCase):
 
 
 class SnapshotTest(unittest.TestCase):
+    def test_command_total_requires_valid_atomic_categories(self):
+        for invalid in (None, {}, {'ps_calls': None, 'lsof_calls': 1},
+                        {'ps_calls': True, 'lsof_calls': 1}, {'ps_calls': -1, 'lsof_calls': 1},
+                        {'ps_calls': 1, 'lsof_calls': 1, 'process_start_calls': None}):
+            self.assertIsNone(watch._command_total(invalid))
+        self.assertEqual(watch._command_total({'ps_calls': 1, 'lsof_calls': 1}), 2)
+        self.assertEqual(watch._command_total({'ps_calls': 1, 'lsof_calls': 1, 'process_start_calls': 3}), 5)
+
+    def test_cycle_telemetry_derives_total_commands_from_atomic_categories(self):
+        self.run_cycle()
+        path = self.state / 'watcher/last-cycle.json'
+        raw = json.loads(path.read_text())
+        self.assertNotIn('commands', raw['counters'])
+        raw['counters']['commands'] = 999
+        path.write_text(json.dumps(raw))
+        self.assertEqual(watch.cycle_status(self.state)['counters']['commands'], 2)
+
+    def test_manifest_stores_detail_not_derived_views_and_status_ignores_stale_count(self):
+        self.run_cycle([session(S1), session(S2)])
+        self.run_cycle([session(S1)], [unknown()])
+        doc = json.loads(self.latest.read_text())
+        for field in ('canonical_inventory', 'canonical_unresolved', 'retained_unverified',
+                      'terminal_surface_count', 'other_terminals', 'coverage'):
+            self.assertNotIn(field, doc)
+        self.assertTrue(all(not {'status', 'age_hours', 'error', 'last_interaction'}.intersection(row)
+                            for row in doc['sessions']))
+        view = gs.load_snapshot(str(self.latest))
+        self.assertEqual(view['coverage'], 'partial')
+        self.assertTrue(all(row['status'] == 'unknown' for row in view['sessions']))
+        self.assertEqual(sum(r.get('membership') == 'retained-unverified' for r in doc['sessions']), 1)
+        doc['retained_unverified'] = 999  # a legacy aggregate cannot override the rows
+        self.latest.write_text(json.dumps(doc))
+        with mock.patch.object(watch, 'system_run', return_value=subprocess.CompletedProcess([], 1, '', '')), \
+                mock.patch.object(watch, 'launch_target', return_value=self.state / 'agent.plist'):
+            view = watch.status(self.state)['latest_snapshot']
+        self.assertEqual((view['recorded_sessions'], view['identified_at_capture'], view['retained_unverified']), (2, 1, 1))
+
+    def test_legacy_canonical_views_are_checked_but_not_written_again(self):
+        self.run_cycle()
+        doc = json.loads(self.latest.read_text())
+        doc['canonical_inventory'] = watch.canonical(doc['sessions'], {})
+        doc['canonical_unresolved'] = watch.canonical_unresolved(doc.get('unresolved', []))
+        self.latest.write_text(json.dumps(doc))
+        self.assertEqual(self.run_cycle()['state'], 'unchanged')
+        self.assertEqual(self.run_cycle([session(S2)])['state'], 'changed')
+        self.assertNotIn('canonical_inventory', json.loads(self.latest.read_text()))
+
+    def test_partial_or_empty_legacy_canonical_view_is_not_new_format(self):
+        self.run_cycle()
+        clean = self.latest.read_bytes()
+        for value in (None, [], {}):
+            with self.subTest(value=value):
+                doc = json.loads(clean)
+                doc['canonical_inventory'] = value
+                self.latest.write_text(json.dumps(doc))
+                with self.assertRaisesRegex(ValueError, 'corrupt'):
+                    self.run_cycle()
+        doc = json.loads(clean)
+        doc['canonical_unresolved'] = []
+        self.latest.write_text(json.dumps(doc))
+        with self.assertRaisesRegex(ValueError, 'corrupt'):
+            self.run_cycle()
+
     def test_partial_automatic_cycle_does_not_import_other_terminal_membership(self):
         self.latest.parent.mkdir(parents=True)
         prior = {'scope': 'all-cli', 'sessions': [
@@ -387,7 +450,7 @@ class SnapshotTest(unittest.TestCase):
         self.assertGreaterEqual(heartbeat['attempted_at'], first['attempted_at'])
         self.assertEqual(heartbeat['last_snapshot_change_at'], first['last_snapshot_change_at'])
         self.assertFalse(heartbeat['snapshot_changed'])
-        self.assertEqual(heartbeat['identified'], 1)
+        self.assertNotIn('identified', heartbeat)
         for key in ('attempted_at', 'completed_at', 'last_successful_observation_at'):
             self.assertIsNotNone(datetime.fromisoformat(heartbeat[key]).tzinfo)
         lines = (self.state / 'watcher/cycles.jsonl').read_text().splitlines()
@@ -454,12 +517,18 @@ class SnapshotTest(unittest.TestCase):
         self.assertEqual(result['retained_unverified'], 1)
         doc = json.loads(self.latest.read_text())
         self.assertEqual({row['sid'] for row in doc['sessions']}, {S1, S2, S3})
-        self.assertEqual(doc['coverage'], 'partial')
+        self.assertNotIn('coverage', doc)
+        self.assertEqual(gs.snapshot_coverage(doc), 'partial')
         self.assertEqual(len(doc['unresolved']), 1)
         heartbeat = watch.cycle_status(self.state)
         self.assertEqual(heartbeat['state'], 'partial')
-        self.assertEqual(heartbeat['identified'], 2)
-        self.assertEqual(heartbeat['sessions'], 3)
+        self.assertEqual((result['identified'], result['sessions']), (2, 3))
+        for field in ('identified', 'sessions', 'unresolved', 'retained_unverified'):
+            self.assertNotIn(field, heartbeat)
+        stored = json.loads((self.state / 'watcher/last-cycle.json').read_text())
+        for field in ('identified', 'sessions', 'unresolved', 'retained_unverified',
+                      'coverage', 'snapshot_changed'):
+            self.assertNotIn(field, stored)
         self.assertEqual(heartbeat['last_successful_observation_at'], successful_at)
         self.assertIn('unresolved', heartbeat['error'])
         self.assertEqual(self.run_cycle([session(S1), session(S3)], [unknown(pid=800, tty='ttys099')])['state'], 'unchanged')
@@ -493,7 +562,7 @@ class SnapshotTest(unittest.TestCase):
             record = watch.cycle_status(self.state)
             self.assertEqual(record['state'], expected)
             self.assertEqual(record['last_successful_observation_at'], successful_at)
-            self.assertIsNone(record['identified'])
+            self.assertNotIn('identified', record)
             self.assertTrue(record['error'])
             self.assertEqual(self.latest.read_bytes(), before)
         absent = dict(observation([]), ghostty_processes=0)
@@ -515,7 +584,8 @@ class SnapshotTest(unittest.TestCase):
         self.assertEqual(doc['unresolved'][0]['profile'], 'unknown')
         self.assertNotIn('sid', doc['unresolved'][0])
         self.assertNotIn('restore_command', doc['unresolved'][0])
-        opaque = doc['canonical_unresolved'][0]
+        self.assertNotIn('canonical_unresolved', doc)
+        opaque = watch.canonical_unresolved(doc['unresolved'])[0]
         self.assertEqual(opaque['raw_command'], doc['unresolved'][0]['cmdline'])
         self.assertEqual(opaque['parse_status'], 'opaque')
         self.assertEqual(opaque['profile'], 'unknown')
@@ -554,7 +624,8 @@ class SnapshotTest(unittest.TestCase):
         self.assertEqual(len(doc['sessions']), 1)
         self.assertNotIn('sid', doc['unresolved'][0])
         self.assertEqual(doc['liveness'], 'not-observed')
-        self.assertEqual(doc['sessions'][0]['status'], 'unknown')
+        self.assertNotIn('status', doc['sessions'][0])
+        self.assertEqual(gs.load_snapshot(str(self.latest))['sessions'][0]['status'], 'unknown')
 
     def test_corrupt_empty_and_missing_prior_are_distinct(self):
         self.latest.parent.mkdir(parents=True)
@@ -572,7 +643,10 @@ class SnapshotTest(unittest.TestCase):
             self.run_cycle()
         self.assertFalse(self.latest.exists())
         self.latest.write_bytes(before)
-        value = json.loads(before); value['canonical_inventory'][0]['cwd'] = '/tmp/corrupt'
+        value = json.loads(before)
+        value['canonical_inventory'] = watch.canonical(value['sessions'], {})
+        value['canonical_unresolved'] = watch.canonical_unresolved(value.get('unresolved', []))
+        value['canonical_inventory'][0]['cwd'] = '/tmp/corrupt'
         self.latest.write_text(json.dumps(value))
         corrupt = self.latest.read_bytes()
         with self.assertRaisesRegex(ValueError, 'corrupt'):
@@ -686,7 +760,8 @@ class AutomaticNativeIdentityTest(unittest.TestCase):
                 self.assertEqual(result['counters']['uuidless_resolved'], 2)
                 doc = json.loads((state / 'snapshots/latest.json').read_text())
                 self.assertEqual({row['sid'] for row in doc['sessions']}, {S1, S2, S3})
-                self.assertEqual(doc['terminal_surface_count'], 3)
+                self.assertEqual(len(doc['terminal_inventory']), 3)
+                self.assertNotIn('terminal_surface_count', doc)
                 self.assertEqual(watch.cycle(state)['state'], 'unchanged')
                 # A second equal-distance valid transcript makes identity unknown,
                 # rather than choosing its ID or classifying retained S2 as live.
