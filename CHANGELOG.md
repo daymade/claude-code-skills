@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.21.46): Route timed course reading from the repository instructions to its QA procedure; resolve the calibration fixture from the loaded Skill root and derive required video coverage from its offered timestamps.
+
 - **frontend-visual-qa** (v1.21.45): Add course text/video reading journeys and known-answer controls for scrolling players, covered targets and orientation resets.
 
 - **doc-to-markdown** (`daymade-docs` v1.29.7): Resolve Pandoc image references from the Markdown output directory, route generated numbering checks to their original-OOXML owner, replace bypass conversion examples with the maintained converter, and remove derived inventories and metadata templates.
