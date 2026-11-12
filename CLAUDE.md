@@ -558,6 +558,12 @@ keep maintainer-only repository resources distinct from installed Skill paths.
 Context-veto CLI regressions live in
 [test_trap_demotion.py](daymade-audio/transcript-fixer/scripts/tests/test_trap_demotion.py).
 
+### Feishu User Login Recovery
+
+When the version-matched identity guide requires restoring an authorized user
+login, enter [authorization recovery](lark-cli-router/references/auth-recovery.md).
+Keep device-flow commands, continuation and account/result verification there.
+
 ### Feishu Recording Lookup
 
 To find an existing Feishu recording by date, enter
