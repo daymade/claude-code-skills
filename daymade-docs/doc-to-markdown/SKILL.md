@@ -9,8 +9,6 @@ description: >-
 
 Convert documents to high-quality markdown with intelligent multi-tool orchestration and automatic DOCX post-processing.
 
-**Architecture**: Format-specific converters with automatic post-processing.
-
 ## Quick Start
 
 ```bash
@@ -65,32 +63,29 @@ are readable inside the recipient's actual Markdown reader.
 
 When converting DOCX via pandoc, these cleanups are applied automatically:
 
-| Problem | Fix | Test coverage |
-|---------|-----|---------------|
-| Grid tables (`+:---+`) | Single-column → blockquote, multi-column → pipe table | `TestPostprocessPipeline` |
-| Simple tables (`  ---- ----`) | Multi-column images → pipe table with captions | `TestSimpleTable` |
-| Image path nesting (`media/media/`) | Flatten to `media/`, absolute → relative | `test_stats_tracking` |
-| Pandoc attributes (`{width="..."}`) | Removed | `test_pandoc_attributes_removed` |
-| CJK bold spacing (`**粗体**中文`) | Add space around `**` for CJK bold spans | `TestCjkBoldSpacing` |
-| Indented dashed code blocks | → fenced ``` with language detection | `test_code_block_with_language` |
-| Escaped brackets (`\[...\]`) | → `[...]` | `test_escaped_brackets_fixed` |
-| Double-bracket links (`[[text]](url)`) | → `[text](url)` | `test_double_bracket_links_fixed` |
+| Problem | Fix |
+| --------- | ----- |
+| Grid tables (`+:---+`) | Single-column → blockquote, multi-column → pipe table |
+| Simple tables (`  ---- ----`) | Multi-column images → pipe table with captions |
+| Image path nesting (`media/media/`) | Remove doubled `media/`; CLI references resolve relative to the Markdown output |
+| Pandoc attributes (`{width="..."}`) | Removed |
+| CJK bold spacing (`**粗体**中文`) | Add space around `**` for CJK bold spans |
+| Indented dashed code blocks | → fenced ``` with language detection |
+| Escaped brackets (`\[...\]`) | → `[...]` |
+| Double-bracket links (`[[text]](url)`) | → `[text](url)` |
 
-For generated list labels, read [DOCX numbering](references/docx-numbering.md).
-Before Pandoc runs, `scripts/docx_numbering.py` supplies a temporary reading copy
-when a single-level definition omits its level index. The original stays unchanged.
-Validate the result against the original; text extraction alone cannot prove that
-Word's generated numbers survived.
+For Word questionnaires and generated list labels, follow
+[DOCX numbering](references/docx-numbering.md) before conversion and validation.
 
 ## PDF Post-Processing (automatic)
 
 When converting PDF via pymupdf4llm, these cleanups are applied automatically (skip with `--no-postprocess`):
 
-| Problem | Fix | Test coverage |
-|---------|-----|---------------|
-| Tesseract OCR garbage on image regions (`<!-- Start of picture text -->...`) | Block removed; images themselves kept | `TestStripOcrPictureText` |
-| Repeated header/footer/watermark lines (including diagonal watermarks) | Detected via pymupdf cross-page scan, removed from markdown; bold-wrapped and merged-with-page-number variants also caught | `TestRepeatingLines` |
-| Absolute image paths (`![](/abs/tmp/assets/...)`) | Rewritten relative to the output markdown file (portable output) | `TestImagePathsRelative` |
+| Problem | Fix |
+| --------- | ----- |
+| Tesseract OCR garbage on image regions (`<!-- Start of picture text -->...`) | Block removed; images themselves kept |
+| Repeated header/footer/watermark lines (including diagonal watermarks) | Detected via pymupdf cross-page scan, removed from markdown; bold-wrapped and merged-with-page-number variants also caught |
+| Absolute image paths (`![](/abs/tmp/assets/...)`) | Rewritten relative to the output markdown file (portable output) |
 
 For engine availability and failure handling, read [Heavy Mode selection](references/heavy-mode-guide.md#selection-behavior).
 
@@ -137,7 +132,6 @@ For the validator's command, prerequisites, result fields and exit handling, rea
 [Mechanical comparison](references/pdf-acceptance.md#mechanical-comparison).
 The CLI accepts PDF or DOCX source files; the remainder of that procedure covers
 PDF structural and recipient acceptance.
-For DOCX generated numbering and its limits, follow [DOCX numbering](references/docx-numbering.md).
 
 From this Skill's source checkout, run the validator's bidirectional controls with
 `python3 -m unittest discover -s tests -v` (Pandoc required). Default packages
@@ -179,18 +173,6 @@ as the converter; a distribution name alone does not prove an engine is availabl
 - Compare the table with the original and reconstruct missing cells if needed.
 - Read [Heavy Mode selection](references/heavy-mode-guide.md#selection-behavior) before trying another candidate; the validator diagnoses coverage and does not repair tables.
 
-## Bundled Scripts
-
-| Script | Purpose |
-|--------|---------|
-| `convert.py` | Main orchestrator with Quick/Heavy mode + DOCX post-processing |
-| `html_to_markdown.py` | Pandoc HTML adapter and saved-output source-href retention verifier |
-| `test_convert.py` | Converter and post-processing regression tests |
-| `merge_outputs.py` | Merge multiple markdown outputs |
-| `validate_output.py` | Quality validation with HTML report |
-| `extract_pdf_images.py` | PDF image extraction with metadata |
-| `convert_path.py` | Windows to WSL path converter |
-
 ## References
 
 - `references/benchmark-2026-03-22.md` - Historical converter benchmark
@@ -200,16 +182,3 @@ as the converter; a distribution name alone does not prove an engine is availabl
 - `references/html-conversion.md` - Saved HTML scope, link retention, assets and manual heading assembly
 - `references/pdf-acceptance.md` - PDF text/structure checks, synthetic boundary controls, reader and original-file handoff
 - `references/obsidian-link-examples.md` - Native heading/citation and same-name book-index navigation controls
-
-## Next Step: Clean Up Converted Content
-
-After converting documents to markdown, suggest cleanup:
-
-```
-Conversion complete: [N] files converted to markdown.
-
-Options:
-A) Clean up docs — run /daymade-docs:docs-cleaner to consolidate redundant content (Recommended if multiple files)
-B) Check facts — run /fact-checker to verify claims in the converted content
-C) No thanks — the markdown conversion is sufficient
-```

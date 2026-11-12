@@ -49,8 +49,9 @@ not perform the structural checks below. `warn` still exits 0 for CLI compatibil
 valid JSON even with `--report`; report paths go to stderr.
 
 Numeric tokens are compared before whitespace removal, so `12 34` and `1 234`
-remain different. DOCX text uses Pandoc's semantic list numbering on both sides;
-generated Word list labels are not missing body text.
+remain different. For DOCX generated labels, follow [DOCX numbering](docx-numbering.md):
+the separate numbering check reads the original OOXML independently of Pandoc.
+Text comparison alone cannot establish that those labels survived.
 
 The default comparison covers the complete extractable source body and one
 Markdown file. For split books, preserve all parts in a temporary ordered
