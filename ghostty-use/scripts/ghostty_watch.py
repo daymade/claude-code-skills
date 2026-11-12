@@ -500,6 +500,8 @@ def _cycle(state, observer):
             old_rows = canonical(previous['sessions'], mapping)
             old_unknown = canonical_unresolved(previous.get('unresolved', []))
             if previous.get('kind') == AUTO_KIND and (
+                'canonical_inventory' in previous or 'canonical_unresolved' in previous
+            ) and (
                 previous.get('canonical_inventory') != old_rows
                 or previous.get('canonical_unresolved', []) != old_unknown
             ):
@@ -544,13 +546,9 @@ def _cycle(state, observer):
         doc = {'kind': AUTO_KIND, 'scope': 'ghostty', 'captured_at': datetime.now(timezone.utc).isoformat(),
                'active_hours_threshold': gs.ACTIVE_HOURS, 'liveness': 'not-observed',
                'coverage': 'partial' if unknown else 'identified Ghostty descendants',
-               'unresolved': result['unresolved'], 'retained_unverified': retained,
-               'canonical_inventory': rows, 'canonical_unresolved': unknown, 'sessions': sessions}
-        for field in ('terminal_inventory', 'other_terminals'):
-            if field in result:
-                doc[field] = result[field]
+               'unresolved': result['unresolved'], 'sessions': sessions}
         if 'terminal_inventory' in result:
-            doc['terminal_surface_count'] = len(result['terminal_inventory'])
+            doc['terminal_inventory'] = result['terminal_inventory']
             doc['window_tab_mapping'] = 'unknown'
         archive = latest.parent / ('snapshot-auto-' + datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f') + '-' + uuid.uuid4().hex[:8] + '.json')
         atomic_manifest(archive, doc, replace=False)
@@ -743,11 +741,12 @@ def status(state):
     latest = Path(state) / 'snapshots' / 'latest.json'
     if latest.exists():
         doc = read_manifest(latest)
+        retained = sum(row.get('membership') == 'retained-unverified' for row in doc['sessions'])
         result['latest_snapshot'] = {'captured_at': doc.get('captured_at'), 'kind': doc.get('kind', 'manual'),
                                      'recorded_sessions': len(doc['sessions']),
-                                     'identified_at_capture': len(doc['sessions']) - doc.get('retained_unverified', 0),
+                                     'identified_at_capture': len(doc['sessions']) - retained,
                                      'coverage': doc.get('coverage', 'manual'),
-                                     'unresolved': len(doc.get('unresolved', [])), 'retained_unverified': doc.get('retained_unverified', 0)}
+                                     'unresolved': len(doc.get('unresolved', [])), 'retained_unverified': retained}
     result['last_cycle'] = cycle_status(state)
     result['meaning'] = ('last_cycle.attempted_at is the last attempt; last_successful_observation_at '
                          'is complete coverage; last_snapshot_change_at is the last saved change')

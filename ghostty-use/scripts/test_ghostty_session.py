@@ -553,6 +553,9 @@ class RecoveryWorkflowTest(unittest.TestCase):
         live = gs.SessionList([entry()], unresolved=[unknown],
                               terminal_inventory=inventory, other_terminals=[shell])
         path = gs.write_snapshot(live, expected_tabs=2)
+        raw = json.loads(Path(path).read_text())
+        self.assertNotIn('terminal_surface_count', raw)
+        self.assertNotIn('other_terminals', raw)
         doc = gs.load_snapshot(path)
         self.assertEqual(len(doc['sessions']), 1)
         self.assertEqual(doc['unresolved'], [unknown])
@@ -562,7 +565,7 @@ class RecoveryWorkflowTest(unittest.TestCase):
         self.assertEqual(doc['window_tab_mapping'], 'unknown')
         self.assertNotIn('restore_command', doc['unresolved'][0])
         self.assertNotIn('restore_command', doc['other_terminals'][0])
-        self.assertEqual(json.loads(Path(gs.SNAP_DIR, 'latest.json').read_text()), doc)
+        self.assertEqual(json.loads(Path(gs.SNAP_DIR, 'latest.json').read_text()), raw)
 
     def test_legacy_snapshot_missing_metadata_is_valid_but_malformed_lists_are_not(self):
         path = Path(self.snapshot([entry()]))
@@ -580,6 +583,26 @@ class RecoveryWorkflowTest(unittest.TestCase):
             doc[field] = []
             path.write_text(json.dumps(doc))
             self.assertEqual(gs.load_snapshot(str(path))[field], [])
+
+    def test_reconstruct_omits_derived_views_but_preserves_unique_legacy_terminal_evidence(self):
+        candidate = make_codex_file(self.home, S_CODEX, [
+            {"type": "session_meta", "payload": {"id": S_CODEX, "source": "cli"}},
+            {"timestamp": iso(1)}])
+        make_index(self.home, [(S_CODEX, candidate)])
+        shell = {'tty': 'ttys009', 'kind': 'other', 'cwd': '/tmp/ordinary', 'cmdline': '/bin/zsh'}
+        for has_inventory in (False, True):
+            doc = {'sessions': [entry(S_HEALTHY)], 'other_terminals': [shell],
+                   'terminal_surface_count': 999}
+            if has_inventory:
+                doc['terminal_inventory'] = [shell]
+            path = Path(self.home) / ('legacy-' + str(has_inventory) + '.json')
+            path.write_text(json.dumps(doc))
+            output = Path(self.home) / ('rebuilt-' + str(has_inventory) + '.json')
+            self.assertEqual(gs.main(['reconstruct', '--snapshot', str(path), '--out', str(output)]), 0)
+            saved = json.loads(output.read_text())
+            self.assertNotIn('terminal_surface_count', saved)
+            self.assertEqual('other_terminals' in saved, not has_inventory)
+            self.assertEqual(gs.load_snapshot(str(output))['other_terminals'], [shell])
 
     def test_empty_observation_does_not_replace_prior_backup(self):
         Path(gs.SNAP_DIR).mkdir(parents=True)

@@ -2554,10 +2554,10 @@ claude plugin install bilibili-source@daymade-skills
 
 ---
 
-### **ghostty-use** - Ghostty Terminal Session Snapshot & Restore
+### **ghostty-use** - CLI Session Backup & Ghostty Restore
 
-Preserve and recover recorded Ghostty CLI sessions through the
-[canonical Skill](ghostty-use/SKILL.md). For scheduled metadata backups, partial
+Use the [canonical Skill](ghostty-use/SKILL.md) for terminal-session backup,
+capture scope and recovery. For scheduled metadata backups, partial
 coverage and operating prerequisites, use the
 [automatic workflow](ghostty-use/references/automatic-snapshots.md).
 

@@ -42,6 +42,9 @@ fixed interpreter directly. Reinstall updates the owned script copies and enable
 the same job without creating another label. The observer runs those byte-copies,
 not the skill source. Use the upgrade procedure below after a script update;
 changing a source-backed Skill entry alone does not update this runtime.
+The [snapshot output contract](restore_mechanics.md#snapshot-schema-output-contract)
+owns persisted-format compatibility. Refresh the managed script copies together;
+do not assume an older watcher can consume newly written automatic manifests.
 
 Use the read-only `install` plan for the currently requested definition and
 `status` for the loaded schedule. Install independently compares calendarinterval
@@ -127,9 +130,8 @@ The first scheduled observation upgrades a matching manual latest snapshot to
 an automatic manifest once. Later equal observations write health only. The default
 `latest.json` route points at the newest saved manifest; manual snapshot archives
 remain available. Automatic snapshots declare liveness `not-observed`, with
-`unknown` session status. `restore` selects their whole recorded set by default,
-including waiting/quota sessions, while manual snapshots retain the existing
-active-only default. `--all`, `--only` and duplicate-free retries still work.
+`unknown` session status. Restore selection and retry options follow the
+[canonical quick start](../SKILL.md#quick-start).
 
 ## Partial UUID coverage
 

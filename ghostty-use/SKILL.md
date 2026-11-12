@@ -44,7 +44,7 @@ For missing Codex terminals without confirmed Ghostty ownership, load the instal
 
 | You just said / want | Run |
 |---|---|
-| Quitting for an update / reboot ("重启前保存会话") | `snapshot` (all local interactive CLIs); use `snapshot --scope ghostty` only for an explicitly Ghostty-only request |
+| Quitting for an update / reboot ("重启前保存会话") | `snapshot` |
 | Periodic backup, save only changes ("定期增量快照") | Read automatic-snapshots.md, then `ghostty_watch.py install --apply` |
 | Rebooted, want tabs back ("恢复之前的窗口") | Inspect snapshot coverage first. If absent, outdated or partial (unresolved TUIs or retained-unverified rows), follow [candidate selection](references/session_liveness.md#select-recovery-candidates-by-a-time-window) before reconstructing the selected manifest and restoring it |
 | "Was anything lost?" / suspicion after restore | `check`; when coverage is partial, follow [candidate selection](references/session_liveness.md#select-recovery-candidates-by-a-time-window) before claiming the set is complete |
@@ -101,11 +101,12 @@ select their recorded set. Use `--all` to include waiting/quota/dead/stale/unkno
 
 The snapshot lands in `~/.ghostty-session/snapshots/` (home-relative, survives reboot).
 Manual snapshots default to `--scope all-cli`: recognized interactive CLIs in
-Ghostty, other terminal emulators and headless terminal processes. Automatic
+Ghostty, other terminal emulators and headless terminal processes. Use
+`--scope ghostty` only for an explicitly Ghostty-only request. Automatic
 backups remain Ghostty-only. A connection client such as ToDesk does not identify
 the terminal owner: inspect CLI processes, not the remote-access service.
-Snapshots persist resumable AI `sessions`, `unresolved` TUIs, `other_terminals`
-with cwd/process evidence, and the observed `terminal_inventory`. Use the saved
+Snapshots persist resumable AI `sessions`, `unresolved` TUIs and the observed
+`terminal_inventory`, including ordinary-terminal cwd/process evidence. Use the saved
 scope and unresolved rows to state coverage; Ghostty-only totals cannot establish
 whole-machine session preservation. Non-AI commands remain evidence only.
 Treat a TTY as a terminal surface, not a tab: splits and window membership are
