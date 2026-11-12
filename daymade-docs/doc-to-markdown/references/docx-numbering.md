@@ -16,13 +16,15 @@ the experimental `--docx-deep` path or a different converter's output.
 
 ## Check the original independently
 
-```bash
-python3 scripts/validate_output.py source.docx converted.md --json
-```
+Use the validator command and exit handling in
+[Mechanical comparison](pdf-acceptance.md#mechanical-comparison), with the original
+DOCX as the source.
 
 Require `source_numbered_item_count` to equal the expected generated decimal item
 count and `numbering_equal: true` when that count is positive. A count of zero is
-not evidence for a source known to show numbered questions in Word.
+not evidence for a source known to show numbered questions in Word. Also inspect
+the overall result and other diagnostics; matching numbering alone does not make
+the document acceptable.
 
 The checker reads the original OOXML paragraph/style properties, numbering
 instances, starts, overrides and restarts independently of Pandoc. It compares
@@ -38,12 +40,6 @@ not certify list glyph styling, compound prefix rendering, numbering inside imag
 or fields, all document structure, or reader access. Bullet labels are outside the
 decimal check. When original display and extracted numbering disagree, inspect the
 original in Word before asserting what the source contains.
-
-Run the synthetic bidirectional controls from the source checkout with
-`python3 -m unittest discover -s tests -v`. They include the omitted-level failure,
-unchanged-source/other-part checks, good and missing labels, nesting, restarts,
-overrides, inherited styles, plain text and explicit unsupported cases. Customer
-files are not fixtures.
 
 Restart and override semantics follow Microsoft's [LevelRestart](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.levelrestart)
 and [StartOverrideNumberingValue](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.startoverridenumberingvalue)

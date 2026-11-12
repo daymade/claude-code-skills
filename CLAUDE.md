@@ -183,6 +183,10 @@ including refused/unavailable checks and reviewable handoff. DOCX comparison fol
 [the input-identity and coverage procedure](daymade-docs/read-docx-review/references/full-comparison.md);
 keep sending evidence, revision-view selection and comparison limits with that owner.
 
+For Word questionnaires or generated list labels, follow
+[DOCX numbering](daymade-docs/doc-to-markdown/references/docx-numbering.md)
+for conversion and independent source comparison.
+
 For PDF → Markdown manuals or question banks, enter
 [docs-router](daymade-docs/docs-router/SKILL.md) and follow
 [PDF acceptance](daymade-docs/doc-to-markdown/references/pdf-acceptance.md).
