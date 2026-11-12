@@ -38,6 +38,11 @@ For a specific task/object link handoff, select **state and journey** for that
 destination, including authoritative machine and run/job identity when titles
 repeat. Keep the audit bounded to the promised destination.
 
+For an illustrated spreadsheet or fill-in grid, also read
+[grid image forms](references/grid-image-forms.md). Judge recognizable thumbnails,
+readable labels and usable entry fields together; a visible-row target alone
+does not establish readability.
+
 For a website/document converted to Markdown, or an illustrated transcript/note
 consumed in Obsidian or another named reader, load
 [references/markdown-reader-handoff.md](references/markdown-reader-handoff.md)
