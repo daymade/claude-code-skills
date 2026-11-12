@@ -1003,14 +1003,16 @@ def convert_with_markitdown(
 
 
 def convert_with_pandoc(
-    file_path: Path, assets_dir: Optional[Path] = None
+    file_path: Path, assets_dir: Optional[Path] = None,
+    output_dir: Optional[Path] = None,
 ) -> ConversionResult:
     """Convert using pandoc.
 
     Pandoc's --extract-media=DIR creates a media/ subdirectory inside DIR.
     We point --extract-media at assets_dir's parent so pandoc's media/
     subdirectory lands exactly at assets_dir (when assets_dir ends with 'media'),
-    or we use a temp dir and move files afterward.
+    or at assets_dir/media otherwise. CLI callers supply output_dir so references
+    resolve from the Markdown file; callers omitting it retain the media/ prefix.
     """
     try:
         cmd = ["pandoc", str(file_path), "-t", "markdown", "--wrap=none"]
@@ -1042,8 +1044,11 @@ def convert_with_pandoc(
         # Convert absolute image paths to relative paths based on output location
         if extract_dir:
             abs_media = str(extract_dir / "media")
-            # Replace absolute paths with relative 'media/' prefix
-            md = md.replace(abs_media + "/", "media/")
+            relative_media = (
+                Path(os.path.relpath((extract_dir / "media").resolve(), output_dir.resolve()))
+                if output_dir is not None else Path("media")
+            )
+            md = md.replace(abs_media + "/", relative_media.as_posix() + "/")
 
         images = _collect_images(assets_dir) if assets_dir else []
 
@@ -1057,7 +1062,8 @@ def convert_with_pandoc(
 
 
 def convert_single(
-    file_path: Path, tool: str, assets_dir: Optional[Path] = None
+    file_path: Path, tool: str, assets_dir: Optional[Path] = None,
+    output_dir: Optional[Path] = None,
 ) -> ConversionResult:
     """Run a single conversion tool."""
     converters = {
@@ -1073,6 +1079,8 @@ def convert_single(
             markdown="", tool=tool, success=False, error=f"Unknown tool: {tool}"
         )
 
+    if tool == "pandoc":
+        return converter(file_path, assets_dir, output_dir=output_dir)
     return converter(file_path, assets_dir)
 
 
@@ -1312,7 +1320,7 @@ Examples:
         elif assets_dir:
             tool_assets = assets_dir
 
-        result = convert_single(args.input, tool, tool_assets)
+        result = convert_single(args.input, tool, tool_assets, output_dir=output_path.parent)
         results.append(result)
 
         if result.success:

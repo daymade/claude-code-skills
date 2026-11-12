@@ -3,6 +3,9 @@
 Run these commands from the Skill directory after following
 [converter installation](tool-comparison.md#installation). Use a new output location;
 keep the source and any extracted assets together with the delivered Markdown.
+The CLI writes Pandoc image references relative to the Markdown output directory,
+including when it chooses the default assets directory. Keep that directory when
+moving or sharing the output.
 
 ## Single files and quoted paths
 

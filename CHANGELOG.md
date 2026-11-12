@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **doc-to-markdown** (`daymade-docs` v1.29.7): Route generated numbering checks to their original-OOXML owner, replace bypass conversion examples with the maintained converter, and remove derived inventories and metadata templates.
+- **doc-to-markdown** (`daymade-docs` v1.29.7): Resolve Pandoc image references from the Markdown output directory, route generated numbering checks to their original-OOXML owner, replace bypass conversion examples with the maintained converter, and remove derived inventories and metadata templates.
 
 - **doc-to-markdown** (`daymade-docs` v1.29.6): Preserve unambiguous implicit DOCX list levels in a disposable Pandoc input and independently check original OOXML decimal numbering, nesting and restarts against Markdown.
 

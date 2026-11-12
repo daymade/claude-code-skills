@@ -67,7 +67,7 @@ When converting DOCX via pandoc, these cleanups are applied automatically:
 | --------- | ----- |
 | Grid tables (`+:---+`) | Single-column → blockquote, multi-column → pipe table |
 | Simple tables (`  ---- ----`) | Multi-column images → pipe table with captions |
-| Image path nesting (`media/media/`) | Flatten to `media/`, absolute → relative |
+| Image path nesting (`media/media/`) | Remove doubled `media/`; CLI references resolve relative to the Markdown output |
 | Pandoc attributes (`{width="..."}`) | Removed |
 | CJK bold spacing (`**粗体**中文`) | Add space around `**` for CJK bold spans |
 | Indented dashed code blocks | → fenced ``` with language detection |
