@@ -21,6 +21,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Optional
 
+from docx_numbering import markdown_numbering, pandoc_input, source_numbering
+
 
 @dataclass
 class ValidationMetrics:
@@ -32,6 +34,10 @@ class ValidationMetrics:
     text_similarity: float = 0.0
     text_equal: bool = False
     numeric_sequences_equal: Optional[bool] = None
+    source_numbered_item_count: Optional[int] = None
+    output_numbered_item_count: Optional[int] = None
+    numbering_equal: Optional[bool] = None  # None: no generated decimal items / unavailable
+    numbering_differences: list[dict] = field(default_factory=list)
     source_extracted: bool = False
     structure_verified: bool = False
     comparison_scope: str = "Extractable body text; whitespace ignored, punctuation retained"
@@ -117,12 +123,13 @@ def extract_text_from_docx(docx_path: Path) -> tuple[str, int, int]:
             image_count = sum(1 for name in z.namelist()
                             if name.startswith('word/media/'))
 
-            # Word stores generated list labels outside w:t. Use the same
-            # semantic parser as Markdown so faithful numbered lists compare.
-            result = subprocess.run(
-                ['pandoc', '-f', 'docx', '-t', 'json', str(docx_path)],
-                capture_output=True, text=True, timeout=60, check=True,
-            )
+            # This text comparison is diagnostic; independent original-OOXML
+            # numbering checks below catch labels omitted by this parser.
+            with pandoc_input(docx_path) as reading_copy:
+                result = subprocess.run(
+                    ['pandoc', '-f', 'docx', '-t', 'json', str(reading_copy)],
+                    capture_output=True, text=True, timeout=60, check=True,
+                )
             ast = json.loads(result.stdout)
             return body_text(ast.get('blocks', [])), table_count, image_count
 
@@ -206,6 +213,7 @@ def analyze_markdown(md_path: Path) -> dict:
         'raw_content': content,
         'clean_text': clean_text,
         'raw_markup': raw_markup,
+        'numbering': markdown_numbering(ast.get('blocks', []), body_text),
     }
 
 
@@ -233,6 +241,18 @@ def validate_conversion(
             source_text, source_tables, source_images = extract_text_from_pdf(source_path)
         elif ext == '.docx':
             source_text, source_tables, source_images = extract_text_from_docx(source_path)
+            source_items = source_numbering(source_path)
+            metrics.source_numbered_item_count = len(source_items)
+            # Literal numbered paragraphs may also become Markdown lists; bind
+            # generated numbering to its source paragraph text, not unrelated lists.
+            texts = {item['text'] for item in source_items}
+            output_items = [item for item in md_analysis['numbering'] if item['text'] in texts]
+            metrics.output_numbered_item_count = len(output_items)
+            if source_items:
+                metrics.numbering_equal = source_items == output_items
+                if not metrics.numbering_equal:
+                    metrics.errors.append('DOCX generated numbering differs (ordinal, hierarchy or paragraph binding)')
+                    metrics.numbering_differences = [{'source': source_items[:10], 'output': output_items[:10]}]
         else:
             raise ValueError(f"Unsupported source format: {ext}; use PDF or DOCX")
     except Exception as exc:
@@ -475,6 +495,10 @@ def main():
         print(f"   Diagnostic score (not accuracy): {score}")
         print(f"   Text equal: {metrics.text_equal}; similarity: {metrics.text_similarity:.1%}")
         print(f"   Numeric sequences equal: {metrics.numeric_sequences_equal}")
+        if metrics.source_numbered_item_count is not None:
+            print(f"   DOCX generated decimal items: {metrics.source_numbered_item_count}; "
+                  f"matched output items: {metrics.output_numbered_item_count}; "
+                  f"numbering equal: {metrics.numbering_equal}")
         print("   Structure and recipient handoff: not verified")
         print(f"\n   Text character-count coverage: {metrics.text_retention:.1%}")
         for label, value in [('Table', metrics.table_retention), ('Image', metrics.image_retention)]:

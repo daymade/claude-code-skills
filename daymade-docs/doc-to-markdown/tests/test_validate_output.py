@@ -15,6 +15,7 @@ import unittest
 from unittest.mock import patch
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "validate_output.py"
+sys.path.insert(0, str(SCRIPT.parent))
 SPEC = importlib.util.spec_from_file_location("validate_output", SCRIPT)
 validator = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = validator
