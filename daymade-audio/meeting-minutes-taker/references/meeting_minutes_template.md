@@ -4,13 +4,13 @@
 
 ```markdown
 ---
-title: [Meeting Title]
-date: [YYYY-MM-DD]
+title: "[Meeting Title]"
+date: "[YYYY-MM-DD]"
 attendees:
   - Name (Role)
   - Name (Role)
-duration: [X hours/minutes]
-location: [Virtual/Room Name]
+duration: "[X hours/minutes]"
+location: "[Virtual/Room Name]"
 sources:
   - "[Original source locator]"
 ---
