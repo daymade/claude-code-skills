@@ -8,57 +8,89 @@ import re
 import os
 import sys
 import json
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
+
+
+def checked_destination(root, file_path):
+    """Reject archive paths that are not plain, contained relative file paths."""
+    if not isinstance(file_path, str) or not file_path.strip():
+        raise ValueError(f"Rejected archive path {file_path!r}: expected a file path")
+    if ('\x00' in file_path or '\\' in file_path
+            or PureWindowsPath(file_path).drive
+            or Path(file_path).is_absolute()
+            or '..' in file_path.split('/')):
+        raise ValueError(f"Rejected archive path {file_path!r}: unsafe relative path")
+
+    destination = root / file_path
+    if destination == root or not destination.resolve().is_relative_to(root):
+        raise ValueError(f"Rejected archive path {file_path!r}: outside output directory")
+
+    current = root
+    for part in Path(file_path).parts:
+        current = current / part
+        if current.is_symlink():
+            raise ValueError(f"Rejected archive path {file_path!r}: symbolic link")
+        if current != destination and current.exists() and not current.is_dir():
+            raise ValueError(f"Rejected archive path {file_path!r}: parent is not a directory")
+    if destination.exists() and not destination.is_file():
+        raise ValueError(f"Rejected archive path {file_path!r}: not a regular file")
+    return destination
+
+
+def extract_files(entries, output_dir):
+    """Validate every entry before creating directories or writing archive content."""
+    output = Path(output_dir)
+    if output.is_symlink():
+        raise ValueError(f"Rejected output directory {str(output)!r}: symbolic link")
+    root = output.resolve()
+    if root.exists() and not root.is_dir():
+        raise ValueError(f"Rejected output directory {str(output)!r}: not a directory")
+
+    entries = list(entries)
+    errors = []
+    for file_path, file_content in entries:
+        try:
+            checked_destination(root, file_path)
+            if not isinstance(file_content, str):
+                raise ValueError(f"Rejected archive content for {file_path!r}: expected text")
+        except (ValueError, OSError, RuntimeError) as error:
+            errors.append(str(error))
+    if errors:
+        raise ValueError('\n'.join(errors))
+
+    extracted_files = []
+    for file_path, file_content in entries:
+        full_path = checked_destination(root, file_path)
+        full_path.parent.mkdir(parents=True, exist_ok=True)
+        # Recheck after directory creation, including the output root itself.
+        if root.is_symlink():
+            raise ValueError(f"Rejected output directory {str(root)!r}: symbolic link")
+        checked_destination(root, file_path)
+        with open(full_path, 'w', encoding='utf-8') as stream:
+            stream.write(file_content)
+        extracted_files.append(file_path)
+        print(f"✓ Extracted: {file_path}")
+    return extracted_files
 
 
 def unmix_xml(content, output_dir):
     """Extract files from repomix XML format."""
     # Pattern: <file path="...">content</file>
-    file_pattern = r'<file path="([^"]+)">\n(.*?)\n</file>'
+    file_pattern = r'<file path="([^"]*)">\n(.*?)\n</file>'
     matches = re.finditer(file_pattern, content, re.DOTALL)
 
-    extracted_files = []
-    for match in matches:
-        file_path = match.group(1)
-        file_content = match.group(2)
-
-        # Create full output path
-        full_path = Path(output_dir) / file_path
-        full_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Write the file
-        with open(full_path, 'w', encoding='utf-8') as f:
-            f.write(file_content)
-
-        extracted_files.append(file_path)
-        print(f"✓ Extracted: {file_path}")
-
-    return extracted_files
+    return extract_files(((match.group(1), match.group(2)) for match in matches), output_dir)
 
 
 def unmix_markdown(content, output_dir):
     """Extract files from repomix Markdown format."""
     # Pattern: ## File: path\n```\ncontent\n```
-    file_pattern = r'## File: ([^\n]+)\n```[^\n]*\n(.*?)\n```'
+    file_pattern = r'## File: ([^\n]*)\n```[^\n]*\n(.*?)\n```'
     matches = re.finditer(file_pattern, content, re.DOTALL)
 
-    extracted_files = []
-    for match in matches:
-        file_path = match.group(1).strip()
-        file_content = match.group(2)
-
-        # Create full output path
-        full_path = Path(output_dir) / file_path
-        full_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Write the file
-        with open(full_path, 'w', encoding='utf-8') as f:
-            f.write(file_content)
-
-        extracted_files.append(file_path)
-        print(f"✓ Extracted: {file_path}")
-
-    return extracted_files
+    return extract_files(
+        ((match.group(1).strip(), match.group(2)) for match in matches), output_dir
+    )
 
 
 def unmix_json(content, output_dir):
@@ -67,26 +99,9 @@ def unmix_json(content, output_dir):
         data = json.loads(content)
         files = data.get('files', [])
 
-        extracted_files = []
-        for file_entry in files:
-            file_path = file_entry.get('path')
-            file_content = file_entry.get('content', '')
-
-            if not file_path:
-                continue
-
-            # Create full output path
-            full_path = Path(output_dir) / file_path
-            full_path.parent.mkdir(parents=True, exist_ok=True)
-
-            # Write the file
-            with open(full_path, 'w', encoding='utf-8') as f:
-                f.write(file_content)
-
-            extracted_files.append(file_path)
-            print(f"✓ Extracted: {file_path}")
-
-        return extracted_files
+        return extract_files(
+            ((entry.get('path'), entry.get('content', '')) for entry in files), output_dir
+        )
     except json.JSONDecodeError as e:
         print(f"Error: Failed to parse JSON: {e}")
         return []
@@ -163,7 +178,11 @@ def main():
     print(f"Output directory: {output_dir}\n")
 
     # Extract files
-    extracted = unmix_repomix(repomix_file, output_dir)
+    try:
+        extracted = unmix_repomix(repomix_file, output_dir)
+    except (ValueError, OSError, RuntimeError) as error:
+        print(f"Error: {error}", file=sys.stderr)
+        sys.exit(1)
 
     if not extracted:
         print("\n⚠️  No files extracted!")

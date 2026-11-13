@@ -40,6 +40,8 @@ python3 ~/.claude/skills/repomix-unmixer/scripts/unmix_repomix.py \
 - **UTF-8 encoding**: Handles international characters correctly
 - **Progress reporting**: Shows extraction progress and statistics
 - **Validation workflows**: Includes comprehensive validation guides
+- **Path containment**: Reject unsafe paths and output symlinks before writing;
+  follow [Path Safety](SKILL.md#path-safety) for the accepted paths and recovery.
 
 ## Supported Formats
 

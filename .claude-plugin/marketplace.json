@@ -766,7 +766,7 @@
       "description": "Extract files from repomix packaged formats (XML, Markdown, JSON) with automatic format detection and validation",
       "source": "./repomix-unmixer",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.0.1",
       "category": "utilities",
       "keywords": [
         "repomix",
