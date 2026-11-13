@@ -63,11 +63,11 @@ if __name__ == "__main__":
 The unmixing script uses this regex pattern:
 
 ```python
-r'<file path="([^"]+)">\n(.*?)\n</file>'
+r'<file path="([^"]*)">\n(.*?)\n</file>'
 ```
 
 **Pattern breakdown:**
-- `<file path="([^"]+)">` - Captures the file path from the path attribute
+- `<file path="([^"]*)">` - Capture the path, including an empty value for validation
 - `\n` - Expects a newline after opening tag
 - `(.*?)` - Captures file content (non-greedy, allows multiline)
 - `\n</file>` - Expects newline before closing tag
@@ -134,11 +134,11 @@ def main():
 ### Extraction Pattern
 
 ```python
-r'## File: ([^\n]+)\n```[^\n]*\n(.*?)\n```'
+r'## File: ([^\n]*)\n```[^\n]*\n(.*?)\n```'
 ```
 
 **Pattern breakdown:**
-- `## File: ([^\n]+)` - Captures file path from heading
+- `## File: ([^\n]*)` - Capture the path, including an empty value for validation
 - `\n` - Newline after heading
 - ``` `[^\n]*` ``` - Opening code block with optional language
 - `\n(.*?)\n` - Captures content between backticks
@@ -249,6 +249,9 @@ File paths may contain:
 - Dots: `"config.local.json"`
 
 Paths are preserved exactly as they appear in the original repository.
+
+Use only paths accepted by [Path Safety](../SKILL.md#path-safety); the extractor
+rejects unsafe entries rather than normalizing or silently skipping them.
 
 ### Directory Separators
 

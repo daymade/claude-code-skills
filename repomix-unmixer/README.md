@@ -40,6 +40,8 @@ python3 ~/.claude/skills/repomix-unmixer/scripts/unmix_repomix.py \
 - **UTF-8 encoding**: Handles international characters correctly
 - **Progress reporting**: Shows extraction progress and statistics
 - **Validation workflows**: Includes comprehensive validation guides
+- **Path containment**: Reject unsafe paths and output symlinks before writing;
+  follow [Path Safety](SKILL.md#path-safety) for the accepted paths and recovery.
 
 ## Supported Formats
 
@@ -134,7 +136,7 @@ For detailed validation procedures, see `references/validation-workflow.md`.
 
 ## Requirements
 
-- Python 3.6 or higher
+- Python 3.10 or higher
 - Standard library only (no external dependencies)
 
 ## Skill Activation
@@ -174,9 +176,8 @@ This skill activates when:
 
 ## Version
 
-- **Version**: 1.0.0
-- **Created**: 2025-10-22
-- **Last Updated**: 2025-10-22
+Resolve the registered plugin version from the repository's
+[marketplace manifest](https://github.com/daymade/claude-code-skills/blob/main/.claude-plugin/marketplace.json).
 
 ## License
 
