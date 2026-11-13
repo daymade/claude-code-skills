@@ -2326,7 +2326,7 @@ claude plugin install daymade-skill@daymade-skills
 "benchmark this skill against a no-skill baseline"
 ```
 
-**Requirements**: Python 3.10+, `uv`, locked PyYAML and Semgrep dependencies, plus gitleaks for secret scanning. `claude` CLI only for agent evals and description-optimization runs.
+**Requirements**: Follow [Skill Creator prerequisites](daymade-skill/skill-creator/references/prerequisites.md) for runtime, scanner and phase-specific dependencies.
 
 ---
 
