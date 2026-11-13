@@ -29,6 +29,35 @@ can invalidate it in between; exercise that interval under the existing lock,
 transaction or equivalent authority boundary. Report missing protection or an
 unavailable barrier as a specific gap rather than asserting race safety.
 
+## Reservations, expiry and command replay
+
+Select this recipe for upload quotas, leases or other capacity reservations.
+Bind each reservation to its operation, account/resource, original backend and
+counter generation under the existing contract. Observe actual admission and
+release effects using the supported backend, alongside its outage fallback.
+
+- Reserve two legitimate slots, then release one reservation twice, including
+  concurrent release calls. Only its own capacity becomes available.
+- Expire the original counter, create replacement-window usage, then deliver
+  the old release. The replacement usage remains intact, and releasing an
+  expired missing counter creates no negative or persistent counter.
+- Capture the actual admission and release commands and redeliver each with
+  the same arguments. When the client can resend unacknowledged commands, each
+  operation's promised effect still occurs once. Two concurrent calls with
+  distinct identities remain two legitimate operations within the limit.
+- At the exact reset boundary, verify admission and reported retry time against
+  the backend's actual expiry. Preserve supported historical counter formats.
+- Consume capacity during an outage, restore the backend, and exercise new
+  admission, backend rejection and failed-upload release. Active fallback usage
+  remains enforced under the declared policy. Duplicate history recorded during
+  the outage still reaches its intended consumer after recovery.
+
+Preserve supported differences between local and distributed enforcement.
+Record an unresolved transport outcome separately from confirmed release.
+For a regression intended to outlive an audit, keep the meaningful replay in
+the repository's existing test entry, with explicit disposable endpoints and
+scoped cleanup. Retire scratch payloads after their evidence has a durable owner.
+
 ## Retained sessions and cached permissions
 
 When login restoration, permissions or upgrades are affected, the QA executor

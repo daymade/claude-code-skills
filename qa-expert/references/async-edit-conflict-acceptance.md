@@ -48,6 +48,21 @@ than only the easiest root node. Do not require the full Cartesian product when
 the implementation and affected boundaries justify a smaller named set. Keep an
 unexercised affected boundary explicit.
 
+## Late committed saves and current drafts
+
+For a dialog or editor backed by durable writes, hold its save request, close or
+replace the editor, then complete the original save. Read the persisted object
+and its real parent list or reader. A successful save remains discoverable through
+the existing refresh/invalidation path while the newer draft retains its own
+text, target and pending state. Deliver the old failure separately and verify
+that it leaves the newer draft intact without a false success or navigation.
+
+Repeat after an account or document switch. Refresh and feedback remain bound
+to the original identity, and returning to the original object shows its
+committed result under the existing contract. Include a save completed while
+the editor stays open as a healthy control. A callback counter alone does not
+prove either durable visibility or draft preservation.
+
 ## Evidence and stopping condition
 
 Retain the held boundary, correlated operation/session IDs, ordered user actions,
