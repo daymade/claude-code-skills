@@ -12,6 +12,8 @@ dependencies = [
 
 [tool.uv]
 package = false
+# Require the interface used by version-scoped dependency overrides.
+required-version = ">=0.11.25"
 # Replace only this Semgrep release's vulnerable SDK pins; keep the patched
 # OpenTelemetry family aligned. Recheck the ordinary scan before changing these.
 override-dependencies = [

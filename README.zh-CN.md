@@ -2331,7 +2331,7 @@ claude plugin install daymade-skill@daymade-skills
 "把这个 skill 和无技能 baseline 做基准对比"
 ```
 
-**要求**：Python 3.10+、`uv`、锁定环境内的 PyYAML 与 Semgrep，以及 gitleaks（密钥扫描）。只有 agent eval 与 description 优化需要 `claude` CLI。
+**要求**：运行时、扫描器及各阶段依赖统一见 [Skill Creator 前置条件](daymade-skill/skill-creator/references/prerequisites.md)。
 
 ---
 

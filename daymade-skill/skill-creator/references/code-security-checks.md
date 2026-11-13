@@ -45,6 +45,13 @@ entry above for ordinary installed-Skill packaging.
 uv run --frozen python -m pytest tests/test_code_scan.py tests/test_security_scan.py tests/test_package_skill.py -q
 ```
 
+For SDK dependency changes, follow
+[scanner SDK maintenance](prerequisites.md#scanner-sdk-maintenance).
+Keep advisory-floor checks, actual Semgrep MCP/telemetry consumer imports and
+construction, healthy span roundtrips and oversized-TraceState rejection in this
+calibration. Test the uv compatibility requirement at its declared boundary;
+keep selected versions and runtime requirements in the project configuration.
+
 Preserve the public pre-repair #1499 extractor under `tests/fixtures/repomix_1499.py`;
 bind its immutable source and checksum in the test. Require all three original
 XML/Markdown/JSON writes to be reported. Pair that with renamed/aliased calls,
