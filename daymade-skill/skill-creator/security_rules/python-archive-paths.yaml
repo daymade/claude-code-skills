@@ -38,6 +38,14 @@ rules:
           - pattern: |
               if not $DEST.is_relative_to($ROOT):
                   raise ...
+          - pattern-not-inside: |
+              try:
+                  ...
+              except ...:
+                  ...
+          - pattern-not-inside: |
+              with ...:
+                  ...
           - focus-metavariable: $DEST
         by-side-effect: true
         exact: true
@@ -48,6 +56,8 @@ rules:
               - pattern: io.open($PATH, $MODE, ...)
               - pattern: open($PATH, mode=$MODE, ...)
               - pattern: io.open($PATH, mode=$MODE, ...)
+              - pattern: open(file=$PATH, mode=$MODE, ...)
+              - pattern: io.open(file=$PATH, mode=$MODE, ...)
           - metavariable-regex:
               metavariable: $MODE
               regex: .*['\"][wax+].*

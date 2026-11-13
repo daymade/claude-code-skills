@@ -7,10 +7,13 @@ modes. Use verbose mode only to add educational pattern checks.
 ## Bind the coverage
 
 Read [the rule](../security_rules/python-archive-paths.yaml) and
-[its runner](../scripts/code_scan.py) as the executable scope. Track Python regex
+[its runner](../scripts/code_scan.py) as the executable scope. Track Python `.py` regex
 captures, and `path` fields read from JSON/XML parsed in the same function, into
-`open`/`io.open`/`Path.open` write modes and `write_text`/`write_bytes`. Recognize
-the local resolved-path `is_relative_to` rejection guard before a write. Verify
+`open`/`io.open`/`Path.open` literal write modes (`w`, `a`, `x`, `+`) and
+`write_text`/`write_bytes`. Recognize
+the local resolved-path `is_relative_to` rejection guard before a write, outside
+exception-catching and context-manager blocks. Review other guard forms as
+potential false positives rather than assuming they establish containment. Verify
 that the root and guard actually implement the caller's intended boundary.
 
 Keep cross-function/inter-file flows, other parsers, other languages, other sink
@@ -33,7 +36,10 @@ changed policy; never regenerate a marker by copying its fields.
 
 ## Calibrate before arming
 
-Run from the loaded Skill Creator directory:
+For detector maintenance, run from a canonical source checkout's Skill Creator
+directory containing `tests/`. Keep these maintainer tests outside `.skill`
+packages according to the shared packaging policy. Use the combined scanner
+entry above for ordinary installed-Skill packaging.
 
 ```bash
 uv run --frozen python -m pytest tests/test_code_scan.py tests/test_security_scan.py tests/test_package_skill.py -q

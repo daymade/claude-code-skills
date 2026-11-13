@@ -174,6 +174,11 @@ def test_real_rule_calibration(tmp_path):
         "aliases": ("from pathlib import Path as Destination\nimport json as parser\nitem = parser.loads(text)\nDestination(base, item['path']).write_text('data')", True),
         "inverted_guard": ("p = item.get('path')\nq = (Path(base) / p).resolve()\nif q.is_relative_to(base):\n    raise ValueError()\nq.write_text('data')", True),
         "io_alias": ("from io import open as write_file\np = item.get('path')\nwrite_file(Path(base) / p, 'a').write('data')", True),
+        "keyword_file": ("p = item.get('path')\nopen(file=Path(base) / p, mode='w').write('data')", True),
+        "io_keyword_file": ("import io\np = item.get('path')\nio.open(file=Path(base) / p, mode='w').write('data')", True),
+        "caught_guard": ("p = item.get('path')\nq = (Path(base) / p).resolve()\ntry:\n    if not q.is_relative_to(base):\n        raise ValueError()\nexcept ValueError:\n    pass\nq.write_text('data')", True),
+        "bare_caught_guard": ("p = item.get('path')\nq = (Path(base) / p).resolve()\ntry:\n    if not q.is_relative_to(base):\n        raise ValueError()\nexcept:\n    pass\nq.write_text('data')", True),
+        "suppressed_guard": ("from contextlib import suppress\np = item.get('path')\nq = (Path(base) / p).resolve()\nwith suppress(ValueError):\n    if not q.is_relative_to(base):\n        raise ValueError()\nq.write_text('data')", True),
     }
     for name, (body, _) in cases.items():
         (root / f"{name}.py").write_text(
