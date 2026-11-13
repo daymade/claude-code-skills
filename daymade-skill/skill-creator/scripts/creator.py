@@ -18,6 +18,7 @@ COMMANDS = {
     "quick_validate": "scripts.quick_validate",
     "skill_read_plan": "scripts.skill_read_plan",
     "capture_command": "scripts.capture_command",
+    "code_scan": "scripts.code_scan",
 }
 
 MATERIALIZE_SUMMARY_OPERATIONS = frozenset({

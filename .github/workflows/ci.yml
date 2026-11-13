@@ -318,6 +318,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: '0.12.17'
+          enable-cache: true
+          cache-dependency-glob: daymade-skill/skill-creator/uv.lock
+
       # Pinned to the same version .pre-commit-config.yaml uses, so local and CI agree.
       # A pinned binary rather than a third-party action: one less thing in the supply
       # chain of a public repository, and the version cannot move underneath us.
@@ -373,3 +383,10 @@ jobs:
 
       - name: Scan working tree
         run: gitleaks detect --no-git --config .gitleaks.toml --redact --verbose
+
+      - name: Calibrate code detection and packaging gates
+        working-directory: daymade-skill/skill-creator
+        run: uv run --frozen python -m pytest tests/test_code_scan.py tests/test_security_scan.py tests/test_package_skill.py -q
+
+      - name: Check registered Skill code and repository scripts
+        run: python3 daymade-skill/skill-creator/scripts/creator.py code_scan "${{ github.workspace }}" --marketplace

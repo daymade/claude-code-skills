@@ -243,6 +243,11 @@ visibility. Semantically read shipped examples/identifiers as well as running
 scanners; green scans do not establish privacy. Private findings are information
 for the owner, not permission to replace working configuration.
 
+Run both required [secret and code checks](references/code-security-checks.md)
+before packaging. Keep their declared scope visible; passing them does not
+establish general code safety. Calibrate detector changes against the original
+vulnerability and healthy code before using them to release a package.
+
 Use the shared [packaging policy](scripts/packaging_policy.py) for the shipping
 set. Packaging an existing skill re-verifies its completed regression review;
 a marker or commit alone is not authority. Clear scan/runtime errors, keep scan

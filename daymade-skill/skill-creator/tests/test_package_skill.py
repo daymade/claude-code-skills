@@ -10,6 +10,7 @@ import pytest
 import scripts.package_skill as package_module
 from scripts.package_skill import package_skill, should_exclude
 from scripts.security_scan import calculate_skill_hash
+from scripts.code_scan import policy_hash
 
 
 @pytest.mark.parametrize(
@@ -59,7 +60,9 @@ def _add_security_marker(skill_dir: Path) -> None:
     """Write a .security-scan-passed marker matching the current content hash."""
     content_hash = calculate_skill_hash(skill_dir)
     (skill_dir / ".security-scan-passed").write_text(
-        f"Security scan passed\nContent hash: {content_hash}\n", encoding="utf-8"
+        f"Configured security checks completed\nContent hash: {content_hash}\n"
+        f"Checks: secrets,python-archive-paths\nCode policy hash: {policy_hash()}\n"
+        "Python files: 0\nSemgrep version: not-applicable\n", encoding="utf-8"
     )
 
 

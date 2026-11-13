@@ -16,7 +16,7 @@ ENTRY = ROOT / "scripts/creator.py"
 OWNERS = (
     "audit_skill_regression", "release_readiness", "source_contract", "materialize", "materialize_agent",
     "delivery_identity",
-    "quick_validate", "skill_read_plan", "capture_command",
+    "quick_validate", "skill_read_plan", "capture_command", "code_scan",
 )
 
 
