@@ -156,6 +156,9 @@ For its audit, release or source-contract commands from another working director
 or Agent-facing materialization from any directory, use the
 [fixed command entry](daymade-skill/skill-creator/references/fixed-command-entry.md).
 For security scans, use its [absolute owner-script recipe](daymade-skill/skill-creator/references/publishing-and-packaging.md#step-6-security-review).
+Before installing or changing scanner dependencies, follow
+[runtime prerequisites](daymade-skill/skill-creator/references/prerequisites.md#locked-python-runtime-required)
+and [SDK maintenance](daymade-skill/skill-creator/references/prerequisites.md#scanner-sdk-maintenance).
 
 Before a command that may exceed the response budget, enter the standalone
 [large-output capture recipe](references/bounded-io.md#large-command-output).
