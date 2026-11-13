@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **design-style-picker** (`daymade-codex` v2.4.9): Compare candidates around the user's unresolved choice, preserve approved dimensions and review stages, and stop once the current decision is possible. Replace fixed sample quotas with comparable, readable alternatives.
+
+- **frontend-visual-qa** (v1.21.47): Add relationship-map semantic zoom cases for distant and nearby task handoffs, offscreen anchors, clipped module titles, search recovery and relationship-label activation.
+
 - **frontend-visual-qa** (v1.21.46): Route timed course reading from the repository instructions to its QA procedure; resolve the calibration fixture from the loaded Skill root and derive required video coverage from its offered timestamps.
 
 - **frontend-visual-qa** (v1.21.45): Add course text/video reading journeys and known-answer controls for scrolling players, covered targets and orientation resets.
