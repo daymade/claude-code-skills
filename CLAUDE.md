@@ -65,6 +65,8 @@ For capability extraction or reuse across business callers, follow its
 
 Operational or code-bearing Skill edits complete directly affected document alignment
 before the first candidate freeze; follow skill-creator's Edit workflow.
+For meeting transcripts, participant-note reconciliation or minute-draft merges,
+enter [meeting-minutes-taker](daymade-audio/meeting-minutes-taker/SKILL.md#quick-start).
 When data-visualization delivery-gate text changes, use the
 [repository generator](scripts/sync_delivery_gates.py) and
 [CI validation step](.github/workflows/ci.yml) to refresh its shipped resource;

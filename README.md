@@ -1481,36 +1481,7 @@ Selects the installed StepFun ASR, StepFun TTS, or transcript-to-minutes special
 
 > **Install**: `claude plugin install daymade-audio@daymade-skills` (suite-only — invoked as `daymade-audio:meeting-minutes-taker`)
 
-Transform meeting transcripts into high-fidelity, structured meeting minutes with iterative human review.
-
-**When to use:**
-- Meeting transcript provided and minutes/notes/summaries requested
-- Multiple versions of meeting minutes need merging without content loss
-- Existing minutes need review against original transcript for missing items
-
-**Key features:**
-- Multi-pass parallel generation with UNION merge strategy
-- Evidence-based recording with speaker quotes
-- Mermaid diagrams for architecture discussions
-- Iterative human-in-the-loop refinement workflow
-- Cross-AI comparison for bias reduction
-- Completeness checklist for systematic review
-
-**Example usage:**
-```bash
-# Install the full audio suite (includes meeting-minutes-taker)
-claude plugin install daymade-audio@daymade-skills
-
-# Then provide a meeting transcript and request minutes
-```
-
-**🎬 Live Demo**
-
-*Coming soon*
-
-📚 **Documentation**: See [daymade-audio/meeting-minutes-taker/SKILL.md](./daymade-audio/meeting-minutes-taker/SKILL.md) for complete workflow and template guidance.
-
-**Requirements**: None
+📚 [Canonical inputs, workflow, prerequisites and templates](./daymade-audio/meeting-minutes-taker/SKILL.md#quick-start).
 
 ---
 
@@ -3865,7 +3836,7 @@ Use **excel-automation** to create formatted workbooks, parse complex `.xlsm` mo
 Use **capture-screen** to script repeatable app-window screenshots. Combine with **excel-automation** to generate report-ready workbook visuals.
 
 ### For Meeting Documentation
-Use **meeting-minutes-taker** to transform raw meeting transcripts into structured, evidence-based minutes. Combine with **transcript-fixer** to clean up ASR errors before generating minutes. Features multi-pass generation with UNION merge to avoid content loss.
+Use [meeting-minutes-taker](./daymade-audio/meeting-minutes-taker/SKILL.md#quick-start).
 
 ### For QA Testing & Quality Assurance
 Use [qa-expert](./qa-expert/SKILL.md) for QA setup, test cases, execution tracking, reporting and third-party handoffs.

@@ -76,10 +76,7 @@ Meeting Minutes Progress:
   - [ ] Final: Compare draft against all supplied sources, reconcile final states, add omissions
 - [ ] Step 3: Self-review for completeness
 - [ ] Step 3.5: Retrieval Self-Test (consumption-side verification)
-  - [ ] Fresh-context subagent extracts future-query claims from the transcript and separately labeled participant notes ONLY (never sees draft) → intermediate/<transcript-name>/retrieval-claims.md
-  - [ ] Hit-test each claim against retrievable layer (Key Decisions / Action Items / Parking Lot / Open Questions), by component, with lexical anchors
-  - [ ] Revocation scan before ANY promotion; promote with [self-test promoted] tag + locatable original evidence (transcript quote or labeled note); uncertain → Open Questions
-  - [ ] Report "enumerated N / hits M / promoted K / uncertain list" (never a binary pass); fail-open with visible NOT-RUN note if extraction fails
+  - [ ] Follow [Step 3.5](#step-35-retrieval-self-test-consumption-side-verification) and save its evidence
 - [ ] Step 4: Present draft to user for human review
 - [ ] Step 5: Cross-AI comparison (if human provides external AI output)
 - [ ] Step 6: Iterate on human feedback (expect multiple rounds)
@@ -93,9 +90,9 @@ Note: <transcript-name> = name derived from transcript file (e.g., 2026-01-15-pr
 
 Read all supplied sources before generation. Keep the transcript unchanged; record participant notes and user corrections separately with their author, date and source locator when known. Unknown metadata stays unknown. Give every generation pass the same source bundle. Notes need no separate reader-facing deliverable: integrate their substantive content into one current minutes document, link the transcript for verification, and retain original notes through the owning archive's source record. Follow an explicitly requested alternative delivery format.
 
-Reconcile each fact within its stated scope. A later explicit participant correction or status update can revise that fact; it does not silently replace unrelated meeting decisions. If sources remain irreconcilable, state the conflict in Open Questions. Do not invent agreement. Attribute note-only additions to the note's author/date or source label; do not fabricate a transcript quote, speaker or timestamp for them.
+Reconcile each fact within its stated scope. A later explicit participant correction or status update can revise that fact; it does not silently replace unrelated meeting decisions. If sources remain irreconcilable, state the conflict in Open Questions. Do not invent agreement. Significant transcript-backed decisions need original quotations with speaker attribution and timestamps. Record note-only additions under **Source** with the note's author/date or source label; do not fabricate a transcript quote, speaker or timestamp for them.
 
-Bind each TODO/DONE to its exact action, owner, conditions and supporting source. Preserve unknown owners, deadlines and completion evidence as unknown. An invitation sent does not establish that the meeting occurred; finding an available account does not establish that someone switched accounts. Separate agreed responsibility from work delivered or a hypothesis verified.
+Bind each TODO/DONE to its exact action, owner, conditions and supporting source. Preserve unknown owners, deadlines and completion evidence as unknown. A note's author is not automatically the task owner. An invitation sent does not establish that the meeting occurred; finding an available account does not establish that someone switched accounts. Separate agreed responsibility from work delivered or a hypothesis verified.
 
 Analyze the transcript to identify:
 - Meeting topic and attendees
@@ -230,6 +227,8 @@ Each pass generates **COMPLETE minutes (all sections)** from the full transcript
 
 Apply source reconciliation from Step 1 before every merge, including cross-AI merges and human-feedback rounds. UNION preserves source-supported content; it does not turn superseded proposals into simultaneous active commitments. Scan all supplied sources for later reversals, modifications and conditions. Put the final effective state in Decisions / Action Items, retain useful superseded alternatives in Discussion, and route unresolved conflicts to Open Questions. Apply the same state check to diagrams.
 
+Consolidate duplicate content, retain the more detailed source-supported treatment when versions differ in depth, and maintain logical section numbering.
+
 **❌ WRONG: Narrow-focused passes** (wastes tokens, causes bias)
 ```
 Pass 1: Only extract decisions
@@ -351,7 +350,7 @@ Final Review:
 #### Output Requirements
 
 - **Chinese output** with English technical terms preserved
-- **Evidence-based decisions** - Every significant transcript-backed decision needs a supporting quote; note-only additions need their separately labeled source (Step 1)
+- **Source evidence** - Apply the [source and status contract](#step-1-read-and-analyze-transcript)
 - **Structured sections** - Executive Summary, Key Decisions, Discussion, Action Items, Parking Lot
 - **Proper quote formatting** - See Quote Formatting Requirements section below
 - **Mermaid diagrams** (STRONGLY ENCOURAGED) - Visual diagrams elevate minutes beyond pure text:
@@ -367,7 +366,6 @@ Final Review:
 
 - Never assume - Ask user to confirm if unclear
 - Quote controversial decisions verbatim
-- Assign action items to specific people, not teams
 - Preserve numerical values (ranges, counts, priorities)
 - **Always use multiple passes** - Single turn is guaranteed to lose content
 - **Normalize equivalent terminology** - Treat trivial variations (e.g., "backend architecture" vs "backend", "API endpoint" vs "endpoint") as equivalent; do NOT point out or highlight such differences between speakers
@@ -381,9 +379,9 @@ After initial generation, immediately review against transcript:
 ```
 Completeness Checklist:
 - [ ] All discussion topics covered?
-- [ ] Transcript-backed decisions have supporting quotes and note-only additions have labeled sources?
+- [ ] Verify each decision's evidence against Step 1?
 - [ ] All speakers attributed correctly?
-- [ ] All action items have specific owners?
+- [ ] Task owners checked against source assignments and unresolved fields?
 - [ ] Numerical values preserved (ranges, counts)?
 - [ ] Each completion status applies only to the sourced action, with final effective conditions preserved?
 - [ ] Entity relationships captured?
@@ -399,9 +397,9 @@ If gaps found, add missing content silently without mentioning what was missed.
 **Procedure** (after merge, before presenting the draft):
 
 1. **Reverse-extract a future-query claims list.** Spawn ONE fresh-context subagent that reads ONLY the transcript and any separately labeled participant notes/user corrections — it must NOT see draft minutes or other AI summaries (a speaker-name mapping is fine; the anchoring risk comes from the draft's structure, not from a roster). With no notes, use the transcript alone. Its task:
-   > Imagine project members returning 1–8 weeks from now to verify: "did [person] ever instruct / promise / decide / veto / commit-a-number on X?" Enumerate every such claim. Each claim = who + type (instruction / promise / decision / veto / number-commitment / conditional-consensus) + content + scope (+ expiry condition if any) + timestamp. Include only claims with a clear owner; skip opinions and background narration.
+   > Imagine project members returning 1–8 weeks from now to verify: "did [person] ever instruct / promise / decide / veto / commit-a-number on X?" Enumerate every such claim. Each claim = who + type (instruction / promise / decision / veto / number-commitment / conditional-consensus) + content + scope (+ expiry condition if any) + source locator (transcript timestamp; for notes, Step 1's locator). Skip opinions and background narration; retain unassigned tasks as Open Questions rather than dropping them.
 
-   Include supplied status updates and note-only additions, preserving each source locator. Use a note's date/label when no transcript timestamp exists. Keep a decision-maker, note author and task owner distinct; an unassigned task remains Open Questions instead of being dropped or assigned to its note author.
+   Include supplied status updates and note-only additions using Step 1's source locators, attribution and status scope.
    
    For long transcripts (roughly > 60k characters or > 90 minutes), extract in overlapping chunks and merge — a single pass inherits lost-in-the-middle attention decay exactly where long meetings bury directives. Write the list to `<output_dir>/intermediate/<transcript-name>/retrieval-claims.md` (auditable evidence that the check ran, and reviewable by the human later).
 
@@ -468,13 +466,7 @@ This step is valuable because:
 
 **When user provides another version to merge:**
 
-Merge Principle: **UNION source-supported content, reconcile final states using Step 1 and Step 2**
-
-1. Keep source-supported content from the existing version; move superseded commitments to Discussion when useful
-2. Add source-supported new content from the incoming version; resolve status and decision conflicts before promotion
-3. Consolidate duplicates (don't repeat same info)
-4. Preserve more detailed version when depth differs
-5. Maintain logical section numbering
+Apply the [source-backed UNION merge](#core-principle-multiple-complete-passes--union-merge), then run Step 3.5's iteration-round check.
 
 ### Aggressive Diagram Inclusion (CRITICAL)
 
@@ -685,7 +677,6 @@ Round 4: Update to use "Annotation" instead of "Note"
 - ❌ **Divided sections without overlap** - Each pass must cover FULL transcript, not split by sections
 - ❌ **Narrow-focused passes** - Each pass must generate COMPLETE minutes (all sections), not just one section type (wastes tokens, causes bias)
 - ❌ Generic summaries without supporting evidence (transcript quotes or labeled participant notes)
-- ❌ Action items assigned to "team" instead of specific person
 - ❌ Missing numerical values (priorities, ranges, state counts)
 - ❌ State machines with incomplete states
 - ❌ Circular debate transcribed verbatim instead of summarized

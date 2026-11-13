@@ -12,8 +12,7 @@ attendees:
 duration: [X hours/minutes]
 location: [Virtual/Room Name]
 sources:
-  - [Transcript locator]
-# If supplied, record participant notes/corrections with known author/date and source locator.
+  - "[Original source locator]"
 ---
 ```
 
@@ -33,7 +32,7 @@ If the meeting reviewed specific documents, mockups, or artifacts, list them her
 
 ### 3. Key Decisions
 
-For each major transcript-backed decision, use the quote block below. For a note-only decision, replace **Quote** with **Source** and give the supplied note's author/date when known and its locator; do not invent a transcript quotation or timestamp.
+Evidence selection: [source and status contract](../SKILL.md#step-1-read-and-analyze-transcript). The block below illustrates a transcript-backed decision.
 
 ```markdown
 ### 3.X [Category] Decision Title
@@ -74,7 +73,7 @@ sequenceDiagram
 
 The Notes column exists because conditional commitments ("report due Friday, slips to Tuesday if the environment isn't ready") lose their expiry condition in a four-column row — and the condition is exactly what a future reader queries when the deadline passes. Leave it empty when a task is unconditional; never bury a stated condition in Discussion prose only.
 
-Status applies to the exact action in that row. Record supplied participant notes as notes, preserving their author/date when known; do not present them as transcript quotes. Keep one current minutes document and link original evidence through its source record.
+For action status and source attribution, use the source contract linked above.
 
 ### 6. Parking Lot (Deferred Items)
 
