@@ -57,6 +57,7 @@ stand down without waiting for a human to disable it.
 |---|---|
 | Installing a NEW watchdog from scratch | Select the trigger through `references/event-driven-observers.md`, then § Deploy and § The quiet-watchdog contract |
 | Installing, upgrading, reusing or starting a persistent Python job | § Persistent Python runtime |
+| An evidence observer needs authentication or loses memory-only credentials on restart | § Authenticated evidence observers |
 | An existing watchdog misbehaves (spam, re-launches apps, hammers) | § Troubleshooting quick map：先对齐实际 actor，再按 § The quiet-watchdog contract 诊断违反的条款 |
 | Stopping / disabling / restarting a job | § Stop semantics; before replacement follow `references/event-driven-observers.md` § Wait for an authorized unload before replacement |
 | Retiring a job and its tool permanently | § Stop semantics → Decommissioning a job permanently |
@@ -177,6 +178,37 @@ does not promise zero temporary disk use or, for other Python tasks, zero downlo
 Consult [uv's environment-use guidance](https://docs.astral.sh/uv/guides/integration/docker/#using-the-environment)
 for direct environment execution and its
 [cache documentation](https://docs.astral.sh/uv/concepts/cache/) for `--no-cache`.
+
+### Authenticated evidence observers
+
+Treat process startup, credential readiness and a fresh successful observation as
+three separate checks. `KeepAlive` can relaunch a process; it cannot reconstruct a
+password/token that existed only in its old memory. A live PID or recent error
+log does not establish renewed access to the target.
+
+Before promising unattended recovery, bind the existing credential owner and its
+authorized delivery mechanism in the actual service context. Keep secrets out of
+argv, plist, state and logs; use environment injection only within its existing
+credential contract. Do not invent a plaintext fallback or create new credential
+storage merely to make a restart look successful. When memory-only injection is
+the authorized design, expose credential-unready status and its precise recovery
+action until reinjection and a new successful sample are observed.
+
+Choose the domain from the actual host state through the
+[plist reference](references/launchd-plist-reference.md). An SSH login does not
+prove `gui/<uid>` exists. A system daemon also does not inherit GUI consent or a
+user's unlocked Keychain; verify the selected identity, permissions and credential
+access rather than assuming a domain change fixes them. Reuse the existing
+authorized deployment/recovery owner and preserve unrelated jobs.
+
+Accept the ordinary start, a failed/expired credential delivery, and an authorized
+restart separately: the selected target must produce new valid evidence after
+authentication, or report the specific dependent gap. Keep independent collection
+planes running when one loses access. Retain the configured end time, resource
+bounds and terminal reason across recovery; restarting a job must not silently
+extend an expired experiment. For network incident collectors, follow the
+[network collection SOP](https://github.com/daymade/claude-code-skills/blob/main/debugging-network-issues/references/intermittent-evidence-collection.md)
+for capture-content and child-pipe shutdown checks in addition to service health.
 
 ## Stop semantics (the deprecated trap)
 

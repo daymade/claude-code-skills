@@ -402,6 +402,11 @@ For non-network domains:
 
 ### Step 4: Instrumentation when needed
 
+For intermittent incidents that need unattended pre-failure evidence, first use
+[the collection SOP](references/intermittent-evidence-collection.md). It covers
+raw-before-parse preservation, independent planes, capture validation, bounded
+shutdown, clock uncertainty and authentication/restart gaps.
+
 If the decisive experiment requires an observation that cannot currently be made, add it — do not skip it. The canonical pattern is env-gated instrumentation that:
 
 - Defaults off (zero runtime cost in steady state)

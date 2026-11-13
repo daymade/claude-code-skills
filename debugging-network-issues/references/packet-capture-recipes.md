@@ -85,6 +85,34 @@ segments before cleanup, and check the collector's actual end time and exit stat
 For size-based cyclic overwrite, consult the installed manual's `-C`/`-W` contract;
 combining `-C` and `-G` changes how `-W` is handled.
 
+## Wireless management and control
+
+Bind the radio, observed BSSID, channel/band, dwell interval and capture window.
+Monitor mode can disconnect its client association; prove a separate management
+path works before using that radio. An opened file with only a pcap header proves
+no packet coverage. Read actual target frames and their capture metadata first.
+
+For an authentication investigation needing management traffic and hardware ACKs,
+an installed libpcap filter to validate is:
+
+```text
+type mgt or (type ctl subtype ack)
+```
+
+An ACK carries a receiver address without a transmitter address. An AP's ACK to
+a client's transmission therefore has the client's RA; filtering control frames
+only by AP addresses can remove the evidence being sought. Check the filter on
+both RA directions with the installed libpcap before capture. Do not assign an
+ACK to an AP from RA alone; correlate it with the preceding frame, channel and
+timing. Verify the frame checksum/FCS when available and record its absence when
+unavailable, rather than inventing checksum validity.
+
+Use the snapshot-length checks above for long management frames. Keep kernel
+drop counters and channel changes with the file. A radio hopping across two
+bands has unsampled intervals; no-frame claims apply only to observed windows.
+For pre-trigger retention and shutdown, use
+[the intermittent collection SOP](intermittent-evidence-collection.md).
+
 ## HTTP/2 specifics
 
 A key trap: HTTP/2 has its own RST mechanism at the stream level (`RST_STREAM` frame) that is unrelated to TCP-level RST. The two failure modes look different:

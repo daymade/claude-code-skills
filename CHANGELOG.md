@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **debugging-network-issues** (v1.12.0): Preserve pre-failure raw and partial evidence across collection errors; validate wireless ACK direction, packet length, channel windows and clock uncertainty. Correct unified-log predicate field guidance and separate capture coverage from root-cause attribution.
+- **macos-watchdog** (`daymade-macos` v1.31.0): Distinguish process restart, credential readiness and a new valid observation for authenticated collectors; retain service-context, expiry and recovery boundaries.
+
 - **design-style-picker** (`daymade-codex` v2.4.9): Compare candidates around the user's unresolved choice, preserve approved dimensions and review stages, and stop once the current decision is possible. Replace fixed sample quotas with comparable, readable alternatives.
 
 - **frontend-visual-qa** (v1.21.47): Add relationship-map semantic zoom cases for distant and nearby task handoffs, offscreen anchors, clipped module titles, search recovery and relationship-label activation.
