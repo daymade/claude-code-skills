@@ -145,6 +145,26 @@ mock to restore a green suite. For operation-local configuration snapshots,
 use [file persistence](file-persistence-cli-acceptance.md) for within-call,
 next-call and exceptional-exit cases.
 
+### Prove the negative fixture changed the target
+
+When a rejection test corrupts a digest, version or required field, derive the bad
+value from the current healthy fixture's selected field. Assert that the field
+exists with its required healthy type/value, that exactly the intended target was
+changed, and that the serialized value consumed by the production reader differs.
+A replacement tied to a retired hash prefix can silently change nothing; a test
+that then stays green has not exercised rejection.
+
+For example, for a nonempty hexadecimal digest, change its first character to a
+different valid hexadecimal character and assert the before/after values differ.
+Retain the original healthy bytes as a separate control. Run both through the same
+actual validator/consumer and require healthy acceptance plus the specified bad
+input failure. Calibrate the test against the original faulty implementation, or
+an isolated version with that specific check removed: the regression must detect
+that defect while the healthy control still passes. Treat a mutation precondition
+failure as a broken fixture, not as successful rejection by the product. Missing,
+null and empty fields are separate negative cases when the contract distinguishes
+them; do not disguise them as a digest mismatch.
+
 ### Mandatory Principles
 
 1. **No Shared State**

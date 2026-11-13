@@ -76,15 +76,26 @@ verified parent snapshot. A local cue is not a standalone goal.
    to distinguish unfinished business, runtime status, supported recovery and observed
    automatic continuation. An absent recovery tool in one tool menu is not proof that
    the live host has no recovery control.
-6. Check what was **in flight** when the session died. A foreground long task
-   (remote diagnostic, download, build) dies with its session, and its unpersisted
-   output dies with the pipe — the rollout records that the task started, never its
-   result. Treat such a result as not done: probe whether the remote process or its
-   output file survived, and before re-running, give the rerun a detached
+6. Check what was **in flight** when the session stopped. A long task may survive
+   its controller; a start record proves neither completion nor process death.
+   Read its existing receipt/output and verify the current process before deciding
+   whether to monitor, finish archival or rerun. If the process is gone and the
+   result is unconfirmed, give an authorized rerun a detached
    result-to-disk channel (e.g. remote `( cmd > log 2>&1 </dev/null; echo $? > rc ) &`
    polled through the rc file — prefer `setsid`/`nohup` where the target has them,
    since a pty-backed session can still SIGHUP a bare subshell) so the next
    interruption cannot take the result again.
+
+**In-flight CI example:** An existing `result.json` names commit `H`, owner `O`
+and a running test phase; its lifecycle marker records PID `P`. Before starting
+another CI, match `P`'s live argv to `H` and the exact output path, match its cwd
+and child test phase to that receipt, and observe log growth or a child completing
+the documented timeout fixture. A matching live operation should be monitored
+through its original result, archive and cleanup, keeping its owner and accumulated
+budget. A vanished controller or an old receipt mtime does not authorize a second
+run; PID existence alone does not establish identity. Reconcile any final-head
+delta separately and rerun only the affected checks. This process check follows
+Step 1 for external takeover; native continuation still uses the entry gate above.
 
 ## Step 4: Execute the business task
 

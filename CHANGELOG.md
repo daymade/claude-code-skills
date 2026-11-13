@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **qa-expert** (v1.2.15): Exercise real incremental capture and drift repair across three rounds, prove negative fixtures changed their selected field, and bound completed results behind ordered concurrent publication.
+- **continue-codex-work / claude-switch-models-setup** (`daymade-claude-code` v5.1.11): Identify and finish in-flight CI before rerunning it; calibrate shared helper locking and required launch preparation in isolated fixtures.
+
 - **app-evolver 1.1.14** — Trace implicit state through actual consumers, operation identity, recovery boundaries and declared audit coverage.
 - **qa-expert 1.2.13** — Extend acceptance for reservation replay and expiry, historical schema upgrades through the operator command, and late committed saves that preserve newer drafts.
 

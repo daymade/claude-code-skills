@@ -406,6 +406,24 @@ Uninstall:
 
 ## Verification Checklist
 
+For changes to the shared helpers or required launch preparation, the maintainer
+first runs the source bundle's `tests/test_sync_state.py` and
+`tests/test_native_command.py` in their disposable fixture roots. Keep real
+profiles, registries and lock markers out of this calibration:
+
+- Pair a healthy canonical registry/settings and native-launch case with malformed
+  JSON, a non-object root and missing required settings. Assert refusal preserves
+  the input bytes and produces no native invocation; separately preserve the
+  absent-marketplace registry's documented successful no-op.
+- Hold one helper's kernel guard while entering the other. Confirm exclusion,
+  then release only the test-owned holder. Reclaim a confirmed-dead PID marker;
+  preserve a live or unknown/missing/malformed PID marker regardless of age.
+  Verify exact marker and guard state after each case, not only the timeout status.
+- Test both native entry forms in Bash and zsh with caller `errexit` on and off.
+  Required helper failure must remain nonzero before native execution; healthy
+  arguments and exit propagation remain intact. Adopt the updated helper pair
+  together, since an older helper cannot participate in the kernel guard.
+
 Use implementation-owned inventory instead of a hand-maintained plugin or Skill
 list. First confirm which source identities are registered, then preview the exact
 host selections and affected paths:
