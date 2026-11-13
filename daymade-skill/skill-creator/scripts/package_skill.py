@@ -38,7 +38,8 @@ if str(PACKAGE_ROOT) not in sys.path:
     sys.path.insert(0, str(PACKAGE_ROOT))
 
 from scripts.quick_validate import validate_skill
-from scripts.security_scan import calculate_skill_hash
+from scripts.security_scan import calculate_skill_hash, iter_security_relevant_files
+from scripts.code_scan import policy_hash, SEMGREP_VERSION
 from scripts.packaging_policy import should_exclude
 from scripts.audit_skill_regression import (
     create_regression_marker,
@@ -85,7 +86,20 @@ def validate_security_marker(skill_path: Path) -> Tuple[bool, str]:
     if stored_hash != current_hash:
         return False, "Skill content changed since last security scan"
 
-    return True, "Security scan valid"
+    required = {
+        "Checks:": "Checks: secrets,python-archive-paths",
+        "Code policy hash:": f"Code policy hash: {policy_hash()}",
+    }
+    python_count = sum(path.suffix == ".py" for path in iter_security_relevant_files(skill_path))
+    required["Python files:"] = f"Python files: {python_count}"
+    engine = SEMGREP_VERSION if python_count else "not-applicable"
+    required["Semgrep version:"] = f"Semgrep version: {engine}"
+    for prefix, expected in required.items():
+        matching = [line for line in marker_content.splitlines() if line.startswith(prefix)]
+        if matching != [expected]:
+            return False, "Security marker lacks current secret/code coverage; rerun the scan"
+
+    return True, "Declared secret and Python archive-path checks are current"
 
 
 def _stage_attested_snapshot(skill_path: Path, staged_skill: Path) -> None:

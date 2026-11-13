@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Security Scanner for Claude Code Skills
-Validates skills before packaging to prevent secret leakage and security issues.
+Secret and scoped Python code checks for Claude Code Skills.
+Check the packaging superset without asserting general code safety.
 
 SINGLE RESPONSIBILITY: Validate skill security before distribution
 ARCHITECTURE:
-  - Detection Layer: Gitleaks (secrets) + Pattern matching (code smells)
+  - Detection Layer: Gitleaks + local Semgrep archive-path rules
   - Reporting Layer: Simple mode (gate) / Verbose mode (educational)
   - Action Layer: Creates .security-scan-passed marker on clean scan
 
@@ -36,6 +36,7 @@ if str(PACKAGE_ROOT) not in sys.path:
     sys.path.insert(0, str(PACKAGE_ROOT))
 
 from scripts.packaging_policy import should_exclude
+from scripts.code_scan import CodeScanResult, policy_hash, python_content_hash, run_code_scan
 
 # ANSI color codes
 RED = '\033[91m'
@@ -365,7 +366,7 @@ def print_simple_report(gitleaks_findings: List[Dict], skill_name: str) -> int:
     Returns: Exit code (0=clean, 2=critical, 1=high)
     """
     if not gitleaks_findings:
-        print(f"{GREEN}✅ Security scan passed: No secrets detected{RESET}")
+        print(f"{GREEN}✅ Secret pattern check: no findings (gitleaks){RESET}")
         print(f"{YELLOW}⚠  Keyword-based gate only. It does NOT catch real project/person")
         print(f"   nicknames, CJK names (gitleaks ignores CJK), or verbatim transcript lines —")
         print(f"   none have a secret signature. Before publishing to a PUBLIC repo you MUST")
@@ -455,7 +456,7 @@ def print_verbose_report(gitleaks_findings: List[Dict], pattern_issues: List[Sec
                     print(f"\n  ... and {len(severity_issues) - 10} more {severity} issues")
                 print()
     else:
-        print(f"{GREEN}✅ Code Patterns: Clean{RESET}\n")
+        print(f"{GREEN}✅ Configured educational patterns: no findings{RESET}\n")
 
     # Summary
     print(f"{'=' * 80}")
@@ -470,7 +471,7 @@ def print_verbose_report(gitleaks_findings: List[Dict], pattern_issues: List[Sec
         print(f"{YELLOW}🟠 HIGH issues SHOULD be fixed before distribution{RESET}")
         exit_code = 1
     else:
-        print(f"{GREEN}✅ No critical security issues found!{RESET}")
+        print(f"{GREEN}✅ No blocking findings in the checks reported above{RESET}")
         exit_code = 0
 
     print(f"{'=' * 80}\n")
@@ -524,7 +525,8 @@ def calculate_skill_hash(skill_path: Path) -> str:
 
 
 def _create_security_marker(
-    skill_path: Path, scan_result: GitleaksScanResult
+    skill_path: Path, scan_result: GitleaksScanResult,
+    code_result: Optional[CodeScanResult] = None,
 ) -> None:
     """
     Create marker file indicating security scan passed
@@ -534,14 +536,25 @@ def _create_security_marker(
         raise ValueError("cannot create a clean marker for a scan with findings")
     if calculate_skill_hash(skill_path) != scan_result.content_hash:
         raise ValueError("cannot create marker: source differs from scanned snapshot")
+    if code_result is None:
+        raise ValueError("cannot create marker: Python code check was not completed")
+    if code_result.findings or code_result.content_hash != scan_result.content_hash:
+        raise ValueError("cannot create marker: Python code verdict differs from secret snapshot")
+    if python_content_hash(skill_path, iter_security_relevant_files(skill_path)) != code_result.python_hash:
+        raise ValueError("cannot create marker: Python source differs from scanned snapshot")
+    if policy_hash() != code_result.policy_hash:
+        raise ValueError("cannot create marker: Python code policy changed")
 
     marker_file = skill_path / ".security-scan-passed"
     # Atomic write (methodology §4.5): package_skill reads this marker concurrently.
     marker_tmp = marker_file.with_name(marker_file.name + ".tmp")
     marker_tmp.write_text(
-        f"Security scan passed\n"
+        f"Configured security checks completed\n"
         f"Scanned at: {datetime.now(timezone.utc).isoformat()}\n"
-        f"Tool: gitleaks + pattern-based validation\n"
+        f"Checks: secrets,python-archive-paths\n"
+        f"Code policy hash: {code_result.policy_hash}\n"
+        f"Python files: {len(code_result.python_files)}\n"
+        f"Semgrep version: {code_result.engine_version}\n"
         f"Content hash: {scan_result.content_hash}\n"
     )
     os.replace(marker_tmp, marker_file)
@@ -554,7 +567,7 @@ def _create_security_marker(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Security scanner for Claude Code skills",
+        description="Gitleaks secrets and scoped Python archive-path checks; not a general safety audit",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -562,7 +575,7 @@ Examples:
   uv run --project "<skill-creator-path>" --frozen python "<skill-creator-path>/scripts/security_scan.py" "<absolute-skill-dir>" --verbose  # Detailed review
 
 Exit codes:
-  0 - Clean (no issues)
+  0 - No blocking findings in the declared checks
   1 - High severity issues found
   2 - Critical issues found (MUST fix)
   3 - gitleaks not installed
@@ -592,12 +605,19 @@ Exit codes:
     # Run gitleaks scan (always)
     print(f"🔍 Scanning: {skill_path.name}")
     print(f"   Tool: gitleaks (industry standard)")
-    print(f"   Mode: {'verbose (educational)' if args.verbose else 'simple (packaging gate)'}")
+    print(f"   Mode: {'verbose patterns + required gates' if args.verbose else 'required packaging gates'}")
     gitleaks_result = run_gitleaks(skill_path)
 
     if gitleaks_result is None:
         sys.exit(4)
     gitleaks_findings = gitleaks_result.findings
+    try:
+        code_result = run_code_scan(
+            skill_path, iter_security_relevant_files(skill_path), gitleaks_result.content_hash,
+        )
+    except (RuntimeError, OSError, ValueError) as error:
+        print(f"Python code check incomplete: {error}", file=sys.stderr)
+        sys.exit(4)
 
     # Run pattern-based scan (only in verbose mode)
     pattern_issues = []
@@ -613,7 +633,19 @@ Exit codes:
     else:
         exit_code = print_simple_report(gitleaks_findings, skill_path.name)
 
-    # Create marker file on clean scan
+    if code_result.python_files:
+        print(f"Python archive-path check: examined {len(code_result.python_files)} file(s), "
+              f"{len(code_result.findings)} finding(s); Semgrep {code_result.engine_version}")
+    else:
+        print("Python archive-path check: not applicable (no packaged Python files)")
+    for finding in code_result.findings:
+        print(f"  {finding['path']}:{finding['line']} - {finding['rule']}: {finding['message']}")
+    if code_result.findings:
+        exit_code = max(exit_code, 1)
+    print("Scope: Gitleaks secrets + intraprocedural Python archive-path writes. "
+          "Other vulnerabilities, cross-function flows and other languages are not assessed.")
+
+    # Attest only completed, content-bound checks.
     if exit_code == 0:
         if calculate_skill_hash(skill_path) != gitleaks_result.content_hash:
             print(
@@ -621,7 +653,11 @@ Exit codes:
                 file=sys.stderr,
             )
             sys.exit(4)
-        _create_security_marker(skill_path, gitleaks_result)
+        try:
+            _create_security_marker(skill_path, gitleaks_result, code_result)
+        except (OSError, ValueError) as error:
+            print(f"Security receipt incomplete: {error}", file=sys.stderr)
+            sys.exit(4)
 
     sys.exit(exit_code)
 

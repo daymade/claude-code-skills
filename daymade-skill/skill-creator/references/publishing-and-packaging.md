@@ -62,17 +62,18 @@ Before packaging or distributing a skill, resolve the loaded creator's absolute 
 # Required before packaging
 uv run --project "<skill-creator-path>" --frozen python "<skill-creator-path>/scripts/security_scan.py" "<absolute-skill-dir>"
 
-# Verbose mode includes additional checks for paths, emails, and code patterns
+# Keep both required gates; add educational path/email/code-pattern checks
 uv run --project "<skill-creator-path>" --frozen python "<skill-creator-path>/scripts/security_scan.py" "<absolute-skill-dir>" --verbose
 ```
 
 **Detection coverage:**
 - Hardcoded secrets (API keys, passwords, tokens) via gitleaks
+- Intraprocedural Python archive-path writes via the locked local Semgrep engine in both modes; follow [code-check scope and calibration](code-security-checks.md).
 - Personal information (usernames, emails, company names) in verbose mode
 - Unsafe code patterns (command injection risks) in verbose mode
 - The complete shipping set is defined only by [scripts/packaging_policy.py](../scripts/packaging_policy.py). Packaging, security attestation, content hashing, and regression auditing must consume that shared policy; do not maintain a second exclusion list in prose or in a consumer-specific filter.
 
-**What it does NOT cover** — why Step 5's read-through is still required: gitleaks and the regex rules only match *known secret formats and patterns you listed*. They are structurally blind to private content with no keyword — a real person/project name in a non-English language, a verbatim line from a real transcript, a real example lifted from your own work. A green `security_scan` means "no known-format secret was found", **not** "the skill is sanitized". Never treat it as the latter.
+**Interpret a successful scan within its declared scope.** Treat Gitleaks and verbose regex checks as known-pattern detection: they cannot establish that names, examples or transcript lines are public. Treat the code check as a bounded Python dataflow check, with the limitations in its linked scope. Keep Step 5's semantic read-through and behavior-specific verification; neither privacy nor general code safety follows from exit 0.
 
 **First-time setup:** Install gitleaks if not present:
 
@@ -89,14 +90,19 @@ and the target absolute, including their shell quoting.
 
 Read the [security scanner](../scripts/security_scan.py) for executable exit
 semantics; resolve findings and scan/runtime failures before distribution.
+Restore the pinned Semgrep dependency with the owner's `uv sync --frozen`.
+Reject legacy secret-only markers and rerun the combined scan. Packaging requires
+the current content hash, detector-policy hash, examined Python count and engine
+version; source or policy changes invalidate that evidence.
 
-**In a private skill, a finding is information, not a work order.** The scanner cannot
+**For credentials in a private skill, treat a finding as information, not a work order.** The scanner cannot
 tell a leaked credential from a credential that is *supposed* to be there — a template whose
 whole value is that it comes pre-filled, a script pointing at the one machine it runs on.
 Never auto-fix in a private repo: report what was found and let the owner choose. Option A
 below ("fix automatically") is for skills headed somewhere public.
 
-**If issues are found**, present them via **AskUserQuestion**:
+For credential/PII findings without an existing owner disposition, present the
+finding and proposed action through the host's question mechanism:
 
 ```
 Security scan found [N] issues in "[skill-name]":
@@ -108,8 +114,12 @@ RECOMMENDATION: Fix automatically — these look like [accidental leaks / false 
 Options:
 A) Fix all issues automatically (Recommended)
 B) Review each finding — let me decide per-item (some may be intentional)
-C) Override and proceed — I accept the risk for internal distribution
+C) Retain the private configuration — record the owner disposition; do not claim a clean scanner result
 ```
+
+Resolve code findings through the authorized repair workflow. For a false
+positive, reproduce the healthy behavior and the original unsafe case before
+changing the rule. Do not handwrite a passing marker or disable the gate.
 
 ### Step 7: Packaging a Skill
 

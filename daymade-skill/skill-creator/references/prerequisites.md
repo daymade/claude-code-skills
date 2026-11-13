@@ -14,6 +14,7 @@ echo -n "Python: "; uv run --frozen python --version 2>/dev/null || echo "MISSIN
 echo -n "PyYAML: "; uv run --frozen python -c "import yaml; print(yaml.__version__)" 2>/dev/null || echo "MISSING"
 echo -n "tiktoken: "; uv run --frozen python -c "import tiktoken; print(tiktoken.__version__)" 2>/dev/null || echo "MISSING (conversation mining only)"
 echo -n "gitleaks: "; gitleaks version 2>/dev/null || echo "MISSING"
+echo -n "Semgrep: "; uv run --frozen semgrep --version 2>/dev/null || echo "MISSING"
 echo -n "claude CLI: "; which claude 2>/dev/null || echo "MISSING"
 ```
 
@@ -26,6 +27,7 @@ echo -n "claude CLI: "; which claude 2>/dev/null || echo "MISSING"
 | PyYAML | `quick_validate.py`, `package_skill.py` | Validation, Packaging | **Blocking** |
 | tiktoken | `mine_conversation.py` | Conversation mining | **Blocking for conversation mining** |
 | gitleaks | `security_scan.py` | Security Review (Step 6) | **Blocking for packaging** |
+| Semgrep CE (locked) | `code_scan.py`, `security_scan.py` | Security Review (Step 6) | **Blocking when packaged Python is present** |
 | claude CLI | `run_eval.py`, `run_loop.py` | Testing, Description Optimization | **Blocking for evals** |
 | webbrowser | `generate_review.py` (viewer) | Eval Review | Optional (can use `--static` fallback) |
 
@@ -43,6 +45,11 @@ uv run --frozen python -m scripts.quick_validate <skill-path>
 ```
 
 The environment belongs only to skill-creator. uv restores its pinned packages from the user's shared cache, so projects reuse package data without sharing one mutable environment. Keep the default global cache (or one user-configured global `UV_CACHE_DIR`); never set a global `UV_PROJECT_ENVIRONMENT`.
+
+Use the locked Semgrep console entry installed by this environment; do not invoke
+`python -m semgrep` or substitute an ambient engine version. Run its bundled local
+rules without an account or code upload. Read [code-check scope](code-security-checks.md)
+before interpreting a successful scan.
 
 ### gitleaks (required for packaging)
 

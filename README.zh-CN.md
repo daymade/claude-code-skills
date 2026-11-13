@@ -36,7 +36,7 @@
 | 避免常见错误 | 无指引 | 缓存编辑警告、前置依赖检查、安全扫描门禁 |
 | 了解架构选项 | 未提及 | Inline vs Fork 决策指南（选错会静默破坏你的 skill） |
 | 发布前验证 | 基本 YAML 检查 | 扩展结构校验 + 带来源核验的现有 skill 新旧能力审计；打包时重验完整 review，不信任 marker 自证 |
-| 安全审查 | 无工具 | `security_scan.py` + gitleaks 集成——打包前硬门禁 |
+| 检查密钥与归档路径 | 无工具 | `security_scan.py`：Gitleaks 加 Python 归档路径专项分析，打包前必跑 |
 | 从真实失败中学习 | 无失败案例 | 实战方法论 + 文档化的失败模式和踩坑记录 |
 | 安全蒸馏历史对话 | 未覆盖 | 显式本地 manifest、消息级时间窗、先脱敏后落盘、匿名 source ID、默认忽略 `.enrich/`，候选只能人工晋升进 references/scripts |
 | 用证据锚定知识型 skill | 泛化建议 | 从真实调用和机器可读规范到生产代码的权威源阶梯，加上可执行示例冒烟与证据边界规则 |
@@ -2313,7 +2313,7 @@ claude plugin install daymade-claude-code@daymade-skills
 **主要功能：**
 - 基于当前对话、用户明确授权的过往会话、本地 SOP、已装插件/MCP、skills.sh、官方插件、npm/PyPI 做先验调研——复用基础设施，只把用户独有的方法论编码进技能
 - inline vs `context: fork` 决策指引（subagent 不能 spawn subagent 或调 skill）与可组合/正交的技能设计
-- `init_skill.py` 脚手架、`package_skill.py`（自动校验）、`security_scan.py`（基于 gitleaks 的密钥/PII 检测）
+- `init_skill.py` 脚手架、`package_skill.py`（自动校验）、`security_scan.py`（Gitleaks 密钥检测加本地 Semgrep Python 归档路径专项检查；通过不代表代码整体安全）
 - 现有 skill 迁移闸门：工具签发的快照或已核验 Git commit 基线、区分运行时可达性的能力审计、逐项 disposition，以及无法被 clean commit 或手写 marker 绕过的打包时重验
 - 风险分级验证路由：Tier 1 定向校验、Tier 2 抽样行为回放、Tier 3 标记大改/高风险但不自动扇出
 - 单独授权的完整 Eval 工具链：用户明确要求，或能改变决策的证据计划获得同意后，才运行带技能 + baseline、断言、评分、聚合基准和 HTML viewer
@@ -2331,7 +2331,7 @@ claude plugin install daymade-skill@daymade-skills
 "把这个 skill 和无技能 baseline 做基准对比"
 ```
 
-**要求**：Python 3、`uv`、PyYAML（校验/打包）、gitleaks（安全扫描）。只有 agent eval 与 description 优化需要 `claude` CLI。
+**要求**：Python 3.10+、`uv`、锁定环境内的 PyYAML 与 Semgrep，以及 gitleaks（密钥扫描）。只有 agent eval 与 description 优化需要 `claude` CLI。
 
 ---
 

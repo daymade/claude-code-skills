@@ -1,0 +1,80 @@
+rules:
+  - id: python-uncontrolled-archive-path-write
+    languages: [python]
+    mode: taint
+    severity: ERROR
+    message: Validate archive-derived file paths against a resolved output root before writing.
+    metadata:
+      cwe: CWE-22
+      scope: Intraprocedural Python regex captures and parsed JSON/XML path fields reaching file-write APIs.
+    pattern-sources:
+      - pattern: $MATCH.group(...)
+        label: PATH
+        exact: true
+      - pattern: json.loads(...)
+        label: DOCUMENT
+        exact: true
+      - pattern: json.load(...)
+        label: DOCUMENT
+        exact: true
+      - pattern: xml.etree.ElementTree.fromstring(...)
+        label: DOCUMENT
+        exact: true
+      - pattern: xml.etree.ElementTree.parse(...)
+        label: DOCUMENT
+        exact: true
+      - pattern-either:
+          - pattern: $ENTRY.get("path", ...)
+          - pattern: $ENTRY["path"]
+          - pattern: $ENTRY.attrib["path"]
+        requires: DOCUMENT
+        label: PATH
+        exact: true
+    pattern-sanitizers:
+      - patterns:
+          - pattern-inside: |
+              $DEST = $EXPR.resolve(...)
+              ...
+          - pattern: |
+              if not $DEST.is_relative_to($ROOT):
+                  raise ...
+          - pattern-not-inside: |
+              try:
+                  ...
+              except ...:
+                  ...
+          - pattern-not-inside: |
+              with ...:
+                  ...
+          - focus-metavariable: $DEST
+        by-side-effect: true
+        exact: true
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: open($PATH, $MODE, ...)
+              - pattern: io.open($PATH, $MODE, ...)
+              - pattern: open($PATH, mode=$MODE, ...)
+              - pattern: io.open($PATH, mode=$MODE, ...)
+              - pattern: open(file=$PATH, mode=$MODE, ...)
+              - pattern: io.open(file=$PATH, mode=$MODE, ...)
+          - metavariable-regex:
+              metavariable: $MODE
+              regex: .*['\"][wax+].*
+          - focus-metavariable: $PATH
+        requires: PATH
+      - patterns:
+          - pattern-either:
+              - pattern: $PATH.write_text(...)
+              - pattern: $PATH.write_bytes(...)
+          - focus-metavariable: $PATH
+        requires: PATH
+      - patterns:
+          - pattern-either:
+              - pattern: $PATH.open($MODE, ...)
+              - pattern: $PATH.open(mode=$MODE, ...)
+          - metavariable-regex:
+              metavariable: $MODE
+              regex: .*['\"][wax+].*
+          - focus-metavariable: $PATH
+        requires: PATH
