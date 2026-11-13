@@ -3,7 +3,9 @@
 ## Verification Routing
 
 Before selecting evidence or judging task completion, enter
-[skill-creator](skill-creator/SKILL.md). For task-result acceptance examples, use
+[skill-creator](skill-creator/SKILL.md). Existing-Skill workflow moves and renames
+enter [migration preservation](skill-creator/references/existing-skill-migration.md).
+For task-result acceptance examples, use
 [named task-result examples](skill-creator/references/change-verification.md#named-task-result-examples).
 
 ## Publication Routing

@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **daymade-skill 1.79.2**: Replace Semgrep 1.185.0's vulnerable SDK constraints with version-scoped MCP 1.30.0 and aligned OpenTelemetry 1.45.2/0.66b2 dependencies. Preserve local scan and package gates; add dependency-floor, consumer-interface and oversized-tracestate regressions.
+- **daymade-skill 1.79.1**: Route workflow moves and renames to the migration owner; replace obsolete casebook source-line headings with topic names and remove the duplicated contents list.
+
 - **daymade-skill 1.79.0**: Add required local Semgrep Python archive-path checks beside Gitleaks, calibrate against the original #1499 extractor, reject incomplete analysis and legacy secret-only packaging receipts, and run the same gate in required CI. State the bounded detection scope instead of claiming general code safety.
 - **bilibili-source 1.4.2** — `attest-audio`: Local size and SHA-256 must equal the remote object; a full strict decode must succeed.
 
