@@ -697,7 +697,7 @@ Round 4: Update to use "Annotation" instead of "Note"
 - ❌ Keeping all intermediate outputs in conversation context (causes token overflow, use file system)
 - ❌ **Pure text minutes without diagrams** - Architecture/schema discussions deserve visual representation
 - ❌ **Deleting intermediate files after merge** - Preserve for human review and debugging
-- ❌ **Blindly copying external AI output** - Always verify against transcript before merging
+- ❌ **Blindly copying external AI output** - Always verify against the original supplied source under Step 1 before merging
 - ❌ **Ignoring cross-AI comparison opportunity** - Different AI models catch different details
 - ❌ **Sequential subagent execution** - MUST launch v1, v2, v3 subagents in PARALLEL using multiple Task tool calls in a single message
 - ❌ **Flat intermediate directory** - MUST use transcript-specific subdirectory `intermediate/<transcript-name>/` to avoid conflicts

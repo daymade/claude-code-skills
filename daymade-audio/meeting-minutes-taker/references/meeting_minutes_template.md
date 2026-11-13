@@ -33,7 +33,7 @@ If the meeting reviewed specific documents, mockups, or artifacts, list them her
 
 ### 3. Key Decisions
 
-For each major decision:
+For each major transcript-backed decision, use the quote block below. For a note-only decision, replace **Quote** with **Source** and give the supplied note's author/date when known and its locator; do not invent a transcript quotation or timestamp.
 
 ```markdown
 ### 3.X [Category] Decision Title

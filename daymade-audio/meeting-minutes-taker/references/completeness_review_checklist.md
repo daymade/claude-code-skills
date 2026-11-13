@@ -99,7 +99,7 @@ When merging versions:
 ## Red Flags (Signs of Missing Content)
 
 - Transcript mentions a topic not in minutes
-- Decision recorded without quote
+- Transcript-backed decision without a quote, or note-only addition without a labeled source
 - Action item without clear owner
 - Long transcript section summarized in one sentence
 - Technical discussion with no entity/field names
