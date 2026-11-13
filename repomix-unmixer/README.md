@@ -136,7 +136,7 @@ For detailed validation procedures, see `references/validation-workflow.md`.
 
 ## Requirements
 
-- Python 3.6 or higher
+- Python 3.10 or higher
 - Standard library only (no external dependencies)
 
 ## Skill Activation
@@ -176,9 +176,8 @@ This skill activates when:
 
 ## Version
 
-- **Version**: 1.0.0
-- **Created**: 2025-10-22
-- **Last Updated**: 2025-10-22
+Resolve the registered plugin version from the repository's
+[marketplace manifest](../.claude-plugin/marketplace.json).
 
 ## License
 
