@@ -21,7 +21,7 @@ Transform raw meeting transcripts into comprehensive, evidence-based meeting min
 - **Context file**: Prepare `context.md` with team directory for accurate speaker identification
 
 **Core Workflow:**
-1. Read the transcript provided by user
+1. Read the transcript and any supplied participant notes or user corrections using Step 1's source contract
 2. Load project-specific context file if provided by user (optional)
 3. **Intelligent file naming**: Auto-generate filename from content (see below)
 4. **Speaker identification**: If transcript has "Speaker 1/2/3", FIRST ask the user to label speakers on the source platform and re-export (see Step 1.5 Phase 0); infer from text only as a fallback
@@ -73,12 +73,12 @@ Meeting Minutes Progress:
     - [ ] Subagent 2 → <output_dir>/intermediate/<transcript-name>/version2.md
     - [ ] Subagent 3 → <output_dir>/intermediate/<transcript-name>/version3.md
   - [ ] Merge: UNION all versions, AGGRESSIVELY include ALL diagrams → draft_minutes.md
-  - [ ] Final: Compare draft against transcript, add omissions
+  - [ ] Final: Compare draft against all supplied sources, reconcile final states, add omissions
 - [ ] Step 3: Self-review for completeness
 - [ ] Step 3.5: Retrieval Self-Test (consumption-side verification)
-  - [ ] Fresh-context subagent extracts future-query claims list from transcript ONLY (never sees draft) → intermediate/<transcript-name>/retrieval-claims.md
+  - [ ] Fresh-context subagent extracts future-query claims from the transcript and separately labeled participant notes ONLY (never sees draft) → intermediate/<transcript-name>/retrieval-claims.md
   - [ ] Hit-test each claim against retrievable layer (Key Decisions / Action Items / Parking Lot / Open Questions), by component, with lexical anchors
-  - [ ] Revocation scan before ANY promotion; promote with [self-test promoted] tag + greppable verbatim quote; uncertain → Open Questions
+  - [ ] Revocation scan before ANY promotion; promote with [self-test promoted] tag + locatable original evidence (transcript quote or labeled note); uncertain → Open Questions
   - [ ] Report "enumerated N / hits M / promoted K / uncertain list" (never a binary pass); fail-open with visible NOT-RUN note if extraction fails
 - [ ] Step 4: Present draft to user for human review
 - [ ] Step 5: Cross-AI comparison (if human provides external AI output)
@@ -90,6 +90,12 @@ Note: <transcript-name> = name derived from transcript file (e.g., 2026-01-15-pr
 ```
 
 ### Step 1: Read and Analyze Transcript
+
+Read all supplied sources before generation. Keep the transcript unchanged; record participant notes and user corrections separately with their author, date and source locator when known. Unknown metadata stays unknown. Give every generation pass the same source bundle. Notes need no separate reader-facing deliverable: integrate their substantive content into one current minutes document, link the transcript for verification, and retain original notes through the owning archive's source record. Follow an explicitly requested alternative delivery format.
+
+Reconcile each fact within its stated scope. A later explicit participant correction or status update can revise that fact; it does not silently replace unrelated meeting decisions. If sources remain irreconcilable, state the conflict in Open Questions. Do not invent agreement. Attribute note-only additions to the note's author/date or source label; do not fabricate a transcript quote, speaker or timestamp for them.
+
+Bind each TODO/DONE to its exact action, owner, conditions and supporting source. Preserve unknown owners, deadlines and completion evidence as unknown. An invitation sent does not establish that the meeting occurred; finding an available account does not establish that someone switched accounts. Separate agreed responsibility from work delivered or a hypothesis verified.
 
 Analyze the transcript to identify:
 - Meeting topic and attendees
@@ -222,6 +228,8 @@ Evaluate transcript quality to determine processing depth:
 
 Each pass generates **COMPLETE minutes (all sections)** from the full transcript. Multiple passes with isolated context catch different details. UNION merge consolidates all findings.
 
+Apply source reconciliation from Step 1 before every merge, including cross-AI merges and human-feedback rounds. UNION preserves source-supported content; it does not turn superseded proposals into simultaneous active commitments. Scan all supplied sources for later reversals, modifications and conditions. Put the final effective state in Decisions / Action Items, retain useful superseded alternatives in Discussion, and route unresolved conflicts to Open Questions. Apply the same state check to diagrams.
+
 **❌ WRONG: Narrow-focused passes** (wastes tokens, causes bias)
 ```
 Pass 1: Only extract decisions
@@ -264,6 +272,7 @@ Main Agent: Read all versions → UNION merge, consolidate duplicates → draft_
 
 **CRITICAL: Subagent Prompt Must Include:**
 1. Full path to transcript file
+   - Include every supplied participant note/correction path with its source label, author/date when known, and Step 1's reconciliation and status rules; each pass receives the same bundle.
 2. Full path to output file (version1.md, version2.md, version3.md in transcript-specific subdirectory)
 3. Context files to load (project-specific context if provided, meeting_minutes_template.md)
 4. Reference images/documents if provided by user
@@ -318,7 +327,7 @@ Merge Phase:
 
 Final Review:
   Read: draft_minutes.md
-  Read: original_transcript.md
+  Read: original_transcript.md + any supplied participant notes/corrections
   → Compare & add omissions → Write to: final_minutes.md
 ```
 
@@ -342,7 +351,7 @@ Final Review:
 #### Output Requirements
 
 - **Chinese output** with English technical terms preserved
-- **Evidence-based decisions** - Every significant decision needs a supporting quote
+- **Evidence-based decisions** - Every significant transcript-backed decision needs a supporting quote; note-only additions need their separately labeled source (Step 1)
 - **Structured sections** - Executive Summary, Key Decisions, Discussion, Action Items, Parking Lot
 - **Proper quote formatting** - See Quote Formatting Requirements section below
 - **Mermaid diagrams** (STRONGLY ENCOURAGED) - Visual diagrams elevate minutes beyond pure text:
@@ -372,10 +381,11 @@ After initial generation, immediately review against transcript:
 ```
 Completeness Checklist:
 - [ ] All discussion topics covered?
-- [ ] All decisions have supporting quotes?
+- [ ] Transcript-backed decisions have supporting quotes and note-only additions have labeled sources?
 - [ ] All speakers attributed correctly?
 - [ ] All action items have specific owners?
 - [ ] Numerical values preserved (ranges, counts)?
+- [ ] Each completion status applies only to the sourced action, with final effective conditions preserved?
 - [ ] Entity relationships captured?
 - [ ] State machines complete (all states listed)?
 ```
@@ -388,15 +398,17 @@ If gaps found, add missing content silently without mentioning what was missed.
 
 **Procedure** (after merge, before presenting the draft):
 
-1. **Reverse-extract a future-query claims list.** Spawn ONE fresh-context subagent that reads ONLY the transcript — it must NOT see the draft minutes (a speaker-name mapping is fine; the anchoring risk comes from the draft's structure, not from a roster). Its task:
+1. **Reverse-extract a future-query claims list.** Spawn ONE fresh-context subagent that reads ONLY the transcript and any separately labeled participant notes/user corrections — it must NOT see draft minutes or other AI summaries (a speaker-name mapping is fine; the anchoring risk comes from the draft's structure, not from a roster). With no notes, use the transcript alone. Its task:
    > Imagine project members returning 1–8 weeks from now to verify: "did [person] ever instruct / promise / decide / veto / commit-a-number on X?" Enumerate every such claim. Each claim = who + type (instruction / promise / decision / veto / number-commitment / conditional-consensus) + content + scope (+ expiry condition if any) + timestamp. Include only claims with a clear owner; skip opinions and background narration.
+
+   Include supplied status updates and note-only additions, preserving each source locator. Use a note's date/label when no transcript timestamp exists. Keep a decision-maker, note author and task owner distinct; an unassigned task remains Open Questions instead of being dropped or assigned to its note author.
    
    For long transcripts (roughly > 60k characters or > 90 minutes), extract in overlapping chunks and merge — a single pass inherits lost-in-the-middle attention decay exactly where long meetings bury directives. Write the list to `<output_dir>/intermediate/<transcript-name>/retrieval-claims.md` (auditable evidence that the check ran, and reviewable by the human later).
 
 2. **Hit-test each claim against the retrievable layer** (main agent): the retrievable layer = Key Decisions titles + Decision lines, Action Items table, Parking Lot, Open Questions — a hit means a reader scanning ONLY those finds the claim, no prose reading required. Judge hits **by component**: who / action / deadline / expiry-condition each need to be present (a table row that names the task but drops the expiry condition is a partial miss). Require **lexical anchors** — the row must share the claim's key actor/action words; do not accept purely semantic "an LLM could argue they match" equivalence, because the future reader is a hurried human, not a charitable model.
 
-3. **Disposition for misses.** Before promoting anything, run a **revocation scan**: grep the transcript for later reversals / modifications / conditioning of the same topic ("earlier we said air-freight — hold that until customs confirms"). A claim that was superseded in-meeting must NOT be promoted as-is; record the final state instead. This scan is mandatory — promoting a revoked decision is the one way this step can make minutes *worse* than not running it. Then:
-   - Miss + genuinely an instruction/promise/decision → promote into Key Decisions or Action Items, tagged `[self-test promoted]`, with a verbatim quote + timestamp that can be grepped back to the transcript (a promotion without a greppable quote is rejected — this caps hallucinated-claim risk).
+3. **Disposition for misses.** Before promoting anything, run a **revocation scan** across all supplied sources for later reversals / modifications / conditioning of the same topic ("earlier we said air-freight — hold that until customs confirms"). A superseded claim must NOT be promoted as-is; record the final state instead, following Step 1's scope and conflict rules. This scan is mandatory — promoting a revoked decision is the one way this step can make minutes *worse* than not running it. Then:
+   - Miss + genuinely an instruction/promise/decision or supplied status update → promote into Key Decisions or Action Items, tagged `[self-test promoted]`, with a verbatim quote + timestamp for transcript evidence, or the separately labeled note source for note-only evidence. The evidence must be locatable in the original supplied source.
    - Miss + uncertain → route to Open Questions / Parking Lot. Never let uncertain promotions inflate the decision table; its precision IS its retrievability.
    - Miss + genuinely just detail → leave in Discussion, but be able to say why it won't be queried.
 
@@ -432,7 +444,7 @@ This step is valuable because:
 **Comparison Process:**
 1. Read the external AI output carefully
 2. Identify items present in external output but missing from our draft
-3. Verify each item against original transcript before adding (don't blindly copy)
+3. Verify each item against its original supplied source using Step 1 before adding (don't blindly copy)
 4. Identify items where external AI has errors (wrong facts) - note but don't copy errors
 5. UNION merge valid new content into our draft
 6. Document any corrections made based on cross-comparison
@@ -456,10 +468,10 @@ This step is valuable because:
 
 **When user provides another version to merge:**
 
-Merge Principle: **UNION, never remove**
+Merge Principle: **UNION source-supported content, reconcile final states using Step 1 and Step 2**
 
-1. Keep ALL content from existing version
-2. Add ALL new content from incoming version
+1. Keep source-supported content from the existing version; move superseded commitments to Discussion when useful
+2. Add source-supported new content from the incoming version; resolve status and decision conflicts before promotion
 3. Consolidate duplicates (don't repeat same info)
 4. Preserve more detailed version when depth differs
 5. Maintain logical section numbering
@@ -672,12 +684,12 @@ Round 4: Update to use "Annotation" instead of "Note"
 - ❌ **Single-pass generation** - One turn through transcript will absolutely lose content
 - ❌ **Divided sections without overlap** - Each pass must cover FULL transcript, not split by sections
 - ❌ **Narrow-focused passes** - Each pass must generate COMPLETE minutes (all sections), not just one section type (wastes tokens, causes bias)
-- ❌ Generic summaries without supporting quotes
+- ❌ Generic summaries without supporting evidence (transcript quotes or labeled participant notes)
 - ❌ Action items assigned to "team" instead of specific person
 - ❌ Missing numerical values (priorities, ranges, state counts)
 - ❌ State machines with incomplete states
 - ❌ Circular debate transcribed verbatim instead of summarized
-- ❌ Removing content during multi-version merge
+- ❌ Dropping source-supported content during multi-version merge, or carrying superseded commitments into the active decision table
 - ❌ Claiming "nothing missing" without section-by-section review
 - ❌ Treating first draft as final without human review
 - ❌ Using terminology without checking for conflicts with existing systems
@@ -685,7 +697,7 @@ Round 4: Update to use "Annotation" instead of "Note"
 - ❌ Keeping all intermediate outputs in conversation context (causes token overflow, use file system)
 - ❌ **Pure text minutes without diagrams** - Architecture/schema discussions deserve visual representation
 - ❌ **Deleting intermediate files after merge** - Preserve for human review and debugging
-- ❌ **Blindly copying external AI output** - Always verify against transcript before merging
+- ❌ **Blindly copying external AI output** - Always verify against the original supplied source under Step 1 before merging
 - ❌ **Ignoring cross-AI comparison opportunity** - Different AI models catch different details
 - ❌ **Sequential subagent execution** - MUST launch v1, v2, v3 subagents in PARALLEL using multiple Task tool calls in a single message
 - ❌ **Flat intermediate directory** - MUST use transcript-specific subdirectory `intermediate/<transcript-name>/` to avoid conflicts

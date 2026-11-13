@@ -13,10 +13,11 @@
 ### Phase 1: Structural Check
 
 - [ ] All major discussion topics from transcript are covered
-- [ ] Each decision has supporting quote
+- [ ] Transcript-backed decisions have supporting quotes; note-only additions have labeled sources
 - [ ] All speakers who made decisions are attributed
 - [ ] Action items have specific owners (not generic "team")
-- [ ] Priorities assigned to all action items
+- [ ] Stated priorities retained; unstated priorities remain unknown
+- [ ] All supplied participant notes/corrections are integrated into one current minutes document, with original source identities retained
 
 ### Phase 2: Content Depth Check
 
@@ -31,7 +32,7 @@ For each transcript section, verify:
 
 ### Phase 3: Quote Verification
 
-For significant decisions, ensure:
+For significant transcript-backed decisions, ensure (note-only additions use their labeled original source):
 
 - [ ] Quote accurately reflects speaker's point
 - [ ] Speaker attribution is correct
@@ -45,6 +46,10 @@ Cross-reference with transcript for:
 - [ ] Implicit commitments ("I will design...", "Backend team will...")
 - [ ] Deferred items ("Defer to later...", "Not in MVP scope...")
 - [ ] Follow-up discussions needed ("Discuss offline...", "Follow up separately...")
+- [ ] Supplied note-only additions and TODO/DONE updates are checked as well as transcript claims
+- [ ] DONE names the exact completed action and its source; prerequisites, responsibility agreements and downstream results are distinct
+- [ ] Missing owner, deadline or completion evidence stays unknown; the note author is not assumed to own every task
+- [ ] Later reversals and conditions from every supplied source are reflected in the active task rows
 
 ## Common Omission Patterns
 
@@ -75,9 +80,9 @@ Cross-reference with transcript for:
 
 When merging versions:
 
-1. **Keep ALL content from existing version** - Never remove unless explicitly wrong
-2. **Add NEW content from incoming version** - Union, not replace
-3. **Resolve conflicts by combining** - Include both perspectives
+1. **Keep source-supported content from the existing version** - Preserve useful superseded alternatives in Discussion
+2. **Add source-supported content from the incoming version** - Union valid findings, consolidate duplicates
+3. **Reconcile before combining** - Follow SKILL.md Step 1–2: use the final effective state for the same fact; keep distinct perspectives, and put irreconcilable conflicts in Open Questions
 4. **Preserve more detailed version** - When same topic has different depth
 5. **Maintain structure** - Keep section numbering logical
 
@@ -87,13 +92,14 @@ When merging versions:
 - [ ] All sections from new version added (or merged into existing)
 - [ ] No duplicate content (consolidate if same info appears twice)
 - [ ] Quotes from both versions preserved
-- [ ] Action items from both versions merged
+- [ ] Valid action items from both versions merged, with superseded commitments excluded from active rows
+- [ ] Retrieval Self-Test reads every supplied source without seeing the draft; note-only claims retain their source labels
 - [ ] Numbering remains sequential
 
 ## Red Flags (Signs of Missing Content)
 
 - Transcript mentions a topic not in minutes
-- Decision recorded without quote
+- Transcript-backed decision without a quote, or note-only addition without a labeled source
 - Action item without clear owner
 - Long transcript section summarized in one sentence
 - Technical discussion with no entity/field names
