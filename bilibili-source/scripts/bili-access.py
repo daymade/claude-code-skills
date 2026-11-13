@@ -7,6 +7,7 @@ import json
 import math
 import re
 import sys
+import types
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -253,7 +254,7 @@ def evaluate(captures, bvid, cid, page=1, expected_mid=None):
     return decisions(report)
 
 
-def evaluate_report(report, bvid, cid, page=1, ffprobe=None):
+def evaluate_report(report, bvid, cid, page=1, ffprobe=None, audio_proof=None, media_file=None):
     """Validate a saved diagnostic, recompute decisions and optional fresh media."""
     if not isinstance(report, dict) or (type(report.get('schema_version')) is not int or report.get('schema_version') != SCHEMA_VERSION):
         raise ValueError('unsupported or missing schema_version')
@@ -309,6 +310,14 @@ def evaluate_report(report, bvid, cid, page=1, ffprobe=None):
         identity['state'] = 'mismatch'
     if ffprobe is not None:
         result['media'] = media_check(result['media']['expected_duration_s'], ffprobe)
+        if audio_proof is not None:
+            if media_file is None or result['media']['has_audio'] is not True or not positive(result['media']['actual_duration_s']):
+                raise ValueError('audio proof requires actual nonempty ASR media')
+            import _audio_object
+            proof_sha = _audio_object.verify(types.SimpleNamespace(**globals()), report, audio_proof,
+                                            bvid, cid, page, media_file)
+            result['media'].update(state='complete', basis='verified_full_audio_object',
+                                   audio_object_proof_sha256=proof_sha)
         result['reasons'] = [r for r in result['reasons'] if not str(r).startswith('media:')]
         if result['media']['state'] != 'complete':
             result['reasons'].append('media:' + result['media']['state'])
@@ -372,7 +381,7 @@ def load(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     subs = parser.add_subparsers(dest='command', required=True)
-    for name in ('replay', 'probe', 'verify-report'):
+    for name in ('replay', 'probe', 'verify-report', 'attest-audio'):
         p = subs.add_parser(name)
         p.add_argument('--bvid', required=True)
         p.add_argument('--cid', required=name != 'probe', type=int)
@@ -384,17 +393,30 @@ def main():
         elif name == 'probe':
             p.add_argument('--cookie-file', help='explicit authorized Netscape cookie jar; never reads browser cookies')
             p.add_argument('--expected-mid', type=int)
+        elif name == 'attest-audio':
+            p.add_argument('report')
+            p.add_argument('--source-file', required=True)
+            p.add_argument('--cookie-file')
         else:
             p.add_argument('report')
             p.add_argument('--ffprobe')
+            p.add_argument('--audio-proof')
+            p.add_argument('--media-file')
             p.add_argument('--require', choices=('download', 'asr'), required=True)
     args = parser.parse_args()
     try:
         if not re.fullmatch(r'BV[0-9A-Za-z]{10}', args.bvid) or (args.cid is not None and args.cid <= 0) or args.page <= 0:
             raise ValueError('invalid target')
+        if args.command == 'attest-audio':
+            import _audio_object
+            result = _audio_object.attest(types.SimpleNamespace(**globals()), load(args.report), args.bvid,
+                                         args.cid, args.page, args.source_file, args.cookie_file)
+            print(json.dumps(result, ensure_ascii=False, allow_nan=False))
+            return 0
         if args.command == 'verify-report':
             result = evaluate_report(load(args.report), args.bvid, args.cid, args.page,
-                                     load(args.ffprobe) if args.ffprobe else None)
+                                     load(args.ffprobe) if args.ffprobe else None,
+                                     load(args.audio_proof) if args.audio_proof else None, args.media_file)
         else:
             captures = (probe(args.bvid, args.cid, args.page, args.cookie_file) if args.command == 'probe'
                         else {name: load(getattr(args, name)) for name in ('nav', 'view', 'player', 'playurl', 'ffprobe') if getattr(args, name)})
@@ -407,7 +429,7 @@ def main():
         if args.command == 'verify-report':
             return 0 if result[args.require + '_allowed'] else 1
         return 0 if result['download_allowed'] else 1
-    except (ValueError, OSError, TypeError, KeyError) as error:
+    except (ValueError, OSError, TypeError, KeyError, TimeoutError) as error:
         print(json.dumps({'schema_version': SCHEMA_VERSION, 'download_allowed': False,
                           'asr_allowed': False, 'error': type(error).__name__}), file=sys.stdout)
         return 2
