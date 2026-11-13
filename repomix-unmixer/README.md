@@ -177,7 +177,7 @@ This skill activates when:
 ## Version
 
 Resolve the registered plugin version from the repository's
-[marketplace manifest](../.claude-plugin/marketplace.json).
+[marketplace manifest](https://github.com/daymade/claude-code-skills/blob/main/.claude-plugin/marketplace.json).
 
 ## License
 
