@@ -142,6 +142,8 @@ change until resolved.
 
 Read [implementation and acceptance](references/implementation-and-acceptance.md)
 before editing or launching validation.
+For repository-wide state or recovery audits, follow its
+[lifecycle audit](references/implementation-and-acceptance.md#trace-implicit-state-machines).
 For a requested domain role or scattered decision policy, use its
 [domain-role extraction](references/implementation-and-acceptance.md#extract-a-domain-role-through-its-consumers)
 before choosing a new component or moving callers.

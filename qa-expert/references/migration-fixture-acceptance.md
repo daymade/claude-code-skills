@@ -18,6 +18,28 @@ refund fees, later refund adjustments, commissions and closed-ledger authority
 unless the user explicitly changes their policy. Compare both definitions and
 actual amounts; a successful migration on an empty database is insufficient.
 
+## Distinguish schema bootstrap from upgrade
+
+Inspect the migration runner and its journal as well as the SQL directory and
+schema synchronization command. List the files the normal command actually
+executes. A file's presence does not establish that it is registered or applied.
+
+When both historical SQL and schema synchronization are supported, prepare
+separate disposable databases through those actual entry paths. Apply the
+candidate upgrade to a populated historical database and to the current schema.
+Exercise the actual write, read and related-note consumers on the upgraded
+database, preserving body content, source relationships, saved notes and sealed
+operation inputs. Keep missing historical measurements unknown unless an
+authorized contract defines their reconstruction.
+
+Invoke the migration's real operator command in a child process, check its
+meaningful output, and independently read the target schema and data. Importing
+its function alone misses dispatch failures that exit successfully without
+performing the upgrade. Include absent, empty and valid target configuration,
+incompatible existing columns, indexes and foreign keys, and transactional
+rollback. Repeating an accepted upgrade preserves existing values. A current
+compatible schema remains compatible without an unrelated schema rewrite.
+
 ## Exercise a populated upgrade
 
 1. Apply the original migrations using the repository's actual database engine.
