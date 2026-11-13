@@ -86,6 +86,9 @@ fixtures, load [migration and fixture acceptance](references/migration-fixture-a
 For file-backed state, snapshot dependency checks, recovery or CLI argument,
 wrapper, compatibility-alias, output or read-cost changes, load
 [file persistence and CLI acceptance](references/file-persistence-cli-acceptance.md).
+For a persisted-state upgrade, use its
+[old-writer/new-reader recipe](references/file-persistence-cli-acceptance.md#persisted-state-upgrade-and-recovery)
+before choosing fresh fixtures or changing retry identity.
 For admission decisions, account/resource bindings, retained sessions or cached
 permissions across upgrades, and recovery that can authorize an effect,
 load [admission and recovery acceptance](references/admission-recovery-acceptance.md)

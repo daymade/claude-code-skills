@@ -568,7 +568,7 @@
       "description": "Audits, preserves and recovers local Git state before cleanup: unpushed or wrong-branch commits, dirty worktrees, duplicate clones, stashes, dangling commits, squash-merge uncertainty. Use when the user fears lost work, wants to recover a commit, asks if a branch is actually merged, asks whether a branch, worktree or clone is safe to delete, or wants one clean main (误删分支 / 还有没有丢的东西). Not for GitHub PR operations.",
       "source": "./git-safety-net",
       "strict": false,
-      "version": "1.28.0",
+      "version": "1.28.1",
       "category": "developer-tools",
       "keywords": [
         "git",
@@ -729,7 +729,7 @@
       "description": "QA process setup with AAA test cases, P0-P4 bug tracking, metrics reports, OWASP security testing and third-party handoffs. Use for test planning, approved-batch execution and checkpoint recovery through the bundled master prompt.",
       "source": "./qa-expert",
       "strict": false,
-      "version": "1.2.13",
+      "version": "1.2.14",
       "category": "developer-tools",
       "keywords": [
         "qa",
@@ -1122,7 +1122,7 @@
       "description": "Audits rendered UI and specific task/object-link handoffs; excludes ordinary source citations alone. Audits already-rendered UI and Markdown/Obsidian image layout — web app, deck/slide, dashboard, design-system, or Electron/native app — via real-browser/native-app journeys and a Playwright sweep. Use after UI implementation to find typography, overflow, responsive, routing, data-viz, browser-output, or native-shell defects, or to compare a render against a reference. Not for greenfield UI design (use ui-designer) or QA-program setup (use qa-expert).",
       "source": "./frontend-visual-qa",
       "strict": false,
-      "version": "1.21.47",
+      "version": "1.21.48",
       "category": "design",
       "keywords": [
         "frontend",

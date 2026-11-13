@@ -7,6 +7,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import shlex
 import shutil
 import subprocess
@@ -212,6 +213,170 @@ class WorktreeRetirementTests(unittest.TestCase):
         self.git("-C", str(self.primary), "worktree", "lock", "--reason", "active fixture worker", str(self.target))
         self.assertEqual(self.run_tool("prepare").returncode, 1)
         self.assertFalse(self.out.exists())
+
+    def test_empty_lfs_scaffolds_preserve_mode_and_recover_after_removal(self) -> None:
+        for repo, mode in ((self.target, 0o750), (self.module, 0o700)):
+            admin = Path(self.git("-C", str(repo), "rev-parse", "--absolute-git-dir").decode().strip())
+            (admin / "lfs").mkdir(mode=mode)
+            (admin / "lfs").chmod(mode)
+        state = self.prepare()
+        for scope, mode in zip(state["snapshot"]["scopes"], (0o750, 0o700)):
+            self.assertEqual(scope["repo"]["metadata"]["lfs"], {"type": "directory", "mode": mode})
+            saved = self.out / scope["name"] / "metadata/lfs"
+            self.assertTrue(saved.is_dir())
+            self.assertFalse(saved.is_symlink())
+            self.assertEqual(list(saved.iterdir()), [])
+            self.assertEqual(saved.stat().st_mode & 0o7777, mode)
+        self.assertEqual(self.run_tool("verify-current").returncode, 0)
+        self.assertEqual(self.run_tool("prepare", "--resume").returncode, 0)
+        self.git("-C", str(self.primary), "worktree", "remove", "--force", str(self.target))
+        result = self.run_tool("verify-recovery")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["status"], "verified")
+        self.assertEqual(self.primary_state(), self.primary_before)
+
+    def test_lfs_nonempty_indirect_and_special_entries_fail_without_output(self) -> None:
+        outside = self.root / "outside empty lfs"
+        outside.mkdir()
+        for repo in (self.target, self.module):
+            admin = Path(self.git("-C", str(repo), "rev-parse", "--absolute-git-dir").decode().strip())
+            path = admin / "lfs"
+            for shape in ("nonempty", "symlink", "dangling", "file", "fifo"):
+                with self.subTest(repo=repo, shape=shape):
+                    if shape == "nonempty":
+                        path.mkdir()
+                        (path / ".unique-object").write_text("must not be dropped\n")
+                    elif shape == "symlink":
+                        path.symlink_to(outside, target_is_directory=True)
+                    elif shape == "dangling":
+                        path.symlink_to(self.root / "absent lfs", target_is_directory=True)
+                    elif shape == "file":
+                        path.write_text("")
+                    else:
+                        os.mkfifo(path)
+                    try:
+                        result = self.run_tool("prepare")
+                        self.assertEqual(result.returncode, 1, result.stderr)
+                        self.assertIn("LFS", result.stderr)
+                        self.assertEqual(result.stdout, "")
+                        self.assertFalse(self.out.exists())
+                        if shape == "nonempty":
+                            self.assertEqual((path / ".unique-object").read_text(), "must not be dropped\n")
+                    finally:
+                        if shape == "nonempty":
+                            shutil.rmtree(path)
+                        else:
+                            path.unlink()
+        # Empty scaffolding is a narrow LFS exception, not a generic extension bypass.
+        (admin / "annex").mkdir()
+        self.assertEqual(self.run_tool("prepare").returncode, 1)
+        self.assertFalse(self.out.exists())
+
+    def test_lfs_source_changes_block_current_and_resume_without_rewriting_evidence(self) -> None:
+        paths = []
+        for repo in (self.target, self.module):
+            admin = Path(self.git("-C", str(repo), "rev-parse", "--absolute-git-dir").decode().strip())
+            path = admin / "lfs"
+            path.mkdir(mode=0o750)
+            path.chmod(0o750)
+            paths.append(path)
+        self.prepare()
+        evidence = TOOL.inventory(self.out)
+        for path in paths:
+            for change in ("mode", "missing", "nonempty", "symlink"):
+                with self.subTest(path=path, change=change):
+                    if change == "mode":
+                        path.chmod(0o700)
+                    elif change == "missing":
+                        path.rmdir()
+                    elif change == "nonempty":
+                        (path / "later-object").write_text("later unique object\n")
+                    else:
+                        path.rmdir()
+                        path.symlink_to(self.root / "absent later lfs", target_is_directory=True)
+                    self.assertEqual(self.run_tool("verify-current").returncode, 1)
+                    self.assertEqual(self.run_tool("prepare", "--resume").returncode, 1)
+                    self.assertEqual(TOOL.inventory(self.out), evidence)
+                    self.assertEqual(self.run_tool("verify-recovery").returncode, 0)
+                    if change == "nonempty":
+                        self.assertEqual((path / "later-object").read_text(), "later unique object\n")
+                        (path / "later-object").unlink()
+                    elif change == "symlink":
+                        path.unlink()
+                    if not path.exists():
+                        path.mkdir()
+                    path.chmod(0o750)
+        self.assertEqual(self.run_tool("verify-current").returncode, 0)
+        saved = self.out / "root/metadata/lfs"
+        saved.rmdir()
+        self.assertEqual(self.run_tool("verify-recovery").returncode, 1)
+
+    def test_missing_lfs_is_frozen_and_later_empty_lfs_is_a_change(self) -> None:
+        state = self.prepare()
+        for scope in state["snapshot"]["scopes"]:
+            self.assertNotIn("lfs", scope["repo"]["metadata"])
+            path = Path(scope["repo"]["admin"]) / "lfs"
+            path.mkdir()
+            self.assertEqual(self.run_tool("verify-current").returncode, 1)
+            path.rmdir()
+        self.assertEqual(self.run_tool("verify-current").returncode, 0)
+
+    def test_readonly_lfs_is_preserved_but_unreadable_lfs_is_not_assumed_empty(self) -> None:
+        admin = Path(self.git("-C", str(self.module), "rev-parse", "--absolute-git-dir").decode().strip())
+        path = admin / "lfs"
+        path.mkdir()
+        try:
+            path.chmod(0o555)
+            self.assertEqual(list(path.iterdir()), [])
+            state = self.prepare()
+            scope = state["snapshot"]["scopes"][1]
+            self.assertEqual((self.out / scope["name"] / "metadata/lfs").stat().st_mode & 0o7777, 0o555)
+            self.assertEqual(self.run_tool("verify-recovery").returncode, 0)
+            self.out = self.root / "unreadable evidence"
+            path.chmod(0)
+            try:
+                list(path.iterdir())
+            except PermissionError:
+                pass
+            else:
+                self.skipTest(f"identity {os.geteuid()} bypasses the unreadable-directory control")
+            result = self.run_tool("prepare")
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertIn("Permission denied", result.stderr)
+            self.assertEqual(result.stdout, "")
+            self.assertFalse(self.out.exists())
+        finally:
+            path.chmod(0o700)
+
+    def test_invalid_rebuildable_paths_fail_before_content_scan_or_evidence_writes(self) -> None:
+        cases = (("dist", "does not exist"), (".gitignore", "matches no ignored entry"),
+                 ("vendor/component/value.txt", "matches no ignored entry"))
+        for path, error in cases:
+            with self.subTest(path=path), mock.patch.dict(os.environ, self.env, clear=True), \
+                    mock.patch.object(TOOL, "repo_snapshot", side_effect=AssertionError("expensive content scan")), \
+                    mock.patch.object(TOOL, "inventory", side_effect=AssertionError("inventory traversal")):
+                with self.assertRaisesRegex(TOOL.Unsafe, error + ".*" + re.escape(path)):
+                    TOOL.prepare(self.target.resolve(), self.out.resolve(), "refs/heads/main", {path: "synthetic build"}, False)
+                self.assertFalse(self.out.exists())
+        self.assertEqual((self.target / "cache/evidence.txt").read_text(), "unique evidence\n")
+        self.assertEqual(self.primary_state(), self.primary_before)
+
+    def test_rebuildable_overlap_fails_before_scan_and_literal_nested_paths_still_work(self) -> None:
+        with mock.patch.dict(os.environ, self.env, clear=True), \
+                mock.patch.object(TOOL, "repo_snapshot", side_effect=AssertionError("expensive content scan")):
+            with self.assertRaisesRegex(TOOL.Unsafe, "Overlapping rebuildable.*cache"):
+                TOOL.prepare(self.target.resolve(), self.out.resolve(), "refs/heads/main",
+                             {"cache": "synthetic build", "cache/evidence.txt": "synthetic build"}, False)
+        nested = self.target / "cache/[literal]"
+        nested.mkdir()
+        (nested / "artifact.txt").write_text("rebuildable fixture\n")
+        state = self.prepare("--rebuildable", "cache/[literal]=fixture generator",
+                             "--rebuildable", "vendor/component=fixture module generator")
+        root, module = state["snapshot"]["scopes"]
+        self.assertEqual(root["ignored"]["cache/[literal]/artifact.txt"]["disposition"], "rebuildable")
+        self.assertEqual(root["ignored"]["cache/evidence.txt"]["disposition"], "copy")
+        self.assertEqual(module["ignored"]["scratch/note.txt"]["disposition"], "rebuildable")
+        self.assertEqual(self.run_tool("verify-current").returncode, 0)
 
     def test_module_filter_is_refused_before_any_status_can_execute_it(self) -> None:
         (self.module / ".gitattributes").write_text("value.txt filter=fixture\n")

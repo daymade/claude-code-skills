@@ -193,9 +193,14 @@ def repo_snapshot(path: Path, admin: Path, module: bool) -> dict:
                     or line.startswith("include.") or line.startswith("includeif.")
                     for line in config), "Partial/extended/included Git configuration needs manual handling")
     require(not (admin / "shallow").exists(), "Shallow repository needs manual handling")
-    require(not (admin / "lfs").exists() and not (admin / "annex").exists(), "Extension object store needs manual handling")
+    lfs = admin / "lfs"
+    if os.path.lexists(lfs):
+        require(stat.S_ISDIR(lfs.lstat().st_mode) and not any(lfs.iterdir()),
+                f"Nonempty, indirect or special LFS store needs manual handling: {lfs}")
+    require(not os.path.lexists(admin / "annex"), "Extension object store needs manual handling")
     require(not (admin / "worktrees").exists(), "Shared module Git store needs manual handling")
     metadata = inventory(admin, ("objects", "modules"))
+    require(not any(name.startswith("lfs/") for name in metadata), "LFS store changed during inventory")
     require(all(item["type"] != "symlink" for item in metadata.values()),
             "Indirect Git/admin metadata needs manual preservation")
     require(not any(name.endswith(".lock") or name in ("MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD")
@@ -236,13 +241,14 @@ def repo_snapshot(path: Path, admin: Path, module: bool) -> dict:
             "object_metadata": object_meta, "worktree_config": worktree_config}
 
 
+def ignored_roots(path: Path) -> list[str]:
+    paths = git(path, "ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z")
+    return [os.fsdecode(raw).rstrip("/") for raw in paths.split(b"\0") if raw]
+
+
 def ignored(path: Path) -> dict:
     result = {}
-    paths = git(path, "ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z")
-    for raw in paths.split(b"\0"):
-        if not raw:
-            continue
-        relative = os.fsdecode(raw).rstrip("/")
+    for relative in ignored_roots(path):
         candidate = path / relative
         require(beneath(candidate.absolute(), path), "Invalid ignored path")
         item = entry(candidate)
@@ -278,7 +284,30 @@ def module_stores(container: Path) -> set[str]:
     return found
 
 
+def preflight_recipes(target: Path, scopes: list[dict], recipes: dict) -> None:
+    """Match names without hashing ignored content or scanning Git object stores."""
+    used = set()
+    for scope in scopes:
+        for relative in ignored_roots(Path(scope["repo"]["path"])):
+            top = (Path(scope["relative"]) / relative).as_posix()
+            for recipe in recipes:
+                if top == recipe or top.startswith(recipe + "/"):
+                    used.add(recipe)
+                elif recipe.startswith(top + "/"):
+                    # Git collapsed a fully ignored directory. Its descendants
+                    # count only through real directories, never through aliases.
+                    parents = (target / recipe).relative_to(target / top).parents
+                    if all(stat.S_ISDIR((target / top / p).lstat().st_mode) for p in parents):
+                        used.add(recipe)
+    unused = sorted(set(recipes) - used)
+    require(not unused, "Rebuildable declaration matches no ignored entry: " + ", ".join(unused))
+
+
 def scope_snapshot(target: Path, base_ref: str, recipes: dict) -> dict:
+    for path in recipes:
+        require(os.path.lexists(target / path), "Rebuildable path does not exist: " + path)
+        require(not any(path != other and path.startswith(other + "/") for other in recipes),
+                "Overlapping rebuildable declarations: " + path)
     records = git(target, "worktree", "list", "--porcelain", "-z").split(b"\0\0")
     worktrees = []
     for record in records:
@@ -294,7 +323,7 @@ def scope_snapshot(target: Path, base_ref: str, recipes: dict) -> dict:
     common = Path(text_git(target, "rev-parse", "--path-format=absolute", "--git-common-dir")).resolve()
     require(admin.parent == common / "worktrees", "Target is not an ordinary linked worktree")
     require(not beneath(target, primary) and not beneath(primary, target), "Nested primary/target path")
-    scopes = [{"name": "root", "relative": "", "repo": repo_snapshot(target, admin, False)}]
+    scopes = [{"name": "root", "relative": "", "repo": {"path": str(target), "admin": str(admin)}}]
     pending = [scopes[0]]
     uninitialized = []
     while pending:
@@ -321,10 +350,15 @@ def scope_snapshot(target: Path, base_ref: str, recipes: dict) -> dict:
             require(beneath(module_admin, admin / "modules") and module_admin == module_common, "Module store is shared or outside target admin")
             item = {"name": "module-" + hashlib.sha256(relative.encode()).hexdigest()[:16],
                     "relative": relative, "gitlink": oid.decode(),
-                    "repo": repo_snapshot(path, module_admin, True)}
-            require(item["repo"]["head"] == item["gitlink"], "Module HEAD differs from gitlink")
+                    "repo": {"path": str(path), "admin": str(module_admin)}}
             scopes.append(item)
             pending.append(item)
+    if recipes:
+        preflight_recipes(target, scopes, recipes)
+    for scope in scopes:
+        scope["repo"] = repo_snapshot(Path(scope["repo"]["path"]), Path(scope["repo"]["admin"]), scope["name"] != "root")
+        if scope["name"] != "root":
+            require(scope["repo"]["head"] == scope["gitlink"], "Module HEAD differs from gitlink")
     require(module_stores(admin / "modules") == {s["repo"]["admin"] for s in scopes[1:]},
             "Orphan or unresolved module Git store needs manual preservation")
     used = set()
@@ -347,7 +381,7 @@ def scope_snapshot(target: Path, base_ref: str, recipes: dict) -> dict:
                     value.update(disposition="copy")
             classified[relative] = value
         scope["ignored"] = classified
-    require(used == set(recipes), "Rebuildable declaration matches no ignored entry")
+    require(used == set(recipes), "Rebuildable declaration matches no ignored entry: " + ", ".join(sorted(set(recipes) - used)))
     require(base_ref.startswith("refs/"), "Base must be a fully qualified retained ref")
     root_head_name = scopes[0]["repo"]["head_name"]
     require(base_ref != root_head_name, "Target branch is not a retained recovery carrier")
@@ -515,7 +549,8 @@ def main() -> int:
     parser.add_argument("--worktree", type=Path)
     parser.add_argument("--base-ref", default="refs/heads/main")
     parser.add_argument("--resume", action="store_true")
-    parser.add_argument("--rebuildable", action="append", default=[], metavar="PATH=RECIPE")
+    parser.add_argument("--rebuildable", action="append", default=[], metavar="PATH=RECIPE",
+                        help="existing target-relative ignored path and explicit reproduction recipe; checked before content scanning")
     args = parser.parse_args()
     try:
         recipes = {}

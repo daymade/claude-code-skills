@@ -697,13 +697,30 @@ evidence is notoriously noisy from anti-aliasing, sub-pixel positioning and font
 smoothing, and a frame captured at a different device scale factor than the
 viewport it claims to represent will crop or letterbox what you see.
 
-- **Before filing "content is clipped / overflowing", falsify it against DOM
-  geometry.** If `document.documentElement.scrollWidth === clientWidth` and the
-  suspect element's `getBoundingClientRect().right` sits inside `clientWidth`,
-  the page fits and the clipping lives in your capture, not in the product. This
-  is the one direction where DOM geometry *overrides* the visual impression
-  instead of explaining it — report the reverse and you send someone to "fix"
-  CSS that was already correct.
+- **Before attributing clipping to the capture, inspect the text's actual
+  clipping and paint boundaries.** The auditor uses browser inspection and an
+  opened capture to distinguish these observations:
+  - **Complete text:** inspect the expected string and rendered text fragments
+    (`Range.getClientRects()` or SVG text geometry), including transforms. DOM
+    text presence alone does not prove that every character paints.
+  - **Within boundaries:** compare those fragments with the viewport and every
+    applicable ancestor's clipping area: `overflow-x/y`, legacy `clip`,
+    `clip-path`, masks and SVG viewports. A page with no horizontal overflow can
+    still crop a label inside a smaller SVG or card. When that crop removes
+    required characters, report a product defect even if the entire text box
+    lies inside the browser window. Intentional ellipsis or a scroll window
+    needs its own reading/expansion journey, not an automatic clipping failure.
+  - **Actually readable:** inspect the painted label for markers, paths, other
+    text or overlays covering characters. Full text inside every boundary is
+    still insufficient. Hit testing can corroborate ordinary overlays; SVG
+    graphics with `pointer-events:none` can cover glyphs without winning a hit
+    test. Do not call the label legible from geometry or hit testing alone.
+  - **Capture calibration:** compare image dimensions/device scale with the
+    claimed viewport, then re-capture the same settled state with the intended
+    engine and fonts when the image and browser observation disagree. Attribute
+    the defect to capture only with evidence of that discrepancy; a fitting
+    page or bounding box cannot establish it. Keep an unresolved discrepancy
+    unverified rather than dismissing the visible crop.
 - **Pin the scale factor** (`--force-device-scale-factor=1`) so the captured
   frame and the CSS viewport agree, and capture only after fonts have loaded and
   animation/network have settled; those are the standard sources of diff noise.
