@@ -39,6 +39,14 @@ disabled state is frozen, and per-worktree `config.worktree` bytes are preserved
 Changing either later blocks current verification; other extensions, includes and
 promisor settings still require manual handling.
 
+An `lfs` directory in a retiring Git/admin directory is supported only when `lstat`
+identifies a real, empty directory. Its presence and mode are frozen in metadata
+and preserved for recovery. Missing and empty remain distinct; later creation,
+removal, mode changes or contents block current verification and resume. Nonempty,
+indirect (including dangling symlinks), special or unreadable LFS paths require
+manual handling. This exception does not support an LFS object store or bypass
+the tracked-content-filter gate.
+
 All ignored paths, entry types, modes, sizes, file hashes and symlink targets are
 frozen. Byte-identical entries at the same relative primary path use that retained
 carrier; other entries are copied with their relative paths. To exclude a known
@@ -50,9 +58,13 @@ rebuildable directory, add an exact target-relative declaration, repeated on res
 
 This is the operator's explicit reproduction claim, not a detector for caches.
 Check that the named tool and tracked inputs really rebuild every covered entry;
-unique environment files, evidence or uncertain bytes stay copied. Empty, unused
-or overlapping declarations fail. Excluded entries remain in the frozen inventory
-with their recipe, and later changes still fail the final comparison.
+unique environment files, evidence or uncertain bytes stay copied. Declare only
+paths present in this target; do not add an optional build directory that is absent.
+Empty declarations fail. Nonexistent, unused or overlapping paths fail before
+content scans or recovery output creation, with the offending path in the diagnostic. Git ignored
+names are checked across initialized modules without hashing file contents; the
+full ignored inventory is still frozen afterward. Excluded entries retain their
+recipe, and later changes still fail the final comparison.
 
 `state.json` is an atomic versioned checkpoint. A completed stage has its own scope
 digest and file manifest before its directory is renamed into place. Resume verifies
@@ -77,6 +89,7 @@ state, and 2 is invalid input or an execution failure. Missing/corrupt checkpoin
 remain failures. Primary targets, dirty/locked worktrees, shared or unresolved module
 stores, indirect Git/admin metadata, uninitialized modules with retained stores, partial/shallow Git
 repositories or extensions other than native `worktreeConfig`,
-content filters, extension object stores and special file types require
+content filters, extension object stores (apart from the empty LFS scaffold above)
+and special file types require
 the manual Mode E path or resolution of that exact gap. Do not deinitialize modules
 or force deletion to bypass an unsupported state.

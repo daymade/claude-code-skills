@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **daymade-skill 1.79.3**: Declare the uv interface required by scoped SDK overrides, route scanner installation and maintenance from the project entry, align prerequisite and calibration instructions, and replace copied requirement/status examples with their owning sources.
+- **frontend-visual-qa** (v1.21.48): Distinguish ancestor clipping, painted text obstruction and capture calibration; cover clipped, healthy and marker-covered SVG labels in Chromium.
+- **qa-expert** (v1.2.13): Verify persisted-state upgrades with original-writer artifacts, interrupted recovery, conflicting retries and unavailable legacy input; preserve legal follow-up operations.
+- **git-safety-net** (v1.28.1): Preserve empty LFS metadata scaffolds while rejecting payloads and symlinks; reject invalid rebuildable declarations before expensive retirement preparation.
+
 - **daymade-skill 1.79.2**: Replace Semgrep 1.185.0's vulnerable SDK constraints with version-scoped MCP 1.30.0 and aligned OpenTelemetry 1.45.2/0.66b2 dependencies. Preserve local scan and package gates; add dependency-floor, consumer-interface and oversized-tracestate regressions.
 - **daymade-skill 1.79.1**: Route workflow moves and renames to the migration owner; replace obsolete casebook source-line headings with topic names and remove the duplicated contents list.
 
