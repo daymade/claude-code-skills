@@ -304,3 +304,75 @@ def test_marketplace_inventory_uses_each_registered_skill_policy(tmp_path):
 
 def test_engine_pin_matches_locked_project():
     assert f'"semgrep=={code_scan.SEMGREP_VERSION}"' in (code_scan.ROOT / "pyproject.toml").read_text()
+
+
+def test_scanner_sdk_security_floors_and_telemetry_alignment():
+    from importlib.metadata import version
+    from packaging.version import Version
+
+    # MCP's four advisories are fixed in 1.30.0; GHSA-xcq7-p3pf-p88h
+    # is fixed in opentelemetry-api 1.45.1. Keep the existing MCP major API.
+    assert Version("1.30.0") <= Version(version("mcp")) < Version("2")
+    api = version("opentelemetry-api")
+    assert Version(api) >= Version("1.45.1")
+    assert version("opentelemetry-sdk") == api
+    assert version("opentelemetry-exporter-otlp-proto-http") == api
+    instrumentation = version("opentelemetry-instrumentation")
+    assert version("opentelemetry-instrumentation-requests") == instrumentation
+    assert version("opentelemetry-instrumentation-threading") == instrumentation
+    assert version("opentelemetry-semantic-conventions") == instrumentation
+
+
+def test_semgrep_mcp_import_and_construction_remain_compatible():
+    from semgrep.commands.mcp import FastMCP
+    from semgrep.commands.mcp import TransportSecuritySettings
+    from semgrep.mcp.utilities import tracing
+
+    server = FastMCP("scanner-sdk-compatibility")
+    assert callable(server.tool)
+    assert TransportSecuritySettings(enable_dns_rebinding_protection=True)
+    assert callable(tracing.start_tracing)
+
+
+def test_semgrep_telemetry_resource_exporters_and_span_roundtrip():
+    from opentelemetry.sdk.resources import Resource
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+    from semgrep import telemetry
+
+    resource = telemetry.MutableResource(Resource({"service.name": "scanner-compatibility"}))
+    resource.update_attributes({"probe": "synthetic"})
+    assert resource.attributes["probe"] == "synthetic"
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider(resource=resource)
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    try:
+        with provider.get_tracer("scanner-compatibility").start_as_current_span("probe"):
+            pass
+        assert [span.name for span in exporter.get_finished_spans()] == ["probe"]
+    finally:
+        provider.shutdown()
+
+    # Construct the same exporter classes Semgrep imports, without exporting
+    # spans or logs or starting an HTTP/MCP service.
+    span_exporter = telemetry.OTLPSpanExporter(endpoint="http://127.0.0.1:9/v1/traces", timeout=1)
+    log_exporter = telemetry.OTLPLogExporter(endpoint="http://127.0.0.1:9/v1/logs", timeout=1)
+    span_exporter.shutdown()
+    log_exporter.shutdown()
+
+
+def test_oversized_tracestate_is_rejected_without_quadratic_parsing():
+    probe = """
+import json, logging
+from opentelemetry.trace import TraceState
+logging.disable(logging.CRITICAL)
+normal = dict(TraceState.from_header(["vendor=value"]))
+oversized = TraceState.from_header(["vendor=value" + " " * 200000 + "x"])
+print(json.dumps({"normal": normal, "oversized": len(oversized)}))
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", probe], capture_output=True, text=True, timeout=5,
+    )
+    assert result.returncode == 0, result.stderr[-1000:]
+    assert json.loads(result.stdout) == {"normal": {"vendor": "value"}, "oversized": 0}

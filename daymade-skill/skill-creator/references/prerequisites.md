@@ -46,6 +46,21 @@ uv run --frozen python -m scripts.quick_validate <skill-path>
 
 The environment belongs only to skill-creator. uv restores its pinned packages from the user's shared cache, so projects reuse package data without sharing one mutable environment. Keep the default global cache (or one user-configured global `UV_CACHE_DIR`); never set a global `UV_PROJECT_ENVIRONMENT`.
 
+Keep the version-scoped Semgrep SDK correction in
+[pyproject.toml](../pyproject.toml) together with [uv.lock](../uv.lock).
+Keep MCP on its patched 1.x interface and upgrade the OpenTelemetry API, SDK,
+exporters and instrumentation as one compatible family. Retire the correction
+when an upstream Semgrep release accepts patched dependencies; retain the
+security-floor and real scanner/packager regressions when changing it.
+Use `uv sync --frozen` for the declared graph, including these scoped overrides.
+Interpret `uv pip check` against the original wheel metadata: its four Semgrep
+SDK requirement mismatches are the explicitly replaced constraints. Treat any
+other mismatch as unresolved; do not suppress it or claim the raw metadata check
+passed. Run the maintenance calibration in
+[code security checks](code-security-checks.md#calibrate-before-arming) after a
+dependency correction; it includes SDK imports, telemetry construction and the
+oversized-tracestate regression alongside the scan-to-package checks.
+
 Use the locked Semgrep console entry installed by this environment; do not invoke
 `python -m semgrep` or substitute an ambient engine version. Run its bundled local
 rules without an account or code upload. Read [code-check scope](code-security-checks.md)
