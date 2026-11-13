@@ -104,6 +104,57 @@ leaked snapshot. Revalidate mutable admission state at its own effect boundary;
 a configuration snapshot does not freeze permissions. Select this case only for
 an affected snapshot contract, not as a global requirement to cache configuration.
 
+## Incremental capture: three producer/consumer rounds
+
+Select this case for an archive, backup or incremental reader that skips unchanged
+sources. The QA engineer executes the actual producer and consumer in the existing
+harness, with synthetic source data and isolated source/archive/staging roots.
+Intercept transport only to copy the producer's real bytes; do not fabricate its
+manifest or row counts. Freeze both implementation refs and the selected version
+field before running the sequence.
+
+| Round | Arrange and act | Required observations |
+|---|---|---|
+| First capture | Create a nonempty source database through its supported writer, with no alternative text/log source. Run capture and consume its actual response. | Producer selects a snapshot; one transfer occurs. Reopen the final archive through the consumer and assert its record identities/count and accepted source version. |
+| Unchanged reuse | Leave the source and archive unchanged and run the same operation again. | Observe the real producer's unchanged response: it may omit a snapshot and report zero newly captured rows. The consumer still reports the nonempty final archive, with the same accepted version; cumulative transfers remain one. Zero changed rows must not be mistaken for an empty final result. |
+| Local drift and recapture | Change only the test-owned archived bytes so their signature no longer matches the accepted version; leave the remote source unchanged. Run again. | The consumer invalidates the local reuse proof before requesting capture. The real producer emits another snapshot; cumulative transfers become two. Reopen the repaired archive and assert the original source records, count and source version, rather than the injected local drift. |
+
+Count producer invocations and transfers separately: three capture decisions do
+not mean three transfers. Assert the exact version map sent to each producer call,
+each response and the final public result. Validate every unchanged entry used for
+reuse, including a mixed response where another source is nonempty; a missing,
+null, empty or mismatched version must not borrow that other source's success.
+Keep the genuinely empty-source refusal as a separate negative control.
+
+After each round, independently verify that its exact producer-created staging
+directory was retired and that the staging parent, a sibling operation and the
+archive remain. Do not replace this assertion with a mocked cleanup call. Retain
+the pre-repair failure and an untouched healthy archive control; stop after the
+three transitions and their selected failure cases are decided.
+
+## Bounded concurrent probes and ordered publication
+
+Select for a collector or scheduler that probes in parallel and publishes in
+configuration order. The QA engineer freezes that order, concurrency/backlog
+limits, timestamp meaning and failure policy from the existing contract, then
+uses controlled producer barriers in the actual execution path.
+
+Hold the first configured slot open. Let later slots finish quickly and supply
+enough slots to exceed the declared backlog bound if admission only counts running
+workers. At each start, completion, consumption and publication, record slot ID,
+in-flight count, completed-but-unconsumed count and the producer's capture timestamp.
+While the first slot is held, assert both the running limit and the declared bound
+on running plus completed-but-unconsumed work. A fixed thread count alone does not
+bound queued results or prove backpressure.
+
+Release the first slot and drain through the public completion API. Require exactly
+one result per selected slot, published in configuration order despite out-of-order
+completion. Compare published capture timestamps with the original producer values;
+publication must not replace them with drain time. Pair the held-first case with
+ordinary ordered completion and the affected failure/timeout case, preserving each
+slot's outcome and the existing policy. Use barriers and recorded events for these
+assertions, not a sleep or elapsed-time threshold.
+
 ## Synthesis example: stored jobs with shared snapshots
 
 **TC-CLI-001 — Arrange:** In the existing harness, create two completed synthetic
