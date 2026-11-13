@@ -1,6 +1,10 @@
 ---
 name: design-style-picker
-description: Batch-generate and compare visual design directions so a user can choose the style they actually want. Use when the user says they cannot describe an abstract visual style, asks for many style options, wants to choose from generated UI/design-system images, rejects outputs as too colorful/too dead/too generic, or needs an existing UI/design system evolved without discarding current assets.
+description: >-
+  Batch-generate and compare visual design directions so a user can choose the style they actually want.
+  Use when the user says they cannot describe an abstract visual style, asks for many style options,
+  wants to choose from generated UI/design-system images, rejects outputs as too colorful/too dead/too
+  generic, or needs an existing UI/design system evolved without discarding current assets.
 ---
 
 # Design Style Picker
@@ -17,6 +21,7 @@ Do not ask the user to describe an abstract style if they already said they cann
 
 1. **Restate The Real Target**
    - Say what the user is actually choosing: design-system style, business app surface, landing page, deck, component library, etc.
+   - Separate business meaning, spatial organization, visual treatment, and interaction behavior. Name which is being chosen this round, what is already approved, and what remains open; approval of one does not approve the others. Follow the user's stated review order and do not reopen an approved dimension without a later correction.
    - Distinguish choosing one direction, retaining several directions, and assigning directions to different visual roles. Multiple options do not imply mutual exclusion; retaining both does not decide how they coexist. Keep an unresolved adoption or fusion choice open while exploring the authorized directions.
    - Separate the primary artifact from validation samples. If the task is a design system, business screens are optional validation samples, not the main deliverable.
    - Preserve any existing UI, assets, tokens, layout, brand cues, and domain context unless the user explicitly asks to discard them.
@@ -29,10 +34,11 @@ Do not ask the user to describe an abstract style if they already said they cann
    - Treat current assets as the starting vocabulary. Do not generate unrelated "fresh" concepts over them.
 
 3. **Generate A Matrix, Not Minor Variants**
-   - Use at least two authorized axes when taste is unclear:
+   - Size the candidate set around the unresolved choice, not a fixed image quota. For each unresolved authorized axis, choose useful contrasts:
      - Vertical ladder: one dimension changes by large steps, such as color intensity 20/35/50/65/80.
      - Horizontal directions: different organization strategies, such as data-driven color, brand spine, warm product imagery, scenario modules, or governance-led layout.
    - Make options visibly different. If two images look like siblings, regenerate one with a clearer contrast.
+   - Keep the same business facts and comparable surface/detail coverage across candidates. Do not manufacture a second disputed axis or more candidates after the user can make the current choice.
    - Prefer batch generation. The user is waiting for selection, not watching one slow image at a time.
 
 4. **Use Color As A System**
@@ -42,13 +48,14 @@ Do not ask the user to describe an abstract style if they already said they cann
      - Data visualization and evidence systems for multi-color semantics.
      - Brand/risk colors for rare, high-signal emphasis.
      - Neutral components for routine UI.
-   - Include explicit upper-bound samples when the user is tuning color: safe, middle, high, and overload boundary.
+   - When the unresolved choice is the acceptable color range, include safe, middle, high, and overload boundary samples; reuse a known boundary rather than calibrating it again.
 
 5. **Review Before Presenting**
    - Open generated images yourself.
    - Check target coverage before taste: can the user inspect the requested surface, scale, states, and interaction levels, and do the candidates retain the stated relationship? Repair missing coverage before judging colors or character details. Static images illustrate interaction levels; they do not prove interaction behavior.
    - Mark which are likely too dead, too colorful, too generic, too business-system-like, or closest to the target.
    - Present file paths and a short decision note for each useful candidate.
+   - Show a readable large candidate first, with switching and side-by-side comparison available when useful. If the review surface supports enlargement, test that exit preserves the selected candidate and reading position. Image enlargement is not evidence that the depicted product's zoom works.
 
 6. **Implement From Selected Images**
    - Extract principles, not pixels: color roles, layout density, focal hierarchy, component treatment, image use, governance/data placement.
@@ -79,7 +86,7 @@ Avoid: <known rejected styles from the user>.
 - A user saying "not colorful" may mean "no dozens of equal-weight small color chips", not "remove all color".
 - A user saying "more weight" may mean visual authority and hierarchy, not dark-mode control room.
 - For design-system work, do not replace the system with a business dashboard. Business screens can validate style, but should not become the answer.
-- Always create deliberate boundary samples. They make "too much" visible and speed up selection.
+- Use deliberate boundary samples when the acceptable range is unresolved; stop adding them once that boundary is known.
 - After an approved combination, fuse the chosen references and name what each contributes.
 
 ## References

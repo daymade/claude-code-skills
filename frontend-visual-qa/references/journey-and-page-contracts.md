@@ -979,6 +979,35 @@ Verify:
 Use a real device when gesture, performance, or device-specific map behavior is
 material. Chrome Device Mode is only an approximation.
 
+### Relationship Maps With Semantic Zoom
+
+Use this bounded recipe when the map explains work, dependencies or handoffs.
+The auditor follows the existing browser journey; these checks are not enforced
+by the generic layout sweep. Use the agreed desktop viewport and actual inspector
+geometry. Add a mobile matrix only when that surface is affected or requested.
+
+Start from the reader's question: can they identify the selected task, the work
+it belongs to, its relevant upstream/downstream relationships and the next action?
+At each detail level, inspect new meaning and its visible parent association.
+Larger labels or a task grid covering the relationship network do not establish
+semantic disclosure. A task-association line must not silently become a new
+prerequisite arrow.
+
+Exercise the affected counterexamples with a healthy control:
+
+| Observed failure shape | Journey and passing evidence |
+|---|---|
+| A minimum camera scale and an open inspector put both a distant task and its corresponding work outside the visible canvas; only their connecting line remains. | Select a distant task through ordinary search with the inspector open, then compare a nearby task. The selected task title must remain readable. If both real objects fit legibly, show them; otherwise expose an explicit, named offscreen-work anchor, open the real corresponding object, and return to the task. Do not report the offscreen-anchor case as two objects visible together. Verify that the nearby task does not retain the distant task's anchor. |
+| Entering a module clips its name beneath the toolbar even though its internal nodes appear. | Enter from overview and read the module name, current location and core internal relationships without first dragging the canvas. Then return to the same overview. |
+| A search-results panel overflows the viewport, or a failed query leaves an empty, unfocused search showing “not found.” | Use a failing query, clear it, blur the input, and recover with a known task. Check the actual viewport/panel bounds and document scroll, neutral empty state and selectable recovered result. Preserve any product-specific empty-but-focused contract. |
+| Clicking a relationship's label does nothing while clicking its bare line opens an explanation. | Trigger both visible targets through the ordinary browser path and compare the opened relationship identity and explanation. If the label is intentionally not actionable, its affordance must make that distinction clear. |
+
+Use source-bound task fields when reading the inspector: unknown follow-up stays
+unknown, and an observed handoff does not become a completed downstream action.
+Keep the camera, selected object and relationship identity bound to the evidence.
+Stop after the named failing journeys and healthy controls pass; do not repeat
+unchanged zoom/search checks or claim that map usability proves business results.
+
 ## Review And Annotation Tools
 
 Review tools are user workflows even when they began as internal diagnostics.
