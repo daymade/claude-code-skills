@@ -49,6 +49,17 @@ python3 scripts/unmix_repomix.py \
 4. **Writes** each file to its original location
 5. **Reports** extraction progress and statistics
 
+### Path Safety
+
+Use forward-slash relative file paths inside the selected output directory.
+Reject absolute paths, Windows drive paths, backslashes, `..` components, empty
+paths and symbolic links at the output root or within extracted paths. Validate
+all entries before writing archive content; report rejected paths and exit with
+status 1 when validation fails. Choose a fresh output directory to recover, or
+obtain a corrected archive; do not bypass the checks. Existing regular files at
+valid paths can still be overwritten, so review shared archives in a fresh
+directory before using their contents.
+
 ### Output
 
 The script will:

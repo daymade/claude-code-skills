@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **daymade-skill 1.78.2**: Add two bounded Skill Creator migration cases: preserve behavioral assertions when workflow instructions move, and retain externally consumed machine IDs during a public rename.
+- **repomix-unmixer** (v1.0.1): Reject archive path traversal, absolute and Windows-style paths, and output symlinks across XML, Markdown and JSON before writing archive files. Report invalid entries with a nonzero exit status; add registered filesystem and CLI regressions. Fixes #1499.
 
 - **meeting-minutes-taker / audio-router** (`daymade-audio` v1.58.3): Align project and audio routing with participant-note inputs. Keep source/status and merge definitions in the canonical workflow; remove copied rules and a derived checklist contents summary, correct unknown-owner checks, and keep source locators as YAML strings in the template.
 
