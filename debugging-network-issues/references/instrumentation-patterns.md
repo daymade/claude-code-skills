@@ -13,6 +13,11 @@
 
 ## When to instrument
 
+For collection that must survive until an intermittent fault recurs, load
+[Collect an intermittent incident](intermittent-evidence-collection.md). Preserve
+the pre-failure window and verify collector failures before treating silence as
+evidence about the target.
+
 Instrument when a hypothesis cannot be confirmed or refuted from currently-available observability. If the system already emits the signal you need (distributed trace, access log field, metric), use that. If not, add instrumentation rather than guess.
 
 Symptoms that justify adding instrumentation:
@@ -31,8 +36,9 @@ Before adding instrumentation, check whether the platform is already writing the
 
 ```bash
 # `log` is a zsh builtin — the absolute path matters.
-# --predicate matches only the message body, not the `[subsystem]` prefix,
-# so dump the window and grep rather than trying to filter server-side.
+# For --predicate, inspect /usr/bin/log help predicates and select explicit fields.
+# A rendered [subsystem] prefix is not message text. Do not assume a JSON output
+# key is a valid predicate field; retain a bounded window when selection is unsure.
 /usr/bin/log show --last 1h --style compact > /tmp/ulog.txt
 grep 'nw_listener' /tmp/ulog.txt | grep -oE '\binterface: [a-z0-9]+' | sort | uniq -c | sort -rn
 # Scope it to one process by grepping the process name first:

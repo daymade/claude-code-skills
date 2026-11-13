@@ -349,7 +349,7 @@
       "description": "Apple-platform development and operations suite for macOS window capture, TCC and Keychain dialog diagnosis, Full Disk Access repair, iOS/macOS app development, disk cleanup, and launchd watchdogs.",
       "source": "./daymade-macos",
       "strict": false,
-      "version": "1.30.4",
+      "version": "1.31.0",
       "category": "suite",
       "keywords": [
         "suite",
@@ -978,7 +978,7 @@
       "description": "Investigates network, streaming and protocol failures with falsification-first layered experiments, the general fallback for unknown root causes. Use for ECONNRESET / RST_STREAM / SSE stalls, CDN/CGNAT timeouts or certificate errors, throughput collapse where everything returns 200 but transfers crawl, or LAN identity/topology mysteries. Not for known Tailscale/TUN/DNS/proxy-path conflicts (use tunnel-doctor).",
       "source": "./debugging-network-issues",
       "strict": false,
-      "version": "1.11.11",
+      "version": "1.12.0",
       "category": "developer-tools",
       "keywords": [
         "debugging",
