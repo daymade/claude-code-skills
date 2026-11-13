@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **daymade-skill 1.79.1**: Route workflow moves and renames to the migration owner; replace obsolete casebook source-line headings with topic names and remove the duplicated contents list.
+
 - **daymade-skill 1.79.0**: Add required local Semgrep Python archive-path checks beside Gitleaks, calibrate against the original #1499 extractor, reject incomplete analysis and legacy secret-only packaging receipts, and run the same gate in required CI. State the bounded detection scope instead of claiming general code safety.
 - **bilibili-source 1.4.2** — `attest-audio`: Local size and SHA-256 must equal the remote object; a full strict decode must succeed.
 
