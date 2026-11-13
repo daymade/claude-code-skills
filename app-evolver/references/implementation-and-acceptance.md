@@ -63,6 +63,27 @@ requested surface. Use QA's admission/recovery recipe when that boundary changes
 The engineering owner selects these probes in the existing harness; this prose
 does not mechanically detect a policy left behind in an unexamined caller.
 
+## Trace implicit state machines
+
+For a repository-wide state audit, start with a real user operation and follow
+its request, persistence, worker, cache and receiving UI. Record each state's
+authoritative writer, operation/account/resource identity, eligibility to
+advance, failure or compensation, and recovery entry. Include lifetimes held in
+closures, timers, reservations and caches alongside declared status fields.
+
+At each asynchronous boundary, ask which operation and resource generation can
+still accept the result. Exercise duplicate delivery, late completion after a
+replacement, failure after an external effect, and ordinary completion where
+those transitions exist. Inspect the client's actual resend policy before
+assuming a server-side atomic operation makes a retried command idempotent.
+Use QA's existing admission/recovery and asynchronous-edit recipes for cases.
+
+Keep the map tied to the current source revision and actual consumers. State
+which requested entry points were inspected and which remain unresolved.
+Resolve findings through the existing owner and verify the protected user
+journey. A completed repair batch retains the original audit's unexamined scope
+and remaining delivery or user acceptance as explicit pending work.
+
 ## Protect the lifecycle
 
 Inspect normal execution, failure, cancel, retry and late completion wherever
