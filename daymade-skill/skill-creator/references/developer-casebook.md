@@ -14,6 +14,8 @@ Use the current owning guide for instructions. Inspect these cases only when the
 - [authoring-and-reuse — source lines 281–281](#authoring-and-reuse--source-lines-281281)
 - [existing-skill-migration — source lines 1332–1332](#existing-skill-migration--source-lines-13321332)
 - [existing-skill-migration — source lines 1618–1618](#existing-skill-migration--source-lines-16181618)
+- [Moved workflow, unchanged behavioral checks](#moved-workflow-unchanged-behavioral-checks)
+- [Display rename, stable external identifier](#display-rename-stable-external-identifier)
 - [publishing-and-packaging — source lines 1805–1809](#publishing-and-packaging--source-lines-18051809)
 
 ## authoring-and-reuse — source lines 233–233
@@ -31,6 +33,46 @@ Power users run several Claude sessions at once, and skill repos are exactly whe
 ## existing-skill-migration — source lines 1618–1618
 
 **Why a script here, when the rest of this block is prose.** The one-liner this replaces went through five rounds of patches — anchor the diff to the right base, see staged edits, survive committing, skip the diff's own `+++` header, drop a misleading `-n` — and four of those five added one more way for it to print nothing and exit 0, which is indistinguishable from "I checked and it was clean". The fifth was the other shape of the same disease: the `-n` it removed had been printing real hits with line numbers counted off the piped stream, so they looked authoritative and pointed nowhere — worse than silence, because a wrong answer outranks no answer. Either way the check kept shipping the defect it was written to catch. Prose cannot validate its own inputs, cannot say which of its outcomes occurred, and cannot be tested; a script does all three and its contract is that **every outcome is named and bad input fails loudly**. This is the Scripts check earlier in this same step, applied to this block — and the five rounds are what ignoring it costs.
+
+## Moved workflow, unchanged behavioral checks
+
+This synthetic reconstruction isolates a failure from a video-document Skill
+merge. Verification-status instructions move from `SKILL.md` to a linked
+`recording-workflow.md`. Baseline tests pass, but the candidate fails because the
+tests still search the entry file and require a fixed reference count.
+
+The repair changed the tests' lookup path, not their behavioral expectations:
+read the workflow owner, assert it is reachable from `SKILL.md`, and traverse the
+entry's local Markdown links to find the shipped references. The prior verified /
+unverified statuses, screen-text-only limitation, sampling and refusal criteria
+remained checked. Merely replacing the old reference count with the new one would
+have kept a layout assertion while leaving runtime reachability untested.
+
+Replay this distinction against a frozen pre-move baseline and candidate. First
+confirm the old tests pass on the baseline and fail at the moved location. Then
+run the adapted tests on the candidate and on isolated negative variants: change
+a required verification status, remove the workflow link, and leave a required
+reference unreachable. The correct candidate passes; each defective variant
+fails. A passing candidate alone does not show that the adapted tests still catch
+the original errors. These are case-specific controls, not an extra default suite.
+
+## Display rename, stable external identifier
+
+This synthetic reconstruction separates a public rename from an external
+interface. A Skill and its directory get new names; the patch also renames a CI
+job ID. A separate runner-policy repository allows only the old ID, checking
+`GITHUB_JOB` for exact membership before execution. Such a policy probe can expose
+the mismatch before a renamed job runs; it does not establish a live rejection.
+
+For a synthetic replay, let the allowlist be `["legacy-video-check"]`. The renamed
+machine ID `video-doc-check` is rejected by
+`job_id in policy["jobs"]`; `legacy-video-check` is accepted. Keeping that internal
+ID while changing the job's display `name` and test-directory path lets the new
+public name ship without silently changing the external admission interface.
+Inspect the actual consumer policy and final workflow together; a repository-local
+search cannot establish that no external consumer exists. If the machine ID must
+also change, the policy migration is a separate coordinated change. The existing
+inbound-reference release check owns this boundary.
 
 ## publishing-and-packaging — source lines 1805–1809
 
