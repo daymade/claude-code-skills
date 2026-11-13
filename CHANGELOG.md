@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **meeting-minutes-taker / audio-router** (`daymade-audio` v1.58.3): Align project and audio routing with participant-note inputs. Keep source/status and merge definitions in the canonical workflow; remove copied rules and a derived checklist contents summary, correct unknown-owner checks, and keep source locators as YAML strings in the template.
+
 - **meeting-minutes-taker** (`daymade-audio` v1.58.2): Integrate participant notes into one sourced minutes document, bind completion to the exact action, reconcile superseded commitments before every merge, and include note-only updates in retrieval self-tests. Align the review checklist and action-item template.
 
 - **debugging-network-issues** (v1.12.0): Preserve pre-failure raw and partial evidence across collection errors; validate wireless ACK direction, packet length, channel windows and clock uncertainty. Correct unified-log predicate field guidance and separate capture coverage from root-cause attribution.

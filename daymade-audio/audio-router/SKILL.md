@@ -27,7 +27,7 @@ hidden. Claude users can still invoke their original
 |---|---|
 | Transcribe with StepFun `stepaudio-3-asr-max`, obtain its independent speaker timeline, migrate older StepFun ASR, or diagnose the misleading “model not supported” endpoint error | `../stepfun-asr/SKILL.md` |
 | Synthesize Chinese/Japanese speech or voiceover with StepFun, including prosody, emotions, or a compatible cloned voice | `../stepfun-tts/SKILL.md` |
-| Turn an existing meeting transcript or 妙记 text into 会议纪要; merge multiple minute drafts, review existing minutes against the transcript, or reconcile speaker labels from verified evidence | `../meeting-minutes-taker/SKILL.md` |
+| Turn an existing meeting transcript or 妙记 text, with optional participant notes, into 会议纪要; merge multiple minute drafts, review existing minutes against supplied sources, or reconcile speaker labels from verified evidence | `../meeting-minutes-taker/SKILL.md` |
 
 Do not select StepFun merely because a user says “transcribe this audio.”
 General audio/video transcription, speaker diarization, audio preprocessing,
