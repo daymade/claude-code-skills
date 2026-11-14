@@ -466,10 +466,8 @@ For self-hosted routing, resource limits or cache persistence, follow its
 [runner acceptance](github-ops/references/workflow_operations.md#self-hosted-runner-capacity-and-acceptance).
 Keep demand selection, validation-reuse and capacity acceptance in those owners.
 
-For automatic observers or recovery jobs, begin with
-[ordinary-entry and lifecycle acceptance](daymade-macos/macos-watchdog/SKILL.md#bind-the-ordinary-entry-before-choosing-a-mechanism),
-including recovery after temporary protection. Browser-backed recurring jobs also
-use that Skill's deployment acceptance for resource-budget and focus evidence.
+For application native automatic updates, automatic observers or recovery jobs,
+enter [ordinary-entry and lifecycle acceptance](daymade-macos/macos-watchdog/SKILL.md#bind-the-ordinary-entry-before-choosing-a-mechanism).
 
 Before selecting file-event or periodic triggers, follow
 [macos-watchdog's trigger and acceptance workflow](daymade-macos/macos-watchdog/references/event-driven-observers.md).
@@ -607,6 +605,9 @@ Requests to repeat a previously successful method or reuse/improve an older rend
 For CLI/hook manifest selection or continuation in an already-running host, read
 [the manifest-selection contract](daymade-claude-code/prior-work-retrieval/SKILL.md#2-validate-the-explicit-source-manifest).
 
+For failures while completing a retrieval, enter
+[receipt completion and freshness](daymade-claude-code/prior-work-retrieval/SKILL.md#5-complete-the-reuse-receipt).
+
 For an existing hook integration or a blocked read-only discovery command, use its
 [companion-hook procedure](daymade-claude-code/prior-work-retrieval/SKILL.md#companion-hooks)
 and [discovery boundaries](daymade-claude-code/prior-work-retrieval/SKILL.md#boundaries).
@@ -731,7 +732,8 @@ Before a Codex startup diagnosis or a build/resume/recovery claim, follow
 [entry identity](daymade-codex/local-codex/references/entry-identity.md).
 That SOP owns the shell/executable binding and the limits of identity evidence.
 
-For an authorized shared Codex backend upgrade or restart, enter
+For Codex component updates, native updater eligibility or an authorized shared
+backend restart, enter
 [shared daemon maintenance](daymade-codex/local-codex/references/shared-daemon-maintenance.md).
 
 ### Codex Quota and Account Checks
