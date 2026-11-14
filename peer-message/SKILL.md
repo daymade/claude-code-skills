@@ -89,7 +89,6 @@ description: >-
 
 向正在运行的会话发送「暂停／只回标记／不要调用工具」以做诊断前，先读
 [诊断消息与执行隔离](references/coordination-and-learning-loop.md#诊断消息与执行隔离)。
-这类文本不能代替宿主的暂停或工具权限控制；消息送达与限制被遵守要分别取证。
 
 通过脚本联系独立 worker 并回传、脚本长文本发送、**撞见别人的在制品挡住你**、**向多个 peer 求证某个共享产物的归属或状态**，或复盘本 Skill 的真实使用记录时，读取 `references/coordination-and-learning-loop.md`。它区分原生与脚本回传，定义脚本 reply address 的传播、消息正文结构、长文本文件入口、从 transport 到任务完成的状态语言、可变状态的证据要怎么写才不会过期、发现别人在制品时先核实再问、等多久、等不到怎么继续，枚举求证时否认该怎么解读，以及如何把成功/失败 episode 变成可验证的 Skill 改动。需要协调判断不等于需要切换 transport。
 

@@ -59,29 +59,13 @@ Do not restart a shared daemon merely to enable logging.
 
 Use the existing `debugging-network-issues` Skill's
 [same-byte HTTP compression comparison](https://github.com/daymade/claude-code-skills/blob/main/debugging-network-issues/references/compressed-request-comparison.md)
-for the experiment. Preserve the distinction between:
-
-| Artifact | What it supports |
-| --- | --- |
-| Original failed HTTP entity bytes and sent headers | Replaying the captured original representation |
-| Original serialized JSON before compression | Matching the original logical bytes; a newly encoded entity can differ |
-| Parsed native trace serialized again | A reconstruction, even if its JSON values match |
-| Synthetic fixture | A failure of that fixture; relevance to the original needs its own evidence |
+for request provenance, the controlled experiment and incident-attribution criteria.
 
 Keep credentials in the [selected OAuth store](oauth-guide.md), outside prompts
 and fixtures. Do not switch accounts, change models, remove images and disable
 compression in one comparison. Use the selected build's supported native
 provider/configuration interface, then verify the resulting transport in logs.
 Do not overwrite the user's normal provider table to make a temporary probe run.
-
-A synthetic HTTP request returning 400 with zstd and 200 without it establishes
-a compression-related failure for that tested representation and path. A full
-original-history fork succeeding with compression falsifies “this history always
-fails when compressed.” If the original failed entity is missing, the synthetic
-contrast cannot establish the exact cause of that original 400. Report both
-observations, and leave the backend component unknown unless server evidence
-identifies it. A later compressed success does not erase an earlier controlled
-failure or prove every compressed request is healthy.
 
 ## Mitigate and verify at the actual consumer
 
@@ -101,7 +85,8 @@ Verify separately:
    the original task's relevant result separately if business completion is in
    scope.
 
-The first two checks do not prove an already-loaded daemon adopted the setting.
+A saved setting and fresh-process success do not prove an already-loaded daemon
+adopted the setting.
 Record effective adoption as unknown until observed there. A successful isolated
 fork proves the fork works, not that the original SID recovered. An ephemeral
 fork/copy must preserve the source history; use the current native help to select
