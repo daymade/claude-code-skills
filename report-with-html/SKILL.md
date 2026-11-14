@@ -183,6 +183,21 @@ Every interaction must work without a pointer:
 
 ## Workflow
 
+Choose verification from the actual changed axes and still-valid evidence, not from the
+number of edits. For the first delivery of a complex report, retain both independent
+reader comprehension (step 9) and load-bearing source checks (step 10). They need not
+always be two agents: one independent agent may first return and freeze a genuinely
+page-only blind read, using the canonical prompt verbatim, and only then receive the
+sources and acceptance packet. Never expose author findings, conclusions, or proposed
+fixes to that agent before its blind read is frozen.
+
+For a later delta to an accepted report, invalidate only evidence covering changed
+claims, visual encoding, layout, interactions, or decision structure. When input,
+configuration, criterion, and relevant state are unchanged and no new failure signal
+exists, keep unrelated evidence valid. Re-render and recheck affected axes after chart,
+layout, or interaction changes. Repository-required checks remain required. Stop when
+the named result is decided; do not add a reviewer merely because a small fix landed.
+
 1. **Define success.** Record audience, question, source set, required evidence,
    delivery form, and what would make the artifact fail. The gate template (step 5) also
    always carries a `读者已知清单` slot — fill it when the declared audience is narrower than
@@ -399,26 +414,27 @@ Every interaction must work without a pointer:
    the grounding for why this pass is provisional rather than final are in
    `references/audience-triage.md`.
 
-   **Deciding whether to run it again is an observation, not a self-assessment.** Ask:
-   since the last recorded review, did the page's skeleton, components, decision-card
-   content, any number, or **any term or label the reviewer had to interpret** change?
-   Any yes → new reviewer, because the previous one read a different page. Renaming terms
-   deserves its own mention: it is the standard fix for the reviewer's "words I could not
-   understand" finding, and it is easy to file under wording — but the new words have
-   never been read by anyone but you, which is the exact condition the review exists to
-   remove. Typo and punctuation fixes → no rerun; say so in the closeout instead. Do not
-   decide by asking yourself whether the change "felt structural." The
-   documented failure is a page reviewed as prose and then rebuilt as graphics: each
-   rebuild feels like polishing an already-reviewed page, and three consecutive versions
-   shipped having been read by no one.
+   **Deciding whether to run it again is an observation about invalidated evidence, not an
+   edit count.** Compare the delta with the claims and reader decisions the recorded review
+   covered. A number, term, or label change triggers a fresh page-only review only when it
+   invalidates the previous reader's interpretation of an affected claim, visual encoding,
+   layout, interaction, or decision structure; not every number or term change does. Reuse
+   unrelated review evidence when its input, configuration, criterion, and relevant state
+   are unchanged and no new failure signal exists. A local NAS-name correction, a
+   normalized-copy hash label, or an actionable gap-card correction requires readback of
+   every affected projection and its meaning, not another unchanged full QA pass. Typo and
+   punctuation fixes need only the affected readback. Chart, layout, or interaction changes
+   require a fresh render and rechecks of the affected axes. Stop once the named finding is
+   resolved; do not dispatch a new reviewer just because its small fix landed.
 
-   **That trigger has no ceiling of its own — pair it with a budget, or "any substantive
-   edit needs review" mints an unbounded stream of fresh rounds.** Every genuine fix is,
-   by definition, exactly the kind of change the trigger above requires a new reviewer
-   for, so a converging review and a runaway one are indistinguishable from inside a
-   single round — the failure has been observed at both small scale (three full rounds to
-   close one low-stakes correction) and large (21 rounds on a real decision document,
-   stopped only because a human asked why). This is the Loop Contract from
+   **A required re-review has no ceiling of its own — pair it with a budget, or "any
+   invalidating edit needs review" mints an unbounded stream of fresh rounds.** A local fix
+   whose affected readback resolves the named finding without invalidating the blind read
+   does not start another cycle. When re-review is required, a converging review and a
+   runaway one are indistinguishable from inside a single round — the failure has been
+   observed at both small scale (three full rounds to close one low-stakes correction) and
+   large (21 rounds on a real decision document, stopped only because a human asked why).
+   This is the Loop Contract from
    `claude-code-hooks`'s SKILL.md rule 7 — "If the hook demands remediation, prove the
    loop terminates"
    (`daymade-claude-code/claude-code-hooks/SKILL.md` (daymade/claude-code-skills),
@@ -432,12 +448,15 @@ Every interaction must work without a pointer:
              "no" — or surfaces any finding that amounts to the same thing (the reader
              could not actually make the decision this page exists to produce) — on that
              same axis, using only findings that survived triage
-   REMEDIATION R: reproduce the finding, apply one bounded fix, re-run the review once
+   REMEDIATION R: reproduce the finding, apply one bounded fix, and read back every affected
+                  projection and its meaning; re-run the blind review once only if that
+                  delta invalidates its axis
    VARIANT V: 2 - completed review cycles for this lineage
    BUDGET:   2 cycles total — the initial review plus one narrowly scoped re-review.
              A third reviewer on this lineage is never automatic.
-   SUCCESS EXIT: the re-review answers item 9 "yes" on that same axis, with nothing else
-             reopening it
+   SUCCESS EXIT: the affected readback resolves the named finding without invalidating
+             existing blind-read evidence; otherwise the single re-review answers item 9
+             "yes" on that same axis, with nothing else reopening it
    AUDIENCE-MISMATCH EXIT: EVERY SINGLE post-triage reason behind a cycle's "no" disposes as
              audience-declared-known — ship, log the disposition table, do not report this
              to the user as blocked. "Every" means every: a "no" with two reasons, one
@@ -483,27 +502,32 @@ Every interaction must work without a pointer:
      what converged, and open the new item as its own review with its own budget if the
      user wants it pursued now.
 
-   **The same crossing applies once this lineage has already passed step 10 once.** A
-   formal acceptance is not immune to reopening, and that is a distinct failure from the
-   one above — it recurs even when every individual finding along the way was real and on
-   a fresh axis (three separate passing acceptances on one lineage, each individually
-   genuine, is the documented worst case). If step 10 has already returned a clean verdict
-   for this lineage and something is about to dispatch another step 9/10 round anyway,
-   that crossing — by itself, before judging whether the new finding is real — is the
-   signal to stop and ask the user, not to silently reopen.
-10. **Independent acceptance.** Hand the acceptance checklist below, the page and its
+   **Stop after the named result is decided.** Once steps 9/10 have returned the verdict for
+   the current delta, do not reopen them merely because a small accepted fix landed. A later
+   maintenance delta selects its own bounded evidence under §6.3; only invalidated axes are
+   rechecked. A third reviewer on the same unresolved comprehension lineage is still never
+   automatic.
+10. **Independent acceptance.** Either hand the acceptance checklist below, the page and its
    sources, and the original request, later corrections, output contract and required
-   acceptance criteria to a *second* fresh-context agent — separate from the reader in step 9,
-   because they answer different questions (see the table under that list). It returns a
-   verdict and evidence per item. Its FAILs are findings you reproduce and fix, exactly
-   like step 9's; its PASSes are the only thing that closes an item.
-11. **Finalize after review.** Apply accepted fixes, rerender, repeat the browser journey,
-   and **re-run the delivery gate** — editing the page after filling the gate file
-   deliberately invalidates it, so `check` will be red here and that is the design, not a
-   malfunction. Re-run `init --force` (it carries the previous answers into an appendix so
-   you review-and-move rather than retype), re-read the *new* masked render, move each answer
-   up only after confirming it still holds, then `check` again. Only then open the final HTML
-   for the user. Do not open a pre-review draft as the delivered artifact.
+   acceptance criteria to a *second* fresh-context agent, or use the step 9 independent agent
+   after its page-only blind read has been returned and frozen. The latter is the sequential
+   route defined at Workflow entry, not permission to leak sources, author findings, or
+   proposed fixes before that freeze. Keep the two phases separate because they answer
+   different questions (see the table under that list). The acceptance phase returns a verdict
+   and evidence per item. Its FAILs are findings you reproduce and fix, exactly like step 9's;
+   its PASSes are the only thing that closes an item.
+11. **Finalize after review.** Apply accepted fixes, then select only checks invalidated by
+   the actual changed axes. Re-render and recheck affected visual, layout, or interaction axes
+   after chart, layout, or interaction changes; rerun only affected journeys and masked/gate
+   artifacts. For a local text-only delta, read back every affected projection and its meaning.
+   If a particular gate or check is inapplicable to that delta, record
+   `inapplicable: <reason>` and the relevant readback; never describe a stale gate as green.
+   If the page contract or repository still requires a check, run it. For an invalidated
+   delivery gate, re-run `init --force`, read the new masked render, carry forward only answers
+   confirmed against it, then run `check` again. Reuse unrelated evidence only while its
+   inputs, configuration, criteria, and relevant state remain unchanged and no new failure
+   signal exists. Only then open the final HTML for the user. Do not open a pre-review draft
+   as the delivered artifact.
 
 **Where a new lesson goes — answer in this order before writing one into this skill.**
 
@@ -542,7 +566,7 @@ reader does not have.
 Hand this list, the page **and its gate artifacts** (`page.html.gate.md`, `page--masked.png`),
 the original request and later corrections with their source coordinates, the existing output
 contract and required acceptance criteria, the sources behind load-bearing facts, the commands
-you ran, and the step 9 review file to a fresh-context agent (non-fork). You may walk it yourself first — it catches the
+you ran, and the step 9 review file to the acceptance agent selected in step 10. You may walk it yourself first — it catches the
 obvious misses cheaply — but *you do not get to declare the items passed.*
 
 Why it cannot be a self-check, stated plainly because the urge to skip it peaks exactly
@@ -608,10 +632,14 @@ never as a pass.
    findings verbatim, and record how that reviewer was spawned. A path only proves a file
    exists and the author writes that file; the reviewer's own words and the spawn details
    are what cannot be produced without a review having run. Then check each finding has a
-   disposition, and ask for every change made afterwards: if that list holds anything
-   beyond wording — skeleton, components, decision-card content, any number, or any term
-   the reviewer had to interpret — step 9 required a fresh reviewer, so establish whether
-   one ran. If the page declares `读者已知清单` (step 1), the author's disposition of each
+   disposition and compare every later change with the evidence it invalidates. Require a
+   fresh page-only reviewer when a delta invalidates prior independent coverage of affected
+   claims, visual encoding, layout, interactions, or decision structure; a changed number or
+   term alone is not the trigger. For a local NAS-name correction, normalized-copy hash label,
+   or actionable gap-card correction, verify readback of every affected projection and its
+   meaning; do not demand unchanged full QA. Keep unrelated review evidence when its input,
+   configuration, criterion, and relevant state are unchanged and no new failure signal exists.
+   If the page declares `读者已知清单` (step 1), the author's disposition of each
    `audience-declared-known` finding is a provisional first pass, not the answer — **this is
    the independent re-derivation that makes it real, not a second look at the author's own
    conclusion**: read the reviewer's quoted finding and the list entry it was disposed
@@ -633,12 +661,16 @@ never as a pass.
    not as passed. A labeled late addition is not automatically disqualified; judge whether the
    audience really would already know it, same as any other entry.
 
-5. **Delivery gate ran, and its answers describe this page** — check the artifacts and
-   independently compare their recorded answers with the rendered evidence:
+5. **Delivery gate evidence describes this page and delta** — check the artifacts and
+   independently compare their recorded answers with the rendered evidence. For first delivery
+   and every delta for which the gate remains applicable:
    (a) `page.html.gate.md` and `page--masked.png` **exist**, and `check` exits 0 right now
    (paste the output). A nonzero exit is a **FAIL of this item**, not an invitation to let the
    author re-run `init --force` and try again while you wait — the gate is supposed to be green
-   before the page reaches you; (b) **count the distinct geometries visible in the masked PNG FIRST, write that
+   before the page reaches you. A local text-only delta does not make a required gate optional.
+   If a particular gate or check is genuinely inapplicable to that delta, record
+   `inapplicable: <reason>` and supply readback of every affected projection and its meaning;
+   never pass a stale gate by citing its old green. For applicable gate evidence, (b) **count the distinct geometries visible in the masked PNG FIRST, write that
    number down, and only then open the gate table** — reading the table first makes you go
    looking for the shapes it lists, which is confirmation bias with a known direction. Then
    compare the two counts — the masked render is the ground truth here. **Before calling a mismatch:** a

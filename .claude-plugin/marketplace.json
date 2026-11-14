@@ -349,7 +349,7 @@
       "description": "Apple-platform development and operations suite for macOS window capture, TCC and Keychain dialog diagnosis, Full Disk Access repair, iOS/macOS app development, disk cleanup, and launchd watchdogs.",
       "source": "./daymade-macos",
       "strict": false,
-      "version": "1.31.1",
+      "version": "1.31.2",
       "category": "suite",
       "keywords": [
         "suite",
@@ -1323,7 +1323,7 @@
       "description": "Produces the reader-facing HTML artifact — report, dashboard, architecture view, data browser, or review workbench — evidence-backed, browser-verified. Use when the deliverable IS a visual HTML report, or the user asks for an HTML/web presentation. Load data-visualization-discipline for chart judgment. Not for chat status or Markdown prose unless asked to become a report; not for PowerPoint (deck-creator Route C).",
       "source": "./report-with-html",
       "strict": false,
-      "version": "1.6.1",
+      "version": "1.6.2",
       "category": "documentation",
       "keywords": [
         "HTML报告",
