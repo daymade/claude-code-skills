@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **peer-message** (v1.26.0): Derive native send arguments and commit identity from the original prepare result; execute the documented return-driven flow without manually copying envelopes or UUIDs, and retain unknown transport outcomes.
+- **tech-selection** (`daymade-claude-code` v5.1.15): Challenge unnecessary bindings, version/path pins and compatibility constraints against current user requirements and actual consumers before preserving them.
+
 - **auto-repo-setup** (v2.2.1): Select checks from the actual input changes, reuse matching successful evidence, and distinguish guard maintenance and diagnostic success from verified publication recovery.
 - **prior-work-retrieval** (`daymade-claude-code` v5.1.14): Skip impossible include matches before materializing Git scope paths while retaining ripgrep's final decision; reject incomplete required coverage before freshness probes. Change type: bug fix.
 - **peer-message** (v1.25.8): Read existing current-schema coordination status without write initialization or cleanup, preserving first-use bootstrap, legacy migration and integrity rejection.

@@ -24,6 +24,8 @@ description: >-
 
 安装、绑定变更或原生发送前，执行 [原生协调与前置检查](references/local-coordination.md#原生跨会话通信)。从本次加载的 Skill 目录运行该 SOP 的绝对路径命令；按其覆盖与验收条款判断实际宿主是否生效。
 
+Codex 独立 thread 的原生发送使用[返回值驱动入口](references/local-coordination.md#返回值驱动的-codex-原生执行)，在同一次代码调用内从 prepare 原 JSON 派生原生参数和 commit ID。
+
 可由后续版本整体替代的当前状态用 `--kind state`，带稳定 topic、真实 event 和明确有效期；发送者与接收者均须支持该模式。按本地协调机制的「可被新版本替代的状态」执行：新版本生效后，旧版本不再触发核查或回信。累计通知和真实新阻塞保留 notice/request，不猜正文语义、不给旧信封补有效期。
 
 ## 收到消息先分流
