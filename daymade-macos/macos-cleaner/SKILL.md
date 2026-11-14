@@ -17,6 +17,7 @@ Choose the narrowest path that can answer the request:
 
 | User signal | Route |
 |---|---|
+| A directory was already copied to an external disk; compare, sync recent work, or retire the internal copy | Start at [lightweight copied-directory verification](references/external-cold-archives.md#verify-an-already-copied-directory-lightly); reuse the copy and existing evidence, then use `scripts/relocate_directory.py` for journaled cutover and retirement |
 | Move selected cold data to an SD card or external disk while retaining its original entry | Read [external cold archives](references/external-cold-archives.md) before copying; bind volume identity, pilot metadata fidelity, verify the retained copy and test original-path consumption before retiring the internal payload |
 | Identical inactive local files must retain every path and offline availability | Read `references/apfs-shared-blocks.md`; use only authorized explicit pairs, native APFS checks and the bundled guarded executor |
 | Apple Content Caching, `AssetCacheManagerUtil`, `CacheUsed`, `ActualCacheUsed`, iCloud cache, or “Caching needs more space” | Read `references/apple_content_caching.md` completely before probing or proposing commands |
@@ -136,7 +137,7 @@ Mole's analyzer scans a fixed set that includes the home directory, application 
 
 For an explicitly approved duplicate-file investigation, read the “Optional duplicate files” section in `references/cleanup_targets.md`. It is read-only and never uses an automatic-delete option.
 
-**A large data folder is not a cache — proposing its deletion needs an evidence chain, not a size ranking.** When discovery surfaces a big project-asset / media / dataset directory (not a cache, not an app remnant), do NOT put it in the action set on size alone: read `references/proving-redundancy-before-deletion.md` before proposing anything. The deliverable is the evidence table; the unprovable row (purely manual usage) goes to the user, never gets papered over.
+**A large data folder is not a cache — proposing its deletion needs an evidence chain, not a size ranking.** When discovery surfaces a big project-asset / media / dataset directory (not a cache, not an app remnant), read `references/proving-redundancy-before-deletion.md` before proposing deletion. For an already-authorized external relocation, use the copied-directory route above; do not reopen the user's storage decision or require historical non-use to preserve the same entry on another disk.
 
 When discovery is fanned out to sub-agents, each returns candidates and measurements only — the classification, the acceptance, and the proposal happen in the session that runs the Phase 2 entry gate. A sub-agent's inventory is input to the classification table, never the plan.
 
@@ -287,6 +288,7 @@ uv run scripts/cleanup_report.py --snapshot after --compare
 ## Resources
 
 - `references/batch-selection.md` and `scripts/batch_budget.py` — select a bounded next batch using supplied capacity and pilot evidence; unknown ceilings stay unknown.
+- `references/external-cold-archives.md` and `scripts/relocate_directory.py` — verify a copied directory with metadata and selected content checks, then journal the same-volume rollback rename, original-entry consumer test and exact internal retirement; resume after interruption without copying or hashing the whole payload again.
 - `references/apfs-shared-blocks.md` and `scripts/apfs_cow.py` — preserve exact inactive local paths with guarded APFS cloning, pinned rollback, per-item lock release and an exact remainder.
 - `scripts/stream_accounting.py` — calculate internal full-clone allocation upper bounds from supplied native observations; not a probe or physical-release measurement.
 - `scripts/measure_apfs_allocation.py` — bounded, metadata-only private-allocation observations for explicit physical paths; report partial/unsupported results as unknown, not zero reclaim.
