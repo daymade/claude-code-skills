@@ -4,17 +4,21 @@ Use this branch after source-account binding when a Wiki node resolves to
 `bitable`, `sheet` or `sheets`. Keep docx, comments and linked documents on their
 existing extraction branches. Bind the profile through `lark-cli-router`; use its
 preparation route if CLI/auth is missing, then continue the same source.
+Resolve `FEISHU_SKILL` to the absolute directory of the loaded Skill; keep the
+shell in the destination project rather than relying on a Skill-directory cwd.
 
 ```bash
-python3 scripts/capture_table.py \
+FEISHU_SKILL='<absolute loaded feishu-doc-scraper directory>'
+python3 "$FEISHU_SKILL/scripts/capture_table.py" \
   --source 'https://example.feishu.cn/wiki/<node-token>' \
   --profile '<bound-profile>' --out '<new-capture-directory>' \
-  --attachments local
+  --attachments metadata
 ```
 
-Use `--attachments metadata` when bytes belong on NAS or only a locator is
-authorized. This collector downloads no video extensions. Its local attachment
-branch accepts named document/image formats up to 100 MiB; other attachments
+Keep `--attachments metadata` when bytes belong on NAS or only a locator is
+authorized. Choose `--attachments local` only for authorized document/image
+working copies. This collector downloads no video extensions. Its local attachment
+branch applies the collector's format and size checks; other attachments
 remain explicit pending locators. Raise the explicit cell/page budget only when
 the selected source scope requires it. An existing output directory is refused;
 reuse its completed evidence or choose a new timestamped capture.

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **feishu-doc-scraper v1.14.1 / report-with-html v1.7.1**: Make archive commands independent of the caller's working directory, document PDF adapter imports, remove copied implementation limits and add repository task routes.
+
 - **prior-work-retrieval** (`daymade-claude-code` v5.1.14): Skip impossible include matches before materializing Git scope paths while retaining ripgrep's final decision; reject incomplete required coverage before freshness probes. Change type: bug fix.
 - **github-ops** (v1.16.4): Materialize tracked checker configuration before sparse publication, restore omitted inputs from the pinned ref, and rerun the original checks without changing policy or payload.
 - **tunnel-doctor** (v1.17.17): Correct Shadowrocket rule-order and module-activation guidance; preserve backups and original VPN intent, and separate dated compile experiments from current route verification.
