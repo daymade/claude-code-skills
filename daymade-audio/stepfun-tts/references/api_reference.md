@@ -44,6 +44,21 @@ The developer guide explicitly pairs 2.5 cloning with natural-language delivery
 control. Global guidance and local directions can therefore accompany a clone;
 they do not establish identity or expression quality by themselves.
 
+Before contextual synthesis, distinguish intended spoken parentheses from local
+directions. ASCII `()` around business text invokes the documented instruction
+syntax; do not promise that text will be spoken or silently delete it. Resolve
+the intended wording with the caller, or use a currently documented literal-text
+path if one exists. Do not invent an escaping syntax. Check the complete tagged
+input against the model's input limit, including inserted directions; reject or
+replan an overlong request rather than truncate it or silently substitute an
+independent-line batch for a continuous passage.
+
+This is caller-side input review. The native wrapper still forwards explicit
+request bodies unchanged: preserving parentheses on the wire does not prove
+literal speech survived the provider's parser. Offline request construction or
+mocked transport proves payload fidelity, not provider acceptance or audible
+emphasis. Inspect the complete native body before a paid call.
+
 The global HTTP reference includes model/input/voice, language, response_format,
 speed, volume, instruction, sample_rate, pronunciation_map, stream_format,
 markdown_filter and return_url. The China HTTP contract additionally specifies:

@@ -273,6 +273,10 @@ refresh a completed receipt or exempt a new user requirement.
 Gitlink changes do not qualify for this narrow rebinding proof.
 If completion reports changed source evidence or scope, retrieve again for the
 current requirement, inspect the affected results and complete the new run.
+If a Git probe is temporarily unavailable, restore access and retry the same
+`complete --run` command. No receipt is accepted while verification fails;
+the retry still checks for scope changes. An unreadable directory or failed
+history adapter remains unresolved, not evidence that no prior work exists.
 Do not edit saved runs or old receipts to make stale evidence pass.
 Then verify:
 

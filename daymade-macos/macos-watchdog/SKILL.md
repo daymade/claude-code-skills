@@ -27,6 +27,14 @@ separate document for a simple task:
 - **Lifecycle:** whether the result covers a session, login, or machine, and
   which owned components must start and stop with it.
 
+When the request is to enable an existing application's automatic updates or
+native recovery, inspect and configure that application's own mechanism first.
+"Automatic" and acceptance of restart interruptions do not authorize an extra
+LaunchAgent, polling script or watchdog. If native support cannot meet the
+selected channel or behavior, explain that limit and obtain acceptance of the
+specific fallback before adding a recurring job. An explicit request for a new
+watchdog or scheduled observer continues through the deployment routes below.
+
 If the request explicitly limits the work to a manually run helper, an opt-in
 experiment, or a read-only design, preserve that scope. Otherwise, accept through
 the ordinary entry without unrequested manual activation. Reuse the existing
@@ -55,6 +63,7 @@ stand down without waiting for a human to disable it.
 
 | The situation is… | Go to |
 |---|---|
+| Enabling an existing application's native automatic updates or recovery | Its owning application/CLI maintenance procedure; inspect native eligibility before proposing an extra job |
 | Installing a NEW watchdog from scratch | Select the trigger through `references/event-driven-observers.md`, then § Deploy and § The quiet-watchdog contract |
 | Installing, upgrading, reusing or starting a persistent Python job | § Persistent Python runtime |
 | An evidence observer needs authentication or loses memory-only credentials on restart | § Authenticated evidence observers |
