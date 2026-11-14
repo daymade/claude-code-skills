@@ -11,18 +11,10 @@ deleting them is a user-data decision, and the only defensible way to propose it
 is an evidence chain that proves the content is redundant *and* that nothing
 alive consumes the copy being removed.
 
-This reference exists because of a 2026-09-19 session that proposed deleting a
-109 GB folder from a folder name and a file comparison — and was correctly
-challenged with "how do you prove it was never used?". The name-based inference
-was wrong in principle: a folder called `X-交付` ("delivery") tells you nothing
-about its role. What replaced it, below, is the method.
-
 ## The wrong question, and the right one
 
-**"Was it ever used?" is unprovable and the wrong target.** File atime is dead on
-modern macOS (APFS mounts `noatime` by default — access does not update
-timestamps), and a human opening files in Finder leaves no log. No evidence can
-support "never used."
+**Do not claim "never used" from timestamps or missing records.** Filesystem
+metadata does not establish a complete history of human or application use.
 
 **"Does the covered evidence show it was used as a DATA SOURCE?" is answerable.**
 Agent-executed usage can appear in session transcripts and repo code. Inspect
@@ -36,12 +28,8 @@ available. The evidence ladder climbs from provable to bounded:
 
 Before anything else: `df <candidate-path>` — the Filesystem column must show
 the local data volume (`/dev/disk…`), **not a network mount** (`//host/share`,
-`nfs`, `afp`). A 2026-09-19 disk-accounting session walked `du` **without `-x`**
-into `/Volumes/homes` — an SMB-mounted NAS — and surfaced 837 GB of remote NAS
-content as a candidate "big item" on the local disk. It was neither local nor
-one item: it was other people's data on other people's disks, and the whole
-"270 GB accounting gap" that motivated the walk was manufactured by the
-measurement itself.
+`nfs`, `afp`). Keep disk-accounting walks on that filesystem with `du -x`; remote
+NAS contents are not local reclaim candidates.
 
 Any path under `/Volumes/` is suspect until df'd,
 and in disk-accounting contexts `du` always carries `-x`. **A candidate that
@@ -69,68 +57,44 @@ Choose evidence from the asset's preservation contract. For copied-directory
 relocation, use the lightweight route linked above. A complete two-end hash can
 establish equality of a selected unique artifact; it is not a universal gate for
 retiring a reconstructable directory. Preserve missing or unexplained content.
-Historical selected-artifact checks include a ~28 GiB VM
-archived to NAS (sha256 both ends) before `lume delete` with df before/after;
-11.5 G of build outputs verified byte-identical against delivery copies
-(7d464c5e…/94ace0c4…) before deletion; 30 zero-reference delivery batches
-plus top-level deliveries/releases rsync+checksummed to the NAS before local
-removal (~13 GB). The tar-manifest form: manifest line count == archive
-member count, plus a random sample of 3 members extracted and parsed, before
-the source goes. Without this step "I believe a copy exists" can be the only
-copy — a DMG's historical signature bytes cannot be rebuilt (re-signing
-produces new bytes), and a 108 G same-day snapshot vanished with the sole
-copies of already-deleted live files before the hub confirmed receipt. The
-2026-09-28 TSV+SHA-256 approval-list precedent is the same gate.
+For an archive container, reconcile its member inventory and parse selected
+members before retiring the source. Preserve unique signed artifacts and the
+only surviving copy until the owning storage contract is met; rebuilding or
+re-signing does not recover the original bytes.
 
 ### 2. Origin — was the candidate *created from* the canonical copy?
 
-The strongest single piece of evidence: find the session or script that created
-the candidate. A creation command naming the other copy as source settles the
-relationship permanently:
-
-```text
-rm -rf "<candidate>" && mkdir "<candidate>" && SRC="<canonical>" && for d in ...; do cp ...
-```
-
-Search session history for the folder name (see rung 4) and read the creation
-commands verbatim. "Created by copying from X" means the candidate is derived,
-not source — source lives at X.
+Use the bounded original-record route in rung 4 to find the creation command or
+script when provenance changes the decision. A copy command establishes origin,
+not current equivalence, disposability or continuing source ownership. Check
+later changes and current consumers before choosing which copy to retain.
 
 ### 3. Reference check — does anything alive point at the candidate?
 
-Grep project trees, skill configs, and scripts for the folder name/path. Two
-traps that both cost time on 2026-09-19:
+Search project trees, Skill configs and scripts for the exact folder name/path:
 
 - **Unbounded grep over a project tree times out** (media files are huge).
   Restrict to text carriers: `--include="*.md" --include="*.json"
   --include="*.yaml" --include="*.yml" --include="*.sh" --include="*.py"
   --include="*.txt" --exclude-dir={node_modules,.venv,.git}`.
-- **`mdfind` is a fuzzy match, not a literal one.** Spotlight tokenizes:
-  searching `素材库-交付` returns every document containing 素材库 *and* 交付
-  separately. Every mdfind hit must be re-checked with a literal `grep` in the
-  file before it counts (all 8 hits on 2026-09-19 were false).
+- **Recheck Spotlight hits literally.** An `mdfind` result need not contain the
+  exact folder name. Verify the actual referencing text before counting a hit.
 
 A hit is only evidence if the referencing thing is **alive**: a pipeline script
 (`LIB="~/Downloads/<candidate>"` in a corpus builder) makes the folder
 load-bearing infrastructure; a doc sentence describing it makes it a *subject*,
 not a dependency. Read the actual lines — never classify from the file list.
 
-### 3b. Reference and registry checks that retention heuristics skip (2026-10-21, four measured failures)
+### 3b. Reference and registry checks before retention decisions
 
-Before proposing any retention rule or deletion candidate, run all four
-checks — each one below was skipped at least once in a single night and each
-skip produced a wrong proposal:
+Before proposing a retention rule or deletion candidate, check:
 
-1. **Volume distribution over time.** "Keep the latest N batches" fails twice
-   over: the 58 batches before 10-16 totalled only 1.7 G (the bulk is all
-   recent, so keeping-recent keeps nothing and cutting-old frees ~1.0 G), and
-   51 batches are referenced by absolute path from committed documents —
-   batch deletion severs evidence chains. A retention heuristic that was
-   never checked against the volume histogram protects nothing and breaks
-   what it touches.
+1. **Volume distribution over time.** Measure the actual histogram before choosing
+   an age or batch threshold, and check committed references to the selected
+   batches. An old cutoff can miss the largest occupants while deleting required
+   evidence; nominal age is not a retention policy.
 2. **The code layer, not just documents.** Pipeline source can hardcode path
-   patterns (measured: one sync script named the releases pattern at four
-   separate call sites). Grep the owning code for the path/pattern before declaring
+   patterns. Search the owning code for the path/pattern before declaring
    "zero references"; a zero-reference deletion claim also needs the
    retirement evidence ring: no launchd entry, no live process, content
    frozen since a stated date.
@@ -141,16 +105,12 @@ skip produced a wrong proposal:
    references are text is a different check — and the pilot batch sat
    exactly in that blind spot.
 4. **Registries before judgement.** A deletion candidate registered in an
-   SSOT (a local VM registry README listing per-VM disposition rulings) is a
-   retained asset; the correct flow
-   (archive to NAS + two-end sha256 + SSOT update) comes *after* the
-   registry check, not instead of it.
+   SSOT is a retained asset until its owner's disposition allows retirement.
+   Apply that storage contract and update its record after preservation; a copy
+   or checksum does not supersede the registry decision.
 
 Slice disposal candidates by semantic classification (reference status x
-retention rule), never by mtime/age/du alone: the oldest 12 releases were
-all rule-protected classes (9 unpinned-with-.git + 3 legacy) while every
-safely movable pinned release was recent — an mtime slice selects exactly
-the protected set.
+retention rule), never by mtime/age/du alone.
 
 ### 4. Bounded session evidence — did recorded work READ from it?
 
@@ -171,28 +131,20 @@ No ranked hits means no hits in the stated index coverage, not zero read/process
 operations. Missing tool records, unindexed sources and manual use remain gaps;
 do not use those gaps as evidence that the candidate is disposable.
 
-### 5. .DS_Store — the last manual-usage trace
+### 5. .DS_Store — a metadata clue, not a usage verdict
 
-Finder creates `.DS_Store` in every folder a human opens. The newest
-`.DS_Store` mtime inside the candidate = the last time a human browsed it:
-
-```bash
-find "<candidate>" -name .DS_Store -newermt "<suspect-date>" 2>/dev/null
-find "<candidate>" -type f -newermt "<date>" | head    # what else was touched
-```
-
-A folder whose only recent activity is `.DS_Store` was *looked at*, not *used*.
-Anything beyond Finder (QuickTime, dragging into an app) leaves no trace —
-report that boundary honestly rather than papering over it.
+Treat `.DS_Store` observations as filesystem metadata. Copies and automated
+operations can preserve or change mtimes; these fields do not identify a person,
+establish the last browse time or rule out application/manual use. Reuse an
+existing inventory rather than starting another walk solely for attribution.
+Keep usage unknown without an original usage record or the user's knowledge.
 
 ### 6. The project's own decision records
 
 Before proposing anything, read the owning project's `log.md` and
 `_decisions/` for entries about these folders. Original records outrank every
-inference above: on 2026-09-19 the project's own ledger labelled the candidate
-"分类库交付孪生" (delivery twin of the working library) and its decision log
-recorded "本地分发线废除" (local distribution line abolished) — both from the
-user's own earlier decisions, weeks before this investigation existed.
+inference above. Resolve the selected asset's role, retention decision and
+authorization from that owner rather than its folder name.
 
 ## The evidence table — the deliverable
 
@@ -201,11 +153,11 @@ unprovable:
 
 | Proposition | Evidence | Verdict |
 |---|---|---|
-| Content duplicated in canonical copy | name+size+mtime triple (candidate clue), structure match, complete two-end SHA-256 | candidate from metadata; content equality proven only by complete two-end SHA-256 match |
-| Candidate was created FROM canonical | creation command verbatim | proven |
+| Required material retained | asset-contract checks with stated inventory/content coverage | relocation acceptance within that coverage; do not claim full byte equality from metadata or samples |
+| Candidate was created FROM another copy | original creation command | provenance only; assess later changes and current consumers separately |
 | Agent read/process usage in covered records | original calls/results, source coordinates, providers and time window | observed use or no use found in stated coverage; gaps remain unknown |
 | Project's own decision record | log.md / _decisions quote | proven |
-| Manual usage | .DS_Store newest mtime = <date> | bounded: browsed at most |
+| Manual usage | metadata clues, original usage records or user knowledge | metadata alone leaves usage unknown |
 | Non-agent manual use beyond Finder | — | unprovable — user's knowledge only |
 
 Propose deletion only after duplication, origin and live dependencies are
@@ -235,59 +187,12 @@ to the exact target; a history search does not authorize deletion.
 
 ## Git work containers (worktree / detached HEAD / bundle-origin)
 
-When the large folder is a family of Git checkouts rather than plain data, the
-ladder's rungs get Git-specific instruments. A 2026-10-07 cleanup of a 57 GiB
-family on a remote worker worked these, in this order, and every anti-pattern
-below fired.
+For Git clones, linked worktrees, detached HEADs or bundle-origin repositories,
+enter [Git Safety Net](https://github.com/daymade/claude-code-skills/blob/main/git-safety-net/SKILL.md).
+Use that owner for common-store dependencies, local-only refs and uncommitted
+work, content containment, recovery carriers and retirement. Keep pathname
+cutover with this relocation workflow.
 
-### 0. Dependency direction before size ranking
-
-`git -C <dir> rev-parse --absolute-git-dir` and `--git-common-dir`. A checkout
-whose gitdir lives under another repo's `.git/worktrees/<name>` is a *worktree
-of that repo* — so the container that looks like the biggest disposable copy
-may be the load-bearing master: deleting it orphans every worktree's metadata.
-Three "repos" were worktrees of one 25 GiB container; the container was the one
-thing that could not go. Deleting by size alone would have picked exactly wrong.
-
-### 1. SHA-level uniqueness
-
-`git clone --filter=blob:none` silently degrades to a full clone when the server
-does not advertise filters (`warning: filtering not recognized by server,
-ignoring`, still exit 0) — on a multi-GiB family that turns the "scratch" mirror
-into a full object-store pull. Check for that warning before proceeding, or the
-space-minimization premise is gone. Fetch every ref into the mirror
-(`git clone --filter=blob:none --no-checkout`, then
-`git fetch ssh://<host>/<path> '+refs/heads/*:refs/remotes/wk/*'
-'HEAD:refs/remotes/wk/detached'` — zero writes to the source), then
-`git rev-list --remotes=wk --not --remotes=origin`. The count is the stranded set;
-ahead/behind per ref follows from `git rev-list --count`. (`<wk-refs>` expands to
-`--remotes=wk`, not a literal `refs/remotes/wk/*` — `--not` must precede ref
-arguments, and a pathspec there fails with exit 128.)
-
-### 2. Supersession is content, not ancestry
-
-`git cherry <base> <ref>` lies in both directions after squash merges (new
-patch-ids), and "the branch is gone from the remote" is not proof the work
-landed. The checks that held up: distinctive symbols on the base
-(`git show <base>:<path> | grep -c <symbol>`), then semantic coverage — the
-base's own test file carrying the same test cases (count hits for the case
-names, not just the function name). A fix whose function *and* tests are on the
-base is superseded; a fix against a since-rewritten architecture is obsolete;
-only "missing" justifies rescue, and neither of the first two is it.
-
-### 3. Dirty-content triage at blob level
-
-For uncommitted state, join `git hash-object <file>` (per dirty path, `-uall`
-expanded) against `git ls-tree <base> -r`: SAME = byte-identical (no residual
-value); DIFF splits into base-never-touched (the only one-of-a-kind class) and
-base-evolved (compare contents); ONLY = untracked (build output in practice —
-2952 of 3197 files that day). A trailing `??` directory in `status` hides
-thousands of files; expand before counting.
-
-### 4. Stranded shapes with no upstream at all
-
-A repo whose `origin` points at a local *bundle file* has no repatriation path —
-pushing writes back into the bundle, so its commits exist nowhere else by
-construction. And squash-merged branches are ahead-by-SHA forever: exclude any
-branch that has a merged PR before calling work stranded (three fix branches
-with merged PRs read as "6 unpushed commits" that day — every one a phantom).
+Do not infer containment from symbol/test-name hits or a historical merged PR,
+or assume untracked files are build outputs. If the owner's workflow or required
+helper is unavailable, preserve the checkout and report that dependency gap.
