@@ -1,5 +1,10 @@
 # Proving Redundancy Before Deletion — large data folders
 
+For a user-authorized move to an existing external copy, follow
+[copied-directory verification](external-cold-archives.md#verify-an-already-copied-directory-lightly)
+and its original-entry cutover. Use that bounded acceptance instead of requiring
+historical non-use or full-directory SHA verification from this general redundancy ladder.
+
 The caches this skill normally handles have a rebuild path built in. **Large data
 folders** (project asset libraries, video material, dataset directories) do not:
 deleting them is a user-data decision, and the only defensible way to propose it
@@ -60,10 +65,11 @@ Then compare directory-level structure (per-subdirectory `du -sk`): matching
 subdirectory names with similar sizes across the copies is the duplication
 signature; divergent names mean different content and the ladder stops here.
 
-**Two-end hash verification is the hard gate, not a courtesy check.** The
-source is deleted only after the archived copy's sha256 matches byte-for-byte
-on both ends; any mismatch or missing copy moves the item to preserve, no
-exceptions. Executed three times on 2026-10-21, all green: a ~28 GiB VM
+Choose evidence from the asset's preservation contract. For copied-directory
+relocation, use the lightweight route linked above. A complete two-end hash can
+establish equality of a selected unique artifact; it is not a universal gate for
+retiring a reconstructable directory. Preserve missing or unexplained content.
+Historical selected-artifact checks include a ~28 GiB VM
 archived to NAS (sha256 both ends) before `lume delete` with df before/after;
 11.5 G of build outputs verified byte-identical against delivery copies
 (7d464c5e…/94ace0c4…) before deletion; 30 zero-reference delivery batches
