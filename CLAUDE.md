@@ -263,6 +263,8 @@ Before updating an accepted report's facts or content, follow its
 [incremental maintenance recipe](report-with-html/references/long-lived-report-maintenance.md#63-已验收报告的有界增量更新).
 For transcript speaker-label updates, later reconciliation and consumer readback,
 follow its [maintenance contract](report-with-html/references/long-lived-report-maintenance.md).
+For a hierarchical course/archive reader,
+use the [archive reader procedure](report-with-html/references/archive-reader.md).
 
 For citation previews and in-place source inspection, enter
 [report-with-html's interaction owner](report-with-html/references/interaction-components.md)
@@ -600,6 +602,8 @@ enter [feishu-doc-scraper](feishu-doc-scraper/SKILL.md) and follow its task rout
 Body-capture commands and failure recovery belong to its
 [API capture procedure](feishu-doc-scraper/references/lark-cli-api-extraction.md#step-3-fetch-the-body-programmatically);
 change and exercise that recipe rather than maintaining another copy in the entry.
+Wiki Base/Sheets capture uses
+[table capture](feishu-doc-scraper/references/table-capture.md).
 
 ### Prior Work Retrieval Boundary
 

@@ -8,7 +8,15 @@ replace it. Unknown parents stay visibly unassigned rather than being invented.
 
 ## Build the hierarchy
 
-Use `scripts/build_archive_reader.py --catalog <catalog.json> --out <new.html>`.
+Resolve `REPORT_SKILL` to the absolute directory of the loaded Skill and invoke
+the builder from the destination project:
+
+```bash
+REPORT_SKILL='<absolute loaded report-with-html directory>'
+python3 "$REPORT_SKILL/scripts/build_archive_reader.py" \
+  --catalog '<catalog.json>' --out '<new.html>'
+```
+
 For an update, also pass `--previous <previous-catalog.json>`; preserve that
 source-owned previous snapshot before generating the new catalog.
 
@@ -52,6 +60,10 @@ existing dependency owner if `pdfinfo`/`pdftoppm` are absent. Register only
 verified local PDFs by stable ID and exact relative path:
 
 ```python
+import sys
+from pathlib import Path
+# Resolve report_skill_root from the loaded Skill, never from an HTTP parameter.
+sys.path.insert(0, str(Path(report_skill_root) / "scripts"))
 from pdf_preview import PDFPreview
 pdfs = PDFPreview(archive_root, {
     "reference": {"path": "attachments/reference.pdf", "mime": "application/pdf",
@@ -66,7 +78,7 @@ if response is not None:
 ```
 
 `/pdf/<id>?page=N` renders navigation plus a readable page image;
-`/pdf-page/<id>?page=N` renders one 1600px PNG on demand. Unregistered IDs,
+`/pdf-page/<id>?page=N` renders one bounded PNG on demand. Unregistered IDs,
 non-PDF records, invalid page values, changed size and unavailable renderers fail
 explicitly. No arbitrary filesystem-path endpoint is added. Keep the original
 `/asset/<id>` binary response and its MIME, bytes and Range behavior unchanged.
