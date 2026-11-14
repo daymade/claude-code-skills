@@ -276,11 +276,28 @@ def _prepared_core(envelope, metadata_start):
 
 
 class Board:
-    def __init__(self, root: Path, clock=time.time):
+    def __init__(self, root: Path, clock=time.time, *, read_only=False):
         self.clock = clock
         self.root = Path(root).expanduser()
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.path = self.root / "coordination.sqlite3"
+        if read_only and self.path.exists():
+            # Current-schema status reads need no write lock or maintenance.
+            # Empty and v1 databases fall through to the original initializer.
+            self.db = sqlite3.connect(self.path.resolve().as_uri() + "?mode=ro",
+                                      uri=True, timeout=5, isolation_level=None)
+            self.db.row_factory = sqlite3.Row
+            try:
+                version = self.db.execute("PRAGMA user_version").fetchone()[0]
+                if version not in (0, 1, 2):
+                    raise CoordinationError(f"unsupported coordination schema {version}; retain state")
+                if version == 2:
+                    self._require_state_ledger()
+                    return
+            except BaseException:
+                self.db.close()
+                raise
+            self.db.close()
         self.db = sqlite3.connect(self.path, timeout=5, isolation_level=None)
         self.db.row_factory = sqlite3.Row
         try:
@@ -328,9 +345,7 @@ class Board:
                 self.db.execute("CREATE INDEX IF NOT EXISTS state_stream ON state_events(sender,target,topic,revision)")
                 self.db.execute("""CREATE TABLE IF NOT EXISTS state_retired(
                     message_id TEXT PRIMARY KEY, slot TEXT NOT NULL, terminal TEXT NOT NULL)""")
-                if self.db.execute("""SELECT 1 FROM messages m WHERE m.kind='state' AND NOT EXISTS
-                    (SELECT 1 FROM state_events e WHERE e.slot=m.slot) LIMIT 1""").fetchone():
-                    raise CoordinationError("state revision ledger is incomplete; retain state and reconcile")
+                self._require_state_ledger()
                 self.db.execute("PRAGMA user_version=2")
             os.chmod(self.path, 0o600)
             # Only closed transport records are disposable. Unknown sends and
@@ -350,6 +365,11 @@ class Board:
         except BaseException:
             self.db.close()
             raise
+
+    def _require_state_ledger(self):
+        if self.db.execute("""SELECT 1 FROM messages m WHERE m.kind='state' AND NOT EXISTS
+            (SELECT 1 FROM state_events e WHERE e.slot=m.slot) LIMIT 1""").fetchone():
+            raise CoordinationError("state revision ledger is incomplete; retain state and reconcile")
 
     def close(self):
         self.db.close()
