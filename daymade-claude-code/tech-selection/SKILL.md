@@ -50,6 +50,11 @@ Write these before comparing any candidate:
 1. The **named business result** this choice serves.
 2. The **named failure mode** — what observable phenomenon would prove the choice wrong.
 
+Before retaining an identity binding, version/path pin or backward-compatibility requirement,
+apply the [prerequisite-necessity check](references/decision-axes.md#axis-9--implementation-choice--product-justification).
+An implementation detail already present in the system is a candidate constraint to justify,
+not an additional user requirement. Honor the current task's explicit support boundary.
+
 Derive the business result from context, not from the request text. A bare "which DB" carries no result on its face — read the project's decision log, the user's recent corrections, and what this choice unblocks downstream. If no context exists to derive from, say so explicitly rather than fabricating one.
 
 > Checkpoint: Cannot derive a business result from any available context → this is an execution task, not a selection task. Exit skill. Business result written as "tests pass" or "pipeline complete" → that's a proxy metric. Rewrite.

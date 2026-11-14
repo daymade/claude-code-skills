@@ -1785,6 +1785,96 @@ def managed_send(args, target, body, sender, reply_to):
         board.close()
 
 
+def native_prepared_input(value):
+    """Read the original prepare result without inventing absent send fields."""
+    if not isinstance(value, dict):
+        raise coordination.CoordinationError("prepare result must be an object")
+    status = value.get("status")
+    suppressed = {"suppressed_expired", "suppressed_superseded", "suppressed_state_revision",
+                  "suppressed_closed_reply", "suppressed_pending"}
+    if isinstance(status, str) and status in suppressed:
+        return None
+    if status != "prepared":
+        raise coordination.CoordinationError("original prepare result is not prepared or suppressed")
+    message_id = coordination.nonblank(value.get("message_id"), "prepared message_id")
+    target = coordination.nonblank(value.get("target"), "prepared target")
+    body = coordination.nonblank(value.get("body"), "prepared body")
+    metadata = coordination.native_coordination_metadata(body)
+    if (metadata is None or metadata != value.get("metadata")
+            or metadata["id"] != message_id or metadata["target"] != target):
+        raise coordination.CoordinationError("prepare result differs from its original envelope")
+    try:
+        thread_id = str(uuid.UUID(target.removeprefix("codex:")))
+    except ValueError as exc:
+        raise coordination.CoordinationError("native-call requires an exact Codex thread target") from exc
+    if target != "codex:" + thread_id:
+        raise coordination.CoordinationError("native-call requires an exact Codex thread target")
+    if len(body.encode("utf-8")) > 1000:
+        raise coordination.CoordinationError("prepared body exceeds the native Codex prompt limit")
+    return message_id, target, body, metadata, thread_id
+
+
+def native_transport_outcome(result, thread_id):
+    """Recognize the observed native acceptance receipt; all other results stay unknown."""
+    if (not isinstance(result, dict) or result.get("isError", False) is not False
+            or set(result) - {"content", "isError", "_meta", "structuredContent"}):
+        return "unknown"
+    content = result.get("content")
+    if not isinstance(content, list) or len(content) != 1 or not isinstance(content[0], dict):
+        return "unknown"
+    block = content[0]
+    if block.get("type") != "text" or not isinstance(block.get("text"), str):
+        return "unknown"
+    try:
+        receipt = json.loads(block["text"])
+    except ValueError:
+        return "unknown"
+    if receipt != {"threadId": thread_id}:
+        return "unknown"
+    if "structuredContent" in result and result["structuredContent"] != receipt:
+        return "unknown"
+    return "accepted"
+
+
+def cmd_native_coord(args):
+    try:
+        prepared = json.loads(args.prepared_json)
+    except ValueError as exc:
+        raise coordination.CoordinationError("prepare result must be valid JSON") from exc
+    selected = native_prepared_input(prepared)
+    if selected is None:
+        result = {key: prepared[key] for key in ("status", "message_id", "target", "prior_state")
+                  if key in prepared}
+        print(json.dumps({**result, "transport_status": "not_sent"}, ensure_ascii=False))
+        return 0
+    message_id, target, body, metadata, thread_id = selected
+    actor = coordination_actor_key(coordination_current_address(args))
+    board = coordination.Board(args.state_dir)
+    try:
+        row = board.db.execute("SELECT sender,target FROM messages WHERE id=?", (message_id,)).fetchone()
+        claim = board.db.execute("SELECT envelope_digest FROM native_sends WHERE message_id=?",
+                                 (message_id,)).fetchone()
+        if (row is None or claim is None or row["sender"] != actor or metadata["sender"] != actor
+                or row["target"] != target
+                or claim["envelope_digest"] != hashlib.sha256(body.encode()).hexdigest()):
+            raise coordination.CoordinationError("original prepare result does not match this sender's record")
+        if args.operation == "native-call":
+            result = {"status": "prepared", "message_id": message_id, "target": target,
+                      "arguments": {"threadId": thread_id, "prompt": body}}
+        else:
+            try:
+                receipt = json.loads(args.native_result_json)
+            except ValueError as exc:
+                raise coordination.CoordinationError("native result must be valid JSON; retain the original send") from exc
+            outcome = native_transport_outcome(receipt, thread_id)
+            result = {**board.commit(message_id, actor, outcome, receipt),
+                      "transport_status": outcome, "target": target}
+        print(json.dumps(result, ensure_ascii=False))
+        return 0
+    finally:
+        board.close()
+
+
 def cmd_coord(args):
     if args.operation == "status" and args.details and args.output is None:
         raise PeerError("coord status --details requires --output to a new file")
@@ -1931,6 +2021,17 @@ def build_parser() -> argparse.ArgumentParser:
     commit_parser = operations.add_parser("commit")
     commit_parser.add_argument("--message-id", required=True)
     commit_parser.add_argument("--outcome", choices=("accepted", "not_sent", "unknown"), required=True)
+    for operation in ("native-call", "commit-native"):
+        entry = operations.add_parser(operation, help=(
+            "derive Codex native arguments from the original prepare JSON; sends nothing"
+            if operation == "native-call" else
+            "record the native result using its original prepare JSON, without a hand-copied id"))
+        entry.add_argument("--prepared-json", required=True, help="complete original coord prepare JSON")
+        if operation == "commit-native":
+            entry.add_argument("--native-result-json", required=True, help="complete native CallToolResult, or a captured exception object")
+        entry.add_argument("--actor", help="exact current-host address matching its provider environment")
+        entry.add_argument("--json", action="store_true", help="include a structured error receipt")
+        entry.set_defaults(handler=cmd_native_coord)
     receive_parser = operations.add_parser("receive")
     receive_parser.add_argument("envelope_file", help="original received envelope, or - for stdin")
     finish_parser = operations.add_parser("finish")

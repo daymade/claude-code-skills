@@ -223,6 +223,68 @@ python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord prepare '<exact-target>' reques
 沿原准入重新 prepare。不得截改 prepared body、只删信封或改走其他 transport；
 transport 是否调用不明时，沿下文原通道读回，不凭超限推定未发送。
 
+### 返回值驱动的 Codex 原生执行
+
+当前宿主确实提供 `mcp__codex_tui__send_message_to_thread({threadId,prompt})`、
+且其 prompt 上限仍为 1000 UTF-8 bytes 时，使用下面的同 cell 编排。先按上节完成
+目标发现与当前宿主身份核对；父子 subagent 继续直接走宿主协作，不进入此入口。
+将 `skillRoot`、`actor`、`target`、`message` 填为本次已核实的值，其余参数从返回值派生。
+
+```javascript
+const skillRoot = "<absolute-loaded-peer-message-directory>";
+const actor = "<exact-current-host-address>";
+const target = "<discovered-codex-address>";
+const message = "<authorized-message>";
+const sh = value => "'" + String(value).replace(/'/g, "'\\''") + "'";
+async function coord(tail) {
+  let part = await tools.exec_command({
+    cmd: ["python3", skillRoot + "/scripts/peer.py", "coord", ...tail].map(sh).join(" "),
+    yield_time_ms: 1000
+  });
+  let output = part.output;
+  while (part.session_id) {
+    part = await tools.write_stdin({session_id: part.session_id, chars: "", yield_time_ms: 1000});
+    output += part.output;
+  }
+  if (part.exit_code !== 0) throw new Error(output);
+  return JSON.parse(output);
+}
+const prepared = await coord(["prepare", target, "--message", message,
+  "--actor", actor, "--max-envelope-bytes", "1000"]);
+if (prepared.status !== "prepared") {
+  text(prepared);
+} else {
+  const original = JSON.stringify(prepared);
+  const owner = prepared.metadata.sender;
+  const call = await coord(["native-call", "--prepared-json", original, "--actor", owner, "--json"]);
+  if (call.status !== "prepared") {
+    text(call);
+  } else {
+    let receipt;
+    try {
+      receipt = await tools.mcp__codex_tui__send_message_to_thread(call.arguments);
+    } catch (error) {
+      receipt = {error: String(error)};
+    }
+    text(await coord(["commit-native", "--prepared-json", original,
+      "--native-result-json", JSON.stringify(receipt ?? null), "--actor", owner, "--json"]));
+  }
+}
+```
+
+`native-call` 只生成参数，不发送、不代替原生 guard。它和 `commit-native` 均核对原
+prepare 的完整信封、ID、收发人和本地准备摘要；suppression 不生成发送参数，也不
+commit。保留原 JSON，不重建信封或手抄 UUID。
+
+`commit-native` 仅将已观测的单个 text block、内容为精确
+`{"threadId":"<本次目标UUID>"}` 的 JSON 回执识别为 `accepted`；MCP `isError`
+缺失或显式 `false` 均可。可选 `structuredContent` 出现时，须与 text 解析出的
+`{threadId}` 完全一致；缺失正常，null、空值或冲突都记 `unknown`。
+空、畸形、不同目标、错误标记、未知其它顶层字段或异常对象也记 `unknown`，
+不从报错文字猜 `not_sent`。accepted 只证明 transport 接受；不证明收件人已读或执行。
+拒绝不换 transport；reserved/unknown 继续沿下面的原通道核定屏障处理。
+其它原生工具继续按实际 schema 使用原有 prepare/send/commit，不将本例参数套给它们。
+
 ### 原生调用与回执
 
 其他 suppression 状态安静结束。前置检查绑定宿主的发送 session、实际收件人、完整

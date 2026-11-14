@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **peer-message** (v1.26.0): Derive native send arguments and commit identity from the original prepare result; execute the documented return-driven flow without manually copying envelopes or UUIDs, and retain unknown transport outcomes.
+- **tech-selection** (`daymade-claude-code` v5.1.15): Challenge unnecessary bindings, version/path pins and compatibility constraints against current user requirements and actual consumers before preserving them.
 - **feishu-doc-scraper v1.14.1 / report-with-html v1.7.1**: Make archive commands independent of the caller's working directory, document PDF adapter imports, remove copied implementation limits and add repository task routes.
 
 - **auto-repo-setup** (v2.2.1): Select checks from the actual input changes, reuse matching successful evidence, and distinguish guard maintenance and diagnostic success from verified publication recovery.
