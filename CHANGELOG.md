@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **claude-switch-models-setup** (`daymade-claude-code` v5.1.13): Keep shared-helper calibration expectations in the executable fixture matrices and remove historical watcher timing from operating guidance. Route affected QA and takeover work from the repository instructions.
 
 - **qa-expert** (v1.2.15): Exercise real incremental capture and drift repair, prove negative fixtures changed their selected field, and bound completed results behind ordered concurrent publication.
+- **local-codex / debugging-network-issues / peer-message** (`daymade-codex` v2.4.12, `debugging-network-issues` v1.12.2, `peer-message` v1.25.7): Route repository instructions to the diagnostic SOPs and consolidate request provenance, attribution and native recovery in their owning references.
+
 - **stepfun-tts** (`daymade-audio` v1.58.4): Distinguish literal parentheses from delivery instructions, count the complete tagged input, and preserve native request forwarding without treating transport fidelity as audible control.
 - **local-codex / macos-watchdog** (`daymade-codex` v2.4.10, `daymade-macos` v1.31.1): Verify native updater ownership and channel eligibility per component; keep extra scheduled updaters opt-in and preserve explicitly requested watchdogs.
 - **prior-work-retrieval** (`daymade-claude-code` v5.1.12): Direct temporary Git verification failures to a same-run retry while retaining scope-change and required-carrier checks.

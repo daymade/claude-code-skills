@@ -117,7 +117,7 @@
       "description": "Bridge local Claude Code and Codex sessions only when the current host's native communication tools do not cover the target. Use for cross-product messages, hooks/scripts posting to sessions, fallback reply lookup and delivery verification, or diagnosing Held peer messages. Also use its coordination guidance when shared-work ownership or an inbound peer assertion needs verification. For ordinary parent/subagent, teammate, or independent-session communication, first discover and use available native tools; do not load this skill merely to send a native message. The bundled network preview for cross-machine pairing is deprecated (existing deployments only; invitations use the peer-message:v1 format). Never bypass a denied or Held message with another transport. Not for spawning agents, moving full history, or granting user approval. Triggers: 跨产品通信、原生工具未覆盖的会话、脚本回帖、peer 送达排查、共享在制品归属核实、peer-message:v1 邀请（既有部署）。",
       "source": "./peer-message",
       "strict": false,
-      "version": "1.25.6",
+      "version": "1.25.7",
       "category": "communication",
       "keywords": [
         "agent-communication",
@@ -244,7 +244,7 @@
       "description": "OpenAI Codex operations and design exploration suite bundling model-aware long-context workstation setup, local Codex delegation, generated-image review, static visual-direction selection, and runnable HTML interaction Design Boards under one shared namespace.",
       "source": "./daymade-codex",
       "strict": false,
-      "version": "2.4.11",
+      "version": "2.4.12",
       "category": "suite",
       "keywords": [
         "suite",
@@ -978,7 +978,7 @@
       "description": "Investigates network, streaming and protocol failures with falsification-first layered experiments, the general fallback for unknown root causes. Use for ECONNRESET / RST_STREAM / SSE stalls, CDN/CGNAT timeouts or certificate errors, throughput collapse where everything returns 200 but transfers crawl, or LAN identity/topology mysteries. Not for known Tailscale/TUN/DNS/proxy-path conflicts (use tunnel-doctor).",
       "source": "./debugging-network-issues",
       "strict": false,
-      "version": "1.12.1",
+      "version": "1.12.2",
       "category": "developer-tools",
       "keywords": [
         "debugging",

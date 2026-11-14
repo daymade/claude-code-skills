@@ -100,9 +100,5 @@ boundary into a universal server limit. An [upstream Codex report](https://githu
 contains related comparisons; it is corroborating incident evidence, not an
 official statement of the backend's exact implementation or a portable threshold.
 
-For mitigation, preserve the experiment's evidence, apply an authorized native
-setting change, and read it back at the consumer. Verify a fresh real request
-without the experimental override and the original session/workload separately.
-A saved flag, a successful fork and an already-loaded process's adoption are
-different observations. Stop after the authorized outcome is verified; escalate
-the remaining backend question with request IDs and sanitized same-byte evidence.
+For Codex feature changes and original-session recovery, continue with
+[verification at the actual consumer](https://github.com/daymade/claude-code-skills/blob/main/daymade-codex/local-codex/references/model-request-diagnostics.md#mitigate-and-verify-at-the-actual-consumer).
