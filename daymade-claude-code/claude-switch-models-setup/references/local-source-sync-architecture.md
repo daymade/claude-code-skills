@@ -35,7 +35,7 @@ global prompt. The sync scripts exist for topology repair, not day-to-day editin
 | Change | Mechanism |
 |---|---|
 | Edit an existing `SKILL.md`, script, reference, or asset in an activated canonical source | Live through symlink; restart running agent session if needed |
-| Install/uninstall, or `claude plugin enable`/`disable --scope user`, a plugin in the default Claude profile | Default `settings.json` / `installed_plugins.json` changes; LaunchAgent watcher mirrors state to every profile within seconds (verified 2026-08-22: launchd run counter incremented within 5s of a `settings.json` touch) |
+| Install/uninstall, or `claude plugin enable`/`disable --scope user`, a plugin in the default Claude profile | Default `settings.json` / `installed_plugins.json` changes trigger the LaunchAgent watcher |
 | Add a new skill/plugin entry | Marketplace manifest changes; LaunchAgent watcher runs source sync |
 | Remove or rename a skill entry | Marketplace manifest changes; the watcher prunes stale managed links from `.agents/skills` but only reports legacy `.codex/skills` links for reviewed cleanup |
 | Bump `plugins[].version` | Marketplace manifest changes; LaunchAgent watcher creates/updates the version symlink and installed metadata |
@@ -406,23 +406,13 @@ Uninstall:
 
 ## Verification Checklist
 
-For changes to the shared helpers or required launch preparation, the maintainer
-first runs the source bundle's `tests/test_sync_state.py` and
-`tests/test_native_command.py` in their disposable fixture roots. Keep real
-profiles, registries and lock markers out of this calibration:
-
-- Pair a healthy canonical registry/settings and native-launch case with malformed
-  JSON, a non-object root and missing required settings. Assert refusal preserves
-  the input bytes and produces no native invocation; separately preserve the
-  absent-marketplace registry's documented successful no-op.
-- Hold one helper's kernel guard while entering the other. Confirm exclusion,
-  then release only the test-owned holder. Reclaim a confirmed-dead PID marker;
-  preserve a live or unknown/missing/malformed PID marker regardless of age.
-  Verify exact marker and guard state after each case, not only the timeout status.
-- Test both native entry forms in Bash and zsh with caller `errexit` on and off.
-  Required helper failure must remain nonzero before native execution; healthy
-  arguments and exit propagation remain intact. Adopt the updated helper pair
-  together, since an older helper cannot participate in the kernel guard.
+For shared-helper or required-launch preparation changes, use the source-owned
+fixture matrices in [`test_sync_state.py`](../tests/test_sync_state.py) and
+[`test_native_command.py`](../tests/test_native_command.py). Run these test entries
+with Python 3 from the selected source bundle; they create disposable profiles,
+registries and lock markers rather than using the maintainer's live state. Keep
+lock recovery, registry/settings refusal and native-launch expectations in those
+tests instead of maintaining a second case list here.
 
 Use implementation-owned inventory instead of a hand-maintained plugin or Skill
 list. First confirm which source identities are registered, then preview the exact

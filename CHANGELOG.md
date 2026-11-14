@@ -7,7 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **qa-expert** (v1.2.15): Exercise real incremental capture and drift repair across three rounds, prove negative fixtures changed their selected field, and bound completed results behind ordered concurrent publication.
+- **qa-expert** (v1.2.16): Remove repeated resource/workflow summaries and the stale OWASP-section example; preserve the canonical execution routes, handoff steps and isolation requirements.
+- **claude-switch-models-setup** (`daymade-claude-code` v5.1.12): Keep shared-helper calibration expectations in the executable fixture matrices and remove historical watcher timing from operating guidance. Route affected QA and takeover work from the repository instructions.
+
+- **qa-expert** (v1.2.15): Exercise real incremental capture and drift repair, prove negative fixtures changed their selected field, and bound completed results behind ordered concurrent publication.
 - **continue-codex-work / claude-switch-models-setup** (`daymade-claude-code` v5.1.11): Identify and finish in-flight CI before rerunning it; calibrate shared helper locking and required launch preparation in isolated fixtures.
 
 - **app-evolver 1.1.14** — Trace implicit state through actual consumers, operation identity, recovery boundaries and declared audit coverage.
