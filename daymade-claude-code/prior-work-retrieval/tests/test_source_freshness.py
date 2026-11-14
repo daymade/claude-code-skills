@@ -64,6 +64,47 @@ class SourceFreshnessTests(unittest.TestCase):
         return self.cli("complete", "--run", run["run_id"], "--session-id", "fixture",
                         "--reuse", self.candidate["candidate_id"] + "=reuse the opened verified contract", "--json")
 
+    def install_failing_git(self):
+        binary = shutil.which("git", path=self.env["PATH"])
+        bin_dir = self.root / "bin"
+        bin_dir.mkdir()
+        wrapper = bin_dir / "git"
+        wrapper.write_text(
+            "#!" + sys.executable + "\nimport os, sys\n"
+            "args = sys.argv[1:]\n"
+            "mode = os.environ.get('PRIOR_WORK_FIXTURE_FAIL_GIT')\n"
+            "if len(args) > 2 and ((mode == 'head' and args[2] == 'rev-parse') "
+            "or (mode == 'diff' and args[2] == 'diff')):\n"
+            "    sys.exit(128)\n"
+            "os.execv(" + repr(binary) + ", [" + repr(binary) + ", *args])\n")
+        wrapper.chmod(0o755)
+        self.env["PATH"] = str(bin_dir) + os.pathsep + self.env["PATH"]
+
+    def test_git_probe_failure_retries_same_run_without_another_search(self):
+        run = self.retrieve()
+        self.install_failing_git()
+        for mode in ("head", "diff"):
+            with self.subTest(mode=mode):
+                self.env["PRIOR_WORK_FIXTURE_FAIL_GIT"] = mode
+                result = self.complete(run)
+                self.assertEqual(result.returncode, 2, result.stdout)
+                self.assertIn("retry the same command", result.stderr)
+                self.assertNotIn("retrieve again", result.stderr)
+                self.env.pop("PRIOR_WORK_FIXTURE_FAIL_GIT")
+                self.assertEqual(self.complete(run).returncode, 0)
+                self.assertEqual(self.cli("check", "--session-id", "fixture", "--json").returncode, 0)
+
+    def test_git_access_recovery_does_not_accept_a_changed_scope(self):
+        run = self.retrieve()
+        self.install_failing_git()
+        self.env["PRIOR_WORK_FIXTURE_FAIL_GIT"] = "head"
+        self.assertEqual(self.complete(run).returncode, 2)
+        self.env.pop("PRIOR_WORK_FIXTURE_FAIL_GIT")
+        (self.source / "new.md").write_text("A newly available reusable contract.\n")
+        result = self.complete(run)
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("working scope changed; retrieve again", result.stderr)
+
     def test_unrelated_commit_and_identical_rebase_preserve_verified_evidence(self):
         run = self.retrieve()
         (self.repo / "unrelated.txt").write_text("unrelated change\n")

@@ -41,6 +41,18 @@
         {"id": "catches-no-premise-check", "text": "指出无前提状态自检（用户退出也照修）"},
         {"id": "catches-path-relative-binary", "text": "指出 ProgramArguments 用 bash/相对路径而非绝对路径"}
       ]
+    },
+    {
+      "id": 3,
+      "prompt": "帮我开启 Codex 应用本来的自动更新，客户端和 App Server 分开更新也行，我接受中断，但继续跟 beta。只给出接下来会做的操作，别真改系统。已知 CLI 和 App Server 都是官方签名的 0.171.0-alpha.5；App Server 是 --from-cli 安装的，autoUpdateEnabled=true，没有 updater 成功记录。该版本原生 daemon updater 要求稳定 latest 通道、开关开启和受管二进制支持；显式版本选择会固定版本。桌面客户端更新状态没查过。",
+      "expected_output": "分别核对桌面客户端、CLI 与 App Server 的安装所有者和原生更新资格；不把开关 true 或官方签名当成原生自动更新已生效；说明当前固定预发布包的资格限制并保留 beta 偏好；未获额外授权不创建轮询任务，不静默切稳定通道。",
+      "files": [],
+      "assertions": [
+        {"id": "native-owner-per-component", "text": "分别检查实际组件的原生更新入口，桌面状态保持待核"},
+        {"id": "preference-is-not-eligibility", "text": "指出启用偏好和官方包来源不能证明固定包参与自动更新"},
+        {"id": "preserves-selected-channel", "text": "解释该版本固定 beta 包与原生 latest updater 的具体取舍，不自行改通道"},
+        {"id": "no-unrequested-recurring-job", "text": "不把接受中断或自动更新请求转换成额外定时器、LaunchAgent 或轮询脚本"}
+      ]
     }
   ]
 }
