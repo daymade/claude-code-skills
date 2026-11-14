@@ -435,6 +435,8 @@ recovery, or capacity checks before necessary backup/copy/extraction, use
 For exact-file allocation or an already collected inventory, use the
 [read-only diagnosis CLI](daymade-macos/macos-cleaner/references/storage-diagnosis.md).
 When changing measurement, run the SOP's targeted regression suite before shipping.
+For an already-copied directory moving to an external disk, enter
+[macos-cleaner's relocation SOP](daymade-macos/macos-cleaner/references/external-cold-archives.md#verify-an-already-copied-directory-lightly).
 For OrbStack image discovery and physical-release diagnosis, use its
 [Docker reference](daymade-macos/macos-cleaner/references/docker_analysis.md#step-2b-orbstack-specific-analysis).
 For uv cache diagnosis or retirement, enter

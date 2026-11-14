@@ -175,7 +175,18 @@ a completed copy or delete a retained tree solely because a process lost its rep
 Use `scripts/relocate_directory.py` after the lightweight checks above, under
 existing exact-path relocation and permanent-retirement authority. Keep the proof,
 journal, inventory sidecar and lock in a private directory outside both payloads.
-Require macOS `diskutil`, `lsof`, Python 3.10+ and a destination on another device.
+Require macOS `diskutil`, `lsof`, Python 3.10+ and a destination on another filesystem.
+Use the installed `uv` entry for the commands below, or invoke the same script
+with Python directly. Require physical directory roots with matching relative
+names, file sizes and symlink targets; the helper does not normalize filenames.
+Reconcile understood name-normalization differences without collisions before
+planning. The only allowlisted copy difference is an exact destination-only
+regular `.DS_Store` path. Keep other unresolved differences outside a passing proof.
+Keep the source owned by the current user and the executor's working directory
+outside it. The helper rejects overlapping roots, home/system roots, root symlinks
+and nested filesystems. Create an owned journal directory that is not group/world
+writable before planning; the helper does not create its parent. Preserve its
+proof and sidecar for recovery.
 Coordinate scheduled writers and application owners first. The helper checks
 current-user open handles; it cannot establish non-use by other users or future jobs.
 
@@ -216,7 +227,17 @@ directory only if the paths still belong to this operation. Use `retire` only fo
 the recorded internal sibling. It does not follow symlinks and adds owner access
 only to owned read-only directories in that retired tree. Never chmod the archive.
 
-After interruption, read the journal and actual paths, then run:
+After interruption, read the journal and actual paths before choosing the next action:
+
+| Observed state | Next action |
+|---|---|
+| No journal was committed | Preserve any partial sidecar; fix the failed planning condition and use a new journal path. `resume` requires an existing journal. |
+| `planned`, `renaming`, `renamed` | Use `resume` only while the original relocation and permanent-retirement authority still applies; it continues through deletion. |
+| `cutover_verified`, `deleting` | Use `retire` or `resume` to finish only the pending internal retirement. |
+| `rolled_back` | Verify the original physical directory was restored. Fix the consumer or prerequisite, then create a new plan and journal; the rolled-back journal is not resumable. |
+| `complete` | Perform the independent readback below. Re-running `resume` on a complete journal does not revalidate the destination or consumer. |
+
+For a resumable state, run:
 
 ```bash
 uv run scripts/relocate_directory.py resume --state "$STATE"
@@ -225,6 +246,8 @@ uv run scripts/relocate_directory.py resume --state "$STATE"
 Treat `resume` as continuation through permanent retirement, not a read-only status
 command. It reuses a recorded successful consumer check and resumes remaining
 entries. Preserve state on a nonzero exit; resolve the named failure before retry.
-Read JSON progress and the final `complete` state, then independently inspect the
+Treat `removed_entries` after interruption as a checkpointed lower bound, not an
+exact removal count or reclaimed-byte measurement. Read the final `complete` state,
+then independently inspect the
 original symlink, absence of the retired sibling, destination UUID and real consumer.
 Report timestamped internal free space separately from logical bytes relocated.
