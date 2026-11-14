@@ -384,6 +384,11 @@ If you cannot state a concrete refuter, the hypothesis is unfalsifiable. Flag it
 
 ### Step 3: Decisive experiment
 
+For a request rejected only with a content encoding, follow the
+[same-byte compression comparison](references/compressed-request-comparison.md).
+It separates captured wire bytes from reconstructed JSON and synthetic fixtures,
+and keeps transport selection and bounded A/B/A controls observable.
+
 For network-layer problems, use **layered isolation** with verified path differences. Example for `Client → CDN → LB → Origin`:
 
 | Path | Route | Difference from the full path |
