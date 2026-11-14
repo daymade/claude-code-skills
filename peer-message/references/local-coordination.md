@@ -278,7 +278,9 @@ commit。保留原 JSON，不重建信封或手抄 UUID。
 
 `commit-native` 仅将已观测的单个 text block、内容为精确
 `{"threadId":"<本次目标UUID>"}` 的 JSON 回执识别为 `accepted`；MCP `isError`
-缺失或显式 `false` 均可。空、畸形、不同目标、错误标记或异常对象都记 `unknown`，
+缺失或显式 `false` 均可。可选 `structuredContent` 出现时，须与 text 解析出的
+`{threadId}` 完全一致；缺失正常，null、空值或冲突都记 `unknown`。
+空、畸形、不同目标、错误标记、未知其它顶层字段或异常对象也记 `unknown`，
 不从报错文字猜 `not_sent`。accepted 只证明 transport 接受；不证明收件人已读或执行。
 拒绝不换 transport；reserved/unknown 继续沿下面的原通道核定屏障处理。
 其它原生工具继续按实际 schema 使用原有 prepare/send/commit，不将本例参数套给它们。

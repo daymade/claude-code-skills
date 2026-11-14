@@ -1817,7 +1817,7 @@ def native_prepared_input(value):
 def native_transport_outcome(result, thread_id):
     """Recognize the observed native acceptance receipt; all other results stay unknown."""
     if (not isinstance(result, dict) or result.get("isError", False) is not False
-            or set(result) - {"content", "isError", "_meta"}):
+            or set(result) - {"content", "isError", "_meta", "structuredContent"}):
         return "unknown"
     content = result.get("content")
     if not isinstance(content, list) or len(content) != 1 or not isinstance(content[0], dict):
@@ -1829,7 +1829,11 @@ def native_transport_outcome(result, thread_id):
         receipt = json.loads(block["text"])
     except ValueError:
         return "unknown"
-    return "accepted" if receipt == {"threadId": thread_id} else "unknown"
+    if receipt != {"threadId": thread_id}:
+        return "unknown"
+    if "structuredContent" in result and result["structuredContent"] != receipt:
+        return "unknown"
+    return "accepted"
 
 
 def cmd_native_coord(args):

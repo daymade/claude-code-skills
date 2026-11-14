@@ -62,7 +62,8 @@ class NativeExecutionTests(unittest.TestCase):
         return {"content": [{"type": "text", "text": json.dumps({"threadId": B})}], **extra}
 
     def test_original_result_drives_arguments_and_commit_with_missing_or_false_iserror(self):
-        for extra in ({}, {"isError": False}):
+        for extra in ({}, {"isError": False}, {"structuredContent": {"threadId": B}},
+                      {"isError": False, "structuredContent": {"threadId": B}}):
             with self.subTest(extra=extra):
                 prepared = self.prepare()
                 code, call, error = self.run_cli("native-call", prepared)
@@ -138,7 +139,12 @@ class NativeExecutionTests(unittest.TestCase):
                     {"content": [{"type": "text", "text": json.dumps({"threadId": B, "error": True})}]},
                     {"error": "synthetic permission denied before sending"},
                     *[self.accepted(isError=value) for value in (None, "", True, 0)],
-                    {**self.accepted(), "structuredContent": {"status": "unknown"}}]
+                    *[{**self.accepted(), "structuredContent": value} for value in (
+                        None, "", {}, [], {"threadId": A}, {"threadId": None}, {"threadId": ""},
+                        {"threadId": B, "status": "unknown"})],
+                    {"content": [{"type": "text", "text": json.dumps({"threadId": A})}],
+                     "structuredContent": {"threadId": B}},
+                    {**self.accepted(), "other": True}]
         prepared = self.prepare()
         for receipt in variants:
             with self.subTest(receipt=receipt):
