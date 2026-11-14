@@ -341,6 +341,8 @@ lock on the base branch.
 
 For missing checks or a fork run awaiting approval, first follow
 [the run-state diagnosis](workflow_operations.md#resolve-missing-checks-and-fork-approval).
+For a disclosed service-initialization failure followed by an explicit instruction
+to merge, follow the [task-level exception case](ci-demand-and-notifications.md#explicit-merge-after-a-service-initialization-failure).
 Before a squash merge, follow the existing
 [reviewed-head and commit-message procedure](https://github.com/daymade/claude-code-skills/blob/main/github-review-pr/references/remediation_and_landing.md#merge-with-the-reviewed-head-guard).
 
