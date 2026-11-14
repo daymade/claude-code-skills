@@ -622,6 +622,9 @@ For reconciliation of an already-resumed native Goal, read
 directly, binding the current host thread without external-takeover preparation;
 use `continue-codex-work`'s full entry and verified history receipt for external task takeover.
 
+For in-flight CI during task takeover, follow
+[current-operation reconciliation](daymade-claude-code/continue-codex-work/SKILL.md#step-3-reconcile-with-current-reality).
+
 For input appended after an operation's current-thread request, use [read-codex-history's bounded input cursor](daymade-claude-code/read-codex-history/SKILL.md#bounded-current-thread-direct-input-cursor). That owner defines source binding and read failures; the consuming operation owns human authorization. Keep executable commands and source details in the Skill.
 
 For conversation-backup health checks or recent unfinished-request inventories, follow
@@ -803,6 +806,8 @@ For installed-Skill and fresh-host acceptance, enter
 For maintainer source-backed activation, source-watcher deployment, or authorized plugin-to-personal
 Skill conversion, follow
 [Local Source Sync Architecture](daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md).
+For shared-helper or required-launch preparation changes, use its
+[fixture verification route](daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md#verification-checklist).
 Intentional same-name source variants follow that owner's
 [explicit source preferences](daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md#explicit-source-preferences).
 For Skill authoring in an approved independent Fleet clone, follow the

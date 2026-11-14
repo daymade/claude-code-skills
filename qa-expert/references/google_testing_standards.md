@@ -132,6 +132,8 @@ not establish that the assertions detect the required failure.
 
 ## Test Isolation
 
+Do not use production data in tests.
+
 Use the repository's CI-pinned test environment and declared development
 dependencies. A minimal production runtime missing a test-only client is not an
 assertion failure; run that test in its intended environment rather than adding
@@ -308,26 +310,6 @@ remains unresolved. Calibrate the decision against these distinct outcomes.
 - Baseline comparison
 - Quality gates status
 - Next week plan
-
----
-
-## Best Practices Summary
-
-### DO:
-- ✅ Write reproducible test cases
-- ✅ Update tracking after EACH test
-- ✅ File bugs immediately on failure
-- ✅ Follow AAA pattern
-- ✅ Maintain test isolation
-- ✅ Document environment details
-
-### DON'T:
-- ❌ Skip test documentation
-- ❌ Batch CSV updates
-- ❌ Ignore security tests
-- ❌ Use production data in tests
-- ❌ Skip cleanup
-- ❌ Hard-code test data
 
 ---
 

@@ -104,7 +104,7 @@ leaked snapshot. Revalidate mutable admission state at its own effect boundary;
 a configuration snapshot does not freeze permissions. Select this case only for
 an affected snapshot contract, not as a global requirement to cache configuration.
 
-## Incremental capture: three producer/consumer rounds
+## Incremental capture and drift recovery
 
 Select this case for an archive, backup or incremental reader that skips unchanged
 sources. The QA engineer executes the actual producer and consumer in the existing
@@ -115,12 +115,14 @@ field before running the sequence.
 
 | Round | Arrange and act | Required observations |
 |---|---|---|
-| First capture | Create a nonempty source database through its supported writer, with no alternative text/log source. Run capture and consume its actual response. | Producer selects a snapshot; one transfer occurs. Reopen the final archive through the consumer and assert its record identities/count and accepted source version. |
-| Unchanged reuse | Leave the source and archive unchanged and run the same operation again. | Observe the real producer's unchanged response: it may omit a snapshot and report zero newly captured rows. The consumer still reports the nonempty final archive, with the same accepted version; cumulative transfers remain one. Zero changed rows must not be mistaken for an empty final result. |
-| Local drift and recapture | Change only the test-owned archived bytes so their signature no longer matches the accepted version; leave the remote source unchanged. Run again. | The consumer invalidates the local reuse proof before requesting capture. The real producer emits another snapshot; cumulative transfers become two. Reopen the repaired archive and assert the original source records, count and source version, rather than the injected local drift. |
+| First capture | Create a nonempty source database through its supported writer, with no alternative text/log source. Run capture and consume its actual response. | The producer-selected snapshot is transferred. Reopen the final archive through the consumer and assert its record identities/count and accepted source version. |
+| Unchanged reuse | Leave the source and archive unchanged and run the same operation again. | Observe the real producer's unchanged response: it may omit a snapshot and report zero newly captured rows. The consumer still reports the nonempty final archive, with the same accepted version and no transfer for the omitted snapshot. Zero changed rows must not be mistaken for an empty final result. |
+| Local drift and recapture | Change only the test-owned archived bytes so their signature no longer matches the accepted version; leave the remote source unchanged. Run again. | The consumer invalidates the local reuse proof before requesting capture. The real producer emits another snapshot and that snapshot is transferred. Reopen the repaired archive and assert the original source records, count and source version, rather than the injected local drift. |
 
-Count producer invocations and transfers separately: three capture decisions do
-not mean three transfers. Assert the exact version map sent to each producer call,
+Record capture decisions and transfers with their operation/source/snapshot
+identities. Derive expected transfers from the snapshot-bearing responses at run
+time and compare their multiset with the actual transfer events; unchanged reuse
+must add no transfer. Assert the exact version map sent to each producer call,
 each response and the final public result. Validate every unchanged entry used for
 reuse, including a mixed response where another source is nonempty; a missing,
 null, empty or mismatched version must not borrow that other source's success.
@@ -129,8 +131,8 @@ Keep the genuinely empty-source refusal as a separate negative control.
 After each round, independently verify that its exact producer-created staging
 directory was retired and that the staging parent, a sibling operation and the
 archive remain. Do not replace this assertion with a mocked cleanup call. Retain
-the pre-repair failure and an untouched healthy archive control; stop after the
-three transitions and their selected failure cases are decided.
+the pre-repair failure and an untouched healthy archive control; stop when these
+transitions and their selected failure cases are decided.
 
 ## Bounded concurrent probes and ordered publication
 
