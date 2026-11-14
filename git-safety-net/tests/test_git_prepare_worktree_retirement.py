@@ -104,6 +104,199 @@ class WorktreeRetirementTests(unittest.TestCase):
         (self.target / ".env").write_text("SYNTHETIC=unique-fixture-config\n")
         (self.primary / "tracked.txt").write_text("unrelated primary work\n")
 
+    def rebased_pair(self) -> tuple[str, str]:
+        self.plain_target()
+        (self.target / "feature.txt").write_text("work from rebased commit\n")
+        self.commit(self.target, "original feature")
+        old = self.git("-C", str(self.target), "rev-parse", "HEAD").decode().strip()
+        (self.primary / "upstream.txt").write_text("separate upstream input\n")
+        self.commit(self.primary, "upstream change")
+        self.git("-C", str(self.target), "rebase", "main")
+        retained = self.git("-C", str(self.target), "rev-parse", "HEAD").decode().strip()
+        self.assertNotEqual(old, retained)
+        self.git("-C", str(self.primary), "merge", "--ff-only", "plain-task")
+        return old, retained
+
+    def test_known_rebase_withdrawal_uses_retained_ref_without_root_pack(self) -> None:
+        old, retained = self.rebased_pair()
+        before = self.primary_state()
+        state = self.prepare("--known-withdrawal", old + "=" + retained)
+        self.assertEqual(state["version"], 2)
+        snapshot = state["snapshot"]
+        self.assertEqual(snapshot["root_carrier"], "retained-ref")
+        self.assertEqual(snapshot["known_withdrawals"][old]["retained"], retained)
+        self.assertFalse((self.out / "root/recovery.git").exists())
+        self.assertEqual(self.run_tool("prepare", "--resume", "--known-withdrawal", old + "=" + retained).returncode, 0)
+        self.assertEqual(self.run_tool("verify-current").returncode, 0)
+        self.assertEqual(self.primary_state(), before)
+
+    def test_undeclared_and_additional_unique_root_reflog_work_stays_preserved(self) -> None:
+        old, retained = self.rebased_pair()
+        state = self.prepare()
+        self.assertEqual(state["snapshot"]["root_carrier"], "pack")
+        self.assertEqual(self.git("-C", str(self.out / "root/recovery.git"), "show", old + ":feature.txt"),
+                         b"work from rebased commit\n")
+        self.out = self.root / "unique history evidence"
+        (self.target / "unique.txt").write_text("unique old work, not the rebased patch\n")
+        self.commit(self.target, "unique root work")
+        unique = self.git("-C", str(self.target), "rev-parse", "HEAD").decode().strip()
+        self.git("-C", str(self.target), "reset", "--hard", retained)
+        state = self.prepare("--known-withdrawal", old + "=" + retained)
+        self.assertEqual(state["snapshot"]["root_carrier"], "pack")
+        self.assertEqual(self.git("-C", str(self.out / "root/recovery.git"), "show", unique + ":unique.txt"),
+                         b"unique old work, not the rebased patch\n")
+
+    def test_missing_empty_wrong_and_duplicate_withdrawals_refuse_without_output(self) -> None:
+        old, retained = self.rebased_pair()
+        wrong = self.git("-C", str(self.target), "rev-parse", retained + "^").decode().strip()
+        cases = [(), ("",), (old,), (old + "=",), ("=" + retained,),
+                 ("0" * 40 + "=" + retained,), (old + "=" + wrong,),
+                 (retained + "=" + retained,), (old[:10] + "=" + retained,),
+                 (old + "=main",), (old + "=" + "f" * 40,)]
+        for index, values in enumerate(cases):
+            with self.subTest(values=values):
+                self.out = self.root / ("invalid withdrawal " + str(index))
+                result = self.run_tool("prepare", "--known-withdrawal", *values)
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertFalse(self.out.exists())
+        self.out = self.root / "duplicate withdrawal"
+        pair = old + "=" + retained
+        self.assertEqual(self.run_tool("prepare", "--known-withdrawal", pair,
+                                      "--known-withdrawal", pair).returncode, 1)
+        self.assertFalse(self.out.exists())
+
+    def test_withdrawn_seed_cannot_hide_a_unique_nonseed_ancestor(self) -> None:
+        self.primary = self.root / "ancestor primary"
+        self.target = self.root / "ancestor linked target"
+        self.git("init", "-q", "-b", "main", str(self.primary))
+        (self.primary / "baseline.txt").write_text("retained baseline\n")
+        self.commit(self.primary, "baseline")
+        base = self.git("-C", str(self.primary), "rev-parse", "HEAD").decode().strip()
+        (self.primary / "unique.txt").write_text("unique ancestor work\n")
+        self.commit(self.primary, "unique ancestor")
+        unique = self.git("-C", str(self.primary), "rev-parse", "HEAD").decode().strip()
+        (self.primary / "feature.txt").write_text("same declared patch\n")
+        self.commit(self.primary, "old patch")
+        old = self.git("-C", str(self.primary), "rev-parse", "HEAD").decode().strip()
+        self.git("-C", str(self.primary), "worktree", "add", "-q", "--detach", str(self.target), old)
+        self.git("-C", str(self.primary), "reset", "--hard", base)
+        (self.primary / "feature.txt").write_text("same declared patch\n")
+        self.commit(self.primary, "retained patch")
+        retained = self.git("-C", str(self.primary), "rev-parse", "HEAD").decode().strip()
+        self.git("-C", str(self.target), "reset", "--hard", retained)
+        state = self.prepare("--known-withdrawal", old + "=" + retained)
+        root = state["snapshot"]["scopes"][0]["repo"]
+        self.assertNotIn(unique, root["seeds"])
+        self.assertIn(unique, root["closure"])
+        self.assertEqual(state["snapshot"]["root_carrier"], "pack")
+        self.assertEqual(self.run_tool("verify-current").returncode, 0)
+        self.git("-C", str(self.primary), "worktree", "remove", str(self.target))
+        self.git("-C", str(self.primary), "reflog", "expire", "--expire=now", "--all")
+        self.git("-C", str(self.primary), "gc", "--prune=now")
+        self.assertEqual(self.git("-C", str(self.primary), "cat-file", "-t", unique, check=False), b"")
+        self.assertEqual(self.run_tool("verify-recovery").returncode, 0)
+        self.assertEqual(self.git("-C", str(self.out / "root/recovery.git"), "show", unique + ":unique.txt"),
+                         b"unique ancestor work\n")
+
+    def test_whitespace_only_patch_id_match_is_not_a_known_withdrawal(self) -> None:
+        old, prior_retained = self.rebased_pair()
+        (self.target / "feature.txt").write_text("work  from rebased commit\n")
+        self.git("-C", str(self.target), "add", "feature.txt")
+        self.git("-C", str(self.target), "commit", "--amend", "--no-edit", "-q")
+        retained = self.git("-C", str(self.target), "rev-parse", "HEAD").decode().strip()
+        self.git("-C", str(self.primary), "reset", "--hard", "plain-task")
+        original, replacement = TOOL.commit_patch_ids(self.primary, old), TOOL.commit_patch_ids(self.primary, retained)
+        self.assertEqual(original["stable"], replacement["stable"])
+        self.assertNotEqual(original["verbatim"], replacement["verbatim"])
+        result = self.run_tool("prepare", "--known-withdrawal", old + "=" + retained,
+                               "--known-withdrawal", prior_retained + "=" + retained)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("including whitespace", result.stderr)
+        self.assertFalse(self.out.exists())
+
+    def test_withdrawal_resume_proof_and_base_drift_are_rejected(self) -> None:
+        old, retained = self.rebased_pair()
+        self.prepare("--known-withdrawal", old + "=" + retained)
+        checkpoint = (self.out / "state.json").read_bytes()
+        self.assertEqual(self.run_tool("prepare", "--resume").returncode, 1)
+        self.assertEqual(self.run_tool("prepare", "--resume", "--known-withdrawal",
+                                      old + "=" + self.module_head.decode()).returncode, 1)
+        for invalid in (None, {}, "", {old: {"retained": "", "stable": "", "verbatim": ""}}):
+            state = json.loads(checkpoint)
+            state["snapshot"]["known_withdrawals"] = invalid
+            state["snapshot_digest"] = TOOL.fingerprint(state["snapshot"])
+            (self.out / "state.json").write_bytes(TOOL.encoded(state))
+            self.assertEqual(self.run_tool("verify-current").returncode, 1)
+        for parent in (None, "", old, "f" * 40):
+            state = json.loads(checkpoint)
+            state["snapshot"]["known_withdrawals"][old]["parent"] = parent
+            state["snapshot_digest"] = TOOL.fingerprint(state["snapshot"])
+            (self.out / "state.json").write_bytes(TOOL.encoded(state))
+            self.assertEqual(self.run_tool("verify-current").returncode, 1)
+            self.assertEqual(self.run_tool("verify-recovery").returncode, 1)
+        (self.out / "state.json").write_bytes(checkpoint)
+        self.git("-C", str(self.primary), "commit", "--allow-empty", "-qm", "base advanced")
+        self.assertEqual(self.run_tool("verify-current").returncode, 1)
+        self.assertEqual(self.run_tool("verify-recovery").returncode, 1)
+        self.assertEqual((self.out / "state.json").read_bytes(), checkpoint)
+
+    def test_known_withdrawal_recovery_after_source_and_old_object_are_removed(self) -> None:
+        old, retained = self.rebased_pair()
+        self.prepare("--known-withdrawal", old + "=" + retained)
+        self.assertEqual(self.run_tool("verify-current").returncode, 0)
+        self.git("-C", str(self.primary), "worktree", "remove", str(self.target))
+        self.git("-C", str(self.primary), "reflog", "expire", "--expire=now", "--all")
+        self.git("-C", str(self.primary), "gc", "--prune=now")
+        missing = subprocess.run(["git", "-C", str(self.primary), "cat-file", "-e", old],
+                                 env=self.env, capture_output=True)
+        self.assertNotEqual(missing.returncode, 0)
+        self.assertEqual(self.run_tool("verify-recovery").returncode, 0)
+        self.assertEqual(self.git("-C", str(self.primary), "show", retained + ":feature.txt"),
+                         b"work from rebased commit\n")
+        self.assertFalse((self.out / "root/recovery.git").exists())
+
+    def test_known_withdrawal_through_a_source_symlink_with_spaces(self) -> None:
+        old, retained = self.rebased_pair()
+        entry = self.root / "installed skill entry with spaces.py"
+        entry.symlink_to(SCRIPT)
+        result = subprocess.run([str(entry), "prepare", "--out", str(self.out), "--worktree", str(self.target),
+                                 "--known-withdrawal", old + "=" + retained], env=self.env,
+                                cwd=self.root.parent, text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('"status": "prepared"', result.stdout)
+        self.assertEqual(json.loads((self.out / "state.json").read_text())["snapshot"]["root_carrier"], "retained-ref")
+
+    def test_known_withdrawal_cannot_hide_an_unmerged_current_tip(self) -> None:
+        old, retained = self.rebased_pair()
+        (self.target / "unfinished.txt").write_text("current unique work\n")
+        self.commit(self.target, "unmerged current work")
+        result = self.run_tool("prepare", "--known-withdrawal", old + "=" + retained)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("exact current tip", result.stderr)
+        self.assertFalse(self.out.exists())
+
+    def test_empty_and_merge_commits_cannot_be_declared_withdrawn(self) -> None:
+        old, retained = self.rebased_pair()
+        self.git("-C", str(self.target), "commit", "--allow-empty", "-qm", "old empty commit")
+        empty = self.git("-C", str(self.target), "rev-parse", "HEAD").decode().strip()
+        self.git("-C", str(self.target), "reset", "--hard", retained)
+        self.git("-C", str(self.primary), "commit", "--allow-empty", "-qm", "retained empty commit")
+        kept_empty = self.git("-C", str(self.primary), "rev-parse", "HEAD").decode().strip()
+        result = self.run_tool("prepare", "--known-withdrawal", empty + "=" + kept_empty)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("nonempty", result.stderr)
+        self.assertFalse(self.out.exists())
+        tree = self.git("-C", str(self.target), "rev-parse", "HEAD^{tree}").decode().strip()
+        parent = self.git("-C", str(self.target), "rev-parse", retained + "^").decode().strip()
+        merged = self.git("-C", str(self.target), "commit-tree", tree, "-p", retained, "-p", parent,
+                          data=b"withdrawn merge fixture\n").decode().strip()
+        self.git("-C", str(self.target), "update-ref", "HEAD", merged)
+        self.git("-C", str(self.target), "update-ref", "HEAD", retained)
+        result = self.run_tool("prepare", "--known-withdrawal", merged + "=" + retained)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("single-parent", result.stderr)
+        self.assertFalse(self.out.exists())
+
     def test_plain_worktree_reuses_carrier_and_preserves_config_after_removal(self) -> None:
         self.plain_target()
         before = self.primary_state()
