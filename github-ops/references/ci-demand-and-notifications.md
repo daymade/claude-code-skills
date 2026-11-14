@@ -78,6 +78,8 @@ deployment or production acceptance. Shared-service repair retains its own scope
 interruption authorization; a merge request does not grant it. Finish the task-owned branch
 and worktree cleanup through `git-safety-net` without changing the repository's release line.
 
+### Account allowance
+
 For an account allowance question, obtain the current billing report for the
 actual owner and period. Personal and organization billing are separate scopes:
 
