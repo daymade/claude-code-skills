@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **github-ops** (v1.16.4): Materialize tracked checker configuration before sparse publication, restore omitted inputs from the pinned ref, and rerun the original checks without changing policy or payload.
+
 - **competitors-analysis** (v1.6.7): Respect source-storage migration handoffs, preserve read-only pinned analysis, and expand open-ended discovery by the user's workflow alternatives.
 
 - **macos-cleaner** (`daymade-macos` v1.32.0): Replace full-directory hashing in external relocation with inventory, Git/local-only work checks and bounded content checks. Add journaled cutover, consumer-failure rollback and resumable exact internal retirement. Change type: authorized workflow redesign and additive execution capability.
