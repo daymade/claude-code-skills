@@ -61,6 +61,25 @@ not run. Keep that result distinct from assertion failures, environment/setup
 failures, cancellations and jobs still queued. Never call an unexecuted test green
 or explain it as a code regression. Preserve unrelated genuine failures.
 
+### Explicit merge after a service-initialization failure
+
+If a service image cannot be pulled before checkout, the application build and tests have
+not run. Record the setup failure and any existing local validation with their actual scope.
+Read effective repository requirements and the task contract before calling the PR blocked.
+
+An owner's explicit instruction after that disclosure can authorize a task-level merge
+exception. It does not satisfy or bypass repository-required checks or approvals. When those
+requirements are satisfied or positively absent and the instruction covers this PR, follow
+the [normal exact-head merge and readback](pr_operations.md#merging-prs). Reassess the next
+action under that instruction rather than repeat the earlier automatic-merge stopping reason.
+
+Keep failed/skipped CI results intact: merged source does not establish test success,
+deployment or production acceptance. Shared-service repair retains its own scope and
+interruption authorization; a merge request does not grant it. Finish the task-owned branch
+and worktree cleanup through `git-safety-net` without changing the repository's release line.
+
+### Account allowance
+
 For an account allowance question, obtain the current billing report for the
 actual owner and period. Personal and organization billing are separate scopes:
 

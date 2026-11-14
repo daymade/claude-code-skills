@@ -599,10 +599,12 @@ manifest and recheck both the tip and retained carrier immediately before deleti
 containment after a squash is not this exact-object exemption. Unique WIP, ignored files, independent
 clone metadata and submodule objects still need their existing preservation checks.
 
-For a clean linked worktree with initialized submodules or borrowed module objects, use
+For a clean linked worktree, including one without submodules, use
 [the resumable worktree preparation helper](references/worktree-retirement-helper.md).
-It checkpoints recovery stages and reuses verified carriers; it never removes the target or
-replaces Mode E's containment, ownership, occupancy and action-time checks.
+It handles ordinary dependency caches as well as initialized submodules and borrowed module
+objects. Reuse its checkpoints and verified carriers instead of writing a separate inventory
+script; it never removes the target or replaces Mode E's containment, ownership, occupancy
+and action-time checks.
 
 ```bash
 # Only when the preservation decision requires a recovery export.
