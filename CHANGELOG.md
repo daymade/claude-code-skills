@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **tunnel-doctor** (v1.17.17): Correct Shadowrocket rule-order and module-activation guidance; preserve backups and original VPN intent, and separate dated compile experiments from current route verification.
+
 - **git-safety-net** (v1.28.3): Reuse retained history for explicitly verified rebase withdrawals, preserve other reflog work, and bind the opt-in boundary to a versioned recovery checkpoint.
 - **macos-cleaner** (`daymade-macos` v1.32.1): Align relocation recovery, prerequisite and progress guidance with the executor; add the repository entry route and remove redundant retention history and duplicated Git retirement procedures. Change type: documentation correction and SSOT consolidation.
 
