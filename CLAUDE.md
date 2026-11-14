@@ -48,7 +48,7 @@ claude plugin install daymade-skill@daymade-skills
 
 ### Skill Validation and Packaging
 
-For StepFun speech controls, cloning or streaming changes, read
+For StepFun speech controls, literal-text/directive ambiguity, cloning or streaming changes, read
 [`stepfun-tts`'s native API reference](daymade-audio/stepfun-tts/references/api_reference.md).
 Verify both the standalone CLI and the actual flat `llmreg.wrapper_for` loader;
 ordinary package imports alone do not establish consumer compatibility.
