@@ -203,6 +203,8 @@ Proxy-selection and disruptive VPN changes follow tunnel-doctor's
 [proxy-conflict procedure](tunnel-doctor/references/proxy_conflict_reference.md) and
 [network-change recovery](tunnel-doctor/references/network_change_recovery.md). For Shadowrocket rapid toggle loops or Network Extension startup assertions, read its
 [Network Extension recovery section](tunnel-doctor/references/network_change_recovery.md#network-extension-state-and-stale-listener-recovery).
+For Shadowrocket module activation or database rule-order claims, use the same
+proxy-conflict reference; keep its dated build observations separate from current write acceptance.
 When a watchdog is suspected, first align the actual actor and state transitions through
 [macos-watchdog troubleshooting](daymade-macos/macos-watchdog/SKILL.md#troubleshooting-quick-map).
 For unresolved tunnel packet-loss
