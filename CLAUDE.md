@@ -94,14 +94,9 @@ For user-selected competitor-analysis collection destinations, load the
 [collection destination route](competitors-analysis/references/collection_destination.md).
 For running an original application demo, follow that Skill's
 [original-app demo recipe](competitors-analysis/references/original-app-demo.md).
-For file-backed persistence and CLI acceptance (including wrapper argument forwarding
-and compatibility aliases), transaction recovery tests,
-financial migration/fixture acceptance, admission/recovery bindings, runtime compatibility or project-bound release acceptance, enter
-[qa-expert](qa-expert/SKILL.md); its test-case routes select the detailed recipes.
-For required runtime capability probes, path normalization, drive-relative adapter cases,
-subprocess encoding or actual backend-execution acceptance,
-follow its [runtime compatibility recipe](qa-expert/references/runtime-compatibility-acceptance.md)
-and select the affected boundary before starting validation.
+For QA plans and acceptance of changed persistence, CLI or runtime boundaries, enter
+[qa-expert](qa-expert/SKILL.md) and select the affected contract from its current
+test-case routes; keep the recipe inventory in that owner.
 
 For choosing or reviewing a library, framework, storage, data format, model,
 build-vs-buy or architecture — including 用哪个 / 选什么框架 / 要不要自建 / A 还是 B /
@@ -324,9 +319,8 @@ For persistent Python service installation, environment reuse or startup, follow
 
 ### Rendered UI delivery acceptance
 
-For rendered UI freshness, long-list entry controls and actual scroll movement,
-multiline request/log tables, delayed editor/batch responses or deployment acceptance, enter
-[frontend-visual-qa](frontend-visual-qa/SKILL.md).
+For acceptance of rendered UI and visible behavior, enter
+[frontend-visual-qa](frontend-visual-qa/SKILL.md) and follow its current entry route.
 For publication-wide clutter or AI Slop despite passing local checks, including
 controls, deks and expanded summaries, use its
 [publication journey calibration](frontend-visual-qa/references/publication-journey-cases.md).
@@ -1017,9 +1011,9 @@ Before selecting recovery material for a named branch or worktree, apply
 [Preservation before retirement](git-safety-net/references/merge_verification.md#preservation-before-retirement).
 For a linked checkout, follow the owning
 [worktree-retirement procedure](git-safety-net/references/merge_verification.md#worktree-retirement--prove-the-checkout-is-disposable-before-removal).
-For interrupted preservation, initialized submodules or borrowed object stores, use its
+For linked-worktree recovery preparation and its supported-state boundaries, use its
 [preservation helper](git-safety-net/references/worktree-retirement-helper.md).
-When current content differs from an older published review, use that reference's
+When current content differs from an older published review, use the
 [historical publication example](git-safety-net/references/merge_verification.md#worked-example--old-review-content-landed-through-another-ref)
 before deciding supersession; historical equality alone does not establish current intent.
 Resolving conflicts toward upstream can erase the very delta being checked;
