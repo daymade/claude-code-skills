@@ -305,6 +305,21 @@ class SourceFreshnessTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 2, result.stdout)
                 self.assertIn("scope dependencies changed", result.stderr)
 
+    def test_unresolved_required_coverage_fails_before_git_probes(self):
+        run = self.retrieve()
+        path = Path(run["run_path"])
+        self.install_failing_git()
+        self.env["PRIOR_WORK_FIXTURE_FAIL_GIT"] = "head"
+        for status in ("partial", "failed", "manual_required"):
+            with self.subTest(status=status):
+                payload = json.loads(path.read_text())
+                payload["coverage"][0]["status"] = status
+                path.write_text(json.dumps(payload))
+                result = self.complete(run)
+                self.assertEqual(result.returncode, 2, result.stdout)
+                self.assertIn("Required carriers are unresolved: ['docs']", result.stderr)
+                self.assertFalse((self.root / "state" / "receipts").exists())
+
     def test_new_requirement_still_invalidates_the_old_run(self):
         run = self.retrieve()
         event = {"hook_event_name": "UserPromptSubmit", "session_id": "fixture",

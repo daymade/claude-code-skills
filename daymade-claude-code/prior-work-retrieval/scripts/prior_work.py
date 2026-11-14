@@ -13,6 +13,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -314,6 +315,32 @@ def _source_paths(
         # Representing both sides of a file/directory replacement in one
         # synthetic tree is ambiguous; conservatively require a new search.
         return names
+    for value in names:
+        path = Path(value)
+        if path.is_absolute() or not path.parts or ".." in path.parts:
+            raise PriorWorkError("Unsafe source-relative Git path")
+    # A simple final component gives a necessary (not sufficient) condition.
+    # Avoid materializing ignored output files that cannot match any include;
+    # ripgrep still decides directory/glob semantics for every retained name.
+    # Config can alter case/glob behavior, so keep the original path then.
+    if source["includes"] and not os.environ.get("RIPGREP_CONFIG_PATH"):
+        suffixes = []
+        basenames = {".gitignore", ".ignore", ".rgignore"}
+        for pattern in source["includes"]:
+            final = pattern.rsplit("/", 1)[-1]
+            if pattern.startswith("!") or "\\" in pattern:
+                break
+            if re.fullmatch(r"\*\.[A-Za-z0-9]+", final):
+                suffixes.append(final[1:])
+            elif re.fullmatch(r"[A-Za-z0-9_.-]+", final):
+                basenames.add(final)
+            else:
+                break
+        else:
+            names = [name for name in names
+                     if Path(name).name in basenames or name.endswith(tuple(suffixes))]
+            if not names:
+                return []
     with tempfile.TemporaryDirectory(prefix="prior-work-paths-") as directory:
         # rg globs containing '/' are relative to the invocation directory,
         # even when the searched root is absolute. Preserve that relationship.
@@ -324,8 +351,6 @@ def _source_paths(
         cwd.mkdir(parents=True, exist_ok=True)
         for value in names:
             path = Path(value)
-            if path.is_absolute() or not path.parts or ".." in path.parts:
-                raise PriorWorkError("Unsafe source-relative Git path")
             target = root / path
             target.parent.mkdir(parents=True, exist_ok=True)
             target.touch()
@@ -1247,24 +1272,6 @@ def complete(
     unknown = (set(reuse) | set(adapt) | set(reject)) - set(candidates)
     if unknown:
         raise PriorWorkError(f"Unknown candidate IDs: {sorted(unknown)}")
-    # Rebinding preserves required coverage and sources with an actual decision.
-    # Unused optional source maintenance cannot invalidate required evidence.
-    decision_sources = {candidates[key]["source_id"] for key in set(reuse) | set(adapt) | set(reject)}
-    verified_scopes = {}
-    scope_checks = []
-    for row in run.get("coverage", []):
-        if not row.get("required") and row["source_id"] not in decision_sources:
-            continue
-        if "source_scope" not in row or row["source_scope"] == "legacy":
-            continue  # Legacy and non-Git/command coverage keep their contract.
-        if row["source_scope"] != "git":
-            raise PriorWorkError("Retrieval source scope contract is invalid; retrieve again")
-        source = next((s for s in manifest["sources"] if s["id"] == row["source_id"]), None)
-        if not source or row.get("source_sha256") != _source_hash(source):
-            raise PriorWorkError("Retrieval source definition changed after retrieval; retrieve again")
-        recorded = row.get("source_git_state")
-        verified_scopes[(source["id"], _source_hash({"state": recorded}))] = _verify_source_scope(source, recorded)
-        scope_checks.append((source, recorded))
     adopted = set(reuse) | set(adapt)
     if not adopted:
         if not no_reuse_reason or len(no_reuse_reason.strip()) < 20:
@@ -1298,6 +1305,25 @@ def complete(
         raise PriorWorkError(
             f"Required carriers are unresolved: {sorted(unresolved_required)}"
         )
+    # Reject known coverage gaps before any expensive freshness probes.
+    # Rebinding preserves required coverage and sources with an actual decision.
+    # Unused optional source maintenance cannot invalidate required evidence.
+    decision_sources = {candidates[key]["source_id"] for key in set(reuse) | set(adapt) | set(reject)}
+    verified_scopes = {}
+    scope_checks = []
+    for row in run.get("coverage", []):
+        if not row.get("required") and row["source_id"] not in decision_sources:
+            continue
+        if "source_scope" not in row or row["source_scope"] == "legacy":
+            continue  # Legacy and non-Git/command coverage keep their contract.
+        if row["source_scope"] != "git":
+            raise PriorWorkError("Retrieval source scope contract is invalid; retrieve again")
+        source = next((s for s in manifest["sources"] if s["id"] == row["source_id"]), None)
+        if not source or row.get("source_sha256") != _source_hash(source):
+            raise PriorWorkError("Retrieval source definition changed after retrieval; retrieve again")
+        recorded = row.get("source_git_state")
+        verified_scopes[(source["id"], _source_hash({"state": recorded}))] = _verify_source_scope(source, recorded)
+        scope_checks.append((source, recorded))
     decisions = []
     for decision, mapping in (("reuse", reuse), ("adapt", adapt), ("reject", reject)):
         for candidate_id, reason in mapping.items():
