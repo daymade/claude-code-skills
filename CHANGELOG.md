@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **macos-watchdog** (`daymade-macos` v1.31.2): Print the supported idle-job trigger after deployment and align repository operator entries with the native-update and retrieval-completion SOPs.
+- **macos-watchdog** (`daymade-macos` v1.31.2): Print exact-job registration and idle-job commands with the selected domain's privileges; align repository operator entries with the native-update and retrieval-completion SOPs.
 
 - **stepfun-tts** (`daymade-audio` v1.58.4): Distinguish literal parentheses from delivery instructions, count the complete tagged input, and preserve native request forwarding without treating transport fidelity as audible control.
 - **local-codex / macos-watchdog** (`daymade-codex` v2.4.10, `daymade-macos` v1.31.1): Verify native updater ownership and channel eligibility per component; keep extra scheduled updaters opt-in and preserve explicitly requested watchdogs.
