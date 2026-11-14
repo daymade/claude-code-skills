@@ -15,6 +15,7 @@ import re
 import subprocess
 import sys
 import tempfile
+from lark_result import CLIError, parse_cli_result
 
 
 class CaptureError(Exception):
@@ -34,9 +35,9 @@ def call_cli(args, profile=None):
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise CaptureError(f"lark-cli unavailable: {type(exc).__name__}") from exc
     try:
-        envelope = json.loads(result.stdout if result.returncode == 0 else result.stderr)
-    except (ValueError, TypeError) as exc:
-        raise CaptureError(f"lark-cli returned invalid JSON (exit {result.returncode})") from exc
+        envelope = parse_cli_result(result.stdout, result.stderr, result.returncode)
+    except CLIError as exc:
+        raise CaptureError(str(exc)) from exc
     if not isinstance(envelope, dict):
         raise CaptureError("lark-cli envelope is not an object")
     if result.returncode != 0 or envelope.get("ok") is not True:

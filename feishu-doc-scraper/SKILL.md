@@ -79,6 +79,11 @@ What is the source?
 
 **Resolve wiki nodes before choosing a handler.** Use the actual `obj_type` and its installed CLI guide; for example, `bitable` uses `lark-base`. A `3380002 Unsupported document type` response from `docs +fetch` identifies a handler mismatch, not a permission denial. If the required guide is unavailable, retain the token and type in the worklist as unextracted.
 
+For Wiki Base/Sheets with a bound account, use [table capture](references/table-capture.md)
+and `scripts/capture_table.py` for faithful exports, readable records and attachment
+provenance. It normalizes Wiki locators, preserves structured CLI errors from both
+streams, and keeps unsupported fields, truncation or missing attachments partial.
+
 A collection/hub is just a docx whose body references other docs — **Path A handles it by recursively following the reference graph**, not by visiting pages in a browser.
 
 ## Path A — lark-cli API extraction (primary)
