@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **feishu-doc-scraper v1.14.1 / report-with-html v1.7.1**: Make archive commands independent of the caller's working directory, document PDF adapter imports, remove copied implementation limits and add repository task routes.
+
 - **auto-repo-setup** (v2.2.1): Select checks from the actual input changes, reuse matching successful evidence, and distinguish guard maintenance and diagnostic success from verified publication recovery.
 - **prior-work-retrieval** (`daymade-claude-code` v5.1.14): Skip impossible include matches before materializing Git scope paths while retaining ripgrep's final decision; reject incomplete required coverage before freshness probes. Change type: bug fix.
 - **peer-message** (v1.25.8): Read existing current-schema coordination status without write initialization or cleanup, preserving first-use bootstrap, legacy migration and integrity rejection.
