@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **github-ops** (v1.16.3): Route normal PR merges to the existing explicit setup-failure exception case; align repository operator entries with their owning contracts.
+
 - **git-safety-net** (v1.28.2): Route ordinary linked worktrees and explicitly rebuildable dependency caches through the existing retirement helper; preserve unique configuration and detect later changes.
 - **github-ops** (v1.16.2): Clarify explicitly authorized task-level merge exceptions after service initialization fails, preserving repository-required gates and distinct validation, deployment and repair authority.
 
