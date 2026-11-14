@@ -49,6 +49,70 @@ def text_git(path: Path, *args: str) -> str:
     return git(path, *args).decode("utf-8", "surrogateescape").strip()
 
 
+FULL_SHA = re.compile(r"[0-9a-f]{40}\Z")
+
+
+def withdrawal_arguments(values: list[str]) -> dict[str, str]:
+    result = {}
+    for value in values:
+        pair = value.split("=")
+        require(len(pair) == 2 and all(FULL_SHA.fullmatch(item) for item in pair)
+                and pair[0] != pair[1] and pair[0] not in result,
+                "Known withdrawal requires distinct full OLD=RETAINED commit IDs, once per OLD")
+        result[pair[0]] = pair[1]
+    return result
+
+
+def commit_patch_ids(path: Path, commit: str) -> dict[str, str]:
+    parents = text_git(path, "rev-list", "--parents", "-n", "1", commit).split()
+    require(len(parents) == 2 and parents[0] == commit,
+            "Known withdrawal requires ordinary single-parent commits")
+    patch = git(path, "diff-tree", "--no-commit-id", "--binary", "--full-index", "--no-renames",
+                "--no-ext-diff", "--no-textconv", "--no-color", "-p", parents[1], commit)
+    result = {}
+    for mode in ("stable", "verbatim"):
+        rows = git(path, "patch-id", "--" + mode, data=patch).splitlines()
+        require(len(rows) == 1 and len(rows[0].split()) == 2
+                and FULL_SHA.fullmatch(rows[0].split()[0].decode()),
+                "Known withdrawal patch must be nonempty and have a complete patch ID")
+        result[mode] = rows[0].split()[0].decode()
+    return result
+
+
+def withdrawal_proof(primary: Path, root: dict, retained: set[str], declared: dict) -> dict:
+    require(isinstance(declared, dict), "Known withdrawals must be explicit commit pairs")
+    if not declared:
+        return {}
+    require(root["head"] in retained, "Known withdrawal requires the exact current tip in retained base history")
+    require(set(declared).issubset(set(root["seeds"]) - retained),
+            "Known withdrawal OLD is not an unretained root reflog commit")
+    proof = {}
+    for old, replacement in declared.items():
+        require(isinstance(old, str) and FULL_SHA.fullmatch(old)
+                and isinstance(replacement, str) and FULL_SHA.fullmatch(replacement)
+                and old != replacement and replacement in retained,
+                "Known withdrawal RETAINED must be a full commit ID in retained base history")
+        original = commit_patch_ids(primary, old)
+        kept = commit_patch_ids(primary, replacement)
+        # Stable patch IDs ignore whitespace; verbatim IDs protect that work too.
+        require(original == kept, "Known withdrawal patches differ (including whitespace)")
+        proof[old] = {"retained": replacement, **kept}
+    return proof
+
+
+def frozen_withdrawals(snapshot: dict) -> dict[str, str]:
+    if "known_withdrawals" not in snapshot:
+        return {}
+    proof = snapshot["known_withdrawals"]
+    require(isinstance(proof, dict) and bool(proof), "Frozen known withdrawals are missing or empty")
+    for old, row in proof.items():
+        require(isinstance(old, str) and FULL_SHA.fullmatch(old) and isinstance(row, dict)
+                and set(row) == {"retained", "stable", "verbatim"}
+                and all(isinstance(value, str) and FULL_SHA.fullmatch(value) for value in row.values())
+                and old != row["retained"], "Frozen known withdrawal proof is invalid")
+    return {old: row["retained"] for old, row in proof.items()}
+
+
 def digest(path: Path) -> str:
     value = hashlib.sha256()
     with path.open("rb") as stream:
@@ -303,7 +367,7 @@ def preflight_recipes(target: Path, scopes: list[dict], recipes: dict) -> None:
     require(not unused, "Rebuildable declaration matches no ignored entry: " + ", ".join(unused))
 
 
-def scope_snapshot(target: Path, base_ref: str, recipes: dict) -> dict:
+def scope_snapshot(target: Path, base_ref: str, recipes: dict, known_withdrawals: dict | None = None) -> dict:
     for path in recipes:
         require(os.path.lexists(target / path), "Rebuildable path does not exist: " + path)
         require(not any(path != other and path.startswith(other + "/") for other in recipes),
@@ -389,10 +453,15 @@ def scope_snapshot(target: Path, base_ref: str, recipes: dict) -> dict:
     # The linked admin's reflog may retain an older detached commit too. All
     # those exact commits need the carrier, not just the current HEAD.
     retained = set(git(primary, "rev-list", base_oid).decode().splitlines())
-    contained = set(scopes[0]["repo"]["seeds"]).issubset(retained)
-    return {"target": str(target), "primary": str(primary), "common": str(common),
+    proof = withdrawal_proof(primary, scopes[0]["repo"], retained,
+                             {} if known_withdrawals is None else known_withdrawals)
+    contained = (set(scopes[0]["repo"]["seeds"]) - retained).issubset(proof)
+    snapshot = {"target": str(target), "primary": str(primary), "common": str(common),
             "base_ref": base_ref, "base_oid": base_oid, "root_carrier": "retained-ref" if contained else "pack",
             "recipes": recipes, "scopes": scopes, "uninitialized": sorted(uninitialized, key=lambda x: x["relative"])}
+    if proof:
+        snapshot["known_withdrawals"] = proof
+    return snapshot
 
 
 def copy_ignored(scope: dict, dest: Path) -> None:
@@ -468,9 +537,11 @@ def validate_state(out: Path) -> dict:
     require(checkpoint.is_file() and not checkpoint.is_symlink(), "Checkpoint is missing or indirect")
     state = json.loads(checkpoint.read_text())
     require(isinstance(state, dict) and type(state.get("version")) is int
-            and state["version"] == 1, "Unsupported checkpoint version")
+            and state["version"] in (1, 2), "Unsupported checkpoint version")
     snapshot = state.get("snapshot")
     require(isinstance(snapshot, dict) and bool(snapshot.get("scopes")), "Missing/empty frozen scope")
+    declared = frozen_withdrawals(snapshot)
+    require(bool(declared) == (state["version"] == 2), "Checkpoint withdrawal version/proof mismatch")
     require(state.get("snapshot_digest") == fingerprint(snapshot), "Frozen checkpoint digest mismatch")
     require(isinstance(snapshot["scopes"], list)
             and all(isinstance(scope, dict) and isinstance(scope.get("name"), str)
@@ -492,27 +563,42 @@ def verify(out: Path, current: bool) -> dict:
     for scope in snapshot["scopes"]:
         verify_stage(scope, out / scope["name"], scope["name"] != "root" or snapshot["root_carrier"] == "pack")
     if snapshot["root_carrier"] == "retained-ref":
-        require(text_git(Path(snapshot["primary"]), "rev-parse", "--verify", snapshot["base_ref"] + "^{commit}") == snapshot["base_oid"], "Retained base ref moved")
-        git(Path(snapshot["primary"]), "cat-file", "-e", snapshot["scopes"][0]["repo"]["head"] + "^{commit}")
+        primary = Path(snapshot["primary"])
+        require(text_git(primary, "rev-parse", "--verify", snapshot["base_ref"] + "^{commit}") == snapshot["base_oid"], "Retained base ref moved")
+        retained = set(git(primary, "rev-list", snapshot["base_oid"]).decode().splitlines())
+        root = snapshot["scopes"][0]["repo"]
+        declared = frozen_withdrawals(snapshot)
+        require(root["head"] in retained and (set(root["seeds"]) - retained).issubset(declared),
+                "Retained base does not cover root history or its known withdrawals")
+        for old, replacement in declared.items():
+            require(old in root["seeds"] and old not in retained and replacement in retained,
+                    "Frozen known withdrawal is outside retained root history")
+            kept = commit_patch_ids(primary, replacement)
+            require(kept == {key: snapshot["known_withdrawals"][old][key] for key in ("stable", "verbatim")},
+                    "Retained known withdrawal patch changed")
     if current:
-        now = scope_snapshot(Path(snapshot["target"]), snapshot["base_ref"], snapshot["recipes"])
+        now = scope_snapshot(Path(snapshot["target"]), snapshot["base_ref"], snapshot["recipes"], frozen_withdrawals(snapshot))
         require(now == snapshot, "Target/ref/module/ignored inventory changed; do not remove")
     return {"status": "verified", "mode": "current" if current else "recovery", "stages": len(snapshot["scopes"]),
             "next": "Now run the final standalone occupancy check and reconfirm ownership/locks/scheduler use; if clear, make the already-authorized normal removal the next operation with no intervening command" if current else "Recovery carriers readable; removal itself has not been verified"}
 
 
-def prepare(target: Path, out: Path, base_ref: str, recipes: dict, resume: bool) -> dict:
+def prepare(target: Path, out: Path, base_ref: str, recipes: dict, resume: bool,
+            known_withdrawals: dict | None = None) -> dict:
+    declared = {} if known_withdrawals is None else known_withdrawals
     if resume:
         state = validate_state(out)
         frozen = state["snapshot"]
-        require(str(target) == frozen["target"] and base_ref == frozen["base_ref"] and recipes == frozen["recipes"], "Resume target/base/recipes differ from checkpoint")
-        require(scope_snapshot(target, base_ref, recipes) == frozen, "Target changed since checkpoint; preserve changes and start new evidence")
+        require(str(target) == frozen["target"] and base_ref == frozen["base_ref"] and recipes == frozen["recipes"]
+                and declared == frozen_withdrawals(frozen), "Resume target/base/recipes/withdrawals differ from checkpoint")
+        require(scope_snapshot(target, base_ref, recipes, declared) == frozen, "Target changed since checkpoint; preserve changes and start new evidence")
     else:
         require(not out.exists(), "Evidence directory already exists; use --resume for its exact checkpoint")
-        snapshot = scope_snapshot(target, base_ref, recipes)
+        snapshot = scope_snapshot(target, base_ref, recipes, declared)
         require(not beneath(out, target) and not beneath(out, Path(snapshot["common"])), "Evidence must be outside target/common store")
         out.mkdir(mode=0o700, parents=True, exist_ok=False)
-        state = {"version": 1, "snapshot": snapshot, "snapshot_digest": fingerprint(snapshot), "completed": []}
+        state = {"version": 2 if declared else 1, "snapshot": snapshot,
+                 "snapshot_digest": fingerprint(snapshot), "completed": []}
         atomic_json(out / "state.json", state)
     for scope in state["snapshot"]["scopes"]:
         name = scope["name"]
@@ -538,7 +624,7 @@ def prepare(target: Path, out: Path, base_ref: str, recipes: dict, resume: bool)
             atomic_json(out / "state.json", state)
         print(json.dumps({"stage_complete": name}), flush=True)
     # Recheck source CAS, not another full carrier hashing pass in the same run.
-    require(scope_snapshot(target, base_ref, recipes) == state["snapshot"], "Target changed during preparation")
+    require(scope_snapshot(target, base_ref, recipes, declared) == state["snapshot"], "Target changed during preparation")
     return {"status": "prepared", "stages": len(state["completed"]), "next": "Run verify-current before authorized removal; preparation is not removal authority"}
 
 
@@ -551,8 +637,11 @@ def main() -> int:
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--rebuildable", action="append", default=[], metavar="PATH=RECIPE",
                         help="existing target-relative ignored path and explicit reproduction recipe; checked before content scanning")
+    parser.add_argument("--known-withdrawal", action="append", default=[], metavar="OLD=RETAINED",
+                        help="explicit withdrawn rebase commit pair; full IDs, exact tip retained and matching nonempty patches required")
     args = parser.parse_args()
     try:
+        withdrawals = withdrawal_arguments(args.known_withdrawal)
         recipes = {}
         for value in args.rebuildable:
             path, recipe = value.split("=", 1)
@@ -562,9 +651,9 @@ def main() -> int:
             recipes[path] = recipe.strip()
         if args.mode == "prepare":
             require(args.worktree is not None, "prepare requires --worktree")
-            result = prepare(args.worktree.resolve(), args.out.resolve(), args.base_ref, recipes, args.resume)
+            result = prepare(args.worktree.resolve(), args.out.resolve(), args.base_ref, recipes, args.resume, withdrawals)
         else:
-            require(args.worktree is None and not args.resume and not recipes, "Verification reads only the frozen checkpoint")
+            require(args.worktree is None and not args.resume and not recipes and not withdrawals, "Verification reads only the frozen checkpoint")
             result = verify(args.out.resolve(), args.mode == "verify-current")
         print(json.dumps(result, sort_keys=True))
         return 0

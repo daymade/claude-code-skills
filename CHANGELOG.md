@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **git-safety-net** (v1.28.3): Reuse retained history for explicitly verified rebase withdrawals, preserve other reflog work, and bind the opt-in boundary to a versioned recovery checkpoint.
+
 - **stepfun-tts** (`daymade-audio` v1.58.4): Distinguish literal parentheses from delivery instructions, count the complete tagged input, and preserve native request forwarding without treating transport fidelity as audible control.
 - **local-codex / macos-watchdog** (`daymade-codex` v2.4.10, `daymade-macos` v1.31.1): Verify native updater ownership and channel eligibility per component; keep extra scheduled updaters opt-in and preserve explicitly requested watchdogs.
 - **prior-work-retrieval** (`daymade-claude-code` v5.1.12): Direct temporary Git verification failures to a same-run retry while retaining scope-change and required-carrier checks.
