@@ -199,6 +199,8 @@ observations separate; this file does not define another batch recipe.
 For tunnel/proxy-path failures or slow throughput, enter
 [tunnel-doctor](tunnel-doctor/SKILL.md) first. For unresolved protocol, streaming or
 throughput investigations, use [debugging-network-issues](debugging-network-issues/SKILL.md).
+For content-encoding-dependent HTTP failures, use its
+[same-byte compression comparison](debugging-network-issues/references/compressed-request-comparison.md).
 Proxy-selection and disruptive VPN changes follow tunnel-doctor's
 [proxy-conflict procedure](tunnel-doctor/references/proxy_conflict_reference.md) and
 [network-change recovery](tunnel-doctor/references/network_change_recovery.md). For Shadowrocket rapid toggle loops or Network Extension startup assertions, read its
@@ -683,6 +685,8 @@ Keep native-guard installation, recovery and actual-host acceptance in that work
 do not duplicate its parameters here. Reply lookup, transport and discovery
 details belong in [the transport and receiver-evidence SOP](peer-message/references/protocol-and-discovery.md).
 Enter that SOP when diagnosing delayed Codex coordination or comparing live and queued receipts.
+Before a diagnostic pause, marker-only reply or no-tools request to a running session, enter
+[diagnostic coordination](peer-message/references/coordination-and-learning-loop.md#诊断消息与执行隔离).
 Before asking about mutable ownership or a publication window, use the
 [fresh-state preflight](peer-message/references/coordination-and-learning-loop.md#51-发现别人的在制品先核实再问等一个有界窗口).
 For an inbound coordination envelope, a native reply, original-input capture or a receive-integrity error, follow
@@ -734,6 +738,9 @@ For one-shot helper exits or attribution of an exited terminal, enter
 Before a Codex startup diagnosis or a build/resume/recovery claim, follow
 [entry identity](daymade-codex/local-codex/references/entry-identity.md).
 That SOP owns the shell/executable binding and the limits of identity evidence.
+
+For Codex model-request failures, including `400 Bad Request`, enter
+[model-request diagnostics](daymade-codex/local-codex/references/model-request-diagnostics.md).
 
 For Codex component updates, native updater eligibility or an authorized shared
 backend restart, enter
