@@ -133,9 +133,9 @@ if launchctl print "$DOMAIN/$LABEL" >/dev/null 2>&1; then
     echo "OK: $LABEL loaded into $DOMAIN"
     echo "  plist:  $PLIST"
     echo "  logs:   $LOG_OUT / $LOG_ERR"
-    echo "  verify: launchctl list | grep $LABEL"
-    echo "  run now: launchctl kickstart -k $DOMAIN/$LABEL"
-    echo "  stop:    launchctl bootout $DOMAIN/$LABEL"
+    echo "  registration: launchctl print $DOMAIN/$LABEL"
+    echo "  run once (idle job): ${SUDO:+$SUDO }launchctl kickstart $DOMAIN/$LABEL"
+    echo "  stop:    ${SUDO:+$SUDO }launchctl bootout $DOMAIN/$LABEL"
 else
     echo "FAIL: bootstrap reported success but label not found in $DOMAIN" >&2
     exit 1
