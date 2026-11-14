@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **qa-expert** (v1.2.16): Remove repeated resource/workflow summaries and the stale OWASP-section example; preserve the canonical execution routes, handoff steps and isolation requirements.
+- **claude-switch-models-setup** (`daymade-claude-code` v5.1.13): Keep shared-helper calibration expectations in the executable fixture matrices and remove historical watcher timing from operating guidance. Route affected QA and takeover work from the repository instructions.
+
+- **qa-expert** (v1.2.15): Exercise real incremental capture and drift repair, prove negative fixtures changed their selected field, and bound completed results behind ordered concurrent publication.
 - **stepfun-tts** (`daymade-audio` v1.58.4): Distinguish literal parentheses from delivery instructions, count the complete tagged input, and preserve native request forwarding without treating transport fidelity as audible control.
 - **local-codex / macos-watchdog** (`daymade-codex` v2.4.10, `daymade-macos` v1.31.1): Verify native updater ownership and channel eligibility per component; keep extra scheduled updaters opt-in and preserve explicitly requested watchdogs.
 - **prior-work-retrieval** (`daymade-claude-code` v5.1.12): Direct temporary Git verification failures to a same-run retry while retaining scope-change and required-carrier checks.
@@ -19,7 +23,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **git-safety-net** (v1.28.2): Route ordinary linked worktrees and explicitly rebuildable dependency caches through the existing retirement helper; preserve unique configuration and detect later changes.
 - **github-ops** (v1.16.2): Clarify explicitly authorized task-level merge exceptions after service initialization fails, preserving repository-required gates and distinct validation, deployment and repair authority.
 
-- **qa-expert** (v1.2.15): Exercise real incremental capture and drift repair across three rounds, prove negative fixtures changed their selected field, and bound completed results behind ordered concurrent publication.
 - **continue-codex-work / claude-switch-models-setup** (`daymade-claude-code` v5.1.11): Identify and finish in-flight CI before rerunning it; calibrate shared helper locking and required launch preparation in isolated fixtures.
 
 - **app-evolver 1.1.14** — Trace implicit state through actual consumers, operation identity, recovery boundaries and declared audit coverage.
