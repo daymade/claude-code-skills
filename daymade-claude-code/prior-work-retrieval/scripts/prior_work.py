@@ -381,9 +381,15 @@ def _source_git_read(repo: Path, *args: str) -> bytes:
             timeout=10, check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as error:
-        raise PriorWorkError("Could not verify the retrieval source's Git state") from error
+        raise PriorWorkError(
+            "Could not verify the retrieval source's Git state; restore Git access "
+            "and retry the same command with the existing run (if any)"
+        ) from error
     if result.returncode:
-        raise PriorWorkError("Could not verify the retrieval source's Git state")
+        raise PriorWorkError(
+            "Could not verify the retrieval source's Git state; restore Git access "
+            "and retry the same command with the existing run (if any)"
+        )
     return result.stdout
 
 
@@ -403,7 +409,7 @@ def _source_git_changes(repo: Path, relative: str, *revisions: str) -> tuple[lis
 
 
 def _source_git_state(
-    source: dict[str, Any], search_cwd: str | None = None
+    source: dict[str, Any], search_cwd: str | None = None, *, require_head: bool = False
 ) -> dict[str, Any] | None:
     root = Path(source["root"])
     repo = _git_root(root / ".prior-work-scope")
@@ -411,6 +417,11 @@ def _source_git_state(
         return None
     head = _git_head(repo)
     if not head:
+        if require_head:
+            raise PriorWorkError(
+                "Could not read the retrieval source's Git revision; restore Git access "
+                "and retry the same command with the existing run"
+            )
         return None
     relative = root.relative_to(repo).as_posix()
     # --no-renames keeps deletion and addition paths independent. Untracked
@@ -452,7 +463,7 @@ def _verify_source_scope(source: dict[str, Any], recorded: Any) -> dict[str, Any
     search_cwd = recorded.get("search_cwd")
     if not isinstance(search_cwd, str) or not search_cwd or not Path(search_cwd).is_absolute():
         raise PriorWorkError("Retrieval invocation context is missing; retrieve again")
-    current = _source_git_state(source, search_cwd)
+    current = _source_git_state(source, search_cwd, require_head=True)
     if not current:
         raise PriorWorkError("Source scope Git evidence is unavailable; retrieve again")
     for key in ("git_root", "root_relative"):

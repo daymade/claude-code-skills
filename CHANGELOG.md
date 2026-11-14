@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **local-codex / macos-watchdog** (`daymade-codex` v2.4.10, `daymade-macos` v1.31.1): Verify native updater ownership and channel eligibility per component; keep extra scheduled updaters opt-in and preserve explicitly requested watchdogs.
+- **prior-work-retrieval** (`daymade-claude-code` v5.1.12): Direct temporary Git verification failures to a same-run retry while retaining scope-change and required-carrier checks.
+
 - **git-safety-net** (v1.28.2): Route ordinary linked worktrees and explicitly rebuildable dependency caches through the existing retirement helper; preserve unique configuration and detect later changes.
 - **github-ops** (v1.16.2): Clarify explicitly authorized task-level merge exceptions after service initialization fails, preserving repository-required gates and distinct validation, deployment and repair authority.
 

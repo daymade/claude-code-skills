@@ -5,6 +5,33 @@ backend. Routine inspection stays read-only. Reuse passed observations while
 their inputs remain unchanged; do not restart a busy service to test this guide.
 Account adoption remains in [the OAuth guide](oauth-guide.md#existing-native-owner-recovery).
 
+## Select native updating per component
+
+For an update or automatic-update request, identify each requested component:
+desktop application, ordinary CLI, and shared App Server. Bind its actual
+installation owner, selected release channel, pin and native updater eligibility
+separately. Updating the App Server does not update the invoking CLI or desktop
+application. Use each component's supported updater and accept them separately.
+
+An official signed package can still be explicitly pinned. An enabled preference
+alone does not prove automatic updating: inspect channel-selection evidence,
+updater support, the native updater's process and latest result when available.
+Keep a missing result unverified; do not force an upgrade of a busy backend just
+to manufacture a successful automatic-update observation.
+
+For [the inspected 0.171.0-alpha.5 daemon](https://github.com/openai/codex/blob/rust-v0.171.0-alpha.5/codex-rs/app-server-daemon/README.md#managed-packages),
+the native updater requires the stable `latest` selection, an enabled preference
+and managed-binary support. An explicit release or `--from-cli` package remains
+pinned, including official prereleases. This is an installation/channel limit,
+not evidence that official Codex lacks automatic updates. Recheck the selected
+version's implementation before applying this conclusion to another release.
+
+If native eligibility conflicts with the user's selected channel, explain the
+specific tradeoff and preserve that channel until the user chooses otherwise.
+Acceptance of interruptions authorizes the covered restart, not a new recurring
+poller. Enabling an application's own updates uses its native owner; a separate
+scheduled updater requires an explicit request or an accepted fallback proposal.
+
 ## Bind the service and preserve affected work
 
 1. Resolve the ordinary CLI through its owning shell. Inspect that exact
