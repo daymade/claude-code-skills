@@ -40,6 +40,11 @@ Serve only the reviewed explicit file
 snapshot; verify its HTTP readiness and rendered content/action in the permitted
 browser.
 
+For a course/archive browser, use the [hierarchical reader](references/archive-reader.md)
+and its reusable builder/PDF adapter. Preserve current source navigation, historical
+nodes and stable material IDs; verify lesson resources, actual PDF pages and media
+play/seek through the existing source-owned asset server.
+
 The default delivery is the verified HTML opened in a browser. A PNG is a QA artifact
 and is delivered only when the user asks for an image. If the user needs editable
 PowerPoint, finish and verify the HTML first, then use `deck-creator` (Route C).

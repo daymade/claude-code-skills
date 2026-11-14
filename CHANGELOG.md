@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **prior-work-retrieval** (`daymade-claude-code` v5.1.14): Skip impossible include matches before materializing Git scope paths while retaining ripgrep's final decision; reject incomplete required coverage before freshness probes. Change type: bug fix.
 - **github-ops** (v1.16.4): Materialize tracked checker configuration before sparse publication, restore omitted inputs from the pinned ref, and rerun the original checks without changing policy or payload.
 - **tunnel-doctor** (v1.17.17): Correct Shadowrocket rule-order and module-activation guidance; preserve backups and original VPN intent, and separate dated compile experiments from current route verification.
+- **feishu-doc-scraper** (v1.14.0): Add account-bound Wiki Base/Sheet capture with structured CLI error parsing, pagination/revision checks, readable records and explicit attachment/field gaps.
+- **report-with-html** (v1.7.0): Add a reusable course hierarchy reader that preserves material IDs and historical nodes, plus registered PDF page rendering through existing asset servers.
 
 - **git-safety-net** (v1.28.3): Reuse retained history for explicitly verified rebase withdrawals, preserve other reflog work, and bind the opt-in boundary to a versioned recovery checkpoint.
 - **macos-cleaner** (`daymade-macos` v1.32.1): Align relocation recovery, prerequisite and progress guidance with the executor; add the repository entry route and remove redundant retention history and duplicated Git retirement procedures. Change type: documentation correction and SSOT consolidation.
