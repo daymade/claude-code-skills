@@ -39,6 +39,20 @@ the helper packs only the target HEAD/reflog history. Content containment after 
 squash still needs the separate Mode E check. Neither a primary checkout nor its
 unrelated WIP is a removal target.
 
+For explicitly withdrawn rebase commits, pass repeated `--known-withdrawal OLD=RETAINED`
+pairs with full commit IDs. The exact current tip must be in the retained base;
+OLD must be an unretained commit from this root's reflog, and RETAINED must be in
+the base. Both must be nonempty single-parent commits with matching stable and
+verbatim patch IDs, so whitespace changes are not silently discarded. The checkpoint
+freezes these declarations and keeps the original reflog metadata, but does not
+promise recovery of the withdrawn commit's exact object identity. Frozen parent chains
+must reach retained history; undeclared ancestors and other unretained history still
+get the existing root pack. Supplied pairs with missing,
+empty, mismatched or changed IDs fail before new evidence is written. Repeat the same pairs on
+`prepare --resume`; verification reads only the frozen checkpoint.
+Opt-in withdrawal checkpoints use version 2, which old helpers reject; ordinary
+version 1 checkpoints keep their existing meaning and remain readable.
+
 Each initialized module must have its own Git/common directory inside this linked
 worktree's admin directory. The helper inventories module HEAD, gitlink, refs and
 symbolic targets, raw reflogs, metadata and physically owned loose/packed objects.
