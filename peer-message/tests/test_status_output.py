@@ -4,10 +4,15 @@ import importlib.util
 import io
 import json
 from pathlib import Path
+import sqlite3
+import subprocess
+import sys
 import tempfile
+import time
 import unittest
 
-SPEC = importlib.util.spec_from_file_location("peer_status_output", Path(__file__).resolve().parents[1] / "scripts/peer.py")
+SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
+SPEC = importlib.util.spec_from_file_location("peer_status_output", SCRIPTS / "peer.py")
 peer = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(peer)
 
@@ -32,6 +37,104 @@ class StatusOutputTests(unittest.TestCase):
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             code = peer.main(["--state-dir", str(self.root), "coord", "status", *options])
         return code, out.getvalue(), err.getvalue()
+
+    def cli_process(self, root, *options):
+        return subprocess.run(
+            [sys.executable, "-B", str(SCRIPTS / "peer.py"), "--state-dir", str(root),
+             "coord", "status", *options],
+            capture_output=True, text=True, timeout=10, check=False)
+
+    def test_real_cli_reads_committed_page_while_reserved_writer_stays_active(self):
+        root = self.root / "reserved"
+        board = peer.coordination.Board(root)
+        try:
+            board.claim("scope", "task", "synthetic-committed-owner", [])
+            prepared = board.prepare("synthetic-sender", "synthetic-target", "committed",
+                                     topic="synthetic-topic")
+            board.commit(prepared["message_id"], "synthetic-sender", "accepted")
+            committed_id = prepared["message_id"]
+        finally:
+            board.close()
+        writer = sqlite3.connect(root / "coordination.sqlite3", timeout=0.2, isolation_level=None)
+        try:
+            writer.execute("BEGIN IMMEDIATE")
+            writer.execute("UPDATE owners SET owner='synthetic-uncommitted-owner'")
+            now = time.time()
+            writer.execute("INSERT INTO messages VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (
+                "synthetic-uncommitted-message", "[]", "synthetic-sender", "synthetic-target",
+                "synthetic-uncommitted-topic", "notice", now, None, now + 300, "accepted",
+                None, None, None, None))
+            completed = self.cli_process(root, "--scope", "scope")
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            page = json.loads(completed.stdout)
+            self.assertEqual([row["owner"] for row in page["owners"]], ["synthetic-committed-owner"])
+            self.assertEqual([row["id"] for row in page["messages"]], [committed_id])
+            self.assertEqual(page["owner_page"]["total"], 1)
+            self.assertEqual(page["message_page"]["total"], 1)
+            self.assertNotIn("uncommitted", completed.stdout)
+            self.assertTrue(writer.in_transaction)
+            self.assertEqual(writer.execute("SELECT owner FROM owners").fetchone()[0],
+                             "synthetic-uncommitted-owner")
+            self.assertEqual(writer.execute(
+                "SELECT count(*) FROM messages WHERE id='synthetic-uncommitted-message'").fetchone()[0], 1)
+        finally:
+            if writer.in_transaction:
+                writer.execute("ROLLBACK")
+            writer.close()
+
+    def test_current_schema_status_skips_cleanup_and_chmod(self):
+        root = self.root / "cleanup"
+        board = peer.coordination.Board(root)
+        old = time.time() - 40 * 86400
+        try:
+            board.db.execute("INSERT INTO messages VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (
+                "synthetic-old-closed", "[]", "synthetic-sender", "synthetic-target",
+                "synthetic-topic", "notice", old, None, old + 1, "accepted", None, None,
+                old + 1, old + 2))
+        finally:
+            board.close()
+        path = root / "coordination.sqlite3"
+        path.chmod(0o640)
+        completed = self.cli_process(root)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(json.loads(completed.stdout)["messages"], [])
+        with sqlite3.connect(path) as check:
+            self.assertEqual(check.execute(
+                "SELECT count(*) FROM messages WHERE id='synthetic-old-closed'").fetchone()[0], 1)
+            self.assertEqual(check.execute("PRAGMA user_version").fetchone()[0], 2)
+        self.assertEqual(path.stat().st_mode & 0o777, 0o640)
+
+    def test_real_cli_preserves_fresh_bootstrap(self):
+        root = self.root / "fresh"
+        self.assertFalse(root.exists())
+        completed = self.cli_process(root, "--scope", "scope")
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(json.loads(completed.stdout)["status"], "ready")
+        with sqlite3.connect(root / "coordination.sqlite3") as check:
+            self.assertEqual(check.execute("PRAGMA user_version").fetchone()[0], 2)
+
+    def test_real_cli_preserves_v1_migration(self):
+        root = self.root / "v1"
+        root.mkdir()
+        path = root / "coordination.sqlite3"
+        with sqlite3.connect(path) as old:
+            old.executescript("""CREATE TABLE owners(scope TEXT NOT NULL,task TEXT NOT NULL,
+                owner TEXT NOT NULL,resources TEXT NOT NULL,updated REAL NOT NULL,released REAL,
+                PRIMARY KEY(scope,task));
+                CREATE TABLE messages(id TEXT PRIMARY KEY,slot TEXT NOT NULL,sender TEXT NOT NULL,
+                target TEXT NOT NULL,topic TEXT,kind TEXT NOT NULL,created REAL NOT NULL,expires REAL,
+                dedup_until REAL NOT NULL,state TEXT NOT NULL,receipt TEXT,reply_to TEXT);
+                PRAGMA user_version=1;""")
+            old.execute("INSERT INTO owners VALUES(?,?,?,?,?,NULL)", (
+                "scope", "task", "synthetic-v1-owner", "[]", time.time()))
+        completed = self.cli_process(root, "--scope", "scope")
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual([row["owner"] for row in json.loads(completed.stdout)["owners"]],
+                         ["synthetic-v1-owner"])
+        with sqlite3.connect(path) as check:
+            self.assertEqual(check.execute("PRAGMA user_version").fetchone()[0], 2)
+            columns = {row[1] for row in check.execute("PRAGMA table_info(messages)")}
+            self.assertTrue({"received_at", "closed_at"}.issubset(columns))
 
     def test_default_omits_large_receipts_without_losing_attention(self):
         wanted = self.message("wanted", kind="request", expires=1100, payload="SYNTHETIC-RECEIPT" * 20000)

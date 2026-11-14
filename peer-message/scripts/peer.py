@@ -1788,7 +1788,7 @@ def managed_send(args, target, body, sender, reply_to):
 def cmd_coord(args):
     if args.operation == "status" and args.details and args.output is None:
         raise PeerError("coord status --details requires --output to a new file")
-    board = coordination.Board(args.state_dir)
+    board = coordination.Board(args.state_dir, read_only=args.operation == "status")
     try:
         if args.operation == "status":
             result = board.status_page(args.scope, limit=args.limit, offset=args.offset,

@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **auto-repo-setup** (v2.2.1): Select checks from the actual input changes, reuse matching successful evidence, and distinguish guard maintenance and diagnostic success from verified publication recovery.
 - **prior-work-retrieval** (`daymade-claude-code` v5.1.14): Skip impossible include matches before materializing Git scope paths while retaining ripgrep's final decision; reject incomplete required coverage before freshness probes. Change type: bug fix.
+- **peer-message** (v1.25.8): Read existing current-schema coordination status without write initialization or cleanup, preserving first-use bootstrap, legacy migration and integrity rejection.
+
 - **github-ops** (v1.16.4): Materialize tracked checker configuration before sparse publication, restore omitted inputs from the pinned ref, and rerun the original checks without changing policy or payload.
 - **tunnel-doctor** (v1.17.17): Correct Shadowrocket rule-order and module-activation guidance; preserve backups and original VPN intent, and separate dated compile experiments from current route verification.
 - **feishu-doc-scraper** (v1.14.0): Add account-bound Wiki Base/Sheet capture with structured CLI error parsing, pagination/revision checks, readable records and explicit attachment/field gaps.

@@ -36,6 +36,10 @@ python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord claim --scope '<project>' --tas
   --resource '<shared-repository>:publish'
 ```
 
+`coord status` 读取现存当前版本数据库时不申请写事务，也不执行清理；另一写者持有
+RESERVED 锁时仍可读取已提交状态。首次建库及旧版本迁移保留原初始化路径；不支持的版本、
+损坏数据库或缺失必要状态记录时明确失败，不返回伪造的空状态。
+
 `coord status` 默认返回有界摘要，不展开消息 `receipt` 或内部 `slot`。每类最多显示
 `--limit` 条（默认 20，上限 100）；`owner_page` / `message_page` 给出总数、当前偏移、
 显示数、`truncated`、`has_more` 与 `next_offset`。摘要长字段和资源列表另有截断标记，
