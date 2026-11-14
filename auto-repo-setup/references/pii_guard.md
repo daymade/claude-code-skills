@@ -3,6 +3,24 @@
 Use the repository's existing guard as the authority. Do not install a competing
 hook path or copy machine-specific deny-lists into a public skill.
 
+## Select checks for the actual change
+
+Use the repository's check map to select checks for the changed inputs and their
+dependencies. Keep the required staged-content, introduced-history and publication
+checks. Reuse successful results when the candidate content, relevant configuration
+and checked inputs are unchanged; add checks for changed inputs, failures or
+unresolved evidence.
+
+Before repeating a slow publication check, read its route and cache receipts for
+the exact candidate and destination base. If qualifying evidence is missing, use
+the guard owner's explicit background maintenance path, then retry the normal
+publication. Do not replace that recovery with repeated cold scans in the
+interactive push or reuse evidence from a different scanner or policy identity.
+
+A passing doctor or test suite verifies its stated checks. Publication recovery
+requires the normal publication to pass for the intended refs and an independent
+readback of the destination commit.
+
 ## Four complementary layers
 
 ### 1. Secret scanner
