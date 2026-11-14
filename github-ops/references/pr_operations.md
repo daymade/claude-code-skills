@@ -10,6 +10,28 @@ in [operating and checked-invocation contract](../SKILL.md#universal-operating-c
 
 ### Basic PR Creation
 
+When preparing a sparse checkout or `--no-checkout` worktree, the publishing
+agent must materialize the tracked configuration used by the repository's checks
+before editing, committing, or interpreting their findings. Pin the source to a
+full commit SHA. Inspect that ref's tracked files and the active hook/checker
+entry points for policy files and their referenced dependencies; a path omitted
+by sparse checkout is not evidence that the repository declares no policy.
+For example, a PII checker may read root `.pii-*` declarations and
+`.personal-private-paths` from the working tree. Determine its actual inputs from
+the current checker, rather than treating those example names as a complete list.
+
+Compare the required tracked inputs with the materialized files. Preserve the
+existing sparse selection and any in-progress edits; extend it with Git's
+`sparse-checkout add` in its current cone/non-cone mode, or use the repository's
+existing preparation tool. Read back each recovered file and verify its bytes
+against the pinned ref. If a required input is missing, differs unexpectedly, or
+its dependencies cannot be determined, stop preparation at that gap. Restore
+omitted files from the same ref; reconcile intentional policy changes through
+their existing owner before resuming. Do not invent a declaration, add individual
+exceptions, change exposure settings, or disable a hook to clear the findings.
+Once configuration is complete, rerun the original checks on the same payload;
+diagnose any remaining finding through the check owner's normal procedure.
+
 Prepare the local branch under the repository's Git safety rules. Before the first
 push, verify the remote's live visibility and read the repository's publication
 policy and applicable branch rules. A PR-required base uses an authorized feature
