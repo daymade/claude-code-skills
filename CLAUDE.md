@@ -924,7 +924,8 @@ When individual approvals disagree with effective merge requirements, use
 [the landing diagnosis](github-review-pr/references/remediation_and_landing.md#merge-with-the-reviewed-head-guard).
 For archive/ingestion repair publication, enter
 [the repair and publication preflight](github-review-pr/references/remediation_and_landing.md#prepare-an-isolated-repair-environment).
-For direct, queued or separately authorized bypass merges, refusal diagnosis and landed-rule readback,
+For direct, queued or separately authorized bypass merges, disclosed CI setup failures,
+refusal diagnosis and landed-rule readback,
 follow the [checked-merge workflow](github-ops/references/pr_operations.md#merging-prs).
 For hosted-state writes through `gh`, follow its
 [identity, host and target binding](github-ops/SKILL.md#2-bind-identity-host-and-target)
@@ -1004,18 +1005,13 @@ route above before treating another writer's unrelated changes as a reason to
 leave the task waiting. This does not permit overwriting that writer's files or
 claiming the whole checkout is current.
 
-For divergent local `main` or branch/worktree retirement, follow
-[git-safety-net](git-safety-net/SKILL.md) and its
-[content-containment proof](git-safety-net/references/merge_verification.md).
-Before selecting recovery material for a named branch or worktree, apply
-[Preservation before retirement](git-safety-net/references/merge_verification.md#preservation-before-retirement).
-For a linked checkout, follow the owning
-[worktree-retirement procedure](git-safety-net/references/merge_verification.md#worktree-retirement--prove-the-checkout-is-disposable-before-removal).
-For linked-worktree recovery preparation and its supported-state boundaries, use its
+For divergent local `main`, recovery-material selection or branch/worktree retirement,
+follow [git-safety-net](git-safety-net/SKILL.md).
+For linked-worktree recovery preparation, including dependency-cache declarations, use its
 [preservation helper](git-safety-net/references/worktree-retirement-helper.md).
 When current content differs from an older published review, use the
 [historical publication example](git-safety-net/references/merge_verification.md#worked-example--old-review-content-landed-through-another-ref)
-before deciding supersession; historical equality alone does not establish current intent.
+before deciding supersession.
 Resolving conflicts toward upstream can erase the very delta being checked;
 an empty result after that resolution does not prove it shipped.
 
