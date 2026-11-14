@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **git-safety-net** (v1.28.2): Route ordinary linked worktrees and explicitly rebuildable dependency caches through the existing retirement helper; preserve unique configuration and detect later changes.
+- **github-ops** (v1.16.2): Clarify explicitly authorized task-level merge exceptions after service initialization fails, preserving repository-required gates and distinct validation, deployment and repair authority.
+
 - **qa-expert** (v1.2.15): Exercise real incremental capture and drift repair across three rounds, prove negative fixtures changed their selected field, and bound completed results behind ordered concurrent publication.
 - **continue-codex-work / claude-switch-models-setup** (`daymade-claude-code` v5.1.11): Identify and finish in-flight CI before rerunning it; calibrate shared helper locking and required launch preparation in isolated fixtures.
 

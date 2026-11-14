@@ -7,6 +7,19 @@ change refs, remove worktrees, establish business containment or grant deletion 
 Keep the Mode E worktree procedure's ownership, scheduler, occupancy, containment,
 normal-removal and post-removal gates.
 
+The same commands below support ordinary linked worktrees without submodules. For a
+task-created dependency tree, add
+`--rebuildable 'node_modules=pnpm install --frozen-lockfile from tracked package.json and pnpm-lock.yaml'`
+to preparation and resume after verifying that the command and tracked inputs reproduce
+every covered entry. Reuse the helper's ignored-file inventory rather than a one-off script.
+
+Keep environment files, hand edits and unknown data outside that declaration. Their existing
+copy/retained-copy preservation rules still apply. A rebuildable declaration avoids copying
+that payload; it does not skip the frozen inventory or permit changes after preparation.
+Resume with the same declaration, run `verify-current`, then finish the separate Mode E
+removal gates. After removal, `verify-recovery` must still read preserved unique configuration
+and verify the retained carrier. Do not infer faster hashing or weaker checks from this route.
+
 ```bash
 SKILL_ROOT="<absolute-loaded-git-safety-net-directory>"
 python3 "$SKILL_ROOT/scripts/git_prepare_worktree_retirement.py" prepare \

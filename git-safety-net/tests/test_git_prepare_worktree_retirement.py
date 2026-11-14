@@ -91,6 +91,50 @@ class WorktreeRetirementTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         return json.loads((self.out / "state.json").read_text())
 
+    def plain_target(self) -> None:
+        self.primary = self.root / "plain primary"
+        self.target = self.root / "plain linked target"
+        self.git("init", "-q", "-b", "main", str(self.primary))
+        (self.primary / ".gitignore").write_text("node_modules/\n.env\n")
+        (self.primary / "tracked.txt").write_text("fixture generated content\n")
+        self.commit(self.primary, "plain baseline")
+        self.git("-C", str(self.primary), "worktree", "add", "-q", "-b", "plain-task", str(self.target))
+        (self.target / "node_modules").mkdir()
+        (self.target / "node_modules/generated.js").write_text((self.primary / "tracked.txt").read_text())
+        (self.target / ".env").write_text("SYNTHETIC=unique-fixture-config\n")
+        (self.primary / "tracked.txt").write_text("unrelated primary work\n")
+
+    def test_plain_worktree_reuses_carrier_and_preserves_config_after_removal(self) -> None:
+        self.plain_target()
+        before = self.primary_state()
+        state = self.prepare("--rebuildable", "node_modules=fixture writes generated.js from tracked.txt")
+        self.assertEqual(state["snapshot"]["root_carrier"], "retained-ref")
+        self.assertEqual(len(state["snapshot"]["scopes"]), 1)
+        ignored = state["snapshot"]["scopes"][0]["ignored"]
+        self.assertEqual(ignored["node_modules/generated.js"]["disposition"], "rebuildable")
+        self.assertEqual(ignored[".env"]["disposition"], "copy")
+        self.assertFalse((self.out / "root/ignored/node_modules/generated.js").exists())
+        self.assertEqual((self.out / "root/ignored/.env").read_bytes(), (self.target / ".env").read_bytes())
+        self.assertTrue(self.target.exists())
+        self.assertEqual(self.run_tool("verify-current").returncode, 0)
+        self.git("-C", str(self.primary), "worktree", "remove", str(self.target))
+        self.assertFalse(self.target.exists())
+        self.assertEqual(self.run_tool("verify-recovery").returncode, 0)
+        self.assertEqual((self.out / "root/ignored/.env").read_text(), "SYNTHETIC=unique-fixture-config\n")
+        self.assertEqual(self.primary_state(), before)
+
+    def test_plain_worktree_cache_declaration_does_not_hide_late_changes(self) -> None:
+        self.plain_target()
+        self.prepare("--rebuildable", "node_modules=fixture writes generated.js from tracked.txt")
+        generated = self.target / "node_modules/generated.js"
+        original = generated.read_bytes()
+        generated.write_text("later generated-file edit\n")
+        self.assertEqual(self.run_tool("verify-current").returncode, 1)
+        generated.write_bytes(original)
+        self.assertEqual(self.run_tool("verify-current").returncode, 0)
+        (self.target / ".env").write_text("SYNTHETIC=later-fixture-config\n")
+        self.assertEqual(self.run_tool("verify-current").returncode, 1)
+
     def test_recovery_after_real_worktree_removal_is_self_contained(self) -> None:
         # Preserve unrelated dirty primary content without normalizing it.
         (self.primary / "owner-wip.txt").write_text("keep this writer's bytes\n")
