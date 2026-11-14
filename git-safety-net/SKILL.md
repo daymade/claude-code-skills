@@ -603,7 +603,7 @@ For a known discarded rebase commit, the helper accepts explicit `--known-withdr
 full commit IDs. Its current tip must be retained, OLD must occur in that root's reflog, and RETAINED
 must be in the retained base with the same nonempty single-parent patch (stable and whitespace-preserving
 patch IDs). This preserves the retained replacement, not the withdrawn commit's exact identity.
-Undeclared reflog-only work still requires its recovery carrier; never classify every old reflog entry
+Undeclared reflog work and unique ancestors still require their recovery carrier; never classify every old reflog entry
 as disposable merely because the current tip landed. Repeat the same pairs on `--resume`.
 
 For a clean linked worktree, including one without submodules, use

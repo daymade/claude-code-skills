@@ -96,8 +96,21 @@ def withdrawal_proof(primary: Path, root: dict, retained: set[str], declared: di
         kept = commit_patch_ids(primary, replacement)
         # Stable patch IDs ignore whitespace; verbatim IDs protect that work too.
         require(original == kept, "Known withdrawal patches differ (including whitespace)")
-        proof[old] = {"retained": replacement, **kept}
+        parent = text_git(primary, "rev-parse", old + "^")
+        proof[old] = {"retained": replacement, "parent": parent, **kept}
     return proof
+
+
+def retained_history_covers(root: dict, retained: set[str], proof: dict) -> bool:
+    covered = set(retained)
+    pending = set(proof)
+    while pending:
+        ready = {old for old in pending if proof[old]["parent"] in covered}
+        if not ready:
+            return False
+        covered.update(ready)
+        pending.difference_update(ready)
+    return root["head"] in retained and set(root["seeds"]).issubset(covered)
 
 
 def frozen_withdrawals(snapshot: dict) -> dict[str, str]:
@@ -107,7 +120,7 @@ def frozen_withdrawals(snapshot: dict) -> dict[str, str]:
     require(isinstance(proof, dict) and bool(proof), "Frozen known withdrawals are missing or empty")
     for old, row in proof.items():
         require(isinstance(old, str) and FULL_SHA.fullmatch(old) and isinstance(row, dict)
-                and set(row) == {"retained", "stable", "verbatim"}
+                and set(row) == {"retained", "parent", "stable", "verbatim"}
                 and all(isinstance(value, str) and FULL_SHA.fullmatch(value) for value in row.values())
                 and old != row["retained"], "Frozen known withdrawal proof is invalid")
     return {old: row["retained"] for old, row in proof.items()}
@@ -455,7 +468,7 @@ def scope_snapshot(target: Path, base_ref: str, recipes: dict, known_withdrawals
     retained = set(git(primary, "rev-list", base_oid).decode().splitlines())
     proof = withdrawal_proof(primary, scopes[0]["repo"], retained,
                              {} if known_withdrawals is None else known_withdrawals)
-    contained = (set(scopes[0]["repo"]["seeds"]) - retained).issubset(proof)
+    contained = retained_history_covers(scopes[0]["repo"], retained, proof)
     snapshot = {"target": str(target), "primary": str(primary), "common": str(common),
             "base_ref": base_ref, "base_oid": base_oid, "root_carrier": "retained-ref" if contained else "pack",
             "recipes": recipes, "scopes": scopes, "uninitialized": sorted(uninitialized, key=lambda x: x["relative"])}
@@ -568,7 +581,7 @@ def verify(out: Path, current: bool) -> dict:
         retained = set(git(primary, "rev-list", snapshot["base_oid"]).decode().splitlines())
         root = snapshot["scopes"][0]["repo"]
         declared = frozen_withdrawals(snapshot)
-        require(root["head"] in retained and (set(root["seeds"]) - retained).issubset(declared),
+        require(retained_history_covers(root, retained, snapshot.get("known_withdrawals", {})),
                 "Retained base does not cover root history or its known withdrawals")
         for old, replacement in declared.items():
             require(old in root["seeds"] and old not in retained and replacement in retained,

@@ -165,6 +165,39 @@ class WorktreeRetirementTests(unittest.TestCase):
                                       "--known-withdrawal", pair).returncode, 1)
         self.assertFalse(self.out.exists())
 
+    def test_withdrawn_seed_cannot_hide_a_unique_nonseed_ancestor(self) -> None:
+        self.primary = self.root / "ancestor primary"
+        self.target = self.root / "ancestor linked target"
+        self.git("init", "-q", "-b", "main", str(self.primary))
+        (self.primary / "baseline.txt").write_text("retained baseline\n")
+        self.commit(self.primary, "baseline")
+        base = self.git("-C", str(self.primary), "rev-parse", "HEAD").decode().strip()
+        (self.primary / "unique.txt").write_text("unique ancestor work\n")
+        self.commit(self.primary, "unique ancestor")
+        unique = self.git("-C", str(self.primary), "rev-parse", "HEAD").decode().strip()
+        (self.primary / "feature.txt").write_text("same declared patch\n")
+        self.commit(self.primary, "old patch")
+        old = self.git("-C", str(self.primary), "rev-parse", "HEAD").decode().strip()
+        self.git("-C", str(self.primary), "worktree", "add", "-q", "--detach", str(self.target), old)
+        self.git("-C", str(self.primary), "reset", "--hard", base)
+        (self.primary / "feature.txt").write_text("same declared patch\n")
+        self.commit(self.primary, "retained patch")
+        retained = self.git("-C", str(self.primary), "rev-parse", "HEAD").decode().strip()
+        self.git("-C", str(self.target), "reset", "--hard", retained)
+        state = self.prepare("--known-withdrawal", old + "=" + retained)
+        root = state["snapshot"]["scopes"][0]["repo"]
+        self.assertNotIn(unique, root["seeds"])
+        self.assertIn(unique, root["closure"])
+        self.assertEqual(state["snapshot"]["root_carrier"], "pack")
+        self.assertEqual(self.run_tool("verify-current").returncode, 0)
+        self.git("-C", str(self.primary), "worktree", "remove", str(self.target))
+        self.git("-C", str(self.primary), "reflog", "expire", "--expire=now", "--all")
+        self.git("-C", str(self.primary), "gc", "--prune=now")
+        self.assertEqual(self.git("-C", str(self.primary), "cat-file", "-t", unique, check=False), b"")
+        self.assertEqual(self.run_tool("verify-recovery").returncode, 0)
+        self.assertEqual(self.git("-C", str(self.out / "root/recovery.git"), "show", unique + ":unique.txt"),
+                         b"unique ancestor work\n")
+
     def test_whitespace_only_patch_id_match_is_not_a_known_withdrawal(self) -> None:
         old, prior_retained = self.rebased_pair()
         (self.target / "feature.txt").write_text("work  from rebased commit\n")
@@ -194,6 +227,13 @@ class WorktreeRetirementTests(unittest.TestCase):
             state["snapshot_digest"] = TOOL.fingerprint(state["snapshot"])
             (self.out / "state.json").write_bytes(TOOL.encoded(state))
             self.assertEqual(self.run_tool("verify-current").returncode, 1)
+        for parent in (None, "", old, "f" * 40):
+            state = json.loads(checkpoint)
+            state["snapshot"]["known_withdrawals"][old]["parent"] = parent
+            state["snapshot_digest"] = TOOL.fingerprint(state["snapshot"])
+            (self.out / "state.json").write_bytes(TOOL.encoded(state))
+            self.assertEqual(self.run_tool("verify-current").returncode, 1)
+            self.assertEqual(self.run_tool("verify-recovery").returncode, 1)
         (self.out / "state.json").write_bytes(checkpoint)
         self.git("-C", str(self.primary), "commit", "--allow-empty", "-qm", "base advanced")
         self.assertEqual(self.run_tool("verify-current").returncode, 1)
