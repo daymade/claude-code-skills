@@ -117,6 +117,22 @@ archive merely to satisfy the Git storage convention. Consult prior analysis onl
 when the request calls for history or reuse.
 
 Apply the following commands to Git sources only.
+Before a fetch, clone or other repository write, resolve the caller's configured
+`COMPETITORS_BASE` and its actual filesystem target. Honor an explicit external
+volume; an unavailable target is a storage gap, not permission to create a second
+internal copy.
+
+When the user or current evidence identifies an active copy/migration, coordinate
+with its existing owner before writing either tree. Continue analysis from verified
+objects with `git --no-optional-locks --no-lazy-fetch ... show` / `cat-file`; retain missing-object
+and freshness gaps while other profiles proceed. Resume updates after the owner's
+handoff, without taking over copying, deletion or path switching.
+
+An interrupted fetch can change `FETCH_HEAD`, refs or object packs despite a
+failure exit. If it overlaps a migration, inspect the affected paths and give the
+owner the exact delta for synchronization and readback. Do not infer zero writes
+from the exit status or independently delete partial objects.
+
 For first ingestion or an explicit freshness/update request, establish these
 facts from commands, not memory:
 
@@ -145,6 +161,15 @@ If SSH fails for a public repository, report the failure and retry with the
 repository's HTTPS URL only when that keeps the work moving.
 
 ## Discovery Workflow
+
+For Discover or an open-ended Landscape, start from the workflow and business
+problem being replaced. Treat caller-named products as seeds; examine relevant
+alternatives with different ways of organizing the same work. For agent
+coordination, these might include persistent personal/team assistants, task
+platforms, native parent/subagent teams or messaging/task primitives. Select only
+categories that could change the user's choice; do not turn them into a mandatory
+market-wide checklist. Preserve the explicit scope of a standalone Profile or
+closed comparison.
 
 Use `gh search repos` for GitHub repository discovery. Search multiple query
 phrases; do not trust one keyword.
