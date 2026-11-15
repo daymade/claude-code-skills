@@ -576,6 +576,9 @@ Context-veto CLI regressions live in
 When the version-matched identity guide requires restoring an authorized user
 login, enter [authorization recovery](lark-cli-router/references/auth-recovery.md).
 Keep device-flow commands, continuation and account/result verification there.
+For interrupted permission batches, enter
+[permission-batch recovery](lark-cli-router/references/permission-batch-recovery.md)
+after the version-matched Drive/Wiki guides.
 
 ### Feishu Recording Lookup
 
