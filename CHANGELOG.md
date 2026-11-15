@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **git-safety-net** (v1.28.6): Check known external path consumers, including local Git metadata, before retiring a linked worktree; resolve live references through their owning workflow and preserve obsolete evidence without renewing approval.
 
 - **local-codex** (`daymade-codex` v2.4.13 → v2.4.14): Route the fault-driven daemon scenario into the skill — description and Session Management section now trigger on daemon restart, hooks failing with 'Too many open files' and fd exhaustion diagnostics; anchor the observed fd baseline to its version.
+- **lark-cli-router** (v1.0.4): Make authorization handoff identify the bound operator and direct link; resume permission batches from verified per-target state and distinguish transient errors from refusals and source-binding failures.
 
 - **local-codex** (`daymade-codex` v2.4.12 → v2.4.13): Add the fault-driven restart route for daemon fd exhaustion — diagnose per-process lsof against system limits, distinguish a leak from a post-restart reconnection burst by trend sampling, and recover through the managed daemon start.
 - **peer-message** (v1.26.0 → v1.27.0): Add the codex-fork attribution lead (branch suffix ↔ fork session ID) to the shared-WIP ownership checklist.

@@ -58,6 +58,11 @@ Use the embedded IM, Wiki and Drive guides for the actual commands.
 
 ## Workflow
 
+For authorized bulk page-permission changes or interrupted permission updates,
+read [permission-batch recovery](references/permission-batch-recovery.md) after
+the selected version's Drive/Wiki guides. It preserves per-target progress and
+separates transient failures from authorization and target changes.
+
 ### 1. Confirm the runtime
 
 Run `lark-cli --version`. If the binary is absent, fail visibly and report that
@@ -158,9 +163,6 @@ a replacement.
    successes, explicit failures and missing/unknown results against the request
    total, counting each requested identity at most once; report anomalies
    separately, and report `partial` whenever any requested result is not verified.
-   For example, three requested items with one verified
-   result, one permission error and one missing item are `partial: 1/3 successful,
-   1 failed, 1 missing`, even with exit `0` and outer `ok == true`.
 8. After a write, follow the selected guide's domain-specific verification
    contract. If it defines none, perform the narrowest independent read that proves
    the requested state changed. A guide that explicitly forbids an opportunistic

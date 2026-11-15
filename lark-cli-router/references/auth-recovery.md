@@ -39,6 +39,15 @@ Never omit the selector and fall back to the CLI's all-domain default.
 background polling worker and returns the original `verification_url`, deadline,
 flow ID and PID immediately. Show that URL unchanged in the same turn's final
 message and return control. Follow the loaded guide's QR display requirement too.
+In that message, name the account and organization observed for the bound profile,
+the exact missing permission or authorized login purpose, and the deadline with
+timezone. If a display name or organization has not been verified, identify the
+bound profile and retain that gap rather than guessing. Put the actionable URL
+in this message; do not refer only to an earlier link or QR code. Explain that
+the account being authorized comes from the operator's verified profile, not
+from inferring an account from the proposed document recipient. Keep authorization
+for the business action separate from the OAuth step; do not reopen an
+already-approved plan.
 Tell the user to authorize before the displayed deadline; no reply is needed for
 the worker to save credentials. Do not run another blocking poll in the foreground.
 Starting the identical active flow returns its existing link; a different active
