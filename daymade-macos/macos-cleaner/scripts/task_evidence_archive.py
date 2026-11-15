@@ -203,17 +203,36 @@ def verify(manifest_path, receipt_path):
 
 
 def assert_idle(paths):
-    require(sys.platform == "darwin", "Retirement requires macOS lsof; prepare/verify are portable")
-    result = subprocess.run(["/usr/sbin/lsof", "-nP", "-w", "-Fn"],
-                            capture_output=True, text=True, timeout=45, check=False)
-    require(result.returncode == 0 and not result.stderr.strip(), "Open-file probe incomplete")
-    opened = {line[1:] for line in result.stdout.splitlines() if line.startswith("n")}
-    require(not set(paths) & opened, "Selected evidence is still open")
+    require(sys.platform == "darwin", "Retirement requires macOS lsof")
+    # Let lsof select the exact file identities. Its displayed filenames escape
+    # control characters/backslashes and cannot safely be intersected with paths.
+    batches, batch, size = [], [], 0
+    for value in paths:
+        if not os.path.lexists(value):
+            continue
+        cost = len(os.fsencode(value)) + 1
+        if batch and size + cost > 16384:
+            batches.append(batch)
+            batch, size = [], 0
+        batch.append(value)
+        size += cost
+    if batch:
+        batches.append(batch)
+    for batch in batches:
+        result = subprocess.run(["/usr/sbin/lsof", "-nP", "-t", "--", *batch],
+                                capture_output=True, text=True, timeout=45, check=False)
+        require(not result.stderr.strip(), "Open-file probe incomplete")
+        require(not result.stdout.strip(), "Selected evidence is still open")
+        # lsof documents exit 1 with no selected files, 0 with matches. A silent
+        # successful process or any other status is not a complete negative probe.
+        require(result.returncode == 1, "Open-file probe incomplete")
 
 
 def retire(manifest_path, receipt_path, expected_sha, journal_path):
     raw, value = load_manifest(manifest_path)
-    receipt = json.loads(Path(receipt_path).read_bytes())
+    receipt_raw = Path(receipt_path).read_bytes()
+    receipt = json.loads(receipt_raw)
+    require(receipt.get("schema") == 1, "Unknown verification receipt schema")
     require(isinstance(expected_sha, str) and len(expected_sha) == 64 and
             sha(raw) == expected_sha == receipt.get("manifest_sha256"),
             "Exact verified manifest binding missing or changed")
@@ -231,6 +250,7 @@ def retire(manifest_path, receipt_path, expected_sha, journal_path):
     if os.path.lexists(journal):
         require(not journal.is_symlink(), "Journal cannot be a symlink")
         lines = journal.read_text().splitlines()
+        require(bool(lines), "Empty retirement journal")
         header = json.loads(lines[0])
         require(header == {"schema": 1, "manifest_sha256": expected_sha}, "Journal binding differs")
         started = {json.loads(line)["source"] for line in lines[1:]}
@@ -247,6 +267,7 @@ def retire(manifest_path, receipt_path, expected_sha, journal_path):
     assert_idle([row["source"] for row in value["files"]])
     # Rebind after slow verification, immediately before any unlink.
     require(Path(manifest_path).read_bytes() == raw, "Manifest changed during preflight")
+    require(Path(receipt_path).read_bytes() == receipt_raw, "Receipt changed during preflight")
     require(metadata(archive) == receipt["archive_stat"], "Archive changed during preflight")
     deleted = 0
     with journal.open("a") as log:

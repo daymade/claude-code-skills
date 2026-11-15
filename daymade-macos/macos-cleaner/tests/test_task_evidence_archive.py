@@ -170,6 +170,17 @@ class ArchiveTests(unittest.TestCase):
                 self.retire(digest)
         self.assert_preserved()
 
+    def test_receipt_changed_during_slow_probe_prevents_first_unlink(self):
+        digest = self.verified()
+
+        def change_receipt(paths):
+            self.receipt.write_text("{}")
+
+        with patch.object(archive, "assert_idle", change_receipt):
+            with self.assertRaisesRegex(archive.Refused, "Receipt changed"):
+                self.retire(digest)
+        self.assert_preserved()
+
     def test_missing_source_without_intent_refused(self):
         digest = self.verified()
         self.b.unlink()
@@ -202,6 +213,24 @@ class ArchiveTests(unittest.TestCase):
             with self.assertRaisesRegex(archive.Refused, "still open"):
                 self.retire(digest)
         self.assert_preserved()
+
+    @unittest.skipUnless(sys.platform == "darwin", "Actual lsof consumer runs on macOS")
+    def test_lsof_display_escaped_filename_does_not_hide_open_file(self):
+        for name in ["open\nfile.txt", "open\\nfile.txt"]:
+            with self.subTest(name=name):
+                moved = self.source / name
+                self.a.rename(moved)
+                self.a = moved
+                self.spec["files"][0]["path"] = str(self.a)
+                self.bundle = self.root / ("second.tar.gz" if self.bundle.exists() else "first.tar.gz")
+                self.manifest = self.root / ("second-manifest.json" if self.manifest.exists() else "first-manifest.json")
+                self.receipt = self.root / ("second-receipt.json" if self.receipt.exists() else "first-receipt.json")
+                self.journal = self.root / ("second-journal.jsonl" if self.journal.exists() else "first-journal.jsonl")
+                digest = self.verified()
+                with self.a.open("rb"):
+                    with self.assertRaisesRegex(archive.Refused, "still open"):
+                        self.retire(digest)
+                self.assert_preserved()
 
     def test_resume_preserves_recreated_source(self):
         digest = self.verified()
