@@ -94,7 +94,7 @@ For example, if two project trees are both authorized for one external team,
 place both original trees beneath one shared parent. Follow the node-preservation
 checks below, then [enable targeted collaboration](#enable-targeted-external-collaboration)
 and [verify structure, grant and actual access separately](#verify-and-resume).
-If the projects belong to different customers, retain separate permission parents.
+For different authorized audiences or customer groups, retain separate permission parents.
 
 Resolve `space_id`, `node_token`, underlying object token/type and current
 parents before changing structure. Prefer moving existing nodes to preserve
