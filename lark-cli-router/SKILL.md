@@ -49,8 +49,9 @@ before planning a write. Keep command syntax in the selected embedded Doc guide.
 
 ## External customer collaboration
 
-For a customer-facing Wiki with a matching external group, creating an external
-group, or granting a group access to a customer page and its descendants, read
+For Wiki pages shared with a customer or another external collaboration group,
+creating an external group, or granting a group access to an audience's parent
+page and its descendants, read
 [external collaboration](references/external-collaboration.md) before planning
 changes. It also covers inspecting and reusing a group the user created manually.
 Use the embedded IM, Wiki and Drive guides for the actual commands.
