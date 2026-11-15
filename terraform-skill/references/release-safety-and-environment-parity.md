@@ -90,11 +90,16 @@ or the current live config. Those validate a different system.
 
 ## Bind staging, source provenance, and production authorization
 
-- Let staging test a clean local candidate before it is merged.
-- Record a staging receipt only after apply and every required live verifier passes. A recorder callable
+- Select required validation environments from the current release contract and the user's latest
+  instruction. When the authorized path is local validation → fixed artifact → production, use it;
+  do not insert optional or disabled staging as a prerequisite. Keep explicitly required staging checks.
+- When staging is required or explicitly enabled, test its clean candidate and record a staging receipt
+  only after apply and every required live verifier passes. A recorder callable
   by itself must rerun or cryptographically consume that evidence; it cannot mint a receipt from plan text.
 - When the release contract requires promotion of the same artifact, consume the exact image/archive
-  content identity verified in staging. Validate environment-specific runtime configuration separately;
+  content identity verified by its required producer. For a direct production path, bind the validated
+  local artifact and the production acceptance; for staging promotion, retain the staging producer binding.
+  Validate environment-specific runtime configuration separately;
   source SHA equality, a mutable image tag or a build-cache hit does not prove artifact equality. If
   environment values are compiled into the artifact, fix that boundary before removing a required build.
 - Preserve the producing controller revision as provenance; decide consumer compatibility from an
@@ -111,6 +116,15 @@ or the current live config. Those validate a different system.
 - Keep the invalid-config recovery path separate and narrow: exact target, approved known-good bytes,
   prevalidation, compare-and-swap live identity, recovery ledger, and public readback.
 
+### Derive schema transitions from the pinned catalog
+
+When a release repository provides a versioned catalog and loader, consume them from the fixed candidate
+to derive its ordered migration suffix and exact-byte bundle identity. Keep the explicitly supported source
+baseline, its recorded bundle, object contracts and role checks; an available suffix alone does not admit
+an arbitrary historical database. Preserve the plan, confirmation and post-apply verification contract.
+Avoid duplicating each successor's migration list and hashes in orchestration code. Verify the generated
+inputs against the canonical loader and reject missing, reordered or changed migration bytes before apply.
+
 ## Keep pre- and post-mutation checks distinct
 
 Pre-mutation validation prevents a known bad candidate from touching live state. Post-deploy acceptance
@@ -124,7 +138,8 @@ functions. In an isolated fixture, execute the canonical entry with boundary exe
 recording stubs; retain its actual ordering and file handling. Cover saved-plan filename registration,
 plan creation, private evidence production, summary/digest binding, proof consumption and live verification.
 Do not mock away the Make recipe that wires these steps together. A missing producer must fail before
-mutation; a healthy recipe must reach its consumer. Keep a real staging run as the runtime acceptance.
+mutation; a healthy recipe must reach its consumer. Keep a real run in the contract's target environment
+as runtime acceptance; a local orchestration fixture cannot establish a live user journey.
 
 For a shared runtime, the release author also enumerates parallel plan guards and post-write consumers
 before changing the transition. Replay their joint canonical path with the same authenticated baseline.
@@ -146,7 +161,8 @@ to widen live deployment or repeat unchanged runtime tests.
 
 For a narrow runtime update, capture the exact target identity and protected state before and after,
 including when the plan has no changes. Derive preservation flags from those comparisons. Bind production
-promotion to the authenticated staging producer, source, environment and attempt; a local JSON object
+promotion to its authenticated evidence producer, source, environment and attempt, including the staging
+producer when that route is required; a local JSON object
 with the expected shape does not establish provenance. Test absent, empty, fabricated and stale evidence.
 
 Compare runtime state by meaning. Canonicalize only fields known to be unordered, such as a container's
@@ -163,6 +179,8 @@ unmet. Reconcile through the canonical narrow release entry rather than blindly 
 
 Healthy fixtures:
 
+- An authorized direct production path accepts its validated fixed artifact without an optional staging
+  receipt; a contract requiring staging rejects the same input until its required staging evidence exists.
 - Staging and production both provide the same required key set with different valid values.
 - Exact image accepts the rendered candidate.
 - Saved plan, source/artifact provenance, live verifiers, and plan-bound production authorization/audit
