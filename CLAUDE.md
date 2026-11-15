@@ -132,6 +132,8 @@ For evidence-based improvement of an existing application, enter
 [app-evolver](app-evolver/SKILL.md). For released-artifact or runtime evidence,
 load its [Skill composition route](app-evolver/references/skill-composition.md);
 keep specialist selection and handoff boundaries in that owner.
+For publication value and delivery-scope acceptance, use its
+[publication case](app-evolver/references/implementation-and-acceptance.md#synthetic-pair-a-publications-first-useful-result).
 Before collecting Mobbin screens or flows or selecting an adaptation, follow its
 [Mobbin evidence recipe](app-evolver/references/mobbin-evidence.md).
 For domain-role extraction or scattered policy, use its
