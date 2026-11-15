@@ -889,20 +889,16 @@ Before choosing a task checkout's storage location, follow its
 
 For already-authorized delivery in a shared checkout, enter
 [auto-repo-setup's scoped delivery route](auto-repo-setup/references/git_safety.md#authorized-shared-checkout-delivery).
-It owns the authorization/tool gate, bounded coordination, partial-result recovery and final closure;
-keep ordinary sync, publication and recovery boundaries with their existing owners.
 
 For inbound coordination during delivery or closeout, use
 [peer-message's receiving route](peer-message/SKILL.md#收到消息先分流).
-Keep the receiving and user-delivery procedure with that owner rather than duplicating it here.
 
 Stage only explicit owned file paths; never `git add -A` / `git add .`.
 Inspect the staged file list, including deletions,
 in a separate call before committing; investigate any entry outside the intended
-scope through `git-safety-net`. For branch publication and PR creation, follow
+scope through `git-safety-net`. For branch publication or PR creation, read
 [the publication recipe](github-ops/references/pr_operations.md#basic-pr-creation)
-before the first push. Keep its policy preflight, pinned source and remote readback
-in that owner rather than maintaining another push example here.
+before preparing the task checkout, including sparse and `--no-checkout` worktrees.
 
 For task closeout, enter
 [git-safety-net's Outcome contract](git-safety-net/SKILL.md#outcome-contract--keep-the-safety-net-subordinate-to-the-users-job).
@@ -911,7 +907,6 @@ For stash export or independent recovery, follow the
 [stash recovery procedure](git-safety-net/references/recovery_playbook.md#export-and-recover-selected-stashes).
 For final resource readback against the original inventory, follow the
 [terminal-state procedure](git-safety-net/references/merge_verification.md#5-prove-the-user-visible-terminal-state).
-Keep runtime requirements, artifact layouts and verification commands in those owners.
 For a failed fast-forward or a partly synchronized checkout, use its
 [guarded checkout recovery procedure](git-safety-net/references/prevention_practices.md#guarded-checkout-recovery).
 For local snapshot failures involving an index lock or commit-hook refusal, use its

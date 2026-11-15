@@ -1,7 +1,5 @@
 # Pull Request Operations Reference
 
-Comprehensive examples for GitHub pull request operations using gh CLI.
-
 All writes follow the target, authorization, impact-preview, and independent-readback contract
 in [operating and checked-invocation contract](../SKILL.md#universal-operating-contract).
 
@@ -12,13 +10,14 @@ in [operating and checked-invocation contract](../SKILL.md#universal-operating-c
 
 When preparing a sparse checkout or `--no-checkout` worktree, the publishing
 agent must materialize the tracked configuration used by the repository's checks
-before editing, committing, or interpreting their findings. Pin the source to a
-full commit SHA. Inspect that ref's tracked files and the active hook/checker
-entry points for policy files and their referenced dependencies; a path omitted
-by sparse checkout is not evidence that the repository declares no policy.
-For example, a PII checker may read root `.pii-*` declarations and
-`.personal-private-paths` from the working tree. Determine its actual inputs from
-the current checker, rather than treating those example names as a complete list.
+before editing, committing, or interpreting their findings. Pin the recovery ref
+to a full commit SHA. In a fresh `--no-checkout` worktree, first confirm that its
+index and selected files were initialized from that ref; setting sparse patterns
+alone does not prove the checkout is populated. Inspect the ref's tracked files
+and active hook/checker entry points to determine their actual input roots,
+policy files and referenced dependencies, including any ref-policy export used
+instead of working-tree configuration. A path omitted by sparse checkout is not
+evidence that the repository declares no policy.
 
 Compare the required tracked inputs with the materialized files. Preserve the
 existing sparse selection and any in-progress edits; extend it with Git's
