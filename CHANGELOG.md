@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **app-evolver** (v1.1.15 → v1.1.16): Distinguish a standalone prototype, a stale embedded document and the requested application increment; preserve approved structure and interaction during integration.
+- **frontend-visual-qa** (v1.21.48 → v1.21.49): Exercise continuous-map disclosure at intermediate and reversed zoom, in the real host viewport, with affected navigation and return paths.
+
 - **macos-cleaner** (`daymade-macos` v1.32.2 → v1.33.0): Support verified exact-record BuildKit eviction with a named builder and literal cache ID; retain broad-prune exclusions, unknown-state protection and activation approval for unattended deletion. Calibrate the plan checker against literal, empty, dynamic and widened selector forms.
 - **app-evolver** (v1.1.14 → v1.1.15): Add a publication example that separates a useful website increment from optional delivery infrastructure, preserves explicitly requested executable or contribution deliverables, and distinguishes comprehension from external use.
 
