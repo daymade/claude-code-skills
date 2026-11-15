@@ -1,7 +1,7 @@
 # 探针 r4-13：PROPOSABLE 类的「已验证不再使用」证据，非 preserve 目标完全没人查
 
 测什么：SKILL.md:137「PROPOSABLE — verified never-used evidence (a dead project, an
-explicit user statement, an artifact check). Size ratios are not evidence」。检测器的证据
+explicit user statement, an artifact check). Ratios between cache entries and project environments do not establish that any entry was never used.」。检测器的证据
 检查只在 preserve_downgrade 里，且只对命中了 preserve 表的目标生效（check_preserve_downgrade
 的第一道 continue 就是 `if name is None: continue`）。非 preserve 目标标成 PROPOSABLE
 放进动作集，不需要任何证据、不需要任何用户方向。

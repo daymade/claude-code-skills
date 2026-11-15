@@ -14,4 +14,4 @@ EXPLICIT_OBJECT_RES 只给 `uv cache clean <pkg>` 开了窄化口子。于是
 
 | 目标 | Nominal size | Physical confidence | Class | 管辖规则（逐字引用） | 预期物理释放 + 依据 | 恢复成本 | 裁决 |
 |---|---|---|---|---|---|---|---|
-| Docker dangling 镜像 `c5810ff4b86a` | 260 MB（unique 1.976 kB） | engine-reported | PROPOSABLE | "Always delete by specifying exact object IDs or names" | 1.976 kB：该行 UNIQUE SIZE | 重新 build 该镜像 | 入动作集（用户逐对象勾选） |
+| Docker dangling 镜像 `c5810ff4b86a` | 260 MB（unique 1.976 kB） | engine-reported | PROPOSABLE | "Before deleting ANY Docker object, perform independent verification." | 1.976 kB：该行 UNIQUE SIZE | 重新 build 该镜像 | 入动作集（用户逐对象勾选） |
