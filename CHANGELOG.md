@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **claude-code-hooks** (`daymade-claude-code` v5.1.16): Diagnose scanner-backed guard cost by route, cache and measured stage; preserve findings and ordinary dispatcher behavior while isolating verification resources.
+- **skill-creator** (`daymade-skill` v1.79.5): Verify recovery-test prerequisites independently, distinguish invalid fixtures from product failures, and isolate state and execution-slot namespaces from live callers.
+
 - **github-ops** (v1.16.5): Clarify sparse checkout initialization and checker input roots; route repository instructions to the preparation SOP and remove derived routing recaps.
 
 - **lark-cli-router** (v1.0.3): Distinguish one explicitly authorized shared-audience parent from separate customer permission parents, preserving existing nodes and future child-page inheritance.
