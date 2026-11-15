@@ -39,6 +39,14 @@ class DispatchTests(unittest.TestCase):
             "sys.stdout.write('dispatcher stdout\\n')\n"
             "sys.stderr.write('dispatcher stderr\\n')\n"
             "sys.exit(23)\n", encoding="utf-8")
+        # The protocol smoke never performs NumPy work. The original voiceprint
+        # producer imports this declared inference dependency before parsing CLI
+        # flags; isolate it explicitly so the registered suite stays stdlib-only.
+        self.model_stubs = self.root / "protocol-only-model-stubs"
+        self.model_stubs.mkdir()
+        (self.model_stubs / "numpy.py").write_text(
+            "def __getattr__(name):\n"
+            " raise AssertionError('NumPy computation forbidden in protocol smoke: '+name)\n")
         self.profile.write_text(json.dumps({"external_dispatch": {
             "protocol": 1, "argv": [sys.executable, str(self.dispatcher)]}}))
 
@@ -47,7 +55,8 @@ class DispatchTests(unittest.TestCase):
                "AUDIO_CAPTURE": str(self.capture), "HOME": str(self.root),
                "XDG_CONFIG_HOME": str(self.root / "config"), "TMPDIR": str(self.root),
                "TRANSCRIPT_FIXER_CONFIG_DIR": str(self.root / "fixer"),
-               "CLAUDE_PLUGIN_DATA": str(self.root / "plugin-data"), "HF_HOME": str(self.root / "huggingface")}
+               "CLAUDE_PLUGIN_DATA": str(self.root / "plugin-data"), "HF_HOME": str(self.root / "huggingface"),
+               "PYTHONPATH": str(self.model_stubs)}
         env.pop(bridge.BYPASS, None)
         env.pop(bridge.NONCE, None)
         env.pop("STEPFUN_API_KEY", None)
@@ -55,6 +64,12 @@ class DispatchTests(unittest.TestCase):
         for key in ("HF_TOKEN", "HF_HUB_TOKEN", "HUGGING_FACE_HUB_TOKEN"):
             env.pop(key, None)
         return env
+
+    def test_protocol_numpy_stub_refuses_computation(self):
+        result = subprocess.run([sys.executable, "-c", "import numpy as np; np.asarray([1])"],
+                                env=self.environment(), capture_output=True, text=True, timeout=10)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("NumPy computation forbidden in protocol smoke: asarray", result.stderr)
 
     def test_both_independently_installable_skills_ship_the_same_module(self):
         for skill in ("transcript-fixer", "stepfun-asr", "stepfun-tts"):

@@ -149,7 +149,7 @@ class DispatchResumeTests(unittest.TestCase):
                                       "checkpoint_manifest": {"path": str(manifest), "sha256": sha(manifest)}, "outputs": outputs}))
         before = {p: p.read_bytes() for p in (manifest, receipt, artifact)}
         profile = self.root / "unconfigured.json"; profile.write_text("{}")
-        command = ["uv", "run", "--no-project", "python", str(SCRIPTS / "transcribe_long_whispercpp.py"),
+        command = [sys.executable, str(SCRIPTS / "transcribe_long_whispercpp.py"),
                    str(self.wav), str(out), "--ffmpeg-path", str(assets["ffmpeg"]), "--whisper-bin", str(binary),
                    "--gpu-runtime-manifest", str(gpu_manifest), "--whisper-model", str(assets["whisper-model"]),
                    "--vad-model", str(assets["vad-model"])]
@@ -187,7 +187,7 @@ class DispatchResumeTests(unittest.TestCase):
         speaker._write_final_receipt(self.wav, out, "synthetic", params, pipeline)
         return out, decoder
 
-    def test_normal_uv_cli_reuses_completed_receipt_without_model_or_credentials(self):
+    def test_normal_cli_reuses_completed_receipt_without_model_or_credentials(self):
         out, decoder = self.make_bundle()
         before = {p.name: p.read_bytes() for p in out.iterdir()}
         (self.root / "unconfigured.json").write_text("{}")
@@ -198,7 +198,7 @@ class DispatchResumeTests(unittest.TestCase):
         guard = self.root / "sitecustomize.py"
         guard.write_text("import sys\nclass Guard:\n def find_spec(self,fullname,*args):\n  if fullname.split('.')[0] in {'torch','mlx','mlx_audio','pyannote','numpy'}:\n   raise AssertionError('Model runtime forbidden in completed-cache probe: '+fullname)\nsys.meta_path.insert(0,Guard())\n")
         env["PYTHONPATH"] = str(self.root)
-        command = ["uv", "run", "--no-project", "python", str(SCRIPTS / "speaker_transcribe.py"),
+        command = [sys.executable, str(SCRIPTS / "speaker_transcribe.py"),
                    str(self.wav), str(out), "--ffmpeg-path", str(decoder)]
         result = subprocess.run(command, env=env, capture_output=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stderr)
