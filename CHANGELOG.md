@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-cleaner** (`daymade-macos` v1.33.0): Consolidate exact inactive task evidence with original-path manifests, streamed archive verification and hash-bound resumable retirement; preserve active, protected and unclassified files.
+
 - **skill-creator** (`daymade-skill` v1.81.0): Gate task closeout on explicit output disposition. Preserve unclassified work and report exit 24 until disposable outputs are consumed and retired; support exact registration replacement and explicit retained-only inventories for worktrees, links and necessary evidence without implicit deletion.
 
 - **git-safety-net** (v1.28.6 → v1.28.7): Initialize a complete baseline index before sparse materialization and verify the explicit change scope without repairing existing work.
