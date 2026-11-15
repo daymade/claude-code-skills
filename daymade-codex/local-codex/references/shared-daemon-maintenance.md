@@ -84,7 +84,8 @@ Restart route: run the host kill-gate origin check, SIGTERM, then read back.
 A draining daemon can stall on dead proxy connections — if the fd count barely
 moves for minutes, send a second SIGTERM; it exits promptly. Bring the backend
 back with `codex app-server daemon start`, then read back the new PID and fd
-baseline (≈100–200 for a fresh daemon). When the trigger recurs, record it as
+baseline (observed ≈100–200 on 0.171.0-alpha.5 with few live clients). When
+the trigger recurs, record it as
 a product bug for upstream instead of adding a restart schedule.
 
 ## Execute through the supported lifecycle

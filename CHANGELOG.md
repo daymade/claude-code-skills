@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **local-codex** (`daymade-codex` v2.4.13 → v2.4.14): Route the fault-driven daemon scenario into the skill — description and Session Management section now trigger on daemon restart, hooks failing with 'Too many open files' and fd exhaustion diagnostics; anchor the observed fd baseline to its version.
+
 - **local-codex** (`daymade-codex` v2.4.12 → v2.4.13): Add the fault-driven restart route for daemon fd exhaustion — diagnose per-process lsof against system limits, distinguish a leak from a post-restart reconnection burst by trend sampling, and recover through the managed daemon start.
 - **peer-message** (v1.26.0 → v1.27.0): Add the codex-fork attribution lead (branch suffix ↔ fork session ID) to the shared-WIP ownership checklist.
 - **claude-code-hooks** (`daymade-claude-code` v5.1.16): Diagnose scanner-backed guard cost by route, cache and measured stage; preserve findings and ordinary dispatcher behavior while isolating verification resources.
