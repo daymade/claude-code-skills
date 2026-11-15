@@ -107,9 +107,10 @@ class MaterializeTests(unittest.TestCase):
         self.assertEqual((self.root / "artifacts/run-0002/stderr.log").read_text(), "stderr fixture\n")
 
         result = self.cli("finish", "--root", str(self.root), "--owner", "fixture-session", "--summary")
-        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.returncode, 24, result.stderr)
         summary = json.loads(result.stdout)
-        self.assertEqual(summary["state"], "finished")
+        self.assertEqual(summary["state"], "closeout_pending")
+        self.assertEqual(summary["closeout"]["unclassified_count"], 500)
         self.assertEqual(summary["outcome_before_finish"], "child_failed")
         self.assertEqual(summary["last_run"]["returncode"], 7)
         record = self.read()
@@ -739,7 +740,9 @@ class MaterializeTests(unittest.TestCase):
                           "--consumer", "preview-reader", "--consumed", "--summary")
         self.assertEqual(result.returncode, 0, result.stderr)
         summary = json.loads(result.stdout)
-        self.assertEqual(summary["state"], "finished")
+        self.assertEqual(summary["state"], "closeout_pending")
+        self.assertEqual(summary["closeout"]["unclassified_count"], 1)
+        self.assertEqual(summary["closeout"]["pending_retirement_count"], 0)
         self.assertEqual(summary["output_retirement"], {"scope": "registered_outputs", "complete": True,
                          "removed_count": 2, "retained_count": 0, "missing_count": 0,
                          "directories_removed_count": 1})
@@ -918,6 +921,269 @@ class MaterializeTests(unittest.TestCase):
         self.assertEqual(result["state"], "finished")
         self.assertEqual(result["charged_bytes"], charged)
         self.assertFalse(path.exists())
+
+    def test_closeout_unknown_root_files_and_empty_directories_require_disposition(self):
+        self.prepare()
+        note = self.root / "caller-prompt.txt"
+        note.write_text("retained request")
+        (self.root / "empty-output").mkdir()
+        result = self.cli("finish", "--root", str(self.root), "--owner", "fixture-session", "--summary")
+        self.assertEqual(result.returncode, 24, result.stderr)
+        self.assertEqual(self.read()["closeout"]["unclassified"], ["caller-prompt.txt", "empty-output"])
+        self.assertTrue(note.exists())
+        self.register("caller-prompt.txt", kind="evidence")
+        self.register("empty-output", kind="unique")
+        result = self.cli("finish", "--root", str(self.root), "--owner", "fixture-session", "--summary")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(json.loads(result.stdout)["closeout"]["complete"])
+        self.assertEqual(note.read_text(), "retained request")
+
+    def test_closeout_disposable_output_requires_explicit_consumption_and_retirement(self):
+        self.prepare()
+        path = self.root / "artifacts/preview"
+        path.write_text("preview")
+        self.register()
+        result = m.finish(self.root, "fixture-session")
+        self.assertEqual(result["state"], "closeout_pending")
+        self.assertEqual(result["closeout"]["pending_retirement"], ["artifacts/preview"])
+        self.assertEqual(result["closeout"]["unclassified"], [])
+        self.assertTrue(path.exists())
+        done = self.retire()
+        self.assertEqual(done["state"], "finished")
+        self.assertFalse(path.exists())
+        self.assertTrue(done["closeout"]["complete"])
+
+    def test_closeout_late_descendants_need_explicit_resnapshot(self):
+        self.prepare()
+        path = self.root / "artifacts/review"
+        path.mkdir()
+        (path / "first.txt").write_text("first")
+        self.register("artifacts/review", kind="evidence")
+        (path / "later.txt").write_text("later unique work")
+        done = m.finish(self.root, "fixture-session")
+        self.assertEqual(done["closeout"]["unclassified"], ["artifacts/review/later.txt"])
+        declaration = self.output_manifest("artifacts/review", kind="evidence")
+        m.register_output(self.root, "fixture-session", declaration, replace=True)
+        self.assertEqual(m.finish(self.root, "fixture-session")["state"], "finished")
+        self.assertEqual((path / "later.txt").read_text(), "later unique work")
+        self.assertIn("replaces", self.read()["outputs"][0])
+
+    def test_closeout_modified_or_explicitly_preserved_inputs_are_not_deleted(self):
+        self.prepare()
+        changed = self.root / "arms/with/selected/input.txt"
+        changed.write_text("hand edited source")
+        done = m.finish(self.root, "fixture-session")
+        self.assertEqual(done["closeout"]["unclassified"], ["arms/with/selected/input.txt"])
+        self.register("arms/with/selected/input.txt", kind="unique")
+        self.assertEqual(m.finish(self.root, "fixture-session")["state"], "finished")
+        self.assertEqual(changed.read_text(), "hand edited source")
+
+    def test_closeout_explicit_retention_of_unchanged_input_survives_finish(self):
+        self.prepare()
+        self.register("arms/with/selected/input.txt", kind="evidence")
+        done = m.finish(self.root, "fixture-session")
+        self.assertEqual(done["state"], "finished")
+        self.assertEqual((self.root / "arms/with/selected/input.txt").read_text(), "original\n")
+        self.assertFalse((self.root / "arms/baseline/selected/input.txt").exists())
+
+    def test_closeout_missing_preserved_output_is_not_complete(self):
+        self.prepare()
+        path = self.root / "artifacts/proof.json"
+        path.write_text("proof")
+        self.register("artifacts/proof.json", kind="evidence")
+        path.unlink()
+        done = m.finish(self.root, "fixture-session")
+        self.assertEqual(done["state"], "closeout_pending")
+        self.assertEqual(done["closeout"]["missing_preserved"], ["artifacts/proof.json"])
+
+    def test_closeout_inventory_failure_cannot_persist_a_finished_receipt(self):
+        self.prepare()
+        with mock.patch.object(m, "scan", side_effect=m.MaterializationError("unreadable", "measurement_unknown")):
+            with self.assertRaises(m.MaterializationError):
+                m.finish(self.root, "fixture-session")
+        done = self.read()
+        self.assertEqual(done["state"], "closeout_pending")
+        self.assertFalse(done["closeout"]["complete"])
+        self.assertFalse(done["closeout"]["inventory_complete"])
+        self.assertIsNone(m.receipt_summary(done)["closeout"]["unclassified_count"])
+
+    def test_closeout_symlinked_arm_container_is_unknown_not_implicitly_retained(self):
+        self.prepare()
+        arm = self.root / "arms/with"
+        arm.rename(self.base / "preserved-arm")
+        arm.symlink_to(self.repo, target_is_directory=True)
+        done = m.finish(self.root, "fixture-session")
+        self.assertEqual(done["state"], "closeout_pending")
+        self.assertIn("arms/with", done["closeout"]["unclassified"])
+        self.assertEqual((self.repo / "selected/input.txt").read_text(), "original\n")
+
+    def test_closeout_only_exact_runner_logs_have_automatic_evidence_disposition(self):
+        self.prepare()
+        self.run_python("print('proof')")
+        extra = self.root / "artifacts/run-0001/new-build.tar"
+        extra.write_bytes(b"unclassified build")
+        done = m.finish(self.root, "fixture-session")
+        self.assertEqual(done["closeout"]["unclassified"], ["artifacts/run-0001/new-build.tar"])
+        self.assertEqual((self.root / "artifacts/run-0001/stdout.log").read_text(), "proof\n")
+
+    def test_closeout_new_registration_revokes_finished_state_until_retirement(self):
+        self.prepare()
+        self.assertEqual(m.finish(self.root, "fixture-session")["state"], "finished")
+        path = self.root / "artifacts/preview"
+        path.write_text("later build")
+        registered = self.register()
+        self.assertEqual(registered["state"], "closeout_pending")
+        with self.assertRaises(m.MaterializationError):
+            self.run_python("print('cannot reopen a cleaned arm')")
+        self.assertEqual(self.retire()["state"], "finished")
+
+    def test_closeout_recreated_retired_payload_requires_replacement_and_consumption(self):
+        self.prepare()
+        path = self.root / "artifacts/preview"
+        path.write_text("first build")
+        self.register()
+        m.finish(self.root, "fixture-session")
+        self.retire()
+        path.write_text("second build")
+        done = m.finish(self.root, "fixture-session")
+        self.assertEqual(done["closeout"]["pending_retirement"], ["artifacts/preview"])
+        m.register_output(self.root, "fixture-session", self.output_manifest(), replace=True)
+        self.assertEqual(self.retire()["state"], "finished")
+        self.assertFalse(path.exists())
+
+    def test_output_replacement_requires_exact_existing_path_and_inactive_consumer(self):
+        self.prepare()
+        path = self.root / "artifacts/preview"
+        path.write_text("preview")
+        with self.assertRaises(m.MaterializationError):
+            m.register_output(self.root, "fixture-session", self.output_manifest(), replace=True)
+        self.register(consumer_pid=os.getpid())
+        with self.assertRaises(m.MaterializationError):
+            m.register_output(self.root, "fixture-session", self.output_manifest(kind="unique"), replace=True)
+        for value in (None, "", 1):
+            with self.subTest(replace=value), self.assertRaises(m.MaterializationError):
+                m.register_output(self.root, "fixture-session", self.output_manifest(), replace=value)
+
+    def test_closeout_absent_empty_and_null_output_inventories_do_not_hide_unknown_work(self):
+        self.prepare()
+        path = self.root / "caller-prompt.txt"
+        path.write_text("unclassified")
+        original = self.read()
+        for label, value in (("missing", None), ("empty", []), ("null", None)):
+            record = dict(original)
+            if label != "missing":
+                record["outputs"] = value
+            m.save(self.root, record)
+            with self.subTest(inventory=label):
+                if label == "null":
+                    with self.assertRaises(m.MaterializationError):
+                        m.finish(self.root, "fixture-session")
+                else:
+                    done = m.finish(self.root, "fixture-session")
+                    self.assertEqual(done["state"], "closeout_pending")
+                    self.assertIn("caller-prompt.txt", done["closeout"]["unclassified"])
+                self.assertEqual(path.read_text(), "unclassified")
+
+    def test_registration_measurement_failure_revokes_previous_closeout(self):
+        self.prepare()
+        m.finish(self.root, "fixture-session")
+        (self.root / "artifacts/preview").write_text("new build")
+        with mock.patch.object(m, "measure", side_effect=m.MaterializationError("unknown", "measurement_unknown")):
+            with self.assertRaises(m.MaterializationError):
+                self.register()
+        record = self.read()
+        self.assertEqual(record["state"], "closeout_pending")
+        self.assertFalse(record["closeout"]["complete"])
+        self.assertIsNone(m.receipt_summary(record)["closeout"]["unclassified_count"])
+
+    def test_cli_replacement_updates_only_the_exact_registration(self):
+        self.prepare()
+        (self.root / "artifacts/preview").write_text("retain this output")
+        self.register()
+        m.finish(self.root, "fixture-session")
+        manifest = self.base / "replacement.json"
+        manifest.write_text(json.dumps(self.output_manifest(kind="unique")))
+        result = self.cli("register-output", "--root", str(self.root), "--owner", "fixture-session",
+                          "--manifest", str(manifest), "--replace", "--summary")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(json.loads(result.stdout)["closeout"]["complete"])
+        self.assertEqual((self.root / "artifacts/preview").read_text(), "retain this output")
+        self.assertEqual(self.read()["outputs"][0]["kind"], "unique")
+
+    def test_retained_only_real_worktree_metadata_can_close_without_becoming_disposable(self):
+        self.prepare()
+        worktree = self.root / "arms/with/pro-worktree"
+        self.g("worktree", "add", "--detach", str(worktree), self.ref)
+        marker = (worktree / ".git").read_bytes()
+        done = m.finish(self.root, "fixture-session")
+        self.assertIn("arms/with/pro-worktree/.git", done["closeout"]["unclassified"])
+        declaration = self.output_manifest("arms/with/pro-worktree", kind="unique")
+        with self.assertRaises(m.MaterializationError):
+            m.register_output(self.root, "fixture-session", declaration)
+        declaration["retention_only"] = True
+        done = m.register_output(self.root, "fixture-session", declaration)
+        self.assertTrue(done["closeout"]["complete"])
+        self.assertEqual((worktree / ".git").read_bytes(), marker)
+        self.assertEqual(subprocess.check_output(["git", "-C", str(worktree), "rev-parse", "HEAD"],
+                                                env=self.env).decode().strip(), self.ref)
+        self.retire()
+        self.assertTrue((worktree / "selected/input.txt").exists())
+        later = worktree / "later.txt"
+        later.write_text("later retained work")
+        done = m.finish(self.root, "fixture-session")
+        self.assertIn("arms/with/pro-worktree/later.txt", done["closeout"]["unclassified"])
+        m.register_output(self.root, "fixture-session", declaration, replace=True)
+        self.assertEqual(m.finish(self.root, "fixture-session")["state"], "finished")
+        self.assertEqual(later.read_text(), "later retained work")
+
+    def test_retained_only_links_and_fifo_are_never_opened_or_retired(self):
+        self.prepare()
+        directory = self.root / "artifacts/retained"
+        directory.mkdir()
+        original = directory / "original"
+        original.write_text("unique")
+        os.link(original, directory / "hardlink")
+        outside = self.base / "outside.txt"
+        outside.write_text("outside remains outside")
+        (directory / "link").symlink_to(outside)
+        os.mkfifo(directory / "pipe")
+        declaration = self.output_manifest("artifacts/retained", kind="evidence", retention_only=True)
+        with mock.patch.object(m, "digest_chunks", side_effect=AssertionError("retained-only paths must not be hashed/opened")):
+            m.register_output(self.root, "fixture-session", declaration)
+        done = m.finish(self.root, "fixture-session")
+        self.assertEqual(done["state"], "finished")
+        retired = self.retire()
+        self.assertEqual(retired["output_retirement"]["removed"], [])
+        self.assertEqual(retired["output_retirement"]["retained"], ["artifacts/retained"])
+        self.assertTrue((directory / "pipe").exists())
+        self.assertEqual((directory / "link").readlink(), outside)
+        self.assertEqual(outside.read_text(), "outside remains outside")
+        self.assertEqual(original.stat().st_nlink, 2)
+
+    def test_retained_only_manifest_cannot_authorize_disposal_or_escape_root(self):
+        self.prepare()
+        (self.root / "artifacts/preview").write_text("payload")
+        for kind in ("rebuildable", "transport"):
+            with self.subTest(kind=kind), self.assertRaises(m.MaterializationError):
+                self.register(kind=kind, retention_only=True)
+        for value in (None, "", 1, "true"):
+            with self.subTest(retention_only=value), self.assertRaises(m.MaterializationError):
+                self.register(kind="unique", retention_only=value)
+        for path in ("../outside", "/tmp/outside", ".", m.STATE, m.LOCK, "arms/foreign/work"):
+            with self.subTest(path=path), self.assertRaises(m.MaterializationError):
+                self.register(path, kind="unique", retention_only=True)
+        self.assertNotIn("outputs", self.read())
+
+    def test_persisted_retained_only_cannot_be_relabelled_as_disposable(self):
+        self.prepare()
+        (self.root / "artifacts/preview").write_text("unique")
+        self.register(kind="unique", retention_only=True)
+        record = self.read()
+        record["outputs"][0]["kind"] = "rebuildable"
+        m.save(self.root, record)
+        with self.assertRaises(m.MaterializationError):
+            self.retire()
+        self.assertEqual((self.root / "artifacts/preview").read_text(), "unique")
 
     def test_registration_overlap_and_corrupt_persisted_inventory_fail_closed(self):
         self.prepare()

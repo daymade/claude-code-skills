@@ -21,7 +21,7 @@ import time
 STATE = ".materialization.json"
 LOCK = ".materialization.lock"
 EXIT = {"budget_exceeded": 20, "free_space_low": 21, "measurement_unknown": 22,
-        "child_failed": 23, "interrupted": 130, "invalid_manifest": 2}
+        "child_failed": 23, "closeout_pending": 24, "interrupted": 130, "invalid_manifest": 2}
 OUTPUT_KINDS = ("rebuildable", "transport", "evidence", "unique")
 
 
@@ -31,10 +31,11 @@ class MaterializationError(Exception):
         self.reason = reason
 
 
-def relative_path(value):
+def relative_path(value, *, allow_git=False):
     if not isinstance(value, str) or not value or value.startswith(("/", ":")):
         raise MaterializationError("paths must be explicit repository-relative paths")
-    if any(p in ("", ".", "..", ".git") for p in value.split("/")) or "\x00" in value:
+    forbidden = ("", ".", "..") if allow_git else ("", ".", "..", ".git")
+    if any(p in forbidden for p in value.split("/")) or "\x00" in value:
         raise MaterializationError(f"unsafe path: {value!r}")
     return value
 
@@ -260,7 +261,7 @@ def check_limits(record, root):
         raise MaterializationError("free space below explicit minimum", "free_space_low")
 
 
-def scan(root):
+def scan(root, *, retained_specials=()):
     """Bounded to this root; account allocated and logical sizes, never follow links."""
     sizes = {}
 
@@ -290,7 +291,8 @@ def scan(root):
                     if error.errno != errno.ENOENT:
                         raise
                     continue
-                if not (stat.S_ISREG(s.st_mode) or stat.S_ISDIR(s.st_mode) or stat.S_ISLNK(s.st_mode)):
+                if not (stat.S_ISREG(s.st_mode) or stat.S_ISDIR(s.st_mode) or stat.S_ISLNK(s.st_mode)
+                        or path.relative_to(root).as_posix() in retained_specials):
                     raise OSError(f"cannot account special file: {path}")
                 sizes[path.relative_to(root).as_posix()] = max(s.st_size, s.st_blocks * 512)
         after = root.lstat()
@@ -303,7 +305,8 @@ def scan(root):
 
 
 def measure(record, root, *, enforce_limits=True):
-    sizes = scan(root)
+    specials = retained_special_paths(record)
+    sizes = scan(root, retained_specials=specials) if specials else scan(root)
     highwater = record["path_highwater"]
     for name, size in sizes.items():
         old = highwater.get(name, 0)
@@ -461,7 +464,7 @@ def run(root, owner, arm, argv, poll_interval=0.1, *, capacity_config=None):
     if not math.isfinite(poll_interval) or poll_interval <= 0:
         raise MaterializationError("poll_interval must be positive and finite")
     root, record = root_record(root, owner)
-    if arm not in record["arms"] or not record.get("prepared_at") or record["state"] in ("preparing", "prepare_failed", "finished"):
+    if arm not in record["arms"] or not record.get("prepared_at") or record["state"] in ("preparing", "prepare_failed", "finished", "closeout_pending"):
         raise MaterializationError("arm unavailable or root not prepared")
     if alive(record.get("child_pgid"), group=True):
         raise MaterializationError("a child process group is still active")
@@ -570,13 +573,19 @@ def output_contract(data, record):
     """Validate one caller classification; no discovery or external-path adoption."""
     if not isinstance(data, dict):
         raise MaterializationError("output manifest must be an object")
-    if set(data) - {"path", "kind", "consumer", "rebuild_from", "consumer_pid"}:
+    if set(data) - {"path", "kind", "consumer", "rebuild_from", "consumer_pid", "retention_only"}:
         raise MaterializationError("unknown output manifest field")
-    path = relative_path(data.get("path"))
+    if "retention_only" in data and type(data["retention_only"]) is not bool:
+        raise MaterializationError("retention_only must be an explicit boolean")
+    retention_only = data.get("retention_only", False)
+    if retention_only and data.get("kind") not in ("unique", "evidence"):
+        raise MaterializationError("retention_only is restricted to unique/evidence; it never authorizes deletion")
+    path = relative_path(data.get("path"), allow_git=retention_only)
     parts = PurePosixPath(path).parts
-    if not ((parts[0] == "artifacts" and len(parts) >= 2)
-            or (parts[0] == "arms" and len(parts) >= 3 and parts[1] in record["arms"])):
-        raise MaterializationError("output must be a strict descendant of artifacts or a declared arm")
+    if (path in (STATE, LOCK) or parts[0].startswith(".materialization.")
+            or (parts[0] == "artifacts" and len(parts) < 2)
+            or (parts[0] == "arms" and (len(parts) < 3 or parts[1] not in record["arms"]))):
+        raise MaterializationError("output must name an exact non-runner path within the task root")
     if data.get("kind") not in OUTPUT_KINDS:
         raise MaterializationError("output kind must be rebuildable, transport, evidence or unique")
     if not isinstance(data.get("consumer"), str) or not data["consumer"].strip():
@@ -590,7 +599,8 @@ def output_contract(data, record):
             and re.fullmatch(r"run-[0-9]+", parts[1])):
         raise MaterializationError("runner logs are retained evidence, not disposable outputs")
     for entry in record["inputs"]:
-        if overlaps(path, entry["path"]):
+        if overlaps(path, entry["path"]) and not (
+                path == entry["path"] and data["kind"] in ("unique", "evidence")):
             raise MaterializationError("output classification overlaps a declared input")
     return dict(data)
 
@@ -604,6 +614,11 @@ def file_identity(value):
             value.st_mtime_ns, value.st_ctime_ns, value.st_nlink]
 
 
+def retained_special_paths(record):
+    return {item["path"] for output in record.get("outputs", [])
+            if output.get("retention_only") is True for item in output["files"]}
+
+
 def validate_outputs(record):
     outputs = record.get("outputs", [])
     if not isinstance(outputs, list):
@@ -613,8 +628,9 @@ def validate_outputs(record):
         if not isinstance(output, dict):
             raise MaterializationError("invalid persisted output")
         declaration = {key: output[key] for key in
-                       ("path", "kind", "consumer", "rebuild_from", "consumer_pid") if key in output}
+                       ("path", "kind", "consumer", "rebuild_from", "consumer_pid", "retention_only") if key in output}
         output_contract(declaration, record)
+        retention_only = output.get("retention_only", False)
         if any(overlaps(output["path"], path) for path in seen):
             raise MaterializationError("overlapping persisted outputs")
         seen.append(output["path"])
@@ -629,7 +645,7 @@ def validate_outputs(record):
             for item in output[key]:
                 if not isinstance(item, dict):
                     raise MaterializationError("invalid persisted output entry")
-                name = relative_path(item.get("path"))
+                name = relative_path(item.get("path"), allow_git=retention_only)
                 identity = item.get("identity")
                 length = 7 if key == "files" else 2
                 if (not isinstance(identity, list) or len(identity) != length
@@ -642,15 +658,20 @@ def validate_outputs(record):
                 if (name in names or not (name == output["path"] or name.startswith(output["path"] + "/"))):
                     raise MaterializationError("output entry escapes its declared path")
                 names.add(name)
-                if key == "files" and (not isinstance(item.get("sha256"), str)
+                if key == "files" and not retention_only and (not isinstance(item.get("sha256"), str)
                                         or not re.fullmatch(r"[0-9a-f]{64}", item["sha256"])
                                         or not stat.S_ISREG(identity[2]) or identity[6] != 1):
                     raise MaterializationError("invalid persisted output file")
+                if key == "files" and retention_only and (stat.S_ISDIR(identity[2])
+                        or stat.S_IFMT(identity[2]) not in (stat.S_IFREG, stat.S_IFLNK, stat.S_IFIFO,
+                                                           stat.S_IFSOCK, stat.S_IFCHR, stat.S_IFBLK)):
+                    raise MaterializationError("invalid retained-only entry type")
 
 
 def snapshot_output(root, declaration):
     files, directories, ancestors = [], [], []
     path = PurePosixPath(declaration["path"])
+    retention_only = declaration.get("retention_only", False)
     for index in range(1, len(path.parts)):
         name = PurePosixPath(*path.parts[:index]).as_posix()
         with safe_directory(root, name) as fd:
@@ -658,7 +679,7 @@ def snapshot_output(root, declaration):
             ancestors.append({"path": name, "identity": [value.st_dev, value.st_ino]})
 
     def visit(parent_fd, name, relative):
-        relative_path(relative)
+        relative_path(relative, allow_git=retention_only)
         before = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
         if stat.S_ISDIR(before.st_mode):
             fd = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent_fd)
@@ -672,8 +693,20 @@ def snapshot_output(root, declaration):
                 after = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
                 if (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino):
                     raise MaterializationError("output directory changed while registering")
+                if retention_only and file_identity(before) != file_identity(after):
+                    raise MaterializationError("retained-only directory changed while registering")
             finally:
                 os.close(fd)
+        elif retention_only:
+            item = {"path": relative, "identity": file_identity(before)}
+            if stat.S_ISLNK(before.st_mode):
+                item["link_target"] = os.readlink(name, dir_fd=parent_fd)
+            after = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+            if file_identity(before) != file_identity(after):
+                raise MaterializationError("retained-only entry changed while registering")
+            # Metadata-only retention never opens a FIFO/device or follows links,
+            # hashes Git objects, or creates an output eligible for retirement.
+            files.append(item)
         elif stat.S_ISREG(before.st_mode) and before.st_nlink == 1:
             fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent_fd)
             with os.fdopen(fd, "rb") as source:
@@ -694,21 +727,40 @@ def snapshot_output(root, declaration):
             "state": "registered", "registered_at": time.time()}
 
 
-def register_output(root, owner, declaration):
+def register_output(root, owner, declaration, *, replace=False):
+    if type(replace) is not bool:
+        raise MaterializationError("replace must be an explicit boolean")
     root, _record = root_record(root, owner)
     with lock_root(root, owner):
         root, record = root_record(root, owner)
         if record["state"] == "preparing" or alive(record.get("child_pgid"), group=True):
             raise MaterializationError("registration refuses an active child process group")
         declaration = output_contract(declaration, record)
-        if any(overlaps(declaration["path"], output["path"]) for output in record.get("outputs", [])):
+        existing = [output for output in record.get("outputs", [])
+                    if overlaps(declaration["path"], output["path"])]
+        if existing and (not replace or len(existing) != 1 or existing[0]["path"] != declaration["path"]):
             raise MaterializationError("output already registered or overlaps a registration; use a new path")
+        if replace and not existing:
+            raise MaterializationError("replacement requires an existing exact registration")
+        if existing and alive(existing[0].get("consumer_pid")):
+            raise MaterializationError("replacement refuses an active consumer PID")
         output = snapshot_output(root, declaration)
         # Registration allocates no payload and remains available when cleanup is
         # urgent. Charge observed storage without admitting a child or resetting limits.
-        record.setdefault("outputs", []).append(output)
+        if existing:
+            old = existing[0]
+            output["replaces"] = {"kind": old["kind"], "state": old["state"],
+                                  "snapshot_sha256": hashlib.sha256(
+                                      json.dumps(old, sort_keys=True).encode()).hexdigest()}
+            record["outputs"][record["outputs"].index(old)] = output
+        else:
+            record.setdefault("outputs", []).append(output)
+        if "cleanup" in record:
+            invalidate_closeout(record)
         save(root, record)
         measure(record, root, enforce_limits=False)
+        if "cleanup" in record:
+            refresh_closeout(root, record)
         save(root, record)
         return record
 
@@ -800,10 +852,102 @@ def retire(root, owner, consumer, *, consumed=False):
             output["state"] = "retained" if retained else "retired"
             result["complete"] &= not retained
         record["output_retirement"] = result
+        if "cleanup" in record:
+            refresh_closeout(root, record)
         # No capacity config read or free-space gate can block safe retirement.
         # Keep cumulative charges and the original run/finish state intact.
         save(root, record)
         return record
+
+
+def closeout_status(root, record):
+    """Inspect the live root without deleting or guessing classifications.
+
+    Only the runner's exact metadata, declared input container directories and
+    recorded stdout/stderr paths are implicitly covered. Registrations cover
+    their captured entries, never later additions under the same directory.
+    """
+    specials = retained_special_paths(record)
+    current = scan(root, retained_specials=specials) if specials else scan(root)
+    covered = {".", STATE, LOCK}
+
+    def cover_directory(name):
+        if name in current and stat.S_ISDIR((root / name).lstat().st_mode):
+            covered.add(name)
+
+    cover_directory("arms")
+    cover_directory("artifacts")
+    for arm in record["arms"]:
+        cover_directory("arms/" + arm)
+
+    def ancestors(name):
+        for parent in PurePosixPath(name).parents:
+            if parent.as_posix() != ".":
+                cover_directory(parent.as_posix())
+
+    for entry in record["inputs"]:
+        ancestors(entry["path"])
+    runs = record.get("runs")
+    if not isinstance(runs, list) or any(not isinstance(run, dict) for run in runs):
+        raise MaterializationError("invalid run inventory for closeout")
+    for index, _run in enumerate(runs, 1):
+        directory = f"artifacts/run-{index:04d}"
+        if directory in current and stat.S_ISDIR((root / directory).lstat().st_mode):
+            covered.add(directory)
+        for name in (directory + "/stdout.log", directory + "/stderr.log"):
+            if name in current and stat.S_ISREG((root / name).lstat().st_mode):
+                covered.add(name)
+    pending, missing = [], []
+    for output in record.get("outputs", []):
+        disposable = output["kind"] in ("rebuildable", "transport")
+        entries = output["files"] + output["directories"]
+        if disposable and (output["state"] != "retired"
+                           or any(item["path"] in current for item in entries)):
+            pending.append(output["path"])
+        for item, regular in [(item, True) for item in output["files"]] + [
+                (item, False) for item in output["directories"]]:
+            name = item["path"]
+            if name not in current:
+                if not disposable:
+                    missing.append(name)
+                continue
+            value = (root / name).lstat()
+            retained_type = output.get("retention_only") is True and regular and (
+                stat.S_IFMT(value.st_mode) == stat.S_IFMT(item["identity"][2]))
+            if (retained_type or (regular and stat.S_ISREG(value.st_mode))
+                    or (not regular and stat.S_ISDIR(value.st_mode))):
+                covered.add(name)
+                ancestors(name)
+        for item in output["ancestors"]:
+            name = item["path"]
+            if name in current and stat.S_ISDIR((root / name).lstat().st_mode):
+                covered.add(name)
+    unclassified = sorted(set(current) - covered)
+    cleanup = record.get("cleanup")
+    input_complete = isinstance(cleanup, dict) and cleanup.get("inventory_complete") is True
+    active_child = alive(record.get("child_pgid"), group=True)
+    complete = input_complete and not (unclassified or pending or missing or active_child)
+    return {"scope": "task_root", "complete": complete, "inventory_complete": True,
+            "unclassified": unclassified, "pending_retirement": sorted(pending),
+            "missing_preserved": sorted(missing), "active_child": active_child,
+            "checked_at": time.time()}
+
+
+def invalidate_closeout(record):
+    record["state"] = "closeout_pending"
+    record["closeout"] = {"scope": "task_root", "complete": False, "inventory_complete": False,
+                          "unclassified": None, "pending_retirement": None, "missing_preserved": None,
+                          "checked_at": time.time()}
+
+
+def refresh_closeout(root, record):
+    invalidate_closeout(record)
+    try:
+        record["closeout"] = closeout_status(root, record)
+    except (MaterializationError, OSError):
+        save(root, record)
+        raise
+    record["state"] = "finished" if record["closeout"]["complete"] else "closeout_pending"
 
 
 def finish(root, owner):
@@ -811,10 +955,14 @@ def finish(root, owner):
     if alive(record.get("child_pgid"), group=True):
         raise MaterializationError("finish refuses an active child process group")
     with lock_root(root, owner):
+        root, record = root_record(root, owner)
+        if alive(record.get("child_pgid"), group=True):
+            raise MaterializationError("finish refuses an active child process group")
         removed = []
         retained = []
         inventory_complete = False
         record["outcome_before_finish"] = record.get("outcome_before_finish", record.get("recovered_from", record["state"]))
+        invalidate_closeout(record)
         try:
             # Inventory before deletion; unreadable contents are not a green cleanup.
             for directory, dirs, files in os.walk(root, followlinks=False,
@@ -824,10 +972,12 @@ def finish(root, owner):
                     if relative not in (STATE, LOCK):
                         retained.append(relative)
             inventory_complete = True
+            preserved = {item["path"] for output in record.get("outputs", [])
+                         if output["kind"] in ("evidence", "unique") for item in output["files"]}
             for entry in record["inputs"]:
-                if remove_unchanged(root, entry):
+                if entry["path"] not in preserved and remove_unchanged(root, entry):
                     removed.append(entry["path"])
-            record["state"] = "finished"
+            record["state"] = "closeout_pending"
         except KeyboardInterrupt:
             record["state"] = "cleanup_interrupted"
             raise
@@ -840,6 +990,8 @@ def finish(root, owner):
                                  "inventory_complete": inventory_complete,
                                  "finished_at": time.time()}
             save(root, record)
+        refresh_closeout(root, record)
+        save(root, record)
         return record
 
 
@@ -910,6 +1062,11 @@ def receipt_summary(record):
         result["cleanup"] = cleanup
     if "outputs" in record:
         result["output_count"] = len(record["outputs"])
+    closeout = record.get("closeout")
+    if isinstance(closeout, dict):
+        result["closeout"] = {"scope": "task_root", "complete": closeout["complete"],
+                              **{key + "_count": len(closeout[key]) if isinstance(closeout.get(key), list) else None for key in
+                                 ("unclassified", "pending_retirement", "missing_preserved")}}
     retirement = record.get("output_retirement")
     if isinstance(retirement, dict):
         result["output_retirement"] = {"scope": "registered_outputs", "complete": retirement["complete"],
@@ -941,6 +1098,8 @@ def _main(argv=None):
         elif command == "register-output":
             p.add_argument("--manifest", required=True,
                            help="JSON with exact in-root path, kind, consumer and rebuild_from for disposable payloads")
+            p.add_argument("--replace", action="store_true",
+                           help="explicitly reclassify and resnapshot one existing exact registration")
         elif command == "retire":
             p.add_argument("--consumer", required=True)
             p.add_argument("--consumed", action="store_true", required=True,
@@ -951,12 +1110,13 @@ def _main(argv=None):
             with open(args.manifest) as f:
                 result, code = prepare(json.load(f), args.root, capacity_config=args.capacity_config), 0
         elif args.command == "finish":
-            result, code = finish(args.root, args.owner), 0
+            result = finish(args.root, args.owner)
+            code = EXIT.get(result["state"], 0)
         elif args.command == "recover":
             result, code = recover(args.root, args.owner), 0
         elif args.command == "register-output":
             with open(args.manifest) as f:
-                result, code = register_output(args.root, args.owner, json.load(f)), 0
+                result, code = register_output(args.root, args.owner, json.load(f), replace=args.replace), 0
         elif args.command == "retire":
             result, code = retire(args.root, args.owner, args.consumer, consumed=args.consumed), 0
         else:
