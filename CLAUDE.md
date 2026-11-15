@@ -1031,8 +1031,9 @@ claiming the whole checkout is current.
 
 For divergent local `main`, recovery-material selection or branch/worktree retirement,
 follow [git-safety-net](git-safety-net/SKILL.md).
-For linked-worktree recovery preparation, including dependency-cache declarations, use its
-[preservation helper](git-safety-net/references/worktree-retirement-helper.md).
+For named linked-worktree retirement, retained recovery refs after squash, interrupted preparation
+or dependency-cache declarations, follow its complete
+[worktree retirement procedure](git-safety-net/references/merge_verification.md#worktree-retirement--prove-the-checkout-is-disposable-before-removal).
 When current content differs from an older published review, use the
 [historical publication example](git-safety-net/references/merge_verification.md#worked-example--old-review-content-landed-through-another-ref)
 before deciding supersession.
