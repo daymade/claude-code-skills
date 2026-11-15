@@ -205,6 +205,59 @@ provider inventory. Use declared decisions; keep unknown intent on the project's
 existing review path. Excluding intentional retirements must preserve attention
 for a still-retained failing control.
 
+### Continuous zoomable maps
+
+Use this recipe when the product promises an overview and deeper workflow or
+task detail through continuous zoom on the same map. A map that intentionally
+uses discrete levels has a different contract; do not invent continuous LOD as
+a universal requirement. Reuse the existing camera and input harness.
+
+Before driving, take the accepted pre-change map and the user's corrections as
+the reference for protected grouping, node identity, relationships and return
+behavior. Record what the actor must learn at each promised reading level. For
+example: the overview explains the business loop; a closer view explains a
+workflow; detail identifies its inputs, outputs and associated work. The newest
+candidate alone cannot define what survived.
+
+Exercise the affected sequence in the actual application and viewport:
+
+1. Establish the entry, actor and active map revision using the target and
+   freshness checks in the main workflow. Capture the ordinary shell and map
+   together before inspecting a standalone or enlarged rendering.
+2. Move over a named map feature and deliver small wheel or pinch increments
+   through the authorized input channel. Inspect intermediate frames around each
+   disclosure boundary, then reverse direction. Record visible new information,
+   camera state when available, and the corresponding feature's position.
+   Larger text or a smooth camera animation alone does not establish LOD.
+3. Where the contract promises pointer-anchored zoom, follow the same named
+   content point under the pointer. Check for unexpected recentering, detached
+   labels, stale completion after reversed input, and rapid appearance/disappearance
+   around a boundary. Judge gain against browser-received input using the linked
+   wheel recipe, not the automation request's delta.
+4. Read the newly disclosed relationship at the intended level. Follow an input
+   into an action and its output, or explain the task's relationship to the
+   workflow, using visible evidence. Look for overlapping layers, faded duplicate
+   labels and detail clipped by the real host's navigation or toolbar. A wide
+   concept image or an open-state flag cannot clear these failures.
+5. Exercise the affected existing controls: pan, fit/return to overview,
+   region navigation, task search and its return path. Check historical-version
+   opening and return only when that is a supported affected journey. Confirm
+   the selected object, source and relevant reading state rather than merely
+   observing that another view opened.
+
+Use these counterexamples to calibrate the verdict:
+
+| Rendered behavior | Judgment under a continuous same-map contract |
+|---|---|
+| Buttons or scale thresholds swap independent overview and detail diagrams. | Discrete switching; it does not demonstrate continuous LOD. |
+| The camera moves continuously, but every detail layer appears together and becomes unreadable. | Camera continuity passes; useful disclosure fails. |
+| The standalone map is readable, but the ordinary embedded map clips the required detail behind the host chrome. | Standalone evidence does not pass the consuming surface. |
+| Detail is deferred at far zoom, becomes readable while zooming, and disappears predictably on reversal while spatial context survives. | Healthy disclosure, provided the actor's promised questions are answered at their intended levels. |
+
+Retain only the affected states, visible answers and reference comparisons in
+the existing report. Do not turn the recipe into a camera rewrite, force every
+detail into the overview, or claim physical trackpad feel from synthetic input.
+
 ### Embedded readers and semantic zoom
 
 Use this bounded recipe when an affected workspace moves from cards or summaries
