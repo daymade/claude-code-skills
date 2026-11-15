@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **github-ops** (v1.16.5): Clarify sparse checkout initialization and checker input roots; route repository instructions to the preparation SOP and remove derived routing recaps.
+
 - **lark-cli-router** (v1.0.3): Distinguish one explicitly authorized shared-audience parent from separate customer permission parents, preserving existing nodes and future child-page inheritance.
 
 - **git-safety-net** (v1.28.5): Consolidate linked-worktree retirement in one procedure, route source entries to it, and keep helper options and checkpoint semantics in their owning reference.
