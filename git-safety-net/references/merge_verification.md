@@ -896,16 +896,21 @@ Apply the preceding clone procedure's complete survivor proof to independent clo
 ancestry alone cannot exempt their metadata, reflogs or unreachable objects. Submodule repositories,
 stashes and unique uncommitted bytes retain their own preservation procedures.
 
-1. Freeze the authorized ref (or detached HEAD), its full 40-hex tip and the retained carrier's
-   identity. Refresh the exact remote main, resolve it locally, verify its hosted SHA with a separate
-   remote query, and require `git merge-base --is-ancestor <tip> <verified-main-sha>` to exit 0.
+1. Refresh the exact remote main, resolve it locally and verify its hosted SHA with a separate
+   remote query before freezing the authorized ref (or detached HEAD), its full 40-hex tip and
+   retained carrier. To use remote main as the exact-object carrier, require
+   `git merge-base --is-ancestor <tip> <verified-main-sha>` to exit 0.
    Check command errors separately from a genuine non-ancestor result.
 2. When that exact commit remains reachable through the retained remote main, and the checkout's
    tracked, untracked and ignored inventories contain no unique bytes threatened by removal, skip
    the redundant history bundle. Record the refs and SHAs in the existing task manifest instead.
    This is exact-object preservation: squash/content-only containment does not establish it.
-3. Otherwise preserve the unique state through its existing recovery procedure. A content-contained
-   squash tip whose exact identity is still required needs a durable ref or verified export; do not
+3. Otherwise preserve the unique state through its existing recovery procedure. For an authorized
+   task's content-contained squash tip, prefer an existing durable carrier or a collision-checked
+   task recovery ref before choosing a history export. The linked-worktree helper needs that ref
+   to reach every threatened HEAD/reflog commit for `retained-ref`; a tip-only check cannot exempt
+   unique reflog history from its scoped pack. Create the ref before freezing preparation, retain
+   it through recovery readback, and do not fetch or mutate frozen refs/metadata afterward. Do not
    infer that the replacement commit preserves every original object. Preserve dirty/ignored bytes
    separately because a Git bundle cannot capture them.
 4. `git_export_before_drop.sh --branch <ref>` includes all reachable ancestors, even for a tiny
@@ -980,9 +985,12 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
    ancestor/content-contained verdict proves the committed state is on the base; NEEDS REVIEW
    requires manual supersession triage or preserving the commit under a branch/ref.
 6. **Preserve threatened state:** apply [Preservation before retirement](#preservation-before-retirement).
-   Retain the exact ref-to-SHA manifest even when no bundle is needed. When export is required,
-   select the named branch or create one collision-checked `refs/recovery/<worktree-id>` at the
-   detached HEAD, then verify its export. Do not pin unrelated danglers or use `--all-refs` unless
+   Retain the exact ref-to-SHA manifest even when no bundle is needed. For a clean linked worktree,
+   first select the durable carrier and run [the resumable helper](worktree-retirement-helper.md);
+   it can retain exact objects through that ref without a root pack, including after a squash,
+   and otherwise preserves HEAD/reflog history in its scoped pack. When a separate export is
+   required, select the named branch or create one collision-checked `refs/recovery/<worktree-id>`
+   at the detached HEAD, then verify its export. Do not pin unrelated danglers or use `--all-refs` unless
    separately authorized. Keep unique ignored-file copies from step 3 outside the worktree—the
    bundle does not contain them.
    For every local submodule repository threatened by removal, obtain preservation authority for

@@ -20,24 +20,49 @@ Resume with the same declaration, run `verify-current`, then finish the separate
 removal gates. After removal, `verify-recovery` must still read preserved unique configuration
 and verify the retained carrier. Do not infer faster hashing or weaker checks from this route.
 
+Before `prepare`, finish remote refresh/fetch, business containment and preliminary ownership,
+scheduler and occupancy checks. Select a durable ref that will survive the target's retirement.
+Prefer an existing verified carrier. After a squash, main's replacement commit does not retain
+the original commit identities; within the exact task's preservation/removal authority, create
+a collision-checked task recovery ref instead of exporting history by default:
+
+```bash
+primary="<absolute-kept-checkout>"
+target="<exact-linked-worktree>"
+target_head=$(git -C "$target" rev-parse --verify 'HEAD^{commit}') || exit 1
+retained_ref="refs/recovery/worktree-retirement/<unique-task-id>"
+git -C "$primary" update-ref "$retained_ref" "$target_head" "" || exit 1
+```
+
+The empty old value requires a new ref; a collision stops this recipe. Keep the ref through
+removal and recovery readback. Creating it does not prove content delivery, authorize other
+targets, or authorize retiring the recovery ref itself. If an existing verified ref covers the
+history, set `retained_ref` to that fully qualified ref and omit creation.
+
 ```bash
 SKILL_ROOT="<absolute-loaded-git-safety-net-directory>"
 python3 "$SKILL_ROOT/scripts/git_prepare_worktree_retirement.py" prepare \
-  --worktree "<exact-linked-worktree>" --base-ref refs/heads/main \
+  --worktree "$target" --base-ref "$retained_ref" \
   --out "<new-external-evidence-directory>"
 # After an interruption, use the same arguments and declarations:
 python3 "$SKILL_ROOT/scripts/git_prepare_worktree_retirement.py" prepare \
-  --worktree "<exact-linked-worktree>" --base-ref refs/heads/main \
+  --worktree "$target" --base-ref "$retained_ref" \
   --out "<same-external-evidence-directory>" --resume
 python3 "$SKILL_ROOT/scripts/git_prepare_worktree_retirement.py" verify-current \
   --out "<same-external-evidence-directory>"
 ```
 
-Select a fully qualified retained base ref. When it reaches every root HEAD/reflog
-commit being retired, the root uses that ref as its exact-object carrier; otherwise
-the helper packs only the target HEAD/reflog history. Content containment after a
-squash still needs the separate Mode E check. Neither a primary checkout nor its
-unrelated WIP is a removal target.
+Read `state.json`'s `snapshot.root_carrier`: `retained-ref` means the selected ref reaches
+every root HEAD/reflog commit being retired and needs no root-history pack. A ref at HEAD
+is insufficient when the reflog holds a unique commit outside HEAD's ancestry; the helper
+then selects `pack` and preserves the target HEAD/reflog history. Do not discard that pack
+or declare the unknown commit withdrawn to force the cheaper route. Content containment
+after a squash still needs the separate Mode E check. Neither the primary checkout nor
+its unrelated WIP is a removal target.
+
+Preparation freezes refs and metadata as well as payloads. Do not fetch, move the carrier or
+change metadata between `prepare` and removal. If a required refresh or external writer changes
+the snapshot, reclassify and prepare new evidence instead of weakening `verify-current`.
 
 For explicitly withdrawn rebase commits, pass repeated `--known-withdrawal OLD=RETAINED`
 pairs with full commit IDs. The exact current tip must be in the retained base;

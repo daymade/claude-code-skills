@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **git-safety-net** (v1.28.4): Prefer an existing verified carrier. Do not fetch, move the carrier or change metadata between `prepare` and removal.
 - **skill-creator** (`daymade-skill` v1.79.4): Verify self-contained executable claims against the actual shipping set outside the source checkout, including promised self-checks, configuration failures and separate runtime adoption.
 - **debugging-network-issues** (v1.12.3): Route Codex request failures and fix-timing questions to the dedicated diagnostics Skill when available, retaining native-evidence fallback without a private dependency requirement.
 
