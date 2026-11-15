@@ -188,7 +188,9 @@ def _artifact_cache_valid(wav, artifact, producer_script, parameters):
     except (OSError, UnicodeError, json.JSONDecodeError):
         return False
     expected = _cache_contract(wav, producer_script, parameters)
-    if any(provenance.get(key) != value for key, value in expected.items()):
+    from dispatch_compat import producer_matches
+    if (any(provenance.get(key) != value for key, value in expected.items() if key != "producer")
+            or not producer_matches(provenance.get("producer"), expected["producer"], HERE / producer_script)):
         return False
     return provenance.get("artifact_sha256") == _sha256_file(artifact)
 
@@ -977,6 +979,46 @@ def leg_align(
         sys.exit(1)
 
 
+
+def _reuse_completed_bundles(args):
+    """Reuse fully proven outputs across the pinned dispatch-only transition."""
+    from dispatch_compat import pipeline_matches, write_reuse_record
+    from diarize_speakers import ffmpeg_contract
+    pending = []
+    pipeline = _pipeline_contract()
+    decoder = None
+    for wav in args.inputs:
+        receipt_path = _final_receipt_path(args.out_dir, wav.stem)
+        try:
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            if decoder is None:
+                decoder = ffmpeg_contract(args.ffmpeg_path)
+            parameters = {"language": args.language, "initial_prompt": args.initial_prompt,
+                          "device": args.device, "decoder": decoder, "max_gap": args.max_gap,
+                          "text_file": _external_text_identity(args.text_file)}
+            model = {"id": DEFAULT_MODEL_ID, "revision": DEFAULT_MODEL_REVISION,
+                     "chunk_duration_s": DEFAULT_CHUNK_DURATION_S,
+                     "max_tokens_per_chunk": DEFAULT_MAX_TOKENS_PER_CHUNK,
+                     "quality_policy": QUALITY_POLICY_ID,
+                     "dependencies": dict(sorted(PINNED_DEPENDENCY_VERSIONS.items()))}
+            valid = (receipt.get("schema") == FINAL_RECEIPT_SCHEMA
+                     and receipt.get("source_audio") == _source_audio_identity(wav)
+                     and receipt.get("parameters") == parameters
+                     and receipt.get("model_contract") == model
+                     and receipt.get("validation") == _validation_contract()
+                     and pipeline_matches(receipt.get("pipeline"), pipeline, HERE)
+                     and receipt.get("artifacts") == {name: _artifact_receipt(path)
+                         for name, path in _final_artifact_paths(args.out_dir, wav.stem).items()})
+        except (OSError, ValueError, TypeError, KeyError, RuntimeError):
+            valid = False
+        if valid:
+            write_reuse_record(receipt_path, [HERE / name for name in pipeline])
+            log(f"{wav.stem}: complete receipt reused; no audio inference")
+        else:
+            pending.append(wav)
+    return pending
+
+
 def main():
     ap = argparse.ArgumentParser(description="Decoupled multi-speaker transcription")
     ap.add_argument("inputs", nargs="+", type=Path, help="16kHz mono WAV(s)")
@@ -1002,6 +1044,9 @@ def main():
                     help="terminate if this managed caller disappears")
     args = ap.parse_args()
 
+    from external_dispatch import dispatch_cli
+    dispatch_cli("asr.speaker", __file__, args)
+
     start_owner_watchdog(args.owner_pid)
 
     # The flat output contract (<stem>.txt/.csv/.diarization.json) keys on stem
@@ -1026,6 +1071,12 @@ def main():
         plain_text_path(args, args.timeout)
         log("Done (plain-text fast path, no speaker labels).")
         return
+
+    if not args.force:
+        args.inputs = _reuse_completed_bundles(args)
+        if not args.inputs:
+            log("Done (complete bundles reused).")
+            return
 
     # pyannote-missing state machine (implemented; see module docstring).
     if not _hf_token_present():

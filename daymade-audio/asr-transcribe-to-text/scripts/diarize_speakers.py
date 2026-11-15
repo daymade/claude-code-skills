@@ -395,6 +395,8 @@ def main():
     )
     ap.add_argument("--owner-pid", type=int, default=None)
     args = ap.parse_args()
+    from external_dispatch import dispatch_cli
+    dispatch_cli("asr.diarize", __file__, args)
     try:
         diarize(
             args.wav_path,

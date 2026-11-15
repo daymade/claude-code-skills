@@ -255,6 +255,8 @@ def main() -> None:
     elif getattr(args, "lookup_term", None) is not None:
         cmd_lookup(args)
     elif args.input:
+        from external_dispatch import dispatch_cli
+        dispatch_cli("transcript.correct", __file__, args)
         if getattr(args, "json_output", False):
             # --json contract: stdout carries ONLY the machine-readable Stage 1
             # status object so consumers never infer no-op vs failure from whether

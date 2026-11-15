@@ -727,6 +727,9 @@ def main():
     parser.add_argument("--owner-pid", type=int, default=None)
     args = parser.parse_args()
 
+    from external_dispatch import dispatch_cli
+    dispatch_cli("asr.long", __file__, args)
+
     args.audio = args.audio.resolve()
     args.out_dir = args.out_dir.resolve()
     args.ffmpeg_path = args.ffmpeg_path.resolve()
@@ -756,6 +759,35 @@ def main():
     checkpoint_dir = args.out_dir / "_whispercpp_checkpoints" / (
         f"{args.audio.stem}-{digest[:16]}"
     )
+    from dispatch_compat import previous_checkpoint, write_reuse_record
+    previous = previous_checkpoint(checkpoint_dir.parent, args.audio.stem, identity,
+                                   manifest_digest, __file__)
+    if previous and not (checkpoint_dir / "manifest.json").exists():
+        origin, old_identity = previous
+        old_manifest = load_or_create_manifest(origin, old_identity, blocks)
+        receipt_path = args.out_dir / f"{args.audio.stem}.whispercpp.receipt.json"
+        try:
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            outputs = old_manifest["outputs"]
+            valid = (all(validate_done_block(origin.parent, entry) is not None
+                         for entry in old_manifest["blocks"])
+                     and receipt.get("schema") == f"{SCHEMA}-receipt"
+                     and receipt.get("source_audio") == source
+                     and receipt.get("checkpoint_manifest") == {"path": str(origin), "sha256": sha256_file(origin)}
+                     and receipt.get("outputs") == outputs
+                     and set(outputs) == {"json", "txt"}
+                     and all(item["file"] == f"{args.audio.stem}.whispercpp.{kind}"
+                             and sha256_file(args.out_dir / item["file"]) == item["sha256"]
+                             for kind, item in outputs.items()))
+        except (OSError, ValueError, KeyError, TypeError):
+            valid = False
+        if valid:
+            write_reuse_record(receipt_path, [Path(__file__)])
+            log("Complete checkpoint reused; no audio inference")
+            print(json.dumps({"json": str(args.out_dir / outputs["json"]["file"]),
+                              "txt": str(args.out_dir / outputs["txt"]["file"]),
+                              "receipt": str(receipt_path)}))
+            return
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = checkpoint_dir / "manifest.json"
     manifest = load_or_create_manifest(manifest_path, identity, blocks)
