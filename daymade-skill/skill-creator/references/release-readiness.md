@@ -179,6 +179,11 @@ paths and review content out of the public distribution.
    path and blob, plus its current verification outcome. Separate a currently
    valid binding from an already stale or missing historical review. A pre-existing
    failure is not a relocation failure or evidence that the review never passed.
+   Include derived schema-2 receipts naming an affected `original_candidate`:
+   they pin `original_receipt_sha256`, which changes even for a locator-only edit.
+   If a required dependent cannot retain its verification through the owning
+   workflow, stop before rewriting the original receipt and retain the checkout.
+   Do not patch dependent digests to manufacture a passing relocation.
 2. Land useful review changes in the maintained private archive through its normal
    publication flow. Preserve the original review commits when receipts refer to
    them; a squash replacement alone does not retain their identities. Read back
