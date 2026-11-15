@@ -34,8 +34,7 @@ an independent clone can have different local configuration even with identical
 tracked files. Keep unrelated working-tree and index content outside the task.
 
 For an authorized sparse linked worktree, load `git-safety-net` and follow its
-[executable initialization and scope check](../../git-safety-net/references/prevention_practices.md#initialize-an-authorized-sparse-worktree).
-Use its new-worktree initializer before editing and its read-only verifier after staging.
+[executable initialization and scope check](https://github.com/daymade/claude-code-skills/blob/main/git-safety-net/references/prevention_practices.md#initialize-an-authorized-sparse-worktree).
 
 - For Git LFS or custom storage, use the repository's declared setup and transfer
   adapter. A generic batch request failing does not establish that a referenced

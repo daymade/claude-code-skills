@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **git-safety-net v1.28.8 / auto-repo-setup v2.2.3 / peer-message v1.27.2 / daymade-macos v1.33.1**: Keep hook-dependency preparation, staged-set inspection and peer receipt rules in their canonical SOPs, resolve sparse setup across plugin boundaries, and remove derived payload-example summaries.
+
 - **app-evolver** (v1.1.14 → v1.1.15): Add a publication example that separates a useful website increment from optional delivery infrastructure, preserves explicitly requested executable or contribution deliverables, and distinguishes comprehension from external use.
 
 - **github-ops** (v1.16.5 → v1.16.6): Preserve failed-command evidence before disposable runner workspace cleanup, verify later retrieval, and bind cache preparation to each job's actual checkout and service identity.

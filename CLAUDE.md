@@ -443,6 +443,8 @@ accounting, retry eligibility and cleanup behavior. For disk diagnosis, cleanup
 recovery, or capacity checks before necessary backup/copy/extraction, use
 [macos-cleaner](daymade-macos/macos-cleaner/SKILL.md) and its
 [necessary-copy capacity preflight](daymade-macos/macos-cleaner/references/safety_rules.md#necessary-copy-capacity-preflight).
+For classifying generated dependencies, build outputs, retired Apps or releases, use
+[generated-payload plans](daymade-macos/macos-cleaner/references/generated-payload-plans.md).
 For exact-file allocation or an already collected inventory, use the
 [read-only diagnosis CLI](daymade-macos/macos-cleaner/references/storage-diagnosis.md).
 When changing measurement, run the SOP's targeted regression suite before shipping.
@@ -898,17 +900,18 @@ For cross-runtime staged-content validation or isolated task-copy setup, enter
 [auto-repo-setup's Git safety reference](auto-repo-setup/references/git_safety.md).
 Before choosing a task checkout's storage location, follow its
 [isolated checkout preparation](auto-repo-setup/references/git_safety.md#isolated-checkout-preparation).
+For a new authorized sparse worktree or an index/scope check, enter
+[sparse preparation](git-safety-net/references/prevention_practices.md#initialize-an-authorized-sparse-worktree).
 
 For already-authorized delivery in a shared checkout, enter
 [auto-repo-setup's scoped delivery route](auto-repo-setup/references/git_safety.md#authorized-shared-checkout-delivery).
+For staged-set inspection, deletions or entries outside this task, follow
+[commit-scope hygiene](git-safety-net/references/prevention_practices.md#commit-scope-hygiene-dont-sweep-unrelated-staged-work).
 
 For inbound coordination during delivery or closeout, use
 [peer-message's receiving route](peer-message/SKILL.md#收到消息先分流).
 
-Stage only explicit owned file paths; never `git add -A` / `git add .`.
-Inspect the staged file list, including deletions,
-in a separate call before committing; investigate any entry outside the intended
-scope through `git-safety-net`. For branch publication or PR creation, read
+For branch publication or PR creation, read
 [the publication recipe](github-ops/references/pr_operations.md#basic-pr-creation)
 before preparing the task checkout, including sparse and `--no-checkout` worktrees.
 
