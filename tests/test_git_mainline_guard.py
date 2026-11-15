@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -272,6 +273,18 @@ class MainlineGuardTests(unittest.TestCase):
         env = self.env.copy()
         env["GIT_PII_GUARD_DIR"] = str(fake_guard)
         env["HOOK_CAPTURE_PATH"] = str(capture)
+        home = self.root / "budget-home"
+        python = home / ".local/bin/python3.12"
+        python.parent.mkdir(parents=True)
+        python.symlink_to(sys.executable)
+        runner = fake_guard.parent / "claude-hooks/bounded-hook-runner.py"
+        runner.parent.mkdir()
+        runner.write_text(
+            "import subprocess,sys\n"
+            "raise SystemExit(subprocess.run(sys.argv[sys.argv.index('--')+1:]).returncode)\n",
+            encoding="utf-8",
+        )
+        env["HOME"] = str(home)
 
         result = self.hook("pre-push", line, "origin", str(self.remote), env=env)
         self.assertEqual(result.returncode, 0, result.stderr)
