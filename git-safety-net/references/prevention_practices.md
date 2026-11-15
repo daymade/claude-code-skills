@@ -17,6 +17,53 @@ an independent clone because audits can discover it. That exception does not mak
 linked worktrees separate working files, `HEAD`, and index, but share refs, stashes, object storage,
 config, and hooks; ignored dependencies and local-only assets are not copied.
 
+## Initialize an authorized sparse worktree
+
+Use `scripts/git_prepare_sparse_worktree.py` from the resolved Git Safety Net
+bundle when the current task authorizes a new private sparse linked worktree.
+Bind a full immutable commit and explicit tracked files or directories; choose
+an unused task branch and a non-existent destination under a persistent parent.
+The caller still owns repository coordination, hook setup and publication.
+
+```bash
+python3 "<git-safety-net-dir>/scripts/git_prepare_sparse_worktree.py" init \
+  --repo "<source-repo>" --base <full-commit-id> \
+  --worktree "<persistent-task-parent>/sparse task" --branch task/topic \
+  --path "<owned-directory>" --path "<another-owned-file>"
+```
+
+The helper creates the worktree with `--no-checkout`, seeds its **complete**
+baseline index with `read-tree`, applies literal sparse paths without a sparse
+index, and materializes the selection. It then checks the index against the
+baseline and the working files independently. A path-limited checkout alone
+can leave an incomplete index and stage every unselected baseline file as a
+deletion. Sparse configuration success does not prove files were materialized.
+
+After staging explicit owned paths, run the read-only scope check before the
+repository's normal staged-diff inspection and commit:
+
+```bash
+python3 "<git-safety-net-dir>/scripts/git_prepare_sparse_worktree.py" verify \
+  --repo "<persistent-task-parent>/sparse task" --base <full-commit-id> \
+  --allow-path "<exact-owned-file>"
+```
+
+Repeat `--allow-path` for each authorized file or directory. It accepts changes
+and deletions inside that literal scope and rejects changes outside it; a parent
+directory authorizes all its descendants. Omit it to require a clean baseline.
+Supply the current intended commit after committing; the check refuses a moved
+HEAD, missing/empty index or unresolved entries. JSON reports total counts and
+at most 20 records per change category. Exit 0 means verified, 1 means refused,
+and 2 means an argument, filesystem or Git failure; read the reason in either
+failure case.
+
+Initialization refuses an existing destination or branch, preserving staged and
+unstaged work. Verification never repairs an index. If initialization fails after
+creating a worktree, keep that exact path and failure output for inspection;
+do not rerun `read-tree` on it. Preserve any authored files and use a new named
+worktree, or enter the recovery procedure matching the observed state. Neither
+command removes a worktree, bypasses hooks or supplies deletion authority.
+
 ## Shared checkout and concurrent sessions: one writer
 
 **Failure mode:** separate sessions edit different files and assume they are independent, but they

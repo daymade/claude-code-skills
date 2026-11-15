@@ -1773,6 +1773,151 @@ def load_references(reference, bundle):
 
 # --- entry point ------------------------------------------------------------
 
+PAYLOAD_KINDS = ('dependency', 'build-cache', 'retired-test-app', 'release',
+                 'generated-test-copy')
+PAYLOAD_COLUMNS = {
+    'target': ('target', '目标', '候选'),
+    'kind': ('payload kind', '产物类型'),
+    'use': ('current use', '当前使用'),
+    'unique': ('unique state', '唯一内容'),
+    'recovery': ('recovery input', '恢复输入'),
+    'cost': ('restoration cost', '恢复成本'),
+    'retention': ('retention basis', '保留依据'),
+    'backup': ('backup plan', '备份计划'),
+}
+
+
+def payload_target(value):
+    return value.strip().strip('`')
+
+
+def generated_payload_shape(target):
+    """Recognize conventional generated roots, without deciding disposability.
+
+    Unconventional paths must be explicitly listed in the payload-facts table.
+    Ordinary tool-level cache plans retain their existing contract.
+    """
+    return bool(re.search(
+        r'/(?:releases|node_modules|\.venv|target|dist)(?:/|\b)|'
+        r'/(?:[^/\s]*[-_])?(?:generated|source|test|build)[-_]copy(?:/|\b)|'
+        r'/[^/\s]*test[^/\s]*\.app(?:/|\b)', target, re.IGNORECASE))
+
+
+def payload_fact(value, states, label):
+    """Read a typed fact; unknown requires a next check, never becomes false."""
+    state, separator, evidence = value.partition(':')
+    state = state.strip().lower()
+    if state not in states or not separator or not evidence.strip():
+        raise ValueError('%s must be state: evidence (or unknown: next check)' % label)
+    return state, evidence.strip()
+
+
+def check_payload_disposition(table_text, gate_rows, copy_budget=None):
+    """Consume generated-payload facts in the existing plan gate; never delete.
+
+    The checker validates declared evidence and disposition, not the truth of a
+    process observation or availability of a remote recovery locator.
+    """
+    facts = {}
+    violations = []
+    decisions = []
+    budget_copies = []
+    if copy_budget is not None:
+        try:
+            data = json.loads(Path(copy_budget).read_text(encoding='utf-8'))
+            budget_copies = data.get('copies', []) if isinstance(data, dict) else []
+            if not isinstance(budget_copies, list):
+                budget_copies = []  # check_copy_budget reports the malformed manifest.
+        except (OSError, ValueError, TypeError) as error:
+            violations.append('cannot read payload copy budget: ' + str(error))
+    for table in parse_tables(table_text):
+        if table.column(*PAYLOAD_COLUMNS['kind']) is None:
+            continue
+        columns = {key: table.column(*names) for key, names in PAYLOAD_COLUMNS.items()}
+        missing = [key for key, column in columns.items() if column is None]
+        if missing:
+            violations.append('payload facts missing column(s): ' + ', '.join(missing))
+        for row in table.rows:
+            item = {key: table.cell(row, column) for key, column in columns.items()}
+            target = payload_target(item['target'])
+            if not target or target in facts:
+                violations.append('payload target is empty or duplicated: ' + target)
+            facts[target] = item
+
+    classified = {}
+    for row in gate_rows:
+        target = payload_target(row.target)
+        classified.setdefault(target, []).append(row)
+        if generated_payload_shape(target) and target not in facts:
+            violations.append('generated payload lacks typed facts: ' + target)
+
+    for target, item in facts.items():
+        try:
+            bound = classified.get(target, [])
+            if len(bound) != 1:
+                raise ValueError('payload must bind exactly one classified target')
+            row = bound[0]
+            if item['kind'] not in PAYLOAD_KINDS:
+                raise ValueError('payload kind must be one of: ' + ', '.join(PAYLOAD_KINDS))
+            use, _ = payload_fact(item['use'], ('active', 'inactive', 'unknown'), 'current use')
+            unique, _ = payload_fact(item['unique'], ('present', 'absent', 'unknown'), 'unique state')
+            retention, direction = payload_fact(item['retention'],
+                ('none', 'historical-only', 'current-use', 'current-policy', 'unique-state',
+                 'user-requested', 'unknown'), 'retention basis')
+            backup, backup_reason = payload_fact(item['backup'],
+                ('none', 'unique-state', 'user-requested'), 'backup plan')
+            recovery = item['recovery'].strip()
+            cost = item['cost'].strip()
+            if recovery.lower() in ('', 'null', 'none', 'n/a', '-', 'false', 'true') or \
+                    cost.lower() in ('', 'null', 'none', 'n/a', '-', 'false', 'true'):
+                raise ValueError('recovery input and restoration cost must be stated; use unknown: next check')
+            recovery_unknown = recovery.lower().startswith('unknown')
+            cost_unknown = cost.lower().startswith('unknown')
+            for label, value in (('recovery input', recovery), ('restoration cost', cost)):
+                if value.lower().startswith('unknown'):
+                    payload_fact(value, ('unknown',), label)
+            if recovery.lower().startswith('discard-directed'):
+                _, discard_direction = payload_fact(recovery, ('discard-directed',), 'recovery input')
+                if item['kind'] not in ('retired-test-app', 'release') or \
+                        not has_quoted_span(discard_direction):
+                    raise ValueError('discard-directed recovery needs a retired binary and quoted user direction')
+            if retention == 'user-requested' and not has_quoted_span(direction):
+                raise ValueError('user-requested retention requires the quoted original direction')
+            if backup == 'user-requested' and not has_quoted_span(backup_reason):
+                raise ValueError('user-requested backup requires the quoted original direction')
+            if retention == 'current-use' and use != 'active':
+                raise ValueError('current-use retention contradicts current use')
+            if retention == 'unique-state' and unique != 'present':
+                raise ValueError('unique-state retention contradicts unique state')
+            if backup == 'unique-state' and unique != 'present':
+                raise ValueError('automatic backup of a payload without verified unique state')
+            protected = (use != 'inactive' or unique != 'absent' or recovery_unknown
+                         or cost_unknown or retention in ('user-requested', 'current-policy', 'unknown'))
+            if protected:
+                decisions.append('PRESERVE ' + target + ' (live, unique, unknown, policy or user-directed)')
+                if in_action_set(row):
+                    raise ValueError('protected payload must remain outside the action set')
+            else:
+                decisions.append('RETIRE-CANDIDATE ' + target + ' (authorization still required)')
+                if not in_action_set(row) or row.cls not in ('REBUILDABLE', 'PROPOSABLE'):
+                    raise ValueError('inactive reproducible payload must enter the candidate action set; '
+                                     'historical references alone do not justify retention')
+            listed_copies = [entry for entry in budget_copies if isinstance(entry, dict)
+                             and entry.get('target') == target]
+            if backup == 'none' and listed_copies:
+                raise ValueError('copy budget contradicts backup plan none')
+            if backup != 'none':
+                if copy_budget is None:
+                    raise ValueError('planned backup requires --copy-budget')
+                if not listed_copies or any(entry.get('basis') != backup for entry in listed_copies):
+                    raise ValueError('planned backup lacks a matching target/basis in --copy-budget')
+        except (OSError, ValueError, TypeError) as error:
+            violations.append('%s: %s' % (target or '<empty target>', error))
+    details = ['%d payload fact row(s) examined; %d classified target(s)' %
+               (len(facts), len(classified))] + decisions + violations
+    return Result('payload_disposition', not violations, details)
+
+
 def check_copy_budget(path, gate_rows):
     """Read-only destination preflight; absent input authorizes no copies."""
     if path is None:
@@ -1882,6 +2027,7 @@ def main(argv=None):
         check_category_wide_exclusion(commands, gate_rows, plan_tables),
         check_lead_rule(commands, gate_rows, plan_text),
         check_tool_verification(commands, plan_text, gate_rows, plan_tables),
+        check_payload_disposition(table_text, gate_rows, args.copy_budget),
         check_copy_budget(args.copy_budget, gate_rows),
     ]
 

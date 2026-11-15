@@ -34,6 +34,8 @@ Codex 独立 thread 的原生发送使用[返回值驱动入口](references/loca
 
 新阻塞、尚未回答的直接问题、仍有效的写入窗口请求，以及会改变下一步的新证据，仍须及时处理。“无需回复”、相似措辞、旧 SHA 或到达较晚都不能单独成为忽略理由。已有答复但对方明确仍被卡住时，核实缺口并补一次有用的回应；已入队不能说成对方已读。
 
+已判定无需回复的非 request 新信封，按[收件、回信和关闭](references/local-coordination.md#收件回信和关闭)使用 `coord receive --disposition no-reply`：完整性与生命周期校验后复用 finish 关闭，不再准备 ACK。该参数执行调用者的判断，不识别任意正文；request 和未确认发送不能借它关闭。
+
 详细判据、证据复用与用户可见输出边界见 [references/coordination-and-learning-loop.md](references/coordination-and-learning-loop.md) §4。只有需要发送或回复时才进入下面的发送步骤；只有核实会改变行动时才运行检查。任务已结束且没有新的待办时，结束本轮，不因迟到消息重新启动发布或收尾。
 
 ## 稳定运行前置

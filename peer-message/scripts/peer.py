@@ -1918,7 +1918,7 @@ def cmd_coord(args):
                 raw = (sys.stdin.buffer.read() if args.envelope_file == "-" else
                        Path(args.envelope_file).read_bytes())
                 envelope = raw.decode("utf-8")
-                result = board.receive(envelope, actor)
+                result = board.receive(envelope, actor, disposition=args.disposition)
             elif args.operation == "finish":
                 result = board.finish(args.message_id, actor)
         print(json.dumps(result, ensure_ascii=False, sort_keys=True))
@@ -2034,6 +2034,8 @@ def build_parser() -> argparse.ArgumentParser:
         entry.set_defaults(handler=cmd_native_coord)
     receive_parser = operations.add_parser("receive")
     receive_parser.add_argument("envelope_file", help="original received envelope, or - for stdin")
+    receive_parser.add_argument("--disposition", choices=("no-reply",),
+                                help="caller has resolved a non-request notice/reply; validate and finish without creating a reply (does not classify content)")
     finish_parser = operations.add_parser("finish")
     finish_parser.add_argument("--message-id", required=True)
     for entry in (status_parser, prepare_parser, commit_parser, receive_parser, finish_parser,
