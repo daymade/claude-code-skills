@@ -227,7 +227,8 @@ handling, while the worker owns event identity and delivery state.
 
 For Terraform publication, linked releases, shared-route replacement, approval, first mutation,
 expired plans, saved-plan input-type mismatches, frozen approval-input verification,
-environment isolation or initialization-cache changes, enter
+environment isolation, contract-selected validation environments, catalog-derived schema
+recovery or initialization-cache changes, enter
 [`terraform-skill`](terraform-skill/SKILL.md). Certificate rotation or another recurring
 maintenance change uses its [publisher and maintenance-cycle validation](terraform-skill/references/pre-deploy-validation.md#replay-the-next-maintenance-cycle-through-every-gate).
 
@@ -478,8 +479,10 @@ For CI demand, notification overload, exhausted allowance or repeated validation
 enter [github-ops' CI demand workflow](github-ops/references/ci-demand-and-notifications.md).
 For missing PR checks or fork runs awaiting approval, follow
 [the run-state diagnosis](github-ops/references/workflow_operations.md#resolve-missing-checks-and-fork-approval).
-For self-hosted routing, resource limits or cache persistence, follow its
+For self-hosted routing, resource limits, checkout-dependent cache resolution or cache persistence, follow its
 [runner acceptance](github-ops/references/workflow_operations.md#self-hosted-runner-capacity-and-acceptance).
+For failed jobs whose workspace is cleaned, follow its
+[failure-evidence lifecycle](github-ops/references/workflow_operations.md#preserve-failure-evidence-across-workspace-cleanup).
 Keep demand selection, validation-reuse and capacity acceptance in those owners.
 
 For application native automatic updates, automatic observers or recovery jobs,
