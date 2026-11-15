@@ -49,7 +49,7 @@ for c in $(docker ps -a --format "{{.Names}}"); do
 done
 ```
 
-**Version Management Awareness**: Identify version-managed images (e.g., Supabase managed by CLI). When newer versions are confirmed running, older versions are safe to remove. Pay attention to Docker Compose naming conventions (dash vs underscore).
+**Version Management Awareness**: Identify version-managed images (e.g., Supabase managed by CLI). A newer running version does not establish that an older image is disposable; apply Step 2C and the project's supported rollback policy. Pay attention to Docker Compose naming conventions (dash vs underscore).
 
 ### Physical-release reporting rules
 
@@ -205,6 +205,13 @@ docker ps -a --filter "ancestor=<IMAGE_ID>" --format "{{.Names}}\t{{.Status}}"
 # If empty → eligible for an explicit user decision; exact command: docker rmi <IMAGE_ID>
 ```
 
+**For Containers**:
+
+A stopped container may still be needed for restart or hold unique writable-layer
+data. Resolve the existing authorization for the exact container/project, its
+ownership, retained data and recovery path before `docker rm <CONTAINER_NAME>`.
+Do not stop a running container or infer disposal permission from its state.
+
 **For Volumes**:
 ```bash
 # Verify no container mounts the volume
@@ -261,7 +268,7 @@ An approved one-time cleanup alone does not authorize future unattended deletion
 
 **Once approved, this is still precision deletion — just automated and scoped to one repository:**
 - Add retention logic that runs **after** the new build succeeds and any health check passes — never before. A failed new build shouldn't cost the last-known-good image.
-- Keep the N most recent images by **verified creation time** (`docker image inspect --format '{{.Created}}'`), not the human-readable `CreatedSince` string (imprecise, not sortable) or raw `docker image ls` ordering (not guaranteed time-sorted). **Caveat**: reproducible-build tooling (Bazel, Nix, some BuildKit configs) can pin `.Created` to a fixed value like `SOURCE_DATE_EPOCH` instead of the real build time, so a fresh image can sort as "older" than genuinely older ones. If the project's tooling does this, cross-check against the next bullet before trusting the sort.
+- Preserve the project's explicit in-use and supported rollback set. When that policy uses recency, use **verified creation time** (`docker image inspect --format '{{.Created}}'`), not the human-readable `CreatedSince` string (imprecise, not sortable) or raw `docker image ls` ordering (not guaranteed time-sorted). **Caveat**: reproducible-build tooling (Bazel, Nix, some BuildKit configs) can pin `.Created` to a fixed value like `SOURCE_DATE_EPOCH` instead of the real build time, so a fresh image can sort as "older" than genuinely older ones. If the project's tooling does this, cross-check against the next bullet before trusting the sort.
 - Before removing each candidate, verify no container — including stopped ones — references it (`docker ps -a --filter "ancestor=<IMAGE_ID>"`), the same Step 2C protocol running inside the application's automation. This also covers the reproducible-build caveat: exclude whatever image the just-started container is using, independent of its timestamp.
 - For image retention, keep one `docker rmi <ID>` per verified-safe image scoped to one repository. Exact-record BuildKit eviction is a separate cache procedure above; its filters do not establish image-retention eligibility.
 - Wrap the retention step so its own failure doesn't fail the surrounding build/deploy. Verify the exact failure signal your subprocess-execution mechanism actually returns rather than assuming a field name — a wrong assumption there silently turns the failure branch into a no-op.
@@ -275,18 +282,21 @@ During image analysis, if you discover oversized images, suggest multi-stage bui
 ```dockerfile
 # Full build environment in final image
 FROM node:20
+WORKDIR /app
 COPY . .
 RUN npm ci && npm run build
 CMD ["node", "dist/index.js"]
 
 # Runtime in final image; measure the resulting image rather than assume a size
 FROM node:20 AS builder
+WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
 RUN npm run build
 
 FROM node:20-slim
+WORKDIR /app
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 CMD ["node", "dist/index.js"]
