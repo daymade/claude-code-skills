@@ -404,7 +404,7 @@ CATEGORY_WIDE_RES = (
     re.compile(r'\bbrew\s+cleanup\b[^|]*--prune'),
 )
 READ_ONLY_PROBE_RE = re.compile(
-    r'^\s*(?:du|df|lsof|ps|ls|cat|file|grep|mdls|sysctl|sw_vers|head|tail|wc)\b'
+    r'^\s*(?:du|df|lsof|ps|ls|cat|file|grep|mdls|sysctl|sw_vers|head|tail|wc|man|pwd|which|echo|printf|true|false)\b'
 )
 VERSION_RE = re.compile(r'\d+\.\d+(?:\.\d+)?')
 SEMANTICS_RE = re.compile(
@@ -848,14 +848,23 @@ def command_chunks(plan_text):
             for row in table.rows:
                 command_tables[row.lineno] = command_column
     in_fence = False
+    shell_fence = False
     consumed = 0
     for number, line in enumerate(lines):
         if re.match(r'^\s*```', line):
             in_fence = not in_fence
+            if in_fence:
+                language = line.strip()[3:].strip().lower()
+                shell_fence = language in ('', 'sh', 'bash', 'zsh', 'shell', 'console')
             continue
         if in_fence:
             if line.strip() and not line.lstrip().startswith('#'):
                 stripped = line.strip()
+                if chunks and consumed == number and chunks[-1][2].endswith('\\'):
+                    previous = chunks[-1]
+                    chunks[-1] = (previous[0], previous[1], previous[2][:-1] + ' ' + stripped)
+                    consumed = number + 1
+                    continue
                 # The skill's own documented Trash command spans lines, and the
                 # line carrying `-- "<path>"` never mentions osascript, so it was
                 # never recognized as part of the command.
@@ -865,7 +874,7 @@ def command_chunks(plan_text):
                     chunks[-1] = (previous[0], previous[1], previous[2] + ' ' + stripped)
                     consumed = number + 1
                     continue
-                chunks.append((number + 1, 'prose', stripped))
+                chunks.append((number + 1, 'fence' if shell_fence else 'prose', stripped))
                 consumed = number + 1
             continue
         if line.lstrip().startswith('|'):
@@ -880,7 +889,7 @@ def command_chunks(plan_text):
         else:
             spans = [match.group(1).strip() for match in re.finditer(r'`([^`]+)`', line)]
             for span in spans:
-                chunks.append((number + 1, 'prose', span))
+                chunks.append((number + 1, 'inline', span))
             if not spans and line.strip():
                 # A prose line with no inline code is still where a command can
                 # hide ("runs uv cache prune to reclaim 50.9 GiB"). Lines that do
@@ -980,6 +989,8 @@ def helper_targets(text, program='safe_delete.py'):
     for index, part in enumerate(parts):
         if part.rsplit('/', 1)[-1] != program:
             continue
+        if not valid_invocation_prefix(parts, index, program) or any(unsafe_words[:index]):
+            return [None]
         targets = parts[index + 1:]
         unsafe_targets = unsafe_words[index + 1:]
         if program == 'rm':
@@ -999,6 +1010,18 @@ def helper_targets(text, program='safe_delete.py'):
     return [None]
 
 
+def valid_invocation_prefix(words, index, program):
+    """Only declared launchers may precede the program; a suffix is not a plan."""
+    prefix = [word.rsplit('/', 1)[-1] for word in words[:index]]
+    if not prefix:
+        return True
+    if program in ('safe_delete.py', 'task_evidence_archive.py'):
+        if len(prefix) == 1 and re.fullmatch(r'python(?:\d+(?:\.\d+)*)?', prefix[0]):
+            return True
+        return program == 'safe_delete.py' and prefix in (['uv', 'run'], ['uv', 'run', '--script'])
+    return prefix in (['sudo'], ['command'])
+
+
 def archive_targets(text):
     """Expand only an explicitly hash-bound manifest; never inspect source bytes.
 
@@ -1015,6 +1038,8 @@ def archive_targets(text):
     index = next((i for i, word in enumerate(words)
                   if word.rsplit('/', 1)[-1] == 'task_evidence_archive.py'), None)
     if index is None:
+        return [None]
+    if not valid_invocation_prefix(words, index, 'task_evidence_archive.py'):
         return [None]
     args = words[index + 1:]
     if args == ['--help']:
@@ -1084,9 +1109,13 @@ def declared_unused(lineno, origin, chunk, lines, commands_on_line=1):
     In a table the row's other cells describe the target or the estimate, so the
     scope is the cell itself.
     """
+    if origin == 'fence':
+        return False  # shell arguments and trailing comments cannot retract executable code
     if origin != 'cell' and commands_on_line > 1:
         return False
     scope = chunk if origin == 'cell' else lines[lineno - 1]
+    if origin == 'inline':
+        scope = scope.replace(chunk, '', 1)
     return bool(DECLARED_UNUSED_RE.search(scope))
 
 
@@ -1509,9 +1538,38 @@ def unrecognized_command_lines(plan_text, commands):
     for lineno, _origin, _chunk in command_chunks(plan_text):
         per_line[lineno] = per_line.get(lineno, 0) + 1
     for lineno, origin, chunk in command_chunks(plan_text):
-        if any(pattern.search(chunk) for _tools, pattern, _wide, _versioned
-               in DESTRUCTIVE_PATTERNS):
-            continue  # recognized — excluded on purpose or not, it was seen
+        matched = [tools for tools, pattern, _wide, _versioned in DESTRUCTIVE_PATTERNS
+                   if pattern.search(chunk)]
+        if matched:
+            parsed = literal_shell_words(chunk)
+            # Metadata prose can mention a tool. Executable chunks must prove
+            # their whole invocation, not merely contain a recognized suffix.
+            program = argv0(chunk)
+            executable = origin in ('fence', 'inline', 'cmdtable') or (
+                origin == 'prose' and program and program[0].islower() and looks_like_command(chunk))
+            if executable and not declared_unused(lineno, origin, chunk, lines, per_line[lineno]):
+                valid = False
+                if parsed is not None:
+                    words, unsafe = parsed
+                    for tools in matched:
+                        for index, word in enumerate(words):
+                            base = word.rsplit('/', 1)[-1]
+                            if any(re.fullmatch(re.escape(tool) + r'(?:\d+(?:\.\d+)*)?', base)
+                                   for tool in tools):
+                                if valid_invocation_prefix(words, index, base):
+                                    # Literal arguments can include a find pattern or
+                                    # documented <placeholder>. They cannot introduce
+                                    # another shell command outside quoting.
+                                    compound = any(flag and re.search(r'[;|&`()]|\$', value)
+                                                   for value, flag in zip(words, unsafe))
+                                    valid = not compound
+                                    if valid:
+                                        break
+                        if valid:
+                            break
+                if not valid:
+                    missed.append((lineno, chunk))
+            continue
         try:
             source = re.sub(r'<[A-Z][A-Z0-9_-]*>', 'PLACEHOLDER', chunk.strip('` '))
             lexer = shlex.shlex(source, posix=True, punctuation_chars=';&|<>()')
@@ -1560,6 +1618,8 @@ def looks_like_command(chunk, origin='prose'):
     text = chunk.strip().lstrip('`\'" ')
     if not text:
         return False
+    if origin == 'fence':
+        return True
     parts = text.split()
     if len(parts) < 2 or not re.fullmatch(r'[A-Za-z][\w.+-]*', parts[0].rsplit('/', 1)[-1]):
         return False

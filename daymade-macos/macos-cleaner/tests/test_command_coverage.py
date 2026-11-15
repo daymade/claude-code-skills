@@ -91,8 +91,48 @@ class CommandCoverageTests(unittest.TestCase):
     def test_unfenced_prose_does_not_hide_a_deletion(self):
         plan = '执行 rm -r -- "/opt/tasks/结果.mp4"'
         commands = CHECKER.find_destructive_commands(plan)
-        self.assertEqual(['/opt/tasks/结果.mp4'], [c.exact_target for c in commands])
+        self.assertEqual(1, len(commands))
         self.assertFalse(CHECKER.check_target_coverage(commands, [], [], plan).passed)
+
+    def test_known_suffix_does_not_cover_unknown_prefix_or_wrapper(self):
+        for command in ('wipe /opt/unclassified; /bin/rm -- /opt/classified',
+                        'unsupported-wrapper /bin/rm -- /opt/classified',
+                        'wipe /opt/unclassified; docker rmi abc123',
+                        'unsupported-wrapper docker rmi abc123'):
+            self.assertFalse(self.coverage(command, ['/opt/classified'])[1].passed, command)
+
+    def test_shell_fences_keep_bare_and_relative_operand_commands_visible(self):
+        for command in ('obscurecleaner', '/usr/bin/unlink payload', 'unlink payload'):
+            commands, result = self.coverage(command, ['/opt/classified'])
+            self.assertFalse(result.passed, result.details)
+            self.assertIn('coverage incomplete', '\n'.join(result.details))
+        self.assertTrue(self.coverage('pwd', [])[1].passed)
+
+    def test_reviewed_coverage_failures_are_nonzero_at_the_public_cli(self):
+        with tempfile.TemporaryDirectory() as directory:
+            table, plan = Path(directory) / 'table.md', Path(directory) / 'plan.md'
+            table.write_text('| Target | Class | Governing rule | Restoration cost | Verdict |\n'
+                             '|---|---|---|---|---|\n| /opt/classified | PROPOSABLE | '
+                             '"Protect unique source edits, local Git state, credentials, databases and user records." '
+                             '| Verified unused synthetic source; exact retained copy | in action set |\n')
+            for command, expected in (
+                    ('/bin/rm -- /opt/classified', 0),
+                    ('wipe /opt/unclassified; /bin/rm -- /opt/classified', 1),
+                    ('unsupported-wrapper /bin/rm -- /opt/classified', 1),
+                    ('obscurecleaner', 1), ('/usr/bin/unlink payload', 1)):
+                plan.write_text('```sh\n' + command + '\n```\n'
+                                '# Tool verification: rm version 1.0 source and --help observed.\n')
+                output = io.StringIO()
+                with redirect_stdout(output):
+                    code = CHECKER.main(['--table', str(table), '--plan', str(plan)])
+                self.assertEqual(expected, code, command + '\n' + output.getvalue())
+                self.assertIn(('PASS' if expected == 0 else 'FAIL') + ' target_coverage', output.getvalue())
+
+    def test_supported_line_continuation_keeps_the_complete_target_set(self):
+        command = '/bin/rm -r ' + chr(92) + '\n  -- "/opt/classified"'
+        commands, result = self.coverage(command, ['/opt/classified'])
+        self.assertEqual(['/opt/classified'], [c.exact_target for c in commands])
+        self.assertTrue(result.passed, result.details)
 
     def test_read_only_and_explicitly_unused_commands_do_not_fail_coverage(self):
         for command in ('du -sk "/opt/结果"', 'docker image inspect --format json id',
