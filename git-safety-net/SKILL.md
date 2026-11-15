@@ -589,15 +589,27 @@ early draft; judge content against the current base, never the name. Worked exam
 rungs (including the squash-artifact and absorbed-into-refactor cases):
 **[references/merge_verification.md](references/merge_verification.md)** § Supersession triage.
 
-**Step 2 — after deletion authority exists and immediately before deletion, preserve exactly what
-that deletion threatens:**
+**Step 2 — after deletion authority exists, finish preparation, then freeze and preserve exactly
+what deletion threatens:**
 
 Apply [the preservation decision](references/merge_verification.md#preservation-before-retirement)
-before exporting. A clean temporary checkout whose exact tip is already an ancestor of an
-independently verified, retained remote main needs no redundant history bundle. Keep a ref-to-full-SHA
-manifest and recheck both the tip and retained carrier immediately before deletion. Content-only
-containment after a squash is not this exact-object exemption. Unique WIP, ignored files, independent
-clone metadata and submodule objects still need their existing preservation checks.
+before exporting. Complete remote refresh/fetch, containment checks and preliminary ownership,
+scheduler and occupancy probes before freezing the retirement checkpoint or export manifest.
+Select a retained exact-object carrier before requesting a history export: use a verified retained
+main when it covers the threatened history; for an authorized task's squash-landed worktree, a
+collision-checked durable task recovery ref at its full HEAD SHA can retain the original objects
+without copying their history. Keep that ref outside the retiring branch and retain it through
+removal and recovery readback. This is preservation, not evidence that the content landed.
+
+For a clean linked worktree, use
+[the resumable worktree preparation helper](references/worktree-retirement-helper.md) with that
+fully qualified ref. It uses `retained-ref` only when the carrier reaches every threatened root
+HEAD/reflog commit; HEAD retention alone does not cover an older unique reflog commit. Otherwise
+keep its scoped root-history pack. Content containment after a squash and exact-object retention
+remain separate checks. Unique WIP, ignored files, independent clone metadata and submodule
+objects still need their existing preservation checks. Keep the full-SHA manifest; after freezing,
+do not fetch, move refs or change metadata yourself. A real change reopens classification and
+preparation; finish with current-state verification and the final occupancy gate.
 
 For a known discarded rebase commit, the helper accepts explicit `--known-withdrawal OLD=RETAINED`
 full commit IDs. Its current tip must be retained, OLD must occur in that root's reflog, and RETAINED
@@ -606,10 +618,8 @@ patch IDs). This preserves the retained replacement, not the withdrawn commit's 
 Undeclared reflog work and unique ancestors still require their recovery carrier; never classify every old reflog entry
 as disposable merely because the current tip landed. Repeat the same pairs on `--resume`.
 
-For a clean linked worktree, including one without submodules, use
-[the resumable worktree preparation helper](references/worktree-retirement-helper.md).
-It handles ordinary dependency caches as well as initialized submodules and borrowed module
-objects. Reuse its checkpoints and verified carriers instead of writing a separate inventory
+The helper supports linked worktrees with or without submodules, ordinary dependency caches,
+initialized submodules and borrowed module objects. Reuse its checkpoints and verified carriers instead of writing a separate inventory
 script; it never removes the target or replaces Mode E's containment, ownership, occupancy
 and action-time checks.
 
@@ -632,7 +642,8 @@ exporting. `--all-refs` captures branches, tags, stashes, hidden backup
 refs, and linked-worktree HEAD refs, so it is valid only when that whole captured set is authorized;
 add `--all-stashes` only when stashes are also deletion targets. `--verify-current` is the final
 compare-and-swap gate: it exits 1 if any recorded ref moved or disappeared. Refresh remote authority
-before it, and reclassify a changed tip before rebuilding a required bundle. Without a bundle, compare
+before the export freezes its manifest, and reclassify a changed tip before rebuilding a required
+bundle. Without a bundle, compare
 against the frozen ref manifest instead. Keep backups outside the repository; never turn
 one branch into a repo export.
 
@@ -652,7 +663,7 @@ and final branch-count gates that a single-branch retirement does not need.
   then inventory ignored paths separately with `--ignored`. A normal clean status hides `!!`
   files, and no bundle can preserve them; copy out anything not proven reproducible, preserve its
   relative path, and verify it against a recorded pre-removal content hash.
-  Record the exact HEAD, prove it contained/superseded against a freshly fetched base, apply the
+  Record the exact HEAD, prove it contained/superseded against the base refreshed before freezing, apply the
   preservation decision above, retain its exact ref manifest or required verified bundle, and obtain
   deletion authority per the authority definition in the Outcome contract above. As the final
   pre-remove gate, re-run the empty status and
