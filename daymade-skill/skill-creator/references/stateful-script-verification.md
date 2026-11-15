@@ -61,6 +61,30 @@ This matrix follows the mixed-version rollout concern in the
 Its binary-format guarantees do not establish compatibility for JSON/JSONL;
 exercise the actual format and consumers used by the Skill.
 
+## Establish recovery-test prerequisites
+
+Before asserting a recovery, cache-miss or failure branch, name the state that
+selects it and inspect that state independently of the tested verdict. For a
+derived-proof recovery test, check whether a retained native proof can satisfy
+the request first. Removing one report does not prove all reusable evidence is
+absent. Use the owner's actual selection rules rather than the fixture's label.
+
+Exercise a valid prerequisite, its absence and a malformed/empty value where the
+owner treats those states differently. Keep cold and reused decision paths
+separate. If an existing assertion fails, reproduce it on the immutable old
+implementation and check the fixture premise before attributing it to the edit.
+Correct a disproved fixture premise and rerun the affected assertion without
+loosening the product's decision; a valid premise with an incorrect result stays
+a product failure. Preserve the original failure and the deciding observations.
+
+Isolate state reached through HOME, cache/config roots, locks and execution-slot
+namespaces as well as fixture payloads. Inspect the owner's path resolution;
+changing HOME alone need not isolate every resource. Use synthetic fixture
+identities and the owner's existing runtime limits. Verify the fixture resolves
+away from live state; do not delete live caches, alter shared budgets or stop
+another caller to make a test pass. Keep any authorized read-only real-input
+replay separate from these synthetic controls.
+
 ## Partial updates and persisted evidence
 
 List the independent state dimensions and what makes an update explicit. Start
