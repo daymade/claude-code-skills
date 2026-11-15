@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **local-codex** (`daymade-codex` v2.4.12 → v2.4.13): Add the fault-driven restart route for daemon fd exhaustion — diagnose per-process lsof against system limits, distinguish a leak from a post-restart reconnection burst by trend sampling, and recover through the managed daemon start.
+- **peer-message** (v1.26.0 → v1.27.0): Add the codex-fork attribution lead (branch suffix ↔ fork session ID) to the shared-WIP ownership checklist.
+
 - **github-ops** (v1.16.5): Clarify sparse checkout initialization and checker input roots; route repository instructions to the preparation SOP and remove derived routing recaps.
 
 - **lark-cli-router** (v1.0.3): Distinguish one explicitly authorized shared-audience parent from separate customer permission parents, preserving existing nodes and future child-page inheritance.
