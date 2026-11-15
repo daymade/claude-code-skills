@@ -19,7 +19,15 @@ GLOBAL_GUARD_DIR="${GIT_PII_GUARD_DIR:-${HOME:-}/scripts/git-pii-guard}"
 if [ -x "$GLOBAL_GUARD_DIR/pre-push" ]; then
   GLOBAL_HOOK_DIR="$(cd "$(dirname "$GLOBAL_GUARD_DIR/pre-push")" && pwd)"
   if [ "$GLOBAL_HOOK_DIR" != "$HOOK_DIR" ]; then
-    "$GLOBAL_GUARD_DIR/pre-push" "$@" <"$UPDATE_INPUT"
+    PUBLICATION_PYTHON="${HOME:-}/.local/bin/python3.12"
+    PUBLICATION_RUNNER="$GLOBAL_GUARD_DIR/../claude-hooks/bounded-hook-runner.py"
+    if [ ! -x "$PUBLICATION_PYTHON" ] || [ ! -f "$PUBLICATION_RUNNER" ]; then
+      echo "pre-push blocked: publication budget runtime is unavailable." >&2
+      exit 2
+    fi
+    "$PUBLICATION_PYTHON" "$PUBLICATION_RUNNER" \
+      --pass-through --timeout "${PII_PRE_PUSH_TIMEOUT_SECONDS-300}" --max-timeout 300 \
+      --term-grace 3 -- "$GLOBAL_GUARD_DIR/pre-push" "$@" <"$UPDATE_INPUT"
   fi
 else
   echo "WARNING: shared PII pre-push guard is unavailable; only the repository mainline guard ran." >&2
