@@ -437,7 +437,7 @@ For Skill eval grading, aggregation or previous-iteration review, follow
 and [the viewer workflow](daymade-skill/skill-creator/references/paired-evaluation.md#step-4-grade-aggregate-and-launch-the-viewer).
 Keep assertion identity, missing-data semantics and viewer startup instructions in those owners.
 
-When review, replay or evaluation needs input copies, follow
+When review, replay or evaluation needs input copies or task-output closeout, follow
 [the materialization SOP](daymade-skill/skill-creator/references/materialization-budget.md)
 from the locked skill-creator project above. Its
 [CLI](daymade-skill/skill-creator/scripts/materialize.py) owns argument parsing,
@@ -914,9 +914,10 @@ scope through `git-safety-net`. For branch publication or PR creation, read
 [the publication recipe](github-ops/references/pr_operations.md#basic-pr-creation)
 before preparing the task checkout, including sparse and `--no-checkout` worktrees.
 
-For task closeout, enter
+For repository recovery or convergence under concurrent work, enter
 [git-safety-net's Outcome contract](git-safety-net/SKILL.md#outcome-contract--keep-the-safety-net-subordinate-to-the-users-job).
-Use this entry for recovery or repository convergence under concurrent work.
+For consolidating completed-task evidence, enter
+[task evidence closeout](daymade-macos/macos-cleaner/references/task-evidence-closeout.md).
 For stash export or independent recovery, follow the
 [stash recovery procedure](git-safety-net/references/recovery_playbook.md#export-and-recover-selected-stashes).
 For final resource readback against the original inventory, follow the
