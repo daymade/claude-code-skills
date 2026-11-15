@@ -146,6 +146,8 @@ For work becoming eligible after prerequisites arrive, use its
 
 For permission-sensitive fixtures, use Skill Creator's
 [execution-context verification recipe](daymade-skill/skill-creator/references/stateful-script-verification.md#execution-identity-and-permission-fixtures).
+For recovery/cache-test prerequisites, fixture isolation or invalid-fixture triage,
+use its [recovery-test recipe](daymade-skill/skill-creator/references/stateful-script-verification.md#establish-recovery-test-prerequisites).
 For resumable writes to human-edited state, use its
 [interrupted-write controls](daymade-skill/skill-creator/references/stateful-script-verification.md#interrupted-writes-and-later-human-changes).
 
@@ -973,7 +975,8 @@ The existing pre-push entry checks committed current-review evidence for the exa
 `.githooks/pre-commit` and `.githooks/pre-push` dispatch to
 `scripts/git-mainline-guard.mjs`, which rejects direct local-main work and stale
 marketplace manifests or reused plugin versions against current main. The
-dispatchers preserve the shared PII guard when it is installed. Activate this
+shared PII delegate's runtime, deadline and recovery procedure live in
+[repository PII dispatch](references/ci-operations.md#repository-pii-dispatch). Activate this
 repository **from the canonical primary main checkout** with
 `git config core.hooksPath "$(pwd -P)/.githooks"`. The absolute path matters:
 `core.hooksPath` is shared by linked worktrees, so a relative path would let a
