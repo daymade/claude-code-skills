@@ -13,4 +13,4 @@ DESTRUCTIVE_PATTERNS 把 `docker rmi` 标成 category_wide=False，理由是参�
 
 | 目标 | Nominal size | Physical confidence | Class | 管辖规则（逐字引用） | 预期物理释放 + 依据 | 恢复成本 | 裁决 |
 |---|---|---|---|---|---|---|---|
-| Docker 全部镜像 | 引擎口径 reclaimable 23.78 GB | engine-reported | PROPOSABLE | "Always delete by specifying exact object IDs or names" | 6.47 GiB：`docker system df -v` UNIQUE SIZE 求和 | 重新 build/pull 对应镜像 | 入动作集 |
+| Docker 全部镜像 | 引擎口径 reclaimable 23.78 GB | engine-reported | PROPOSABLE | "Before deleting ANY Docker object, perform independent verification." | 6.47 GiB：`docker system df -v` UNIQUE SIZE 求和 | 重新 build/pull 对应镜像 | 入动作集 |
