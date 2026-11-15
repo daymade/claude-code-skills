@@ -454,6 +454,8 @@ For an already-copied directory moving to an external disk, enter
 [macos-cleaner's relocation SOP](daymade-macos/macos-cleaner/references/external-cold-archives.md#verify-an-already-copied-directory-lightly).
 For OrbStack image discovery and physical-release diagnosis, use its
 [Docker reference](daymade-macos/macos-cleaner/references/docker_analysis.md#step-2b-orbstack-specific-analysis).
+For Docker build-cache eviction, enter the
+[exact-record BuildKit procedure](daymade-macos/macos-cleaner/references/docker_analysis.md#exact-record-buildkit-eviction).
 For uv cache diagnosis or retirement, enter
 [macos-cleaner](daymade-macos/macos-cleaner/SKILL.md) and its
 [uv target semantics](daymade-macos/macos-cleaner/references/cleanup_targets.md#uv-cache-retirement).

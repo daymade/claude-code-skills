@@ -32,7 +32,9 @@ only. It does not discover files, classify inactivity, preserve a Git repository
 move live consumers or grant deletion permission. Symlinks, hardlinks, directories,
 special files and protected targets need another disposition. Prepare/verify use
 Python 3.10+ POSIX standard libraries; retirement requires macOS and a successful current
-`/usr/sbin/lsof` probe. A silent or failed probe refuses retirement.
+`/usr/sbin/lsof` probe. For each nonempty batch, only exit 1 with stdout and stderr
+both empty after stripping whitespace establishes no selected file is open;
+all other results refuse retirement.
 
 Before prepare, run the ordinary plan checker and [copy-budget
 check](safety_rules.md) against the exact source rows and prepare/verify commands.

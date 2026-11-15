@@ -142,12 +142,11 @@ List every object rather than reporting category totals:
 |---|---|---|---|---|---|---|
 | <name> | <size> | <unknown or upper bound> | <all running/stopped containers> | <bounded inspection or incomplete> | <risk> | <preserve/confirm exact ID> |
 
-No category-wide Docker prune command is part of the plan. Any exact-record
-BuildKit eviction names its verified builder and literal cache ID and follows
-the scoped procedure in `docker_analysis.md`.
+Docker commands follow the canonical procedure loaded before filling this plan.
 ```
 
-For OrbStack, engine-object deletion frees space inside the VM immediately while the sparse image's host-physical release follows via automatic TRIM on a lag (the manual Reclaim button no longer exists in 2.2.x; measured 2026-10-23). Report VM-side and host-side as two separate postconditions with the lag expectation stated; never promise host `df` recovery from Docker's object-size tables alone.
+Before filling this section, load [Docker analysis and object verification](docker_analysis.md).
+For OrbStack, use its [image discovery and physical-release procedure](docker_analysis.md#step-2b-orbstack-specific-analysis).
 
 ## Phase-4 result
 
