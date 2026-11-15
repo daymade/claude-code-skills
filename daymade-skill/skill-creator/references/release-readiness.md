@@ -197,8 +197,11 @@ paths and review content out of the public distribution.
    the original commit/path/blob remains readable. Do not rewrite the historical
    review to make it match today's HEAD or report an unchanged stale result as a
    successful current validation. Report those limits separately.
-5. Confirm no affected consumer still needs the temporary path, then follow
-   [Git Safety Net's worktree retirement](../../../git-safety-net/references/merge_verification.md#worktree-retirement--prove-the-checkout-is-disposable-before-removal).
+5. Confirm no affected consumer still needs the temporary path, then resolve the
+   installed Git Safety Net or its verified source and follow its
+   [worktree retirement procedure](https://github.com/daymade/claude-code-skills/blob/main/git-safety-net/references/merge_verification.md#worktree-retirement--prove-the-checkout-is-disposable-before-removal).
+   That separate owner is not bundled with standalone Skill Creator; if its
+   required procedure/tools are unavailable, retain the checkout.
    Check the current binding again from the retained checkout after removal.
    Unavailable required evidence or an unresolved live consumer keeps retirement
    pending; an unrelated obsolete record does not require reviving its release.

@@ -945,7 +945,10 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
    metadata. Search the exact path only in the task's known consumer stores; do not infer global
    non-use from a clean status, no open handles or a scan of tracked files alone. Resolve each
    live reference through its owning workflow before freezing retirement evidence. For Skill
-   release receipts, use [the archive relocation procedure](../../daymade-skill/skill-creator/references/release-readiness.md#retire-a-temporary-review-checkout).
+   release receipts, resolve the installed Skill Creator or its verified source and use
+   [the archive relocation procedure](https://github.com/daymade/claude-code-skills/blob/main/daymade-skill/skill-creator/references/release-readiness.md#retire-a-temporary-review-checkout).
+   It is a separate owner, not a bundled tool; unavailable required relocation keeps the
+   checkout pending rather than authorizing ad-hoc receipt repairs.
    Distinguish an already obsolete record from a live dependency: preserve its original evidence
    and report its existing validation limit without inventing a new release approval. Recheck
    relocated consumers after removal; unknown required consumer coverage stops that retirement.
