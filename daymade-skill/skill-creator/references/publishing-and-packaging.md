@@ -141,7 +141,7 @@ uv run --frozen python -m scripts.package_skill \
   --regression-review <workspace>/skill-regression-review.json
 ```
 
-Optional output directory, and `--include-evals` to ship the root `evals/` directory (excluded by default as a development asset):
+Optional output directory and explicitly requested development assets:
 
 ```bash
 cd <skill-creator-path>
@@ -153,6 +153,41 @@ validation, regression-review and security prerequisites and archive creation.
 If security validation blocks packaging, run its complete recovery command for
 your shell from the original working directory, then retry the original packaging
 command. Keep the resolved paths and shell quoting intact.
+
+#### Self-contained executable acceptance
+
+When the user requests a self-contained executable Skill, or the delivery claims
+that property, verify it before calling the result ready, including when no archive
+is requested. Keep declared Python/SDK/system-tool and service prerequisites
+explicit; self-containment does not require vendoring them or credentials.
+
+1. Obtain the actual archive, or materialize the candidate's shipping set using
+   the shared [packaging policy](../scripts/packaging_policy.py). Preserve its
+   selected inclusion policy; do not invent another exclusion list. Check that
+   the promised entry, required helpers and runtime self-checks are in that set.
+2. Execute from a fresh directory outside the source checkout, with a path
+   containing spaces when supported. Remove source-only `PYTHONPATH` additions
+   and do not supply sibling checkouts or the author's undeclared imports.
+   Preserve the consumer's declared tools and external configuration.
+3. Run a representative operation and any promised self-check from that
+   distribution. Inspect meaningful output and the expected exercised cases;
+   help output or a test command that discovers no tests does not establish
+   operation. If a required self-check is excluded, make it a shipped resource
+   or resolve the delivery claim before release; source-tree success is insufficient.
+4. Where the changed interface requires configuration or identity, use synthetic
+   missing/invalid inputs to verify explicit failure before external writes, then
+   verify the supported valid path within the existing authorization. Keep secrets
+   and mutable state outside the bundle. Do not obtain new credentials or make
+   unrelated live requests merely to complete this check.
+5. If installation creates a separate runtime copy, follow
+   [consumed-entry verification](source-location-and-activation.md) and the runtime
+   owner's result check. Keep portable execution, installed adoption and the
+   original business outcome as separate claims.
+
+Manage input copies and extracted transport payloads through
+[materialization and retirement](materialization-budget.md). Reuse matching
+unchanged evidence, run only probes needed for the changed boundary, and retire
+temporary payloads after their consumers finish.
 
 ### Step 8: Update Marketplace
 

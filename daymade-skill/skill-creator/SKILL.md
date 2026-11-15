@@ -254,6 +254,10 @@ a marker or commit alone is not authority. Clear scan/runtime errors, keep scan
 and review evidence bound to current content, and bump the registered plugin's
 release identity for shipped changes. Preserve unrelated registry entries.
 
+For a requested or claimed self-contained executable delivery, complete
+[shipping-set acceptance](references/publishing-and-packaging.md#self-contained-executable-acceptance)
+before declaring readiness, even when no archive is requested.
+
 For repository publication, follow [release readiness](references/release-readiness.md)
 with committed exact-candidate independent evidence. Reuse an unchanged complete
 distribution's review only through that procedure's dependency-bound rebind.

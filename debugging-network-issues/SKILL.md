@@ -16,10 +16,11 @@ Apply this skill when the user reports a network/streaming/protocol symptom and 
 
 ## Triage first — is this a known domain?
 
-Before applying the general methodology below, check whether the symptom points at a stack that already has a dedicated skill in this repo. Those carry the domain-specific symptom→cause→fix tables this skill deliberately stays general about — start there, and come back here for methodology if the root cause turns out to be elsewhere.
+Before applying the general methodology below, check whether the symptom points at a stack with a dedicated skill available to the consumer. Those carry the domain-specific symptom→cause→fix tables this skill deliberately stays general about — start there, and come back here for methodology if the root cause turns out to be elsewhere.
 
 | If the symptom is…                                                                                                                                                                                       | Start with                                   |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| Codex session Bad Request / HTTP 400, native request or SSE failure, or a question about failure time versus a fix | **codex-request-diagnostics**, when available; otherwise continue this Skill's evidence-first method using available native/session evidence and explicit coverage gaps |
 | macOS Tailscale ⨯ proxy/VPN conflict (Shadowrocket / Clash / Surge): `tailscale ping` works but SSH/curl/git fails, `Connection closed by 198.18.x.x`, TUN DNS hijack, ~60s `getaddrinfo` resolver stall | **tunnel-doctor**                            |
 | Cloudflare config: `ERR_TOO_MANY_REDIRECTS`, SSL-mode mismatch, DNS / proxy-status issues behind the orange cloud                                                                                        | **cloudflare-troubleshooting**               |
 | Windows App / AVD / W365 RDP connection quality: WebSocket instead of UDP Shortpath, high RTT, STUN/TURN interference                                                                                    | **windows-remote-desktop-connection-doctor** |

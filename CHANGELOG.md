@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-creator** (`daymade-skill` v1.79.4): Verify self-contained executable claims against the actual shipping set outside the source checkout, including promised self-checks, configuration failures and separate runtime adoption.
+- **debugging-network-issues** (v1.12.3): Route Codex request failures and fix-timing questions to the dedicated diagnostics Skill when available, retaining native-evidence fallback without a private dependency requirement.
+
 - **peer-message** (v1.26.0): Derive native send arguments and commit identity from the original prepare result; execute the documented return-driven flow without manually copying envelopes or UUIDs, and retain unknown transport outcomes.
 - **tech-selection** (`daymade-claude-code` v5.1.15): Challenge unnecessary bindings, version/path pins and compatibility constraints against current user requirements and actual consumers before preserving them.
 - **feishu-doc-scraper v1.14.1 / report-with-html v1.7.1**: Make archive commands independent of the caller's working directory, document PDF adapter imports, remove copied implementation limits and add repository task routes.
