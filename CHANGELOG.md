@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-creator** (`daymade-skill` v1.80.1): Relocate temporary review-checkout bindings without changing the reviewed identities; distinguish current release verification from preserved historical evidence and verify consumers after retirement.
+- **git-safety-net** (v1.28.6): Check known external path consumers, including local Git metadata, before retiring a linked worktree; resolve live references through their owning workflow and preserve obsolete evidence without renewing approval.
 - **skills-search / skill-creator** (`daymade-skill` v1.80.0): Search explicitly scoped project Skills alongside owned catalogs with immutable readback; detect Chinese numbered references and cover owner changes after splitting documents.
 
 - **local-codex** (`daymade-codex` v2.4.13 → v2.4.14): Route the fault-driven daemon scenario into the skill — description and Session Management section now trigger on daemon restart, hooks failing with 'Too many open files' and fd exhaustion diagnostics; anchor the observed fd baseline to its version.
