@@ -72,7 +72,7 @@
 
 交互组件（当交互能帮理解时才上）：
 - **计算器**（滑块 + preset 按钮 + 实时联动数字流 + 高亮结果 + 解释句）—— 让读者拨动参数看结果，比静态数字更懂。
-- **折叠手风琴 / collapsible** —— 概览不丢细节：默认收、点开看全貌；组带 id ＋ hash 自动展开。
+- **折叠手风琴 / collapsible** —— 概览不丢细节：默认收、点开看全貌；组带 id ＋ hash 自动展开。书签、批注等原文阅读页的主要段落按 [阅读页展开规则](reading-surface-disclosure.md) 默认展开，不套概览页默认值。
 - **嵌入源文档抽屉**（文档 tab 导航＋条款锚点＋正文引用自动 linkify→侧滑抽屉定位高亮）—— 审阅页"每句话可核到原文"的实体；全文是烤进页面的**快照**，必须配生成器并用 `--check` 验证同步（纪律 `long-lived-report-maintenance.md`＋模板 `assets/regen-docs-template.py`）。
 - **sticky nav** —— 长页锚点导航。
 
