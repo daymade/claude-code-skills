@@ -60,6 +60,8 @@ For executable handoffs, including instruction-only cross-owner workflows, bind 
 [intended-consumer boundary](daymade-skill/skill-creator/references/change-verification.md#bind-the-intended-consumer-before-verification)
 and follow its [first-use route](daymade-skill/skill-creator/references/first-use-and-resume.md).
 Use its selected workflow for regression review, validation, initialization, and packaging.
+For a self-contained executable delivery, follow its
+[shipping-set acceptance](daymade-skill/skill-creator/references/publishing-and-packaging.md#self-contained-executable-acceptance).
 For capability extraction or reuse across business callers, follow its
 [ownership decision](daymade-skill/skill-creator/references/authoring-and-reuse.md#the-extend-vs-create-check--runs-before-any-specialized-branch).
 
