@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-cleaner** (`daymade-macos` v1.33.0): Check each literal `rm` operand, including `--` and quoted Unicode paths; reject incomplete command coverage instead of returning a warning-only pass. Expand retirement sources only from the exact hash-bound evidence manifest; preserve read-only probes, explicit non-proposals and existing retention gates. Change types: bug fix and authorized workflow/safety redesign.
+
 - **github-ops** (v1.16.5 → v1.16.6): Preserve failed-command evidence before disposable runner workspace cleanup, verify later retrieval, and bind cache preparation to each job's actual checkout and service identity.
 - **terraform-skill** (v1.5.15 → v1.5.16): Select validation environments from the authorized release contract, preserve required staging evidence without inserting optional staging into direct production, and derive supported schema transitions from the fixed candidate's canonical catalog.
 

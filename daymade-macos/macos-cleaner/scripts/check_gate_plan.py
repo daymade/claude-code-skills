@@ -28,10 +28,12 @@ Exit codes:
 """
 
 import argparse
+import hashlib
 import json
 import os
 import re
 import shlex
+import stat
 import sys
 from pathlib import Path
 
@@ -326,7 +328,13 @@ DESTRUCTIVE_PATTERNS = (
         r'(?:"[^"]*/safe_delete\.py"|\'[^\']*/safe_delete\.py\'|'
         r'[^\s`"\']*\bsafe_delete\.py)(?:\s+|$)'),
      False, False),
-    (('rm',), re.compile(r'\brm\s+(?:-\w+[=\w]*\s+)*[/~$"\']'), False, True),
+    (('rm',), re.compile(
+        r'^\s*`?(?:(?:sudo|command)\s+)?(?:\S*/)?rm(?=\s|$)|'
+        r'\brm\s+(?=[-/~$"\'])'), False, True),
+    (('task_evidence_archive.py',), re.compile(
+        r'^\s*`?(?:(?:\S*/)?python(?:\d+(?:\.\d+)*)?\s+)?'
+        r'(?:"[^"]*/task_evidence_archive\.py"|\'[^\']*/task_evidence_archive\.py\'|'
+        r'[^\s`"\']*\btask_evidence_archive\.py)(?:\s+|$)'), False, False),
     (('osascript', 'Finder'), re.compile(r'\bosascript\b'), False, False),
     # Not category-wide on its own: the gate names `brew cleanup --prune`
     # specifically, and the reference prescribes plain `brew cleanup -s` as the
@@ -828,16 +836,17 @@ def command_chunks(plan_text):
     chunks = []
     lines = plan_text.split('\n')
     rule_cells = set()
-    command_tables = set()
+    command_tables = {}
     for table in parse_tables(plan_text):
         index = table.column('管辖规则', 'governing')
         if index is not None:
             for row in table.rows:
                 if index < len(row.cells):
                     rule_cells.add((row.lineno, normalize(row.cells[index])))
-        if table.column('命令', 'command', '动作') is not None:
+        command_column = table.column('命令', 'command', '动作')
+        if command_column is not None:
             for row in table.rows:
-                command_tables.add(row.lineno)
+                command_tables[row.lineno] = command_column
     in_fence = False
     consumed = 0
     for number, line in enumerate(lines):
@@ -862,8 +871,9 @@ def command_chunks(plan_text):
         if line.lstrip().startswith('|'):
             # A table row is read as cells only: its inline backticks belong to
             # those cells, and a rule cell's backticked command is a citation.
-            origin = 'cmdtable' if number + 1 in command_tables else 'cell'
-            for cell in split_row(line):
+            for column, cell in enumerate(split_row(line)):
+                origin = ('cmdtable' if command_tables.get(number + 1) == column
+                          else 'cell')
                 if not cell or (number + 1, normalize(cell)) in rule_cells:
                     continue
                 chunks.append((number + 1, origin, cell))
@@ -899,17 +909,13 @@ class Command(object):
         self.exact_target = exact_target
 
 
-def helper_targets(text):
-    """Read literal helper arguments without opening a batch file or running code.
-
-    A batch, expansion, or compound shell form cannot prove its target set from
-    the plan alone. Keep it visible but unresolved so the coverage gate rejects it.
-    """
+def literal_shell_words(text):
+    """Return values and per-word expansion flags without executing shell code."""
     source = text.strip().strip('`')
     try:
         parts = shlex.split(source)
     except ValueError:
-        return [None]
+        return None
     # shlex returns values, discarding the quote context that decides whether
     # brackets, braces or '&' are filename characters or shell syntax. Track
     # that context separately; never expand or execute the words.
@@ -960,18 +966,99 @@ def helper_targets(text):
         unsafe_words.append(unsafe)
         values.append(value)
     if len(unsafe_words) != len(parts):
-        return [None]
+        return None
     parts = values
+    return parts, unsafe_words
+
+
+def helper_targets(text, program='safe_delete.py'):
+    """Keep expansions, batches and unsupported operands visible but unresolved."""
+    parsed = literal_shell_words(text)
+    if parsed is None:
+        return [None]
+    parts, unsafe_words = parsed
     for index, part in enumerate(parts):
-        if part.rsplit('/', 1)[-1] != 'safe_delete.py':
+        if part.rsplit('/', 1)[-1] != program:
             continue
         targets = parts[index + 1:]
-        if (not targets or any(target.startswith('-') or not target
-                               for target in targets) or
-                any(unsafe_words[index + 1:])):
+        unsafe_targets = unsafe_words[index + 1:]
+        if program == 'rm':
+            while targets and targets[0].startswith('-'):
+                option = targets.pop(0)
+                unsafe_option = unsafe_targets.pop(0)
+                if option == '--' and not unsafe_option:
+                    break
+                # BSD/GNU rm do not share a preview flag. Unknown options
+                # cannot exempt a proposal or establish its operand set.
+                if unsafe_option or not re.fullmatch(r'-[dfiIRrvW]+', option):
+                    return [None]
+        invalid_options = program != 'rm' and any(target.startswith('-') for target in targets)
+        if invalid_options or not targets or any(not target for target in targets) or any(unsafe_targets):
             return [None]
         return targets
     return [None]
+
+
+def archive_targets(text):
+    """Expand only an explicitly hash-bound manifest; never inspect source bytes.
+
+    Prepare/verify do not delete sources; the ordinary copy-budget gate still
+    applies. Retirement and malformed invocations stay visible until the complete
+    literal source set can be checked against the classification table.
+    """
+    parsed = literal_shell_words(text)
+    if parsed is None:
+        return [None]
+    words, unsafe = parsed
+    if any(unsafe):
+        return [None]
+    index = next((i for i, word in enumerate(words)
+                  if word.rsplit('/', 1)[-1] == 'task_evidence_archive.py'), None)
+    if index is None:
+        return [None]
+    args = words[index + 1:]
+    if args == ['--help']:
+        return []
+    if not args or args[0] not in ('prepare', 'verify', 'retire'):
+        return [None]
+    phase = args[0]
+    keys = {'prepare': {'--selection', '--archive', '--manifest'},
+            'verify': {'--manifest', '--receipt'},
+            'retire': {'--manifest', '--receipt', '--expected-manifest-sha256', '--journal'}}[phase]
+    options = args[1:]
+    if len(options) != 2 * len(keys) or set(options[::2]) != keys:
+        return [None]
+    values = dict(zip(options[::2], options[1::2]))
+    if any(not value for value in values.values()):
+        return [None]
+    if phase != 'retire':
+        return []
+    digest = values['--expected-manifest-sha256']
+    if not re.fullmatch(r'[0-9a-f]{64}', digest):
+        return [None]
+    path = Path(values['--manifest'])
+    if not path.is_absolute():
+        return [None]
+    try:
+        # Plan intake is bounded and does not open any selected source file.
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(descriptor, 'rb') as handle:
+            if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+                return [None]
+            raw = handle.read(16 * 1024 * 1024 + 1)
+        if len(raw) > 16 * 1024 * 1024 or hashlib.sha256(raw).hexdigest() != digest:
+            return [None]
+        manifest = json.loads(raw)
+        files = manifest['files']
+        if type(manifest.get('schema')) is not int or manifest['schema'] != 1 or not isinstance(files, list) or not files:
+            return [None]
+        targets = [item['source'] for item in files]
+        if (any(not isinstance(target, str) or not target or not Path(target).is_absolute()
+                for target in targets) or len(set(targets)) != len(targets)):
+            return [None]
+    except (OSError, ValueError, TypeError, KeyError):
+        return [None]
+    return targets
 
 
 # A command the plan declares it did NOT run and will not propose is not a
@@ -1012,6 +1099,8 @@ def find_destructive_commands(plan_text):
         per_line[lineno] = per_line.get(lineno, 0) + 1
     for lineno, origin, chunk in command_chunks(plan_text):
         helper_match = DESTRUCTIVE_PATTERNS[0][1].search(chunk)
+        rm_match = DESTRUCTIVE_PATTERNS[1][1].search(chunk)
+        archive_match = DESTRUCTIVE_PATTERNS[2][1].search(chunk)
         if helper_match:
             try:
                 helper_words = shlex.split(chunk.strip().strip('`'))
@@ -1020,11 +1109,24 @@ def find_destructive_commands(plan_text):
             if ('--help' in helper_words and
                     '--' not in helper_words[:helper_words.index('--help')]):
                 continue
+        elif rm_match:
+            # Help/version flags are read-only only before an end-of-options
+            # marker and without any deletion operands. Filename text is data.
+            try:
+                words = shlex.split(chunk.strip().strip('`'))
+            except ValueError:
+                words = []
+            if argv0(chunk) == 'rm' and words[1:] in (['--help'], ['--version']):
+                continue
+            if chunk.strip('` ') == 'rm' and lines[lineno - 1].strip() != 'rm':
+                continue  # a tool-name citation, not an invocation
+        elif archive_match:
+            pass  # phase/options are parsed by archive_targets, never by filename text
         elif DRY_RUN_RE.search(chunk) or HELP_INVOCATION_RE.search(chunk):
             continue
         if READ_ONLY_PROBE_RE.match(chunk) and not re.search(r'\brm\b', chunk):
             continue
-        if helper_match:
+        if helper_match or rm_match or archive_match:
             # A filename such as '/tmp/not used/item' is not a prose exclusion.
             # For an inline command, only its surrounding sentence can retract it.
             scope = chunk if origin == 'cell' else lines[lineno - 1]
@@ -1037,6 +1139,8 @@ def find_destructive_commands(plan_text):
             match = pattern.search(chunk)
             if not match:
                 continue
+            if tools == ('rm',) and argv0(chunk) == 'docker':
+                continue  # docker owns its rm subcommand and option semantics
             if (tools == ('safe_delete.py',) and chunk.strip('` ') == 'safe_delete.py'
                     and lines[lineno - 1].strip() != 'safe_delete.py'):
                 continue  # a filename citation, not an executable invocation
@@ -1050,7 +1154,9 @@ def find_destructive_commands(plan_text):
             if key in seen:
                 continue
             seen.add(key)
-            targets = helper_targets(chunk) if tools == ('safe_delete.py',) else [None]
+            targets = (archive_targets(chunk) if tools == ('task_evidence_archive.py',) else
+                       helper_targets(chunk, tools[0])
+                       if tools in (('safe_delete.py',), ('rm',)) else [None])
             for target in targets:
                 commands.append(Command(lineno, chunk, tools, category_wide, versioned,
                                         origin, target))
@@ -1073,7 +1179,7 @@ def resolve_target(command, plan_tables):
     A table row's target column wins when there is one: it is where the agent
     states the exact object, and the command cell alone often holds only IDs.
     """
-    if command.tools == ('safe_delete.py',):
+    if command.tools in (('safe_delete.py',), ('rm',), ('task_evidence_archive.py',)):
         return command.exact_target or '', None, command.exact_target is not None
     for table in plan_tables:
         for row in table.rows:
@@ -1149,9 +1255,14 @@ def attribute(command, gate_rows, plan_tables):
     identifier, because for a package-manager cache it *is* the target.
     """
     target, _row, resolvable = resolve_target(command, plan_tables)
-    if command.tools == ('safe_delete.py',):
+    if command.tools in (('safe_delete.py',), ('rm',), ('task_evidence_archive.py',)):
         row = next((row for row in gate_rows
                     if normalize(row.target).strip('\'"') == target), None)
+        if command.tools == ('rm',) and row is None and target:
+            # Annotated target cells may quote the exact path. Two paths with
+            # the same basename are still different deletion targets.
+            row = next((row for row in gate_rows
+                        if target in re.findall(r'`([^`]+)`', row.target)), None)
         return row, resolvable, target
     identifiers = target_identifiers(command, target)
     if not identifiers:
@@ -1384,19 +1495,35 @@ def quote_segments(cell):
 def unrecognized_command_lines(plan_text, commands):
     """Command-shaped chunks the destructive-command list did not match.
 
-    DESTRUCTIVE_PATTERNS is a declared allowlist, so an unlisted command is not
-    checked rather than failed on. Reporting "0 destructive command(s) checked"
-    for a plan full of commands would read as "checked and found clean", which is
-    the opposite of the truth, so the count is surfaced instead.
+    Unknown command forms cannot establish complete target coverage. Read-only
+    probes and explicit non-proposals remain outside the action set.
     """
     missed = []
+    lines = plan_text.split('\n')
+    per_line = {}
+    for lineno, _origin, _chunk in command_chunks(plan_text):
+        per_line[lineno] = per_line.get(lineno, 0) + 1
     for lineno, origin, chunk in command_chunks(plan_text):
         if any(pattern.search(chunk) for _tools, pattern, _wide, _versioned
                in DESTRUCTIVE_PATTERNS):
             continue  # recognized — excluded on purpose or not, it was seen
-        if READ_ONLY_PROBE_RE.match(chunk) or DRY_RUN_RE.search(chunk):
+        try:
+            lexer = shlex.shlex(chunk.strip('` '), posix=True, punctuation_chars=';&|<>()')
+            lexer.whitespace_split = True
+            compound = any(word and all(char in ';&|<>()' for char in word)
+                           for word in lexer)
+        except ValueError:
+            compound = True
+        if compound and looks_like_command(chunk, origin):
+            missed.append((lineno, chunk))
             continue
-        if READ_ONLY_SUBCOMMAND_RE.search(chunk):
+        if READ_ONLY_PROBE_RE.match(chunk.strip('` ')):
+            continue
+        if READ_ONLY_SUBCOMMAND_RE.match(chunk.strip('` ')):
+            continue
+        if re.fullmatch(r'[\w./+-]+\s+--(?:version|help)', chunk.strip('` ')):
+            continue
+        if declared_unused(lineno, origin, chunk, lines, per_line[lineno]):
             continue
         if not looks_like_command(chunk, origin):
             continue
@@ -1407,10 +1534,10 @@ def unrecognized_command_lines(plan_text, commands):
 # Read-only invocations whose program name is itself mutating elsewhere
 # (`docker rmi` versus `docker system df`), so the program alone cannot decide.
 READ_ONLY_SUBCOMMAND_RE = re.compile(
-    r'\b(?:docker|orbctl|orb)\s+(?:system\s+df|images|ps|volume\s+ls|inspect|info|'
+    r'(?:(?:\S*/)?(?:docker|orbctl|orb)\s+(?:system\s+df|images|ps|volume\s+ls|(?:image\s+)?inspect|info|'
     r'version|buildx?\s+du)\b|\bbrew\s+--cache\b|\buv\s+cache\s+dir\b|'
-    r'\bnpm\s+config\s+get\b|\bpnpm\s+store\s+path\b|\b(?:du|df|lsof)\b|'
-    r'\blist\b|--version\b',
+    r'\bnpm\s+config\s+get\b|\bpnpm\s+store\s+path\b|'
+    r'(?:\S*/)?analyze_caches\.py\s+--user-only\b)',
     re.IGNORECASE,
 )
 
@@ -1424,14 +1551,17 @@ def looks_like_command(chunk, origin='prose'):
     commands, where a cell is a command by construction.
     """
     text = chunk.strip().lstrip('`\'" ')
-    if not text or re.search(r'[\u4e00-\u9fff]', text):
+    if not text:
+        return False
+    if (re.search(r'[\u4e00-\u9fff]', text) and
+            not re.match(r'^\S+\s+(?:-|[\'\"]?[/~])', text)):
         return False
     parts = text.split()
     if len(parts) < 2 or not re.fullmatch(r'[A-Za-z][\w.+-]*', parts[0].rsplit('/', 1)[-1]):
         return False
     if origin == 'cmdtable':
         return True
-    return bool(re.search(r'\s-{1,2}[A-Za-z]|[/~]|\d', text))
+    return bool(re.match(r'^\S+\s+(?:-{1,2}[A-Za-z]|[\'\"]?[/~]|\d)', text))
 
 
 def check_target_coverage(commands, gate_rows, plan_tables, plan_text=''):
@@ -1448,13 +1578,15 @@ def check_target_coverage(commands, gate_rows, plan_tables, plan_text=''):
         row, resolvable, target = attribute(command, gate_rows, plan_tables)
         if row is not None:
             continue
-        if not resolvable and gate_rows and command.tools != ('safe_delete.py',):
+        if not resolvable and gate_rows and command.tools not in (
+                ('safe_delete.py',), ('rm',), ('task_evidence_archive.py',)):
             unattributed.append('line %d: %s (no stated target to match)'
                                 % (command.lineno, command.text[:90]))
             continue
         unmatched.append('line %d: %s' % (command.lineno, command.text[:90]))
         unmatched.append('    stated target: %s' % target[:90])
     details = ['%d destructive command(s) checked' % len(commands)]
+    missed = []
     if plan_text:
         missed = unrecognized_command_lines(plan_text, commands)
         if missed:
@@ -1470,8 +1602,7 @@ def check_target_coverage(commands, gate_rows, plan_tables, plan_text=''):
         details.append('%d command(s) name a target absent from the table:'
                        % (len(unmatched) // 2))
         details.extend(unmatched)
-        return Result('target_coverage', False, details)
-    return Result('target_coverage', True, details)
+    return Result('target_coverage', not (unmatched or missed), details)
 
 
 def has_quoted_direction(cells):
