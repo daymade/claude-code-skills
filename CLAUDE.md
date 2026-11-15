@@ -67,6 +67,10 @@ For capability extraction or reuse across business callers, follow its
 
 Operational or code-bearing Skill edits complete directly affected document alignment
 before the first candidate freeze; follow skill-creator's Edit workflow.
+For reusable Skill discovery within a project, follow
+[local repository search](daymade-skill/skills-search/references/local-repository-search.md).
+When splitting or renumbering an instruction owner, use the
+[reference-and-self-application check](daymade-skill/skill-creator/references/existing-skill-migration.md#reference-and-self-application-check).
 For meeting transcripts, participant-note reconciliation or minute-draft merges,
 enter [meeting-minutes-taker](daymade-audio/meeting-minutes-taker/SKILL.md#quick-start).
 When data-visualization delivery-gate text changes, use the

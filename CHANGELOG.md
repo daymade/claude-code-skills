@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skills-search** (`daymade-skill` v1.80.2): Align coverage documentation with source-row and overall statuses, document blocked ancestors, and add repository routes for project discovery and split-reference checks.
+
 - **skill-creator** (`daymade-skill` v1.80.1): Relocate temporary review-checkout bindings without changing the reviewed identities; distinguish current release verification from preserved historical evidence and verify consumers after retirement.
 - **git-safety-net** (v1.28.6): Check known external path consumers, including local Git metadata, before retiring a linked worktree; resolve live references through their owning workflow and preserve obsolete evidence without renewing approval.
 - **skills-search / skill-creator** (`daymade-skill` v1.80.0): Search explicitly scoped project Skills alongside owned catalogs with immutable readback; detect Chinese numbered references and cover owner changes after splitting documents.
