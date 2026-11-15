@@ -1,52 +1,22 @@
-# Resumable preparation for one linked worktree
+# Worktree retirement helper reference
+
+For retiring a linked worktree, follow the complete
+[worktree retirement procedure](merge_verification.md#worktree-retirement--prove-the-checkout-is-disposable-before-removal).
 
 Use this helper after the named target and its initialized module repositories have
 preservation authority. It requires Python 3.10+, Git, empty tracked/untracked status
 in the target and modules, and an external evidence directory. It does not fetch,
 change refs, remove worktrees, establish business containment or grant deletion authority.
-Keep the Mode E worktree procedure's ownership, scheduler, occupancy, containment,
-normal-removal and post-removal gates.
-
-The same commands below support ordinary linked worktrees without submodules. For a
-task-created dependency tree, add
-`--rebuildable 'node_modules=pnpm install --frozen-lockfile from tracked package.json and pnpm-lock.yaml'`
-to preparation and resume after verifying that the command and tracked inputs reproduce
-every covered entry. Reuse the helper's ignored-file inventory rather than a one-off script.
-
-Keep environment files, hand edits and unknown data outside that declaration. Their existing
-copy/retained-copy preservation rules still apply. A rebuildable declaration avoids copying
-that payload; it does not skip the frozen inventory or permit changes after preparation.
-Resume with the same declaration, run `verify-current`, then finish the separate Mode E
-removal gates. After removal, `verify-recovery` must still read preserved unique configuration
-and verify the retained carrier. Do not infer faster hashing or weaker checks from this route.
-
-Before `prepare`, finish remote refresh/fetch, business containment and preliminary ownership,
-scheduler and occupancy checks. Select a durable ref that will survive the target's retirement.
-Prefer an existing verified carrier. After a squash, main's replacement commit does not retain
-the original commit identities; within the exact task's preservation/removal authority, create
-a collision-checked task recovery ref instead of exporting history by default:
-
-```bash
-primary="<absolute-kept-checkout>"
-target="<exact-linked-worktree>"
-target_head=$(git -C "$target" rev-parse --verify 'HEAD^{commit}') || exit 1
-retained_ref="refs/recovery/worktree-retirement/<unique-task-id>"
-git -C "$primary" update-ref "$retained_ref" "$target_head" "" || exit 1
-```
-
-The empty old value requires a new ref; a collision stops this recipe. Keep the ref through
-removal and recovery readback. Creating it does not prove content delivery, authorize other
-targets, or authorize retiring the recovery ref itself. If an existing verified ref covers the
-history, set `retained_ref` to that fully qualified ref and omit creation.
+The same interface supports ordinary linked worktrees without submodules.
 
 ```bash
 SKILL_ROOT="<absolute-loaded-git-safety-net-directory>"
 python3 "$SKILL_ROOT/scripts/git_prepare_worktree_retirement.py" prepare \
-  --worktree "$target" --base-ref "$retained_ref" \
+  --worktree "<exact-linked-worktree>" --base-ref "<fully-qualified-retained-ref>" \
   --out "<new-external-evidence-directory>"
 # After an interruption, use the same arguments and declarations:
 python3 "$SKILL_ROOT/scripts/git_prepare_worktree_retirement.py" prepare \
-  --worktree "$target" --base-ref "$retained_ref" \
+  --worktree "<exact-linked-worktree>" --base-ref "<fully-qualified-retained-ref>" \
   --out "<same-external-evidence-directory>" --resume
 python3 "$SKILL_ROOT/scripts/git_prepare_worktree_retirement.py" verify-current \
   --out "<same-external-evidence-directory>"
@@ -56,13 +26,7 @@ Read `state.json`'s `snapshot.root_carrier`: `retained-ref` means the selected r
 every root HEAD/reflog commit being retired and needs no root-history pack. A ref at HEAD
 is insufficient when the reflog holds a unique commit outside HEAD's ancestry; the helper
 then selects `pack` and preserves the target HEAD/reflog history. Do not discard that pack
-or declare the unknown commit withdrawn to force the cheaper route. Content containment
-after a squash still needs the separate Mode E check. Neither the primary checkout nor
-its unrelated WIP is a removal target.
-
-Preparation freezes refs and metadata as well as payloads. Do not fetch, move the carrier or
-change metadata between `prepare` and removal. If a required refresh or external writer changes
-the snapshot, reclassify and prepare new evidence instead of weakening `verify-current`.
+or declare the unknown commit withdrawn to force the cheaper route.
 
 For explicitly withdrawn rebase commits, pass repeated `--known-withdrawal OLD=RETAINED`
 pairs with full commit IDs. The exact current tip must be in the retained base;
@@ -125,16 +89,11 @@ lost. It never overwrites a mismatched completed stage. A partial `.building-*`
 directory is retained, and resume creates a new stage for that incomplete work only;
 keep or retire those task-owned partial artifacts under the existing artifact gate.
 
-Run `verify-current` before the final standalone occupancy check. It reads the checkpoint, verifies
+`verify-current` reads the checkpoint, verifies
 recovery bytes and object closure, and compares current target, refs, module mapping,
 metadata, physical object identities and ignored inventory with the frozen state.
-Any change stops removal; preserve the new state and prepare a new evidence directory.
-This is not a lock against writers. After its Git probes finish, run the standalone
-occupancy check, reconfirm ownership, locks and scheduler use, then make the
-already-authorized normal removal the next operation with no intervening command.
-After removal, run `verify-recovery --out <same-directory>` and separately prove the
-target is absent and the primary checkout is unchanged. That mode verifies carriers;
-it does not claim removal occurred. Keep recovery-only evidence until authorized retirement.
+`verify-recovery --out <evidence-directory>` verifies the saved carriers without comparing the
+live target. It does not prove removal or that the primary checkout is unchanged.
 
 Exit 0 is a positive preparation/verification result, 1 is an unsafe or changed
 state, and 2 is invalid input or an execution failure. Missing/corrupt checkpoints
