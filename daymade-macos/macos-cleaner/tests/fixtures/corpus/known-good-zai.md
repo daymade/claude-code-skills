@@ -10,7 +10,7 @@
 | `.cache/uv` | 42.3 GB | path-accounted（du） | PRESERVE | "Environments may need to fetch or rebuild dependencies again" | 未逐对象测量；du 路径口径 42.3 GB 不构成释放承诺 | 重新下载/重建 Python 依赖 | 不在动作集（用户未点名该目标） |
 | `.cache/huggingface` | 28.2 GB | path-accounted（du） | PRESERVE | "Large models may take hours to redownload and may be unavailable offline" | 未逐对象测量；模型目录需逐个核对才能定释放 | 模型权重重下（小时级，可能离线不可得） | 不在动作集（用户未点名该目标） |
 | `~/.npm`（npm `_cacache`） | 17.7 GB | path-accounted（du） | PRESERVE | "npm install redownloads packages; constrained networks can turn this into a long reinstall" | 未逐对象测量 | npm install 重下全部包 | 不在动作集（用户未点名该目标） |
-| Docker build cache | 21.82 GB（private 20.26 GB） | engine-reported | USER-DECISION | "This skill does not use docker builder prune or docker buildx prune" | 只报不删：本 skill 不执行 build cache 删除（可用控制全属 prune 家族） | 重建构建层耗时 | 不在动作集（skill 明确只报不删） |
+| Docker build cache | 21.82 GB（private 20.26 GB） | engine-reported | USER-DECISION | "Unknown build-cache records remain report-only." | 未核具体 builder 与 cache ID，保留未知记录 | 重建构建层耗时 | 不在动作集 |
 | `.cache/modelscope` | 4.2 GB | path-accounted（du） | PRESERVE | "Keep unless exact artifacts are obsolete" | 未逐对象测量 | 模型重下 | 不在动作集（用户未点名该目标） |
 | `~/Library/Caches/pnpm` | 3.8 GB | path-accounted（du） | USER-DECISION | no rule found（cleanup_targets.md 的 Package Manager Caches 章节无 pnpm 条目） | 未逐对象测量 | pnpm 包重下 | 不在动作集（无规则覆盖，须问用户） |
 | `~/Library/Caches/ms-playwright` | 3.1 GB | path-accounted（du） | PRESERVE | "Browsers must be downloaded again; this can be several GiB" | 未逐对象测量 | 浏览器二进制重下 | 不在动作集（用户未点名该目标） |

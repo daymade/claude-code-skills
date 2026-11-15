@@ -62,6 +62,46 @@ Docker's numbers use different scopes. Do not copy an image's displayed `SIZE` i
 - **A summed total needs a second method before it enters a plan.** Adding per-image `UNIQUE SIZE` values can miss shared layers and container references. Recompute the total from a second direction (`docker system df -v` aggregate, or the shared-layer graph built from `docker image inspect` over every candidate) and treat any disagreement as a stop.
 - On OrbStack, report VM object release and host-volume free space separately; use Step 2B for image discovery and version-specific reclaim behavior.
 
+### Exact-record BuildKit eviction
+
+Use the installed Buildx version's help and the current
+[prune](https://docs.docker.com/reference/cli/docker/buildx/prune/) and
+[disk-usage](https://docs.docker.com/reference/cli/docker/buildx/du/) contracts.
+Buildx supports ID equality filters; older engines or individual selectors may
+behave differently. Do not infer support or absence from an empty filtered result.
+
+1. Bind the Docker context/endpoint and selected builder. Inspect its complete
+   read-only cache inventory, then compare the filtered view with known candidate
+   IDs. Record each candidate's type, last use, reclaimability, sharing and relevant
+   active-build references. Missing or ambiguous fields leave it report-only.
+2. Select rebuildable records within the exact authorized scope. Preserve active
+   work, unknown ownership and hot caches whose eviction is not authorized. A
+   cache record shared with an image may release only metadata; do not credit its
+   displayed size as host recovery. Recheck active consumers immediately before
+   execution; daemon-side reclaimability does not establish business disposability.
+3. Render one literal ID and builder per command. A supported scoped form is
+   `docker buildx prune --builder <builder> --filter 'id=<cache-id>'`.
+   Add only verified AND filters, such as `until=<approved-duration>` and
+   `type=regular`. Inspect the same selector set with `buildx du` before mutation.
+   Do not replace equality with a pattern, substitute an ID-generating shell
+   expression, omit the builder, or fall back to broad prune when the view is
+   empty or unsupported. Resolve placeholders before checking the plan.
+4. Apply existing authorization to these exact objects and their rebuild cost;
+   request only genuinely missing approval. The plan checker recognizes a narrow
+   literal-ID form as object-scoped; that classification does not verify the live
+   builder, grant deletion authority or prove that any record is reclaimable.
+5. Read back selected-record absence, retained records and original service/build
+   state. Report the engine's reclaimed amount separately from guest free space
+   and host free-space change. Use the existing approved host-reclamation path
+   when needed; do not restart services just to turn logical deletion into a
+   physical-space claim.
+
+The checker accepts the canonical `docker buildx prune` form with one literal
+`--builder` and one `--filter id=...`; optional selectors are `until=...` and
+`type=regular`, with `--force`/`-f` only after authorization. Other syntaxes retain
+the broad/unknown classification rather than silently bypassing review. This
+procedure does not enable image, container, volume or system prune.
+
 ## Step 2B: OrbStack-Specific Analysis
 
 OrbStack users have additional considerations.
@@ -212,13 +252,18 @@ Everything above cleans up an existing backlog. When a Docker resource type keep
 3. Check whether cleanup logic already exists nearby but was never wired in — a `down`/`stop` command that deliberately preserves images (e.g. to keep the last-known-good build) is correct by design; it just means retention belongs at the *build* step instead.
 4. **Confirm this repository is only consumed locally** before proposing an automated fix. The production-side analysis above tells you where images are *produced*, not where they're *consumed* — if the pipeline pushes to a registry that other machines or a CI/CD cluster pull from, a local `docker ps -a` check is blind to those remote consumers, and an image judged eligible locally may still be in active use elsewhere. This approach fits locally-built, locally-consumed repositories (a dev-loop `local-uat`-style target is the common case); a registry-backed multi-host pipeline needs registry-side retention, a different mechanism than what follows.
 
-**Writing the fix needs separate user confirmation — the difference is *when* you ask.** One-time deletion is confirmed per exact object while the user is present; retention logic wired into a build script runs unattended every future time the build succeeds. Get the user's explicit sign-off on that recurring behavior before writing or committing it. This isn't satisfied by avoiding prune-family commands: unattended automation is a different scope from an approved in-session cleanup. Recommend a dry-run/log-only mode for a few runs before enabling real deletion.
+**Separate preparation from activating unattended deletion.** Check the user's
+existing authorization for the exact cleanup and recurring behavior first. Within
+an authorized repair, prepare and validate a concrete report-only/dry-run change
+before asking for any missing activation approval. Keep deletion disabled until
+that approval exists; do not ask again when the same scope is already authorized.
+An approved one-time cleanup alone does not authorize future unattended deletion.
 
 **Once approved, this is still precision deletion — just automated and scoped to one repository:**
 - Add retention logic that runs **after** the new build succeeds and any health check passes — never before. A failed new build shouldn't cost the last-known-good image.
 - Keep the N most recent images by **verified creation time** (`docker image inspect --format '{{.Created}}'`), not the human-readable `CreatedSince` string (imprecise, not sortable) or raw `docker image ls` ordering (not guaranteed time-sorted). **Caveat**: reproducible-build tooling (Bazel, Nix, some BuildKit configs) can pin `.Created` to a fixed value like `SOURCE_DATE_EPOCH` instead of the real build time, so a fresh image can sort as "older" than genuinely older ones. If the project's tooling does this, cross-check against the next bullet before trusting the sort.
 - Before removing each candidate, verify no container — including stopped ones — references it (`docker ps -a --filter "ancestor=<IMAGE_ID>"`), the same Step 2C protocol running inside the application's automation. This also covers the reproducible-build caveat: exclude whatever image the just-started container is using, independent of its timestamp.
-- Never call this with a prune-family command. Still one `docker rmi <ID>` per verified-safe image, scoped to one repository — automation just means unattended instead of a human typing the ID.
+- For image retention, keep one `docker rmi <ID>` per verified-safe image scoped to one repository. Exact-record BuildKit eviction is a separate cache procedure above; its filters do not establish image-retention eligibility.
 - Wrap the retention step so its own failure doesn't fail the surrounding build/deploy. Verify the exact failure signal your subprocess-execution mechanism actually returns rather than assuming a field name — a wrong assumption there silently turns the failure branch into a no-op.
 
 **Then clean the existing backlog** using the Step 2C workflow — the backlog is one-time debt, the source fix stops new debt from accumulating. Fix the source first if practical, then clear the backlog.
