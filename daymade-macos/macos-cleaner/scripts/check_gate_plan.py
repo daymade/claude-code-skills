@@ -398,6 +398,50 @@ EXPLICIT_OBJECT_RES = (
     re.compile(r'\bdocker\s+(?:rmi|rm)\s+(?![^(|]*\$\()(?![^(|]*(?:-q\b|--all\b|'
                r'-a\b))[\w:.@/-]+'),
 )
+
+
+def exact_buildkit_record(command_text):
+    """Recognize scope only; live references and authorization are separate gates."""
+    try:
+        words = shlex.split(command_text.strip().strip('`'))
+    except ValueError:
+        return False
+    if words[:3] != ['docker', 'buildx', 'prune']:
+        return False
+    builder = None
+    record = None
+    index = 3
+    while index < len(words):
+        word = words[index]
+        index += 1
+        if word in ('--force', '-f', '--verbose'):
+            continue
+        if word in ('--builder', '--filter'):
+            if index == len(words):
+                return False
+            value = words[index]
+            index += 1
+        elif word.startswith(('--builder=', '--filter=')):
+            word, value = word.split('=', 1)
+        else:
+            return False
+        if word == '--builder':
+            if builder is not None or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]*', value):
+                return False
+            builder = value
+        elif value.startswith('id='):
+            if record is not None or not re.fullmatch(r'id=[A-Za-z0-9][A-Za-z0-9_.:-]*', value):
+                return False
+            record = value[3:]
+        elif value == 'type=regular':
+            continue
+        elif re.fullmatch(r'until=(?:[0-9]+(?:\.[0-9]+)?[hms])+', value):
+            continue
+        else:
+            return False
+    return builder is not None and record is not None
+
+
 # The mirror image: forms that widen a command to category-wide because they drop
 # per-object selection. `brew cleanup --prune=all` removes every cached download.
 CATEGORY_WIDE_RES = (
@@ -1173,7 +1217,9 @@ def find_destructive_commands(plan_text):
             if (tools == ('safe_delete.py',) and chunk.strip('` ') == 'safe_delete.py'
                     and lines[lineno - 1].strip() != 'safe_delete.py'):
                 continue  # a filename citation, not an executable invocation
-            if category_wide:
+            if match.group(0) == 'docker buildx prune':
+                category_wide = not exact_buildkit_record(chunk)
+            elif category_wide:
                 # An explicit object argument narrows the scope.
                 if any(narrow.search(chunk) for narrow in EXPLICIT_OBJECT_RES):
                     category_wide = False
