@@ -178,20 +178,30 @@ def registered_paths(root, commit, source, report=None):
     blobs = tree_blobs(root, commit, source["skill_roots"] if project else None)
     if project:
         roots = source["skill_roots"]
-        records = git(root, "ls-tree", "-z", commit, "--", *[f":(literal){r}" for r in roots])
+        prefixes = {r: ["/".join(PurePosixPath(r).parts[:depth])
+                        for depth in range(1, len(PurePosixPath(r).parts) + 1)] for r in roots}
         kinds = {}
-        for record in records.split(b"\0"):
-            if record:
-                meta, name = record.split(b"\t", 1)
-                kinds[name.decode("utf-8")] = meta.decode().split()[1]
-        root_reports = [{"path": r, "status": "present" if kinds.get(r) == "tree" else
-                         "absent" if r not in kinds else "invalid",
-                         "examined": sum(PurePosixPath(p).name == "SKILL.md" and p.startswith(r + "/")
-                                         for p in blobs)} for r in roots]
+        for prefix in sorted({p for ancestors in prefixes.values() for p in ancestors}):
+            records = git(root, "ls-tree", "-z", commit, "--", f":(literal){prefix}")
+            for record in records.split(b"\0"):
+                if record:
+                    meta, name = record.split(b"\t", 1)
+                    kinds[name.decode("utf-8")] = meta.decode().split()[1]
+        root_reports = []
+        for r in roots:
+            blocked = next((p for p in prefixes[r] if p in kinds and kinds[p] != "tree"), None)
+            item = {"path": r, "status": "invalid" if blocked else
+                    "present" if kinds.get(r) == "tree" else "absent",
+                    "examined": sum(PurePosixPath(p).name == "SKILL.md" and p.startswith(r + "/")
+                                    for p in blobs)}
+            if blocked:
+                item["blocked_by"] = blocked
+            root_reports.append(item)
         if report is not None:
             report["roots"] = root_reports
-        if any(r["status"] == "invalid" for r in root_reports):
-            raise SourceError("Project Skill root exists but is not a regular Git directory")
+        invalid = sorted({r["blocked_by"] for r in root_reports if "blocked_by" in r})
+        if invalid:
+            raise SourceError(f"Project Skill root or ancestor is not a regular Git directory: {invalid}")
     manifest_path = ".claude-plugin/marketplace.json"
     if source.get("skill_roots"):
         roots = [relative(p).rstrip("/") for p in source["skill_roots"]]

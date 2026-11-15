@@ -344,6 +344,54 @@ class LocalSourcesTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn("Project instructions", result.stdout)
 
+    def test_non_directory_project_root_ancestors_cannot_certify_absence(self):
+        self.register("public")
+        for index, (skill_root, ancestor) in enumerate((
+                (".claude/skills", ".claude"),
+                ("automation/local/skills", "automation"),
+                ("automation/local/skills", "automation/local"))):
+            for kind in ("symlink", "file", "gitlink"):
+                with self.subTest(skill_root=skill_root, ancestor=ancestor, kind=kind):
+                    project = self.repo(f"ancestor-{index}-{kind}")
+                    path = project / ancestor
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    if kind == "gitlink":
+                        oid = self.git(project, "rev-parse", "HEAD")
+                        self.git(project, "update-index", "--add", "--cacheinfo", f"160000,{oid},{ancestor}")
+                    else:
+                        if kind == "symlink":
+                            path.symlink_to(os.path.relpath(project / "bundle", path.parent), target_is_directory=True)
+                        else:
+                            path.write_text("ordinary tracked file")
+                        self.git(project, "add", "--", ancestor)
+                    self.git(project, "commit", "-m", "non-directory scope ancestor")
+                    options = [] if skill_root == ".claude/skills" else ["--project-skill-root", skill_root]
+                    rc, result = self.cli("search", "Chrome", "--project", str(project), *options)
+                    self.assertEqual(rc, 1, result)
+                    self.assertEqual(result["status"], "incomplete")
+                    self.assertEqual(result["coverage"][0]["status"], "searched")
+                    report = result["coverage"][-1]
+                    self.assertEqual(report["status"], "unavailable")
+                    self.assertNotEqual(report["roots"][0]["status"], "absent")
+                    self.assertIn(ancestor, report["error"])
+                    self.assertEqual(result["matched_count"], 1)
+
+    def test_regular_project_ancestors_and_truly_absent_custom_roots_are_successful(self):
+        self.register("public")
+        project = self.repo("empty-project-roots")
+        parent = project / "automation/local"
+        parent.mkdir(parents=True)
+        (parent / ".keep").write_text("tracked directory")
+        self.git(project, "add", "--", "automation/local/.keep")
+        self.git(project, "commit", "-m", "regular scope ancestors")
+        rc, result = self.cli("search", "Chrome", "--project", str(project),
+                              "--project-skill-root", "automation/local/skills",
+                              "--project-skill-root", "automation/missing/skills")
+        self.assertEqual(rc, 0, result)
+        self.assertEqual(result["status"], "complete")
+        self.assertEqual([r["status"] for r in result["coverage"][-1]["roots"]], ["absent", "absent"])
+        self.assertEqual(result["matched_count"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
