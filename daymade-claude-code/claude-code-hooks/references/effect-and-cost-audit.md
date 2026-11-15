@@ -51,6 +51,30 @@ invocation boundaries and both rule results. Duplicate selection is a
 configuration candidate; equivalent predicates are a source overlap candidate.
 Neither alone proves that a real call was blocked twice.
 
+## Diagnose scanner-backed guards
+
+For a slow commit or push, bind the installed dispatcher and scanner owner to
+the exact audited refs. Read the existing route, fallback reason and cache
+receipt before requesting another scan. Distinguish complete input-identity
+validation from scanning every file: a valid cache hit can still read the entire
+export stream. A complete-export route alone does not establish cold scanner work.
+
+Separate outer hook wall time, export/identity work, resource admission wait and
+scanner execution using the fields actually emitted by their owners. Do not
+subtract overlapping or differently scoped durations to invent a missing stage.
+Zero scanner invocations locates the remaining cost outside a new scanner run;
+missing route or timing metadata leaves that stage unknown. Do not repeat a scan
+only to obtain diagnostics its completed receipt already provides.
+
+For an authorized optimization, freeze the same input and policy for old and new
+paths, compare complete normalized finding sets, and retain clean, dangerous and
+unavailable controls on cold and reused paths. Check the real dispatcher's argv,
+stdin, exit propagation and total deadline; a fast helper does not establish a
+bounded ordinary commit/push. Run scanner-heavy verification sequentially with
+isolated fixture state and resource namespaces; retain the owner's concurrency
+limits. Stop when the selected fallback or stage is explained and the affected
+decision and cost claims have deciding evidence.
+
 ## Reuse the existing reader
 
 Resolve the optional
