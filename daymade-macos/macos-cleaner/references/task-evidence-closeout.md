@@ -35,7 +35,8 @@ Python 3.10+ POSIX standard libraries; retirement requires macOS and a successfu
 `/usr/sbin/lsof` probe. A silent or failed probe refuses retirement.
 
 Before prepare, run the ordinary plan checker and [copy-budget
-check](safety_rules.md). Budget source bytes, retained archives and partial retries;
+check](safety_rules.md) against the exact source rows and prepare/verify commands.
+Budget source bytes, retained archives and partial retries;
 verification streams the archive and needs no extracted copy. Coordinate a single
 writer for the selected files throughout prepare and retirement. No name-based
 or filename-reference heuristic proves a file is inactive.
@@ -77,7 +78,13 @@ rejects extra/missing/duplicate members and binds its receipt to the exact manif
 bytes and archive. Reuse that receipt while its bound inputs remain unchanged.
 
 After independently checking authorization and live consumers, pass the exact
-64-character `manifest_sha256` from verification to retirement:
+64-character `manifest_sha256` from verification to retirement. First classify
+each source against its now-verified retained copy in the retirement table and
+rerun `scripts/check_gate_plan.py --table <retirement-table> --plan <retirement-plan>`.
+The plan contains the complete command below, its real manifest hash and adjacent
+tool-version/source/help observations. The checker reads the bound manifest and
+matches every `files[].source` against an eligible table row. Missing or unknown
+command coverage stops the pass; a successful copy plan is not retirement approval.
 
 ```bash
 python3 scripts/task_evidence_archive.py retire \
