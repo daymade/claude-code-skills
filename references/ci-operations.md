@@ -14,12 +14,30 @@ Keep runtime definitions in their executable owners:
   conditions and job deadlines. Inspect any command-specific timeout there before
   treating the job deadline as a timeout for each command.
 - [test-suites.txt](../scripts/ci/test-suites.txt): admission criteria and registered suites.
-- [test_pii_hook_dispatch.py](../scripts/ci/test_pii_hook_dispatch.py): repository PII
-  delegation, publication-budget arguments and failure propagation. Run it with
-  `python3 -m unittest discover -s scripts/ci -p test_pii_hook_dispatch.py -v`.
 - [run_registered_tests.sh](../scripts/ci/run_registered_tests.sh): dispatcher commands,
   file selection and aggregate failure status. This runs the registry, not every
   workflow step.
+
+## Repository PII dispatch
+
+Read [.githooks/pre-push](../.githooks/pre-push) for the delegated PII stage's
+runtime selection, timeout override and cap, then inspect its referenced shared
+runner and guard. Keep those values in the executable owners. The PII stage's
+deadline does not measure or bound the entire Git push. Diagnose completed scan
+receipts through the guard's existing operating SOP before requesting another scan.
+
+When the shared guard exists but its required publication runtime is missing,
+restore that runtime through its installer and retry the normal push. When the
+guard itself is absent, the dispatcher emits a warning and runs only the mainline
+guard; do not report that as a successful PII scan. Preserve that distinction
+when inspecting failures or testing recovery; do not bypass the dispatcher.
+
+Use [test_pii_hook_dispatch.py](../scripts/ci/test_pii_hook_dispatch.py) for the
+actual delegation boundary, publication-budget arguments and failure propagation:
+
+```bash
+python3 -m unittest discover -s scripts/ci -p test_pii_hook_dispatch.py -v
+```
 
 ## Bind the check before diagnosing it
 
