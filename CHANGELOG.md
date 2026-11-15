@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **macos-cleaner** (`daymade-macos` v1.32.2 → v1.33.0): Support verified exact-record BuildKit eviction with a named builder and literal cache ID; retain broad-prune exclusions, unknown-state protection and activation approval for unattended deletion. Calibrate the plan checker against literal, empty, dynamic and widened selector forms.
 - **app-evolver** (v1.1.14 → v1.1.15): Add a publication example that separates a useful website increment from optional delivery infrastructure, preserves explicitly requested executable or contribution deliverables, and distinguishes comprehension from external use.
+- **report-with-html** (v1.7.2): Show primary passages expanded in annotation/bookmark readers while retaining collapsed overview details and secondary diagnostics; verify reading after filtering through the served page.
 
 - **github-ops** (v1.16.5 → v1.16.6): Preserve failed-command evidence before disposable runner workspace cleanup, verify later retrieval, and bind cache preparation to each job's actual checkout and service identity.
 - **terraform-skill** (v1.5.15 → v1.5.16): Select validation environments from the authorized release contract, preserve required staging evidence without inserting optional staging into direct production, and derive supported schema transitions from the fixed candidate's canonical catalog.

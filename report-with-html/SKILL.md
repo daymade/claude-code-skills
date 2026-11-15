@@ -45,6 +45,11 @@ and its reusable builder/PDF adapter. Preserve current source navigation, histor
 nodes and stable material IDs; verify lesson resources, actual PDF pages and media
 play/seek through the existing source-owned asset server.
 
+For bookmark, annotation or passage readers, follow
+[reading-surface disclosure](references/reading-surface-disclosure.md): primary
+passages start expanded; overview drill-down and technical details retain their
+own disclosure behavior. This does not change every report into an expanded reader.
+
 The default delivery is the verified HTML opened in a browser. A PNG is a QA artifact
 and is delivered only when the user asks for an image. If the user needs editable
 PowerPoint, finish and verify the HTML first, then use `deck-creator` (Route C).
