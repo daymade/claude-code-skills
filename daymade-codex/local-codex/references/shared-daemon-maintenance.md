@@ -65,6 +65,28 @@ scheduled updater requires an explicit request or an accepted fallback proposal.
    owner. Preserve an operation record with source/target identities and output
    paths before changing the backend.
 
+## Fault-driven restart: fd exhaustion
+
+When Codex hooks or child spawns fail with `Too many open files` while the
+system itself is nowhere near its limit (`sysctl kern.num_files` vs
+`kern.maxfiles`), suspect the shared daemon leaking descriptors. Count the
+daemon's own fds (`lsof -n -w -p <pid>`): a leaked daemon carries thousands,
+dominated by PIPE entries plus IPv4 rows to the proxy TUN fake-IP range
+(198.18.0.0/16 here) that are never reaped.
+
+Before restarting again, distinguish the leak from a reconnection burst. Every
+client reconnects at once after a daemon replacement, so fd counts spike for
+minutes and then decay; sample `lsof` at two or three instants. Monotonic
+growth over hours that never recovers is the leak; a peak that decays toward
+the live-client count is not.
+
+Restart route: run the host kill-gate origin check, SIGTERM, then read back.
+A draining daemon can stall on dead proxy connections — if the fd count barely
+moves for minutes, send a second SIGTERM; it exits promptly. Bring the backend
+back with `codex app-server daemon start`, then read back the new PID and fd
+baseline (≈100–200 for a fresh daemon). When the trigger recurs, record it as
+a product bug for upstream instead of adding a restart schedule.
+
 ## Execute through the supported lifecycle
 
 ### Assess the target package before requiring patches
