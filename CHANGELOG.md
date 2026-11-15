@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **macos-cleaner** (`daymade-macos` v1.34.0 → v1.34.1): Consolidate Docker cleanup instructions into their canonical procedure, remove the stale blanket-prune prohibition and copied object commands, preserve stopped-container checks, and correct rollback selection and Dockerfile working directories. Route build-cache operations from the project instructions.
+- **macos-cleaner** (`daymade-macos` v1.34.0 → v1.34.1): Consolidate Docker cleanup instructions into their canonical procedure, remove the stale blanket-prune prohibition and copied object commands, preserve stopped-container checks, and correct rollback selection and Dockerfile working directories. Route build-cache operations from the project instructions and refresh maintained validation quotes to their canonical sources.
 - **macos-cleaner** (`daymade-macos` v1.34.0): Check each literal `rm` operand, including `--` and quoted Unicode paths; reject incomplete command coverage instead of returning a warning-only pass. Expand retirement sources only from the exact hash-bound evidence manifest; preserve read-only probes, explicit non-proposals and existing retention gates. Change types: bug fix and authorized workflow/safety redesign.
 
 - **macos-cleaner** (`daymade-macos` v1.32.2 → v1.33.0): Support verified exact-record BuildKit eviction with a named builder and literal cache ID; retain broad-prune exclusions, unknown-state protection and activation approval for unattended deletion. Calibrate the plan checker against literal, empty, dynamic and widened selector forms.
