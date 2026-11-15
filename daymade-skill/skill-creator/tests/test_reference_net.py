@@ -1,6 +1,7 @@
 """Tests for scripts/reference_net.sh.
 
-Every case here is a defect that actually shipped in the prose one-liner this script replaced.
+Cases cover defects in the original prose one-liner and anonymized structural regressions
+from later Skill migrations.
 The script exists because prose could not validate its inputs or name its own outcomes, so the
 assertions are deliberately about *distinguishability*: the failure mode being guarded against is
 "printed nothing, exited 0, looked like a clean pass", so several tests assert that two different
@@ -13,6 +14,7 @@ stay out of the shared registry; run this directly:
     uv run --frozen python -m unittest tests.test_reference_net -v
 """
 
+import json
 import os
 import subprocess
 import tempfile
@@ -221,6 +223,101 @@ class ReferenceNetTest(unittest.TestCase):
         (self.repo / "d.md").write_text("a\nSee Discipline #6\n", encoding="utf-8")
         r = self.run_script(self.base, "d.md")
         self.assertIn("prose reference", r.stdout)
+
+    def test_chinese_numbered_references_are_surfaced(self):
+        for pointer in ("铁律2", "铁律 5", "铁律 #0", "按铁律5直查被改的那层"):
+            with self.subTest(pointer=pointer):
+                (self.repo / "d.md").write_text(f"a\n{pointer}\n", encoding="utf-8")
+                r = self.run_script(self.base, "d.md")
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertIn("1 prose reference(s) in 1 added line(s)", r.stdout)
+                self.assertIn(pointer, r.stdout)
+
+    def split_rule_fixture(self):
+        """Replay the failure's structure; all names/content are generic fixture values."""
+        fixture = json.loads(
+            (SCRIPT.parent.parent / "tests/fixtures/split-rule-ownership.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        (self.repo / "d.md").write_text(fixture["before"], encoding="utf-8")
+        git(self.repo, "add", "d.md")
+        git(self.repo, "commit", "-qm", "monolithic rules")
+        base = git(self.repo, "rev-parse", "HEAD").stdout.strip()
+        for name, content in fixture["after"].items():
+            target = self.repo / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content, encoding="utf-8")
+            git(self.repo, "add", name)
+        (self.repo / "d.md").unlink()
+        return fixture, base
+
+    def test_split_rules_surface_existing_numbers_with_wrong_local_owners(self):
+        fixture, base = self.split_rule_fixture()
+        r = self.run_script(base, "investigation.md")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("2 prose reference(s)", r.stdout)
+        for pointer in fixture["pointers"]:
+            self.assertIn(pointer, r.stdout)
+        # Both new local numbers exist. Existence cannot decide the intended owner;
+        # surface the consumer lines without pretending to reject them.
+        current = (self.repo / "investigation.md").read_text(encoding="utf-8")
+        self.assertIn("2. 配置证据", current)
+        self.assertIn("5. 记录执行器", current)
+        self.assertIn("Open each target", r.stdout)
+
+    def test_split_rules_reconciled_named_anchors_remain_healthy(self):
+        fixture, base = self.split_rule_fixture()
+        (self.repo / "investigation.md").write_text(fixture["reconciled"], encoding="utf-8")
+        r = self.run_script(base, "investigation.md")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("NONE prose-reference-shaped", r.stdout)
+        # This control has named links and matching owner text. The net still
+        # delegates link validation and intent reconciliation to their owners.
+        owner = (self.repo / "service/operations.md").read_text(encoding="utf-8")
+        self.assertIn("service/operations.md#root-cause-before-repair", fixture["reconciled"])
+        self.assertIn("## Root cause before repair\n\n先证伪根因，再修复。", owner)
+        self.assertIn("service/operations.md#verify-changed-resource", fixture["reconciled"])
+        self.assertIn("## Verify changed resource\n\n直接查询实际改动的资源。", owner)
+
+    def test_unchanged_consumers_are_outside_the_added_line_net(self):
+        fixture, base = self.split_rule_fixture()
+        git(self.repo, "add", "investigation.md", "service/operations.md")
+        git(self.repo, "commit", "-qm", "split owners")
+        base = git(self.repo, "rev-parse", "HEAD").stdout.strip()
+        owner = self.repo / "service/operations.md"
+        owner.write_text("# Different owner contract\n", encoding="utf-8")
+        r = self.run_script(base, "investigation.md")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("IDENTICAL", r.stdout)
+        self.assertNotIn("prose reference(s)", r.stdout)
+        consumers = git(self.repo, "grep", "-n", "-E",
+                        r"铁律 *#?(2|5)([^0-9]|$)", "--", "investigation.md")
+        self.assertEqual(consumers.returncode, 0, consumers.stderr)
+        self.assertEqual(len(consumers.stdout.splitlines()), 2)
+        for pointer in fixture["pointers"]:
+            self.assertIn(pointer, consumers.stdout)
+
+    def test_empty_file_is_changed_with_no_added_lines(self):
+        (self.repo / "d.md").write_text("", encoding="utf-8")
+        r = self.run_script(self.base, "d.md")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("CHANGED", r.stdout)
+        self.assertIn("no ADDED lines", r.stdout)
+
+    def test_empty_base_and_empty_path_fail_loudly(self):
+        for args, message in ((("", "d.md"), "does not resolve"),
+                              ((self.base, ""), "not tracked by git")):
+            with self.subTest(args=args):
+                r = self.run_script(*args)
+                self.assertEqual(r.returncode, 2)
+                self.assertIn(message, r.stderr)
+
+    def test_numberless_chinese_prose_remains_outside_the_net(self):
+        (self.repo / "d.md").write_text("a\n遵守铁律，检查配置。\n", encoding="utf-8")
+        r = self.run_script(self.base, "d.md")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("NONE prose-reference-shaped", r.stdout)
 
     def test_hash_before_the_number_is_optional(self):
         """Making `#` mandatory left the old suite green: its only fixture always had one."""

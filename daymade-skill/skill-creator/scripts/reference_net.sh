@@ -2,7 +2,7 @@
 # reference_net.sh <base-ref> <file>… — list the PROSE cross-references among the lines you added,
 # so you can open each target and confirm it says what you claim it says.
 #
-# SCOPE. Prose pointers only: "see rule 8", "discipline #6", "the step 3 above". These have no
+# SCOPE. Prose pointers only: "see rule 8", "discipline #6", "the step 3 above", "铁律2". These have no
 # machine-resolvable target, so no link checker can validate them. Markdown links and URLs are NOT
 # this script's job — use `lychee` (this repo's house standard; invocation and calibration caveats
 # in daymade-docs/docs-cleaner's SKILL.md). A hand-rolled link scanner was tried here and deleted
@@ -27,6 +27,8 @@
 #
 # Known boundary: a submodule bump is reported and correctly classified non-prose, but the content
 # behind the new commit is never traversed — run this inside that submodule if you edited it.
+# Changed owners can invalidate unchanged consumer lines; those are outside this added-line net.
+# Reconcile them using the migration guide's reference-and-self-application check.
 #
 # Exit codes:
 #   0  ran to completion — read the printed verdict, which always says which case you are in
@@ -39,7 +41,8 @@ set -uo pipefail
 # Prose pointers only. Markdown links are lychee's job — see SCOPE above.
 # The leading `(^|[^[:alnum:]])` is a word boundary written portably — `\b` and `\<` differ across
 # BSD and GNU. Without it "whisper9", "paper2" and "upper3" all matched, via the "per" inside them.
-readonly REFERENCE_PATTERN='(^|[^[:alnum:]])(see|per|above|below|§|rule|discipline|step) *#?[0-9]'
+# Chinese prose has no required word separator ("按铁律5"); match this exact label separately.
+readonly REFERENCE_PATTERN='(^|[^[:alnum:]])(see|per|above|below|§|rule|discipline|step) *#?[0-9]|铁律 *#?[0-9]'
 
 usage() {
   echo "usage: $(basename "$0") <base-ref> <file> [file...]" >&2
@@ -154,8 +157,7 @@ for file in "${resolved_paths[@]}"; do
   fi
 
   added_count=$(printf '%s\n' "$added" | wc -l | tr -d ' ')
-  # LC_ALL=C for the same reason as awk above; the pattern is ASCII plus a literal UTF-8 `§`, both
-  # of which match byte-wise.
+  # LC_ALL=C for the same reason as awk above; the ASCII and literal UTF-8 branches match byte-wise.
   hits=$(printf '%s\n' "$added" | LC_ALL=C grep -Ei "$REFERENCE_PATTERN")
 
   if [ -z "$hits" ]; then
