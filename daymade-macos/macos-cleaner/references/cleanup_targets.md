@@ -364,16 +364,18 @@ docker volume rm project-mysql-data project-redis-data
 
 **What it is**: Intermediate build layers
 
-**Safety**: 🟡 **Rebuildable, but category-wide deletion still needs an explicit decision**
+**Safety**: 🟡 **Rebuildable; exact-record eviction requires verified scope and authorization**
 
 Inspect the allocation without deleting it:
 ```bash
 docker builder du
 ```
 
-This skill does not use `docker builder prune` or `docker buildx prune`. They are category-wide prune commands and conflict with this skill's explicit prune prohibition. Report the build-cache total and rebuild cost, then state that build-cache deletion is not executable through this skill; do not leave a dangling promise to obtain an unspecified plan.
-
-Build-cache deletion is outside this skill's execution scope. Do not advertise the build-cache number as reclaimable space this skill can automatically deliver.
+Load [exact-record BuildKit eviction](docker_analysis.md#exact-record-buildkit-eviction)
+before proposing deletion. Keep the selected builder, literal cache IDs, installed
+filter support, active references and rebuild cost bound to the plan.
+Unknown build-cache records remain report-only.
+An engine-reported total is not promised host recovery.
 
 ### node_modules
 
