@@ -4,7 +4,9 @@ description: >-
   Launches and manages the local OpenAI Codex CLI as a non-interactive coding sub-agent via ChatGPT
   OAuth, never API keys. Use to delegate coding tasks to Codex, run codex exec, generate or
   refactor code, or get a Codex code review; phrases like 'codex', 'run codex', 'codex exec',
-  'delegate to codex'.
+  'delegate to codex'. Also route here for shared app-server daemon lifecycle and fault recovery:
+  daemon restart, Codex hooks or spawns failing with 'Too many open files', fd exhaustion
+  diagnostics; phrases like 'codex daemon', 'daemon 重启', 'Too many open files'.
 ---
 
 # Local Codex
@@ -164,8 +166,9 @@ changing configuration or resuming work. It covers complete error capture,
 verified HTTP/WebSocket transport, request-byte provenance, compression controls
 and recovery checks on the original SID.
 
-For native automatic-update eligibility or an authorized shared-daemon restart
-or package replacement, read
+For native automatic-update eligibility, an authorized shared-daemon restart
+or package replacement, or fault recovery when Codex hooks or spawns fail with
+`Too many open files`, read
 [shared daemon maintenance](references/shared-daemon-maintenance.md). Preserve
 affected work, retain an independent operation receipt, and verify continuation
 under the original session IDs; a new daemon is not proof that tasks resumed.
