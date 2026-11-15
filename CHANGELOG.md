@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **report-with-html** (v1.7.3): Keep reading disclosure rules in their canonical reference; use repository, Skill and overview-example entries only as routes instead of duplicating those rules.
+
 - **app-evolver** (v1.1.15 → v1.1.16): Distinguish a standalone prototype, a stale embedded document and the requested application increment; preserve approved structure and interaction during integration.
 - **frontend-visual-qa** (v1.21.48 → v1.21.49): Exercise continuous-map disclosure at intermediate and reversed zoom, in the real host viewport, with affected navigation and return paths.
 - **macos-cleaner** (`daymade-macos` v1.34.0): Check each literal `rm` operand, including `--` and quoted Unicode paths; reject incomplete command coverage instead of returning a warning-only pass. Expand retirement sources only from the exact hash-bound evidence manifest; preserve read-only probes, explicit non-proposals and existing retention gates. Change types: bug fix and authorized workflow/safety redesign.
