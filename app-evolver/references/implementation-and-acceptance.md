@@ -19,6 +19,22 @@ package or production service. Record protected normal behavior and data.
 Choose evidence for each clause, using existing repository checks where suitable.
 Keep required human judgment visible instead of converting it into agent approval.
 
+### Synthetic pair: a publication's first useful result
+
+An existing publication wants to serve people and agents. Its current delivery is
+a website explaining one research question; downloads and a contribution service
+are outside this increment. Accept a page only when an unfamiliar reader can
+distinguish the source's finding from the publication's added evidence, explain
+the result's scope and follow the supporting original. Where machine-readable
+reading is authorized, expose the same claims and limits through the existing site.
+
+Reject a plan that makes a new repository, downloadable bundle or submission
+service a prerequisite without tying it to this reader task and current scope.
+Conversely, when the user explicitly requests executable materials or public
+contributions, preserve that result: a readable page alone does not fulfill it.
+Readability, agent comprehension and actual external use need separate evidence;
+one internal reading replay cannot establish reader value or organic adoption.
+
 ## Give the engineering owner an executable handoff
 
 Provide the current user result, exact source baseline, adopted mechanism,
