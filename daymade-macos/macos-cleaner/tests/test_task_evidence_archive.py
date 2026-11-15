@@ -181,6 +181,32 @@ class ArchiveTests(unittest.TestCase):
                 self.retire(digest)
         self.assert_preserved()
 
+    def test_journal_replaced_by_archive_symlink_preserves_archive_and_sources(self):
+        digest = self.verified()
+        before = self.bundle.read_bytes()
+
+        def replace_journal(paths):
+            self.journal.unlink()
+            self.journal.symlink_to(self.bundle)
+
+        with patch.object(archive, "assert_idle", replace_journal):
+            with self.assertRaises(archive.Refused):
+                self.retire(digest)
+        self.assertEqual(self.bundle.read_bytes(), before)
+        self.assert_preserved()
+
+    def test_second_source_changed_during_probe_prevents_first_unlink(self):
+        digest = self.verified()
+
+        def change_second_source(paths):
+            self.b.write_bytes(b"later human edit")
+
+        with patch.object(archive, "assert_idle", change_second_source):
+            with self.assertRaisesRegex(archive.Refused, "Source changed"):
+                self.retire(digest)
+        self.assertTrue(self.a.exists())
+        self.assertEqual(self.b.read_bytes(), b"later human edit")
+
     def test_missing_source_without_intent_refused(self):
         digest = self.verified()
         self.b.unlink()

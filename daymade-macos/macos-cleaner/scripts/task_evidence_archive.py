@@ -2,6 +2,7 @@
 """Consolidate exact inactive evidence files; never classify a directory for deletion."""
 
 import argparse
+import fcntl
 import hashlib
 import io
 import json
@@ -46,12 +47,16 @@ def absolute(value):
     return Path(os.path.abspath(value))
 
 
+def stat_record(info):
+    return {"device": info.st_dev, "inode": info.st_ino, "bytes": info.st_size,
+            "mode": info.st_mode, "mtime_ns": info.st_mtime_ns, "ctime_ns": info.st_ctime_ns}
+
+
 def metadata(path):
     info = path.lstat()
     require(stat.S_ISREG(info.st_mode), f"Not a regular evidence file: {path}")
     require(info.st_nlink == 1, f"Hardlinked file needs manual disposition: {path}")
-    return {"device": info.st_dev, "inode": info.st_ino, "bytes": info.st_size,
-            "mode": info.st_mode, "mtime_ns": info.st_mtime_ns, "ctime_ns": info.st_ctime_ns}
+    return stat_record(info)
 
 
 def no_symlinks(path, root):
@@ -89,12 +94,21 @@ def new_output(value, roots):
     return path
 
 
+def sync_parent(path):
+    descriptor = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
 def write_new(path, data):
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     with os.fdopen(descriptor, "wb") as stream:
         stream.write(data)
         stream.flush()
         os.fsync(stream.fileno())
+    sync_parent(path)
 
 
 def prepare(spec_path, archive_path, manifest_path):
@@ -155,6 +169,7 @@ def prepare(spec_path, archive_path, manifest_path):
             bundle.addfile(info, io.BytesIO(raw))
         output.flush()
         os.fsync(output.fileno())
+    sync_parent(archive)
     write_new(manifest, raw)
     return {"status": "prepared", "files": len(rows), "manifest_sha256": sha(raw),
             "archive": str(archive), "manifest": str(manifest)}
@@ -246,41 +261,57 @@ def retire(manifest_path, receipt_path, expected_sha, journal_path):
     require(not any(journal.is_relative_to(p) for p in roots), "Journal must be outside source roots")
     require(journal not in {archive, Path(manifest_path).resolve(), Path(receipt_path).resolve()},
             "Journal collides with retained evidence")
-    started = set()
-    if os.path.lexists(journal):
-        require(not journal.is_symlink(), "Journal cannot be a symlink")
-        lines = journal.read_text().splitlines()
+    if not os.path.lexists(journal):
+        write_new(journal, (json.dumps({"schema": 1, "manifest_sha256": expected_sha}) + "\n").encode())
+    descriptor = os.open(journal, os.O_RDWR | os.O_APPEND | os.O_NOFOLLOW)
+    deleted = 0
+    with os.fdopen(descriptor, "r+", encoding="utf-8") as log:
+        fcntl.flock(log.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        journal_state = stat_record(os.fstat(log.fileno()))
+        require(metadata(journal) == journal_state, "Journal identity differs")
+        lines = log.read().splitlines()
         require(bool(lines), "Empty retirement journal")
         header = json.loads(lines[0])
         require(header == {"schema": 1, "manifest_sha256": expected_sha}, "Journal binding differs")
         started = {json.loads(line)["source"] for line in lines[1:]}
         require(started <= {row["source"] for row in value["files"]}, "Unknown journal entry")
-    else:
-        write_new(journal, encode({"schema": 1, "manifest_sha256": expected_sha}).replace(b"\n", b" ") + b"\n")
-    for row in value["files"]:
-        path = Path(row["source"])
-        allowed_source(path)
-        if not os.path.lexists(path):
-            require(row["source"] in started, f"Source missing without retirement intent: {path}")
-        else:
-            fresh(row)
-    assert_idle([row["source"] for row in value["files"]])
-    # Rebind after slow verification, immediately before any unlink.
-    require(Path(manifest_path).read_bytes() == raw, "Manifest changed during preflight")
-    require(Path(receipt_path).read_bytes() == receipt_raw, "Receipt changed during preflight")
-    require(metadata(archive) == receipt["archive_stat"], "Archive changed during preflight")
-    deleted = 0
-    with journal.open("a") as log:
+
+        def sources_current():
+            for row in value["files"]:
+                path = Path(row["source"])
+                allowed_source(path)
+                if not os.path.lexists(path):
+                    require(row["source"] in started, f"Source missing without retirement intent: {path}")
+                else:
+                    fresh(row)
+
+        def controls_current():
+            require(Path(manifest_path).read_bytes() == raw, "Manifest changed during preflight")
+            require(Path(receipt_path).read_bytes() == receipt_raw, "Receipt changed during preflight")
+            require(metadata(archive) == receipt["archive_stat"], "Archive changed during preflight")
+            require(metadata(journal) == journal_state == stat_record(os.fstat(log.fileno())),
+                    "Journal changed during preflight")
+
+        sources_current()
+        assert_idle([row["source"] for row in value["files"]])
+        # Revalidate the WHOLE selection and all controls after slow probes.
+        sources_current()
+        controls_current()
         for row in value["files"]:
             path = Path(row["source"])
             if not os.path.lexists(path):
                 continue
             fresh(row)
+            controls_current()
             if row["source"] not in started:
                 log.write(json.dumps({"source": row["source"]}) + "\n")
                 log.flush()
                 os.fsync(log.fileno())
+                journal_state = stat_record(os.fstat(log.fileno()))
+            controls_current()
+            fresh(row)
             path.unlink()
+            sync_parent(path)
             deleted += 1
     require(all(not os.path.lexists(r["source"]) for r in value["files"]), "Retirement incomplete")
     return {"status": "retired", "files": len(value["files"]), "deleted_now": deleted,

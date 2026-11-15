@@ -31,7 +31,7 @@ authority or break a live absolute path to make the task root look empty.
 only. It does not discover files, classify inactivity, preserve a Git repository,
 move live consumers or grant deletion permission. Symlinks, hardlinks, directories,
 special files and protected targets need another disposition. Prepare/verify use
-Python 3.10+ standard libraries; retirement requires macOS and a successful current
+Python 3.10+ POSIX standard libraries; retirement requires macOS and a successful current
 `/usr/sbin/lsof` probe. A silent or failed probe refuses retirement.
 
 Before prepare, run the ordinary plan checker and [copy-budget
@@ -87,8 +87,10 @@ python3 scripts/task_evidence_archive.py retire \
   --journal /absolute/retained/retirement.jsonl
 ```
 
-Retirement checks the entire source selection before the first unlink, then checks
-each file again. Missing/empty/changed bindings, changed source metadata or bytes,
+Retirement checks the entire source selection again after slow probes and before
+the first unlink, then checks each file again. It pins and locks the journal's
+no-follow file descriptor and rechecks controls before writing an intent.
+Missing/empty/changed bindings, changed source metadata or bytes,
 changed archive identity and incomplete open-file coverage refuse the operation.
 It deletes only selected files; parent directories and unrelated empty directories
 are never pruned. No processes, containers or other sessions are stopped.
