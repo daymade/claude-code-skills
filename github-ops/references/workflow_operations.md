@@ -442,6 +442,25 @@ required checks. Keep earlier valid evidence only while its inputs remain
 unchanged. Do not replace the failed required job with an unrelated local pass
 or turn one image mismatch into a blanket ban on moving runner labels.
 
+### Preserve failure evidence across workspace cleanup
+
+Before a runner's post-job cleanup can remove command captures, export the failed
+command's stdout/stderr and status through the deployment owner's existing
+private evidence path. Bind the files to the repository, exact revision, run,
+attempt and failed phase, then verify their content identity at the retained
+location. A path, byte count or hash in the job log cannot replace missing bytes.
+Trace every invoking workflow to its actual exporter; a helper writing into an
+artifact-shaped directory does not prove that the workflow preserves it.
+
+Keep console diagnostics bounded and redacted: phase, operation class, exit or
+transport status and duration are usually enough. Do not print private captures,
+credentials or response bodies. Preserve the original command failure separately
+from an export failure. Exercise the real failure → export → workspace-cleanup
+sequence and retrieve the original error afterward; a successful capture before
+cleanup alone does not establish recoverability. Reuse an unchanged completed
+check through [the existing input-matching procedure](ci-demand-and-notifications.md),
+without creating a new run merely to obtain another copy of its evidence.
+
 ### Common Debugging Techniques
 
 ```bash
@@ -587,6 +606,16 @@ operator procedure; no bundled tool enforces its deployment or process boundarie
    persistence from a later job's positive cache-hit evidence while preserving
    installation and test checks; a configured path or existing directory alone
    is not proof. A cold-cache miss still performs normal installation and checks.
+
+   Resolve each consumer's checkout and working directory from its actual workflow,
+   including `actions/checkout`'s relative `path` and nested recovery entries
+   ([checkout path input](https://github.com/actions/checkout#usage)). Prepare the
+   verified source/dependency cache for those exact locations and the job's service
+   identity through the existing deployment owner. A warmed ordinary CI checkout
+   does not prove a differently located release or cleanup checkout will reuse it.
+   Accept the cache from that consumer's actual job and required revision/object
+   availability; keep cold-cache installation and tests correct. Do not overwrite
+   another job's active checkout or copy its work-in-progress as a cache seed.
 
    For jobs running directly on a shared Linux runner host, use per-job service
    containers with free host ports and read the assigned port from
