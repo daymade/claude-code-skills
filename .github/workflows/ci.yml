@@ -61,6 +61,9 @@ jobs:
       - name: Shell scripts parse
         run: scripts/ci/check_shell_syntax.sh
 
+      - name: Repository PII dispatch preserves publication budget
+        run: python3 -m unittest discover -s scripts/ci -p test_pii_hook_dispatch.py -v
+
       # A second, buried "## [Unreleased]" heading let six commits (2026-06-13 to
       # 2026-09-16) append entries to the wrong section for three months (#603)
       # before anyone noticed. Nothing stopped that second heading from existing,
