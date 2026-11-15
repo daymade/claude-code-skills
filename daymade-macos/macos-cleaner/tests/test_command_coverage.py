@@ -48,6 +48,13 @@ class CommandCoverageTests(unittest.TestCase):
             self.assertEqual(1, len(commands))
             self.assertFalse(result.passed, result.details)
 
+    def test_path_whitespace_and_literal_wildcards_are_not_markdown_noise(self):
+        for target in ('/opt/a  b', '/opt/a*b'):
+            command = "/bin/rm -- '" + target + "'"
+            self.assertTrue(self.coverage(command, [target])[1].passed)
+        self.assertFalse(self.coverage('/bin/rm -- "/opt/a b"', ['/opt/a  b'])[1].passed)
+        self.assertFalse(self.coverage('/bin/rm -- "/opt/ab"', ['/opt/a*b'])[1].passed)
+
     def test_option_like_filenames_are_operands_after_separator(self):
         for name in ('--help', '--version', '--dry-run', '-n', 'help'):
             command = '/bin/rm -- "' + name + '"'
@@ -73,7 +80,8 @@ class CommandCoverageTests(unittest.TestCase):
     def test_unrecognized_mutations_fail_including_unicode_and_fake_preview(self):
         for command in ('obscurecleaner --all', 'wipe "/opt/结果"',
                         'wipe --dry-run /opt/item', 'wipe /opt/list/item',
-                        'wipe /opt/item --version', 'du -sk /opt/item; wipe --all'):
+                        'wipe /opt/item --version', 'du -sk /opt/item; wipe --all',
+                        'python3 cleanup.py --all', 'python3 cleanup.py', 'uv run cleanup.py'):
             with self.subTest(command=command):
                 commands, result = self.coverage(command, ['/opt/item'])
                 self.assertEqual([], commands)
@@ -89,6 +97,7 @@ class CommandCoverageTests(unittest.TestCase):
     def test_read_only_and_explicitly_unused_commands_do_not_fail_coverage(self):
         for command in ('du -sk "/opt/结果"', 'docker image inspect --format json id',
                         'pip3 --version', 'analyze_caches.py --user-only',
+                        'uv run scripts/analyze_caches.py --user-only',
                         '本轮不执行 `obscurecleaner --all`。'):
             commands = CHECKER.find_destructive_commands(command)
             result = CHECKER.check_target_coverage(commands, [], [], command)
@@ -159,6 +168,18 @@ class CommandCoverageTests(unittest.TestCase):
             self.assertTrue(result.passed, result.details)
         for args in ('retire', 'prepare --selection /opt/s', 'verify --manifest "" --receipt /opt/r'):
             self.assertFalse(self.coverage('python3 scripts/task_evidence_archive.py ' + args, [])[1].passed)
+
+    def test_archive_preparation_requires_copy_budget_at_the_cli(self):
+        healthy = BUNDLE / 'tests/fixtures/corpus/known-good-arm1.md'
+        with tempfile.TemporaryDirectory() as directory:
+            plan = Path(directory) / 'plan.md'
+            plan.write_text(healthy.read_text() + '\n```sh\npython3 scripts/task_evidence_archive.py '
+                            'prepare --selection /opt/s --archive /opt/a --manifest /opt/m\n```\n')
+            output = io.StringIO()
+            with redirect_stdout(output):
+                code = CHECKER.main(['--table', str(healthy), '--plan', str(plan)])
+            self.assertEqual(1, code, output.getvalue())
+            self.assertIn('FAIL copy_budget', output.getvalue())
 
 
 if __name__ == '__main__':

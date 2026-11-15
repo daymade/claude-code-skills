@@ -1256,8 +1256,13 @@ def attribute(command, gate_rows, plan_tables):
     """
     target, _row, resolvable = resolve_target(command, plan_tables)
     if command.tools in (('safe_delete.py',), ('rm',), ('task_evidence_archive.py',)):
+        def literal_cell(value):
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in '`\'"':
+                value = value[1:-1]
+            return value
         row = next((row for row in gate_rows
-                    if normalize(row.target).strip('\'"') == target), None)
+                    if literal_cell(row.target) == target), None)
         if command.tools == ('rm',) and row is None and target:
             # Annotated target cells may quote the exact path. Two paths with
             # the same basename are still different deletion targets.
@@ -1508,7 +1513,8 @@ def unrecognized_command_lines(plan_text, commands):
                in DESTRUCTIVE_PATTERNS):
             continue  # recognized — excluded on purpose or not, it was seen
         try:
-            lexer = shlex.shlex(chunk.strip('` '), posix=True, punctuation_chars=';&|<>()')
+            source = re.sub(r'<[A-Z][A-Z0-9_-]*>', 'PLACEHOLDER', chunk.strip('` '))
+            lexer = shlex.shlex(source, posix=True, punctuation_chars=';&|<>()')
             lexer.whitespace_split = True
             compound = any(word and all(char in ';&|<>()' for char in word)
                            for word in lexer)
@@ -1537,6 +1543,7 @@ READ_ONLY_SUBCOMMAND_RE = re.compile(
     r'(?:(?:\S*/)?(?:docker|orbctl|orb)\s+(?:system\s+df|images|ps|volume\s+ls|(?:image\s+)?inspect|info|'
     r'version|buildx?\s+du)\b|\bbrew\s+--cache\b|\buv\s+cache\s+dir\b|'
     r'\bnpm\s+config\s+get\b|\bpnpm\s+store\s+path\b|'
+    r'(?:(?:\S*/)?(?:uv\s+run|python(?:\d+(?:\.\d+)*)?)\s+)?'
     r'(?:\S*/)?analyze_caches\.py\s+--user-only\b)',
     re.IGNORECASE,
 )
@@ -1553,15 +1560,18 @@ def looks_like_command(chunk, origin='prose'):
     text = chunk.strip().lstrip('`\'" ')
     if not text:
         return False
-    if (re.search(r'[\u4e00-\u9fff]', text) and
-            not re.match(r'^\S+\s+(?:-|[\'\"]?[/~])', text)):
-        return False
     parts = text.split()
     if len(parts) < 2 or not re.fullmatch(r'[A-Za-z][\w.+-]*', parts[0].rsplit('/', 1)[-1]):
         return False
     if origin == 'cmdtable':
         return True
-    return bool(re.match(r'^\S+\s+(?:-{1,2}[A-Za-z]|[\'\"]?[/~]|\d)', text))
+    if re.fullmatch(r'(?:python\d*(?:\.\d+)*|bash|sh|zsh|uv)', parts[0].rsplit('/', 1)[-1]):
+        return True
+    if (re.search(r'[\u4e00-\u9fff]', text) and
+            not re.match(r'^\S+\s+(?:-|[\'\"]?[/~])', text)):
+        return False
+    return bool(re.search(r'\s-{1,2}[A-Za-z]|\s[\'\"]?[/~]', text) or
+                re.match(r'^\S+\s+\d', text))
 
 
 def check_target_coverage(commands, gate_rows, plan_tables, plan_text=''):
@@ -2049,9 +2059,19 @@ def check_payload_disposition(table_text, gate_rows, copy_budget=None):
     return Result('payload_disposition', not violations, details)
 
 
-def check_copy_budget(path, gate_rows):
+def check_copy_budget(path, gate_rows, plan_text=''):
     """Read-only destination preflight; absent input authorizes no copies."""
     if path is None:
+        for _lineno, _origin, chunk in command_chunks(plan_text):
+            if not DESTRUCTIVE_PATTERNS[2][1].search(chunk):
+                continue
+            parsed = literal_shell_words(chunk)
+            if parsed is not None:
+                words, _unsafe = parsed
+                if any(word.rsplit('/', 1)[-1] == 'task_evidence_archive.py' and
+                       words[i + 1:i + 2] == ['prepare'] for i, word in enumerate(words)):
+                    return Result('copy_budget', False,
+                                  ['evidence archive prepare requires --copy-budget'])
         return Result('copy_budget', True, ['no copy preparation authorized; '
                       'supply --copy-budget before making a copy'])
     try:
@@ -2159,7 +2179,7 @@ def main(argv=None):
         check_lead_rule(commands, gate_rows, plan_text),
         check_tool_verification(commands, plan_text, gate_rows, plan_tables),
         check_payload_disposition(table_text, gate_rows, args.copy_budget),
-        check_copy_budget(args.copy_budget, gate_rows),
+        check_copy_budget(args.copy_budget, gate_rows, plan_text),
     ]
 
     for result in results:

@@ -3,7 +3,7 @@ name: macos-cleaner
 description: >-
   Diagnoses and safely reclaims macOS disk space: caches, logs, app remnants, large/duplicate files,
   Docker/OrbStack, Chromium code-sign clones, developer caches. Use when a Mac is low on storage,
-  shows “Caching needs more space”, or before deleting anything to avoid data loss. Not for
+  shows “Caching needs more space”, when consolidating old task evidence, or before deleting anything to avoid data loss. Not for
   Windows/Linux or permission issues (use macos-permissions).
 ---
 
@@ -17,6 +17,7 @@ Choose the narrowest path that can answer the request:
 
 | User signal | Route |
 |---|---|
+| Old task directories need useful work retained and intermediate state retired | Use [task evidence closeout](references/task-evidence-closeout.md); separate implementation, originals, rebuildable output and active/unknown inputs before copying or deleting |
 | A directory was already copied to an external disk; compare, sync recent work, or retire the internal copy | Start at [lightweight copied-directory verification](references/external-cold-archives.md#verify-an-already-copied-directory-lightly); reuse the copy and existing evidence, then use `scripts/relocate_directory.py` for journaled cutover and retirement |
 | Move selected cold data to an SD card or external disk while retaining its original entry | Read [external cold archives](references/external-cold-archives.md) before copying; bind volume identity, pilot metadata fidelity, verify the retained copy and test original-path consumption before retiring the internal payload |
 | Identical inactive local files must retain every path and offline availability | Read `references/apfs-shared-blocks.md`; use only authorized explicit pairs, native APFS checks and the bundled guarded executor |
@@ -185,6 +186,8 @@ A real 2026-09-19 run followed the Phase 1 machinery to the letter and still shi
    For generated payloads, include the typed facts from `references/generated-payload-plans.md` in the table file. The same checker returns `RETIRE-CANDIDATE` or `PRESERVE`, checks required facts for conventional generated paths, and rejects historical-only retention or unbudgeted backup. Inspect the decisions and unresolved checks; it does not authorize or execute deletion. Other plan families keep their existing table.
    Read the examined-command count and every coverage diagnostic: a proposed deletion with zero commands examined is unchecked. Unrecognized command forms fail `target_coverage` with a nonzero exit; use a supported exact form and rerun before execution. Read-only probes and explicit non-proposals remain excluded. The checker verifies table classification, verbatim rule quotes, recognized destructive-command targets, action classes and unlock rules, preserve-by-default protections, category-wide exclusions, release ranking, and tool verification. It checks each literal operand of `rm` or `/bin/rm`, including `--` and quoted Unicode paths, against its own exact row; shell expansions, unsupported options and unresolved operands fail coverage. It also recognizes `uv run` and Python calls to `safe_delete.py` with relative or absolute script paths. A failing run names the violated rule — fix the plan; do not weaken the checker.
 
+   For `task_evidence_archive.py retire`, the checker reads only the literal, hash-bound schema-1 manifest (up to 16 MiB) and matches every `files[].source` to its own exact row. Missing or changed inputs fail coverage. `prepare` and `verify` are not source deletions; `prepare` still requires `--copy-budget`. Follow [task evidence closeout](references/task-evidence-closeout.md) for archive verification, live-consumer checks, authorization and recovery.
+
    Five failure shapes the checker reliably catches, measured while getting a real 18-target plan to exit 0 — all five are plan-side fixes, never checker-side:
    - **Path form mismatch** (`target_coverage`): the table must carry the same full absolute path the command uses; a `~/` shorthand row does not match a command that names `/Users/…`.
    - **Two targets on one row**: a row naming two paired targets fails to parse — split into one row per target.
@@ -290,6 +293,7 @@ uv run scripts/cleanup_report.py --snapshot after --compare
 ## Resources
 
 - `references/batch-selection.md` and `scripts/batch_budget.py` — select a bounded next batch using supplied capacity and pilot evidence; unknown ceilings stay unknown.
+- `references/task-evidence-closeout.md` and `scripts/task_evidence_archive.py` — consolidate exact inactive evidence into a verified original-path archive; bind retirement to that manifest and resume only recorded source intents.
 - `references/external-cold-archives.md` and `scripts/relocate_directory.py` — verify a copied directory with metadata and selected content checks, then journal the same-volume rollback rename, original-entry consumer test and exact internal retirement; resume after interruption without copying or hashing the whole payload again.
 - `references/apfs-shared-blocks.md` and `scripts/apfs_cow.py` — preserve exact inactive local paths with guarded APFS cloning, pinned rollback, per-item lock release and an exact remainder.
 - `scripts/stream_accounting.py` — calculate internal full-clone allocation upper bounds from supplied native observations; not a probe or physical-release measurement.

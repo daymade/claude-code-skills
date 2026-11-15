@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **github-ops** (v1.16.5 → v1.16.6): Preserve failed-command evidence before disposable runner workspace cleanup, verify later retrieval, and bind cache preparation to each job's actual checkout and service identity.
 - **terraform-skill** (v1.5.15 → v1.5.16): Select validation environments from the authorized release contract, preserve required staging evidence without inserting optional staging into direct production, and derive supported schema transitions from the fixed candidate's canonical catalog.
+- **macos-cleaner** (`daymade-macos` v1.33.0): Consolidate exact inactive task evidence with original-path manifests, streamed archive verification and hash-bound resumable retirement; preserve active, protected and unclassified files.
 
 - **skill-creator** (`daymade-skill` v1.81.0): Gate task closeout on explicit output disposition. Preserve unclassified work and report exit 24 until disposable outputs are consumed and retired; support exact registration replacement and explicit retained-only inventories for worktrees, links and necessary evidence without implicit deletion.
 
