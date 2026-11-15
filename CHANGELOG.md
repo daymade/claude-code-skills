@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-creator** (`daymade-skill` v1.79.6): Relocate temporary review-checkout bindings without changing the reviewed identities; distinguish current release verification from preserved historical evidence and verify consumers after retirement.
+- **git-safety-net** (v1.28.6): Check known external path consumers, including local Git metadata, before retiring a linked worktree; resolve live references through their owning workflow and preserve obsolete evidence without renewing approval.
+
 - **local-codex** (`daymade-codex` v2.4.13 → v2.4.14): Route the fault-driven daemon scenario into the skill — description and Session Management section now trigger on daemon restart, hooks failing with 'Too many open files' and fd exhaustion diagnostics; anchor the observed fd baseline to its version.
 
 - **local-codex** (`daymade-codex` v2.4.12 → v2.4.13): Add the fault-driven restart route for daemon fd exhaustion — diagnose per-process lsof against system limits, distinguish a leak from a post-restart reconnection burst by trend sampling, and recover through the managed daemon start.

@@ -940,6 +940,15 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
    for its absolute path (launchd plists in `~/Library/LaunchAgents`, `crontab -l`, systemd units).
    Real case: a detached "deploy" worktree with no open handles and no file change in ten days was
    the working copy of a LaunchAgent that ran every 30 minutes.
+   Check known consumers outside the checkout too: task manifests, artifact indexes or local
+   release receipts can store its absolute path, including files in another repository's Git
+   metadata. Search the exact path only in the task's known consumer stores; do not infer global
+   non-use from a clean status, no open handles or a scan of tracked files alone. Resolve each
+   live reference through its owning workflow before freezing retirement evidence. For Skill
+   release receipts, use [the archive relocation procedure](../../daymade-skill/skill-creator/references/release-readiness.md#retire-a-temporary-review-checkout).
+   Distinguish an already obsolete record from a live dependency: preserve its original evidence
+   and report its existing validation limit without inventing a new release approval. Recheck
+   relocated consumers after removal; unknown required consumer coverage stops that retirement.
 2. **Inspect tracked and untracked state in the linked checkout itself:** run
    `git -C <worktree-path> status --porcelain=v1 --untracked-files=all --ignore-submodules=none`.
    The output must be empty. Do not substitute the primary checkout's status. Enumerate the

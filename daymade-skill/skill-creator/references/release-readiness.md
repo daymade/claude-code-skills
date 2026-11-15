@@ -167,6 +167,42 @@ blocks push. A new candidate commit needs a new review binding. A nonzero or
 ambiguous result pauses dependent mutations until its documented meaning and
 the required readback establish readiness; do not batch unchecked mutations.
 
+## Retire a temporary review checkout
+
+Before removing a review worktree, inspect the affected source repository's local
+release receipts for its exact `review_repo` path. Prefer the private archive's
+maintained checkout for the durable binding; a receipt pointing at a temporary
+checkout keeps that checkout in use even after publication. Keep private receipt
+paths and review content out of the public distribution.
+
+1. Record each affected receipt's candidate, exact Skill scope, review commit,
+   path and blob, plus its current verification outcome. Separate a currently
+   valid binding from an already stale or missing historical review. A pre-existing
+   failure is not a relocation failure or evidence that the review never passed.
+2. Land useful review changes in the maintained private archive through its normal
+   publication flow. Preserve the original review commits when receipts refer to
+   them; a squash replacement alone does not retain their identities. Read back
+   each recorded commit/path/blob from the retained repository. For a currently
+   valid binding, also require its current HEAD and working file to match that
+   blob and remain clean, as required by `evidence()` in `release_readiness.py`.
+3. For a currently valid binding, rerun the existing `attest` command with the
+   retained checkout as `--review-repo`, keeping the original candidate, Skill
+   scope, review commit and path. Independently run `verify` and compare the
+   resulting receipt: only the repository locator may change. Stop on changed
+   identity/content or a new verification failure; retain the temporary checkout.
+4. Keep obsolete records as historical evidence, not fresh release approvals.
+   When relocating their local receipt locator, back up the exact old record,
+   compare before writing to avoid overwriting a concurrent edit, and preserve
+   every other field. Compare verification outcomes before and after and confirm
+   the original commit/path/blob remains readable. Do not rewrite the historical
+   review to make it match today's HEAD or report an unchanged stale result as a
+   successful current validation. Report those limits separately.
+5. Confirm no affected consumer still needs the temporary path, then follow
+   [Git Safety Net's worktree retirement](../../../git-safety-net/references/merge_verification.md#worktree-retirement--prove-the-checkout-is-disposable-before-removal).
+   Check the current binding again from the retained checkout after removal.
+   Unavailable required evidence or an unresolved live consumer keeps retirement
+   pending; an unrelated obsolete record does not require reviving its release.
+
 ## Rebind an unchanged distribution after main integration
 
 The release executor may use `rebind` only when the original committed review
