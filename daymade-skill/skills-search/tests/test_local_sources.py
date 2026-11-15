@@ -210,6 +210,140 @@ class LocalSourcesTests(unittest.TestCase):
                 local.atomic_json(self.config, {"new": True})
         self.assertEqual(self.config.read_text(), "original")
 
+    def project(self, name="task project", roots=(".claude/skills",)):
+        repo = self.repo(name)
+        for skill_root in roots:
+            folder = repo / skill_root / "observer"
+            folder.mkdir(parents=True)
+            (folder / "SKILL.md").write_text(
+                "---\nname: observer\ndescription: trace observability\n---\n# Project instructions\n")
+        self.git(repo, "add", "--all")
+        self.git(repo, "commit", "-m", "project skills")
+        return repo
+
+    def test_project_skill_is_found_alongside_all_owned_catalogs_and_read_at_exact_ref(self):
+        for name in ("public", "team", "private"):
+            self.register(name)
+        project = self.project()
+        original_config = self.config.read_bytes()
+        rc, result = self.cli("search", "observability", "--project", str(project))
+        self.assertEqual(rc, 0, result)
+        self.assertEqual(len(result["coverage"]), 4)
+        self.assertEqual([r["examined"] for r in result["coverage"][:3]], [2, 2, 2])
+        report = result["coverage"][-1]
+        self.assertEqual(report["scope"], "project")
+        self.assertEqual(report["ref"], "HEAD")
+        self.assertEqual(report["commit"], self.git(project, "rev-parse", "HEAD"))
+        self.assertEqual(report["roots"], [
+            {"path": ".claude/skills", "status": "present", "examined": 1},
+            {"path": ".agents/skills", "status": "absent", "examined": 0}])
+        candidate, = result["candidates"]
+        self.assertEqual(candidate["scope"], "project")
+        self.assertEqual(candidate["path"], ".claude/skills/observer/SKILL.md")
+        path = project / candidate["path"]
+        path.write_text(path.read_text().replace("Project instructions", "Later instructions"))
+        self.git(project, "add", "--", candidate["path"])
+        self.git(project, "commit", "-m", "later edition")
+        read = subprocess.run([sys.executable, str(SCRIPT), "read", "--project", str(project),
+                               "--source", candidate["source"], "--commit", candidate["commit"],
+                               "--path", candidate["path"]], env=self.env, capture_output=True, text=True)
+        self.assertEqual(read.returncode, 0, read.stdout)
+        self.assertIn("Project instructions", read.stdout)
+        self.assertNotIn("Later instructions", read.stdout)
+        self.assertEqual(self.config.read_bytes(), original_config)
+
+    def test_marketplace_only_and_unrelated_project_paths_remain_outside_project_scope(self):
+        project = self.register("public")
+        rc, result = self.cli("search", "Chrome", "--project", str(project))
+        self.assertEqual(rc, 0, result)
+        self.assertEqual(result["matched_count"], 1)
+        self.assertEqual(result["coverage"][-1]["examined"], 0)
+        self.assertTrue(all(r["status"] == "absent" for r in result["coverage"][-1]["roots"]))
+        rc, result = self.cli("search", "fixture", "--project", str(project))
+        self.assertEqual(rc, 0, result)
+        self.assertEqual(result["candidates"], [])
+
+    def test_project_declared_root_ref_and_duplicate_provenance(self):
+        project = self.register("public")
+        rc, result = self.cli("search", "Chrome", "--project", str(project),
+                              "--project-ref", "main", "--project-skill-root", "bundle/browser")
+        self.assertEqual(rc, 0, result)
+        self.assertEqual(len(result["coverage"]), 2)
+        self.assertEqual(result["matched_count"], 1)
+        candidate, = result["candidates"]
+        self.assertEqual({p["scope"] for p in candidate["provenance"]}, {"configured", "project"})
+        self.assertEqual(result["coverage"][-1]["roots"][0]["path"], "bundle/browser")
+
+    def test_project_errors_cannot_hide_healthy_owned_results(self):
+        self.register("public")
+        project = self.project()
+        (project / ".claude/skills/observer/SKILL.md").write_text("not frontmatter")
+        self.git(project, "add", "--all")
+        self.git(project, "commit", "-m", "invalid metadata")
+        for path in (project, self.root / "missing-project"):
+            with self.subTest(path=path):
+                rc, result = self.cli("search", "Chrome", "--project", str(path))
+                self.assertEqual(rc, 1, result)
+                self.assertEqual(result["status"], "incomplete")
+                self.assertEqual(result["coverage"][0]["status"], "searched")
+                self.assertEqual(result["coverage"][-1]["status"], "unavailable")
+                self.assertEqual(len(result["candidates"]), 1)
+
+    def test_malformed_project_scope_fails_and_does_not_register(self):
+        project = self.register("public")
+        before = self.config.read_bytes()
+        for extra in (("--project-skill-root", "../outside"),
+                      ("--project-skill-root", "."), ("--project-skill-root", ""),
+                      ("--project-ref", ""), ("--project-ref=-malformed",)):
+            with self.subTest(extra=extra):
+                rc, result = self.cli("search", "Chrome", "--project", str(project), *extra)
+                self.assertEqual(rc, 2, result)
+                self.assertEqual(result["status"], "error")
+        rc, result = self.cli("search", "Chrome", "--project", str(project / "bundle"))
+        self.assertEqual(rc, 1, result)
+        self.assertIn("repository root", result["coverage"][-1]["error"])
+        self.assertEqual(self.config.read_bytes(), before)
+
+    def test_both_project_roots_preserve_same_name_candidates_and_ignore_uncommitted_content(self):
+        self.register("public")
+        project = self.project(roots=(".claude/skills", ".agents/skills"))
+        (project / ".claude/skills/observer/SKILL.md").write_text("uncommitted invalid metadata")
+        rc, result = self.cli("search", "observability", "--project", str(project), "--limit", "1")
+        self.assertEqual(rc, 0, result)
+        self.assertEqual(result["matched_count"], 2)
+        self.assertEqual(result["coverage"][-1]["examined"], 2)
+        self.assertEqual(len(result["candidates"]), 1)
+
+    def test_unreadable_ref_and_nonregular_project_roots_are_incomplete(self):
+        project = self.register("public")
+        (project / ".claude").mkdir()
+        (project / ".claude/skills").symlink_to("../bundle", target_is_directory=True)
+        self.git(project, "add", "--all")
+        self.git(project, "commit", "-m", "symlink root")
+        for extra in ((), ("--project-ref", "missing-ref")):
+            with self.subTest(extra=extra):
+                rc, result = self.cli("search", "Chrome", "--project", str(project), *extra)
+                self.assertEqual(rc, 1, result)
+                self.assertEqual(result["coverage"][-1]["status"], "unavailable")
+                self.assertNotEqual(result["coverage"][-1]["roots"][0]["status"], "absent")
+                self.assertEqual(result["matched_count"], 1)
+
+    def test_project_read_rejects_unrelated_blob_and_requires_scope_for_custom_roots(self):
+        self.register("public")
+        project = self.project(roots=("automation/skills",))
+        commit = self.git(project, "rev-parse", "HEAD")
+        common = ["read", "--source", "@project", "--project", str(project), "--commit", commit]
+        for path in ("bundle/browser/SKILL.md", "automation/skills/observer/SKILL.md"):
+            rc, result = self.cli(*common, "--path", path)
+            self.assertEqual(rc, 2, result)
+            self.assertIn("not a declared Skill", result["error"])
+        result = subprocess.run([sys.executable, str(SCRIPT), *common,
+                                 "--path", "automation/skills/observer/SKILL.md",
+                                 "--project-skill-root", "automation/skills"],
+                                env=self.env, text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("Project instructions", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

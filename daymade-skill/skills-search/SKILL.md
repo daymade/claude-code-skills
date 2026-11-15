@@ -21,6 +21,12 @@ uv run --script <skill-dir>/scripts/local_sources.py list
 uv run --script <skill-dir>/scripts/local_sources.py search '<capability>' --tier owned
 ```
 
+For a task in a Git project, add `--project '<current-task-repository-root>'` to
+that search. This includes committed `.claude/skills` and `.agents/skills` at
+`HEAD` alongside every owned catalog; use the reference's explicit ref/root
+options for a different project layout. Inspect the project coverage even when a
+marketplace candidate matches. Omit this option when no project scope applies.
+
 Search **every enabled repository in the owned tier** before choosing a candidate.
 Read the returned `coverage`, examined counts and exact commit. A missing source,
 bad configuration or interrupted scan is incomplete coverage, not "no Skill".

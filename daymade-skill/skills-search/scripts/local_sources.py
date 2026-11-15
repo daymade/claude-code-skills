@@ -142,8 +142,23 @@ def snapshot(source):
     return root, commit
 
 
-def registered_paths(root, commit, source):
-    tree = git(root, "ls-tree", "-r", "-z", commit)
+def project_source(path, ref="HEAD", roots=None):
+    if not isinstance(ref, str) or not ref.strip() or ref.startswith("-") or any(c in ref for c in "\0\n\r"):
+        raise SourceError("Project ref must be a nonempty Git ref")
+    if not str(path).strip():
+        raise SourceError("Project path is required")
+    selected_roots = list(dict.fromkeys(relative(r) for r in (
+        roots if roots is not None else [".claude/skills", ".agents/skills"])))
+    if not selected_roots or "." in selected_roots:
+        raise SourceError("Project Skill roots must be exact subdirectories, not the whole repository")
+    return {"id": "@project", "scope": "project", "path": str(Path(path).expanduser().resolve()),
+            "tier": "project", "ref": ref, "skill_roots": selected_roots, "priority": 0,
+            "enabled": True}
+
+
+def tree_blobs(root, commit, roots=None):
+    pathspecs = [f":(literal){r}" for r in roots] if roots else []
+    tree = git(root, "ls-tree", "-r", "-z", commit, "--", *pathspecs)
     blobs = {}
     for record in tree.split(b"\0"):
         if not record:
@@ -151,8 +166,32 @@ def registered_paths(root, commit, source):
         meta, name = record.split(b"\t", 1)
         mode, kind, oid = meta.decode().split()
         path = name.decode("utf-8")
+        if roots and (kind == "commit" or mode == "120000"):
+            raise SourceError(f"Project scope contains a symlink or submodule; coverage is unresolved: {path}")
         if kind == "blob" and mode in {"100644", "100755"}:
             blobs[path] = oid
+    return blobs
+
+
+def registered_paths(root, commit, source, report=None):
+    project = source.get("scope") == "project"
+    blobs = tree_blobs(root, commit, source["skill_roots"] if project else None)
+    if project:
+        roots = source["skill_roots"]
+        records = git(root, "ls-tree", "-z", commit, "--", *[f":(literal){r}" for r in roots])
+        kinds = {}
+        for record in records.split(b"\0"):
+            if record:
+                meta, name = record.split(b"\t", 1)
+                kinds[name.decode("utf-8")] = meta.decode().split()[1]
+        root_reports = [{"path": r, "status": "present" if kinds.get(r) == "tree" else
+                         "absent" if r not in kinds else "invalid",
+                         "examined": sum(PurePosixPath(p).name == "SKILL.md" and p.startswith(r + "/")
+                                         for p in blobs)} for r in roots]
+        if report is not None:
+            report["roots"] = root_reports
+        if any(r["status"] == "invalid" for r in root_reports):
+            raise SourceError("Project Skill root exists but is not a regular Git directory")
     manifest_path = ".claude-plugin/marketplace.json"
     if source.get("skill_roots"):
         roots = [relative(p).rstrip("/") for p in source["skill_roots"]]
@@ -199,9 +238,11 @@ def metadata(root, oid):
     return {"name": data["name"], "description": data["description"]}
 
 
-def catalog(source, cache_path):
+def catalog(source, cache_path, report=None):
     root, commit = snapshot(source)
-    paths = registered_paths(root, commit, source)
+    if report is not None:
+        report["commit"] = commit
+    paths = registered_paths(root, commit, source, report)
     key = hashlib.sha256(json.dumps({**source, "commit": commit}, sort_keys=True).encode()).hexdigest()
     cache_file = cache_path / (key + ".json")
     if cache_file.exists():
@@ -220,7 +261,10 @@ def catalog(source, cache_path):
             pass
     entries = []
     for path, oid in paths.items():
-        entries.append({**metadata(root, oid), "path": path, "blob": oid})
+        try:
+            entries.append({**metadata(root, oid), "path": path, "blob": oid})
+        except SourceError as exc:
+            raise SourceError(f"{path}: {exc}") from exc
     atomic_json(cache_file, {"schema": 1, "key": key, "entries": entries})
     return commit, entries, False
 
@@ -229,7 +273,7 @@ def normalize(value):
     return unicodedata.normalize("NFKC", value).casefold()
 
 
-def search(config_path, cache_path, query, tier="owned", terms=None, limit=10):
+def search(config_path, cache_path, query, tier="owned", terms=None, limit=10, project=None):
     config = load_config(config_path)
     selected = [s for s in config["sources"] if s["enabled"] and s["tier"] == tier]
     if not selected:
@@ -240,10 +284,18 @@ def search(config_path, cache_path, query, tier="owned", terms=None, limit=10):
     if not words:
         raise SourceError("Supply concrete capability terms")
     coverage, matches = [], []
-    for source in sorted(selected, key=lambda s: (s["priority"], s["id"])):
-        report = {"id": source["id"], "path": source["path"], "tier": tier}
+    selected = sorted(selected, key=lambda s: (s["priority"], s["id"]))
+    if project is not None:
+        selected.append(project)
+    for source in selected:
+        scope = source.get("scope", "configured")
+        report = {"id": source["id"], "path": source["path"], "tier": source["tier"],
+                  "scope": scope, "ref": source["ref"]}
+        if scope == "project":
+            report["roots"] = [{"path": r, "status": "unknown", "examined": 0}
+                               for r in source["skill_roots"]]
         try:
-            commit, entries, hit = catalog(source, cache_path)
+            commit, entries, hit = catalog(source, cache_path, report)
             report.update(status="searched", commit=commit, examined=len(entries), cache_hit=hit)
             for entry in entries:
                 name = normalize(entry["name"])
@@ -251,8 +303,18 @@ def search(config_path, cache_path, query, tier="owned", terms=None, limit=10):
                 found = [w for w in words if w in name or w in description]
                 if found:
                     score = sum(4 if w in name else 1 for w in found)
-                    matches.append({**entry, "source": source["id"], "repository_path": source["path"],
-                                    "tier": tier, "commit": commit, "matched_terms": found, "score": score})
+                    provenance = {"source": source["id"], "scope": scope,
+                                  "repository_path": source["path"], "tier": source["tier"], "commit": commit}
+                    if scope == "project":
+                        provenance["skill_roots"] = source["skill_roots"]
+                    duplicate = next((m for m in matches if Path(m["repository_path"]).resolve() ==
+                                      Path(source["path"]).resolve() and m["commit"] == commit
+                                      and m["path"] == entry["path"]), None)
+                    if duplicate is not None:
+                        duplicate["provenance"].append(provenance)
+                    else:
+                        matches.append({**entry, **provenance, "matched_terms": found, "score": score,
+                                        "provenance": [provenance]})
         except (SourceError, OSError, UnicodeError) as exc:
             report.update(status="unavailable", error=str(exc), examined=0)
         coverage.append(report)
@@ -286,10 +348,21 @@ def main():
     read.add_argument("--source", required=True)
     read.add_argument("--commit", required=True)
     read.add_argument("--path", required=True)
+    for command in (find, read):
+        command.add_argument("--project", help="Explicit Git repository root; adds bounded project Skills without registration")
+        command.add_argument("--project-ref", default=None, help="Project Git ref (default: HEAD); resolved to an immutable commit")
+        command.add_argument("--project-skill-root", action="append", help="Exact project subdirectory; repeat to replace .claude/skills and .agents/skills")
     args = parser.parse_args()
     try:
         config_path = args.config or state_path("XDG_CONFIG_HOME", ".config", "sources.json")
         cache_path = args.cache or state_path("XDG_CACHE_HOME", ".cache", "catalog")
+        project = None
+        if args.command in {"search", "read"}:
+            if args.project is None and (args.project_ref is not None or args.project_skill_root is not None):
+                raise SourceError("Project ref/roots require --project")
+            if args.project is not None:
+                project = project_source(args.project, args.project_ref if args.project_ref is not None else "HEAD",
+                                         args.project_skill_root)
         if args.command == "register":
             root = args.path.expanduser().resolve()
             source = {"id": args.id, "path": str(root), "tier": args.tier, "ref": args.ref,
@@ -311,13 +384,16 @@ def main():
         elif args.command == "search":
             if not 1 <= args.limit <= 100:
                 raise SourceError("limit must be between 1 and 100")
-            result = search(config_path, cache_path, args.query, args.tier, args.term, args.limit)
+            result = search(config_path, cache_path, args.query, args.tier, args.term, args.limit, project)
         else:
-            config = load_config(config_path)
-            source = next((s for s in config["sources"] if s["id"] == args.source and s["enabled"]), None)
+            if project is not None:
+                source = project if args.source == project["id"] else None
+            else:
+                config = load_config(config_path)
+                source = next((s for s in config["sources"] if s["id"] == args.source and s["enabled"]), None)
             if source is None or not re.fullmatch(r"[0-9a-f]{40}", args.commit):
                 raise SourceError("Enabled source and exact 40-hex candidate commit required")
-            root, _ = snapshot(source)
+            root, _ = snapshot({**source, "ref": args.commit})
             path = relative(args.path)
             if path not in registered_paths(root, args.commit, source):
                 raise SourceError("Candidate is not a declared Skill at that commit")

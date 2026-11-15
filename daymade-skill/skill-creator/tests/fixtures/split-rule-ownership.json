@@ -1,0 +1,9 @@
+{
+  "before": "# Investigation\n\n2. 先证伪根因，再修复。\n5. 直接查询实际改动的资源。\n\n## Checklist\n- 用 L4 证伪（铁律2）。\n- 按铁律5直查被改的那层。\n",
+  "after": {
+    "investigation.md": "# Investigation\n\n2. 配置证据必须来自当前配置。\n5. 记录执行器的生命周期。\n\n## Checklist\n- 用 L4 证伪（铁律2）。\n- 按铁律5直查被改的那层。\n",
+    "service/operations.md": "# Service operations\n\n## Root cause before repair\n\n先证伪根因，再修复。\n\n## Verify changed resource\n\n直接查询实际改动的资源。\n"
+  },
+  "reconciled": "# Investigation\n\n2. 配置证据必须来自当前配置。\n5. 记录执行器的生命周期。\n\n## Checklist\n- 用 L4 证伪，见 [Root cause before repair](service/operations.md#root-cause-before-repair)。\n- 直查被改的那层，见 [Verify changed resource](service/operations.md#verify-changed-resource)。\n",
+  "pointers": ["用 L4 证伪（铁律2）", "按铁律5直查被改的那层"]
+}
