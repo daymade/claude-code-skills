@@ -74,16 +74,20 @@ The whole repository (`.`), parent paths and wildcard roots are rejected. No
 working-tree, installed-directory or home-directory fallback is performed.
 
 Project coverage names the repository, requested ref, resolved commit and each
-root's `present`, `absent` or `unknown` status and examined count. An absent
-directory at that commit is a successful bounded scan with zero entries;
-unavailable repositories/refs, invalid metadata, non-directory roots, symlinks or
-submodules leave coverage incomplete. The configured source file is still
+root's status and examined count. `present` identifies a regular Git directory;
+a truly absent directory is `absent`, a successful bounded scan with zero entries.
+`invalid` with `blocked_by` identifies a non-directory root or ancestor found by
+the boundary check. Failure before that classification leaves `unknown`, including
+a symlink or submodule rejected while enumerating the selected tree.
+Symlinks, submodules, unavailable repositories/refs and invalid metadata leave
+coverage incomplete. The configured source file is still
 required for search; a project option does not hide missing/invalid configuration.
 Do not infer capability absence beyond these roots and lexical terms.
 
 Expected: one coverage row for **every enabled owned source**, each with
 `status=searched`, resolved commit and examined count. Missing/malformed sources
-produce `status=incomplete` and exit 1 while retaining successful candidates.
+produce a source row with `status=unavailable`; the overall result is
+`status=incomplete` and exits 1 while retaining successful candidates.
 Missing/invalid configuration exits 2. Empty results only describe the stated
 committed catalog and supplied lexical terms, not global capability absence.
 For long Chinese requests, provide concrete separate `--term` values; this
