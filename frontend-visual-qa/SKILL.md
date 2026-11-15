@@ -310,6 +310,10 @@ Before judging wheel-driven pan/zoom sensitivity, load the same reference's
 **Wheel requests are not browser-received wheel events** recipe; compare movement
 with received input rather than the harness request.
 
+For a promised continuous same-map overview-to-detail interaction, load
+[Continuous zoomable maps](references/journey-and-page-contracts.md#continuous-zoomable-maps)
+and exercise intermediate disclosure, reversal and the affected return paths.
+
 Load [references/history-derived-checklist.md](references/history-derived-checklist.md)
 for the core visual/responsive defect catalog and standards-backed checks,
 including complete multiline request, log and audit-table rows.

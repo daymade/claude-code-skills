@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **macos-cleaner** (`daymade-macos` v1.34.0 → v1.34.1): Consolidate Docker cleanup instructions into their canonical procedure, remove the stale blanket-prune prohibition and copied object commands, preserve stopped-container checks, and correct rollback selection and Dockerfile working directories. Route build-cache operations from the project instructions, refresh maintained validation quotes to their canonical sources, and align the idle-probe documentation with its exit-status and stripped-output checks.
+- **app-evolver** (v1.1.15 → v1.1.16): Distinguish a standalone prototype, a stale embedded document and the requested application increment; preserve approved structure and interaction during integration.
+- **frontend-visual-qa** (v1.21.48 → v1.21.49): Exercise continuous-map disclosure at intermediate and reversed zoom, in the real host viewport, with affected navigation and return paths.
 - **macos-cleaner** (`daymade-macos` v1.34.0): Check each literal `rm` operand, including `--` and quoted Unicode paths; reject incomplete command coverage instead of returning a warning-only pass. Expand retirement sources only from the exact hash-bound evidence manifest; preserve read-only probes, explicit non-proposals and existing retention gates. Change types: bug fix and authorized workflow/safety redesign.
 
 - **macos-cleaner** (`daymade-macos` v1.32.2 → v1.33.0): Support verified exact-record BuildKit eviction with a named builder and literal cache ID; retain broad-prune exclusions, unknown-state protection and activation approval for unattended deletion. Calibrate the plan checker against literal, empty, dynamic and widened selector forms.
