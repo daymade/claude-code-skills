@@ -31,10 +31,11 @@ class MaterializationError(Exception):
         self.reason = reason
 
 
-def relative_path(value):
+def relative_path(value, *, allow_git=False):
     if not isinstance(value, str) or not value or value.startswith(("/", ":")):
         raise MaterializationError("paths must be explicit repository-relative paths")
-    if any(p in ("", ".", "..", ".git") for p in value.split("/")) or "\x00" in value:
+    forbidden = ("", ".", "..") if allow_git else ("", ".", "..", ".git")
+    if any(p in forbidden for p in value.split("/")) or "\x00" in value:
         raise MaterializationError(f"unsafe path: {value!r}")
     return value
 
@@ -260,7 +261,7 @@ def check_limits(record, root):
         raise MaterializationError("free space below explicit minimum", "free_space_low")
 
 
-def scan(root):
+def scan(root, *, retained_specials=()):
     """Bounded to this root; account allocated and logical sizes, never follow links."""
     sizes = {}
 
@@ -290,7 +291,8 @@ def scan(root):
                     if error.errno != errno.ENOENT:
                         raise
                     continue
-                if not (stat.S_ISREG(s.st_mode) or stat.S_ISDIR(s.st_mode) or stat.S_ISLNK(s.st_mode)):
+                if not (stat.S_ISREG(s.st_mode) or stat.S_ISDIR(s.st_mode) or stat.S_ISLNK(s.st_mode)
+                        or path.relative_to(root).as_posix() in retained_specials):
                     raise OSError(f"cannot account special file: {path}")
                 sizes[path.relative_to(root).as_posix()] = max(s.st_size, s.st_blocks * 512)
         after = root.lstat()
@@ -303,7 +305,8 @@ def scan(root):
 
 
 def measure(record, root, *, enforce_limits=True):
-    sizes = scan(root)
+    specials = retained_special_paths(record)
+    sizes = scan(root, retained_specials=specials) if specials else scan(root)
     highwater = record["path_highwater"]
     for name, size in sizes.items():
         old = highwater.get(name, 0)
@@ -570,9 +573,14 @@ def output_contract(data, record):
     """Validate one caller classification; no discovery or external-path adoption."""
     if not isinstance(data, dict):
         raise MaterializationError("output manifest must be an object")
-    if set(data) - {"path", "kind", "consumer", "rebuild_from", "consumer_pid"}:
+    if set(data) - {"path", "kind", "consumer", "rebuild_from", "consumer_pid", "retention_only"}:
         raise MaterializationError("unknown output manifest field")
-    path = relative_path(data.get("path"))
+    if "retention_only" in data and type(data["retention_only"]) is not bool:
+        raise MaterializationError("retention_only must be an explicit boolean")
+    retention_only = data.get("retention_only", False)
+    if retention_only and data.get("kind") not in ("unique", "evidence"):
+        raise MaterializationError("retention_only is restricted to unique/evidence; it never authorizes deletion")
+    path = relative_path(data.get("path"), allow_git=retention_only)
     parts = PurePosixPath(path).parts
     if (path in (STATE, LOCK) or parts[0].startswith(".materialization.")
             or (parts[0] == "artifacts" and len(parts) < 2)
@@ -606,6 +614,11 @@ def file_identity(value):
             value.st_mtime_ns, value.st_ctime_ns, value.st_nlink]
 
 
+def retained_special_paths(record):
+    return {item["path"] for output in record.get("outputs", [])
+            if output.get("retention_only") is True for item in output["files"]}
+
+
 def validate_outputs(record):
     outputs = record.get("outputs", [])
     if not isinstance(outputs, list):
@@ -615,8 +628,9 @@ def validate_outputs(record):
         if not isinstance(output, dict):
             raise MaterializationError("invalid persisted output")
         declaration = {key: output[key] for key in
-                       ("path", "kind", "consumer", "rebuild_from", "consumer_pid") if key in output}
+                       ("path", "kind", "consumer", "rebuild_from", "consumer_pid", "retention_only") if key in output}
         output_contract(declaration, record)
+        retention_only = output.get("retention_only", False)
         if any(overlaps(output["path"], path) for path in seen):
             raise MaterializationError("overlapping persisted outputs")
         seen.append(output["path"])
@@ -631,7 +645,7 @@ def validate_outputs(record):
             for item in output[key]:
                 if not isinstance(item, dict):
                     raise MaterializationError("invalid persisted output entry")
-                name = relative_path(item.get("path"))
+                name = relative_path(item.get("path"), allow_git=retention_only)
                 identity = item.get("identity")
                 length = 7 if key == "files" else 2
                 if (not isinstance(identity, list) or len(identity) != length
@@ -644,15 +658,20 @@ def validate_outputs(record):
                 if (name in names or not (name == output["path"] or name.startswith(output["path"] + "/"))):
                     raise MaterializationError("output entry escapes its declared path")
                 names.add(name)
-                if key == "files" and (not isinstance(item.get("sha256"), str)
+                if key == "files" and not retention_only and (not isinstance(item.get("sha256"), str)
                                         or not re.fullmatch(r"[0-9a-f]{64}", item["sha256"])
                                         or not stat.S_ISREG(identity[2]) or identity[6] != 1):
                     raise MaterializationError("invalid persisted output file")
+                if key == "files" and retention_only and (stat.S_ISDIR(identity[2])
+                        or stat.S_IFMT(identity[2]) not in (stat.S_IFREG, stat.S_IFLNK, stat.S_IFIFO,
+                                                           stat.S_IFSOCK, stat.S_IFCHR, stat.S_IFBLK)):
+                    raise MaterializationError("invalid retained-only entry type")
 
 
 def snapshot_output(root, declaration):
     files, directories, ancestors = [], [], []
     path = PurePosixPath(declaration["path"])
+    retention_only = declaration.get("retention_only", False)
     for index in range(1, len(path.parts)):
         name = PurePosixPath(*path.parts[:index]).as_posix()
         with safe_directory(root, name) as fd:
@@ -660,7 +679,7 @@ def snapshot_output(root, declaration):
             ancestors.append({"path": name, "identity": [value.st_dev, value.st_ino]})
 
     def visit(parent_fd, name, relative):
-        relative_path(relative)
+        relative_path(relative, allow_git=retention_only)
         before = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
         if stat.S_ISDIR(before.st_mode):
             fd = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent_fd)
@@ -674,8 +693,20 @@ def snapshot_output(root, declaration):
                 after = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
                 if (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino):
                     raise MaterializationError("output directory changed while registering")
+                if retention_only and file_identity(before) != file_identity(after):
+                    raise MaterializationError("retained-only directory changed while registering")
             finally:
                 os.close(fd)
+        elif retention_only:
+            item = {"path": relative, "identity": file_identity(before)}
+            if stat.S_ISLNK(before.st_mode):
+                item["link_target"] = os.readlink(name, dir_fd=parent_fd)
+            after = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+            if file_identity(before) != file_identity(after):
+                raise MaterializationError("retained-only entry changed while registering")
+            # Metadata-only retention never opens a FIFO/device or follows links,
+            # hashes Git objects, or creates an output eligible for retirement.
+            files.append(item)
         elif stat.S_ISREG(before.st_mode) and before.st_nlink == 1:
             fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent_fd)
             with os.fdopen(fd, "rb") as source:
@@ -836,7 +867,8 @@ def closeout_status(root, record):
     recorded stdout/stderr paths are implicitly covered. Registrations cover
     their captured entries, never later additions under the same directory.
     """
-    current = scan(root)
+    specials = retained_special_paths(record)
+    current = scan(root, retained_specials=specials) if specials else scan(root)
     covered = {".", STATE, LOCK}
 
     def cover_directory(name):
@@ -880,7 +912,9 @@ def closeout_status(root, record):
                     missing.append(name)
                 continue
             value = (root / name).lstat()
-            if ((regular and stat.S_ISREG(value.st_mode))
+            retained_type = output.get("retention_only") is True and regular and (
+                stat.S_IFMT(value.st_mode) == stat.S_IFMT(item["identity"][2]))
+            if (retained_type or (regular and stat.S_ISREG(value.st_mode))
                     or (not regular and stat.S_ISDIR(value.st_mode))):
                 covered.add(name)
                 ancestors(name)

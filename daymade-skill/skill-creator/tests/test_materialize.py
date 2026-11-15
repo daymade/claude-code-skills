@@ -1110,6 +1110,81 @@ class MaterializeTests(unittest.TestCase):
         self.assertEqual((self.root / "artifacts/preview").read_text(), "retain this output")
         self.assertEqual(self.read()["outputs"][0]["kind"], "unique")
 
+    def test_retained_only_real_worktree_metadata_can_close_without_becoming_disposable(self):
+        self.prepare()
+        worktree = self.root / "arms/with/pro-worktree"
+        self.g("worktree", "add", "--detach", str(worktree), self.ref)
+        marker = (worktree / ".git").read_bytes()
+        done = m.finish(self.root, "fixture-session")
+        self.assertIn("arms/with/pro-worktree/.git", done["closeout"]["unclassified"])
+        declaration = self.output_manifest("arms/with/pro-worktree", kind="unique")
+        with self.assertRaises(m.MaterializationError):
+            m.register_output(self.root, "fixture-session", declaration)
+        declaration["retention_only"] = True
+        done = m.register_output(self.root, "fixture-session", declaration)
+        self.assertTrue(done["closeout"]["complete"])
+        self.assertEqual((worktree / ".git").read_bytes(), marker)
+        self.assertEqual(subprocess.check_output(["git", "-C", str(worktree), "rev-parse", "HEAD"],
+                                                env=self.env).decode().strip(), self.ref)
+        self.retire()
+        self.assertTrue((worktree / "selected/input.txt").exists())
+        later = worktree / "later.txt"
+        later.write_text("later retained work")
+        done = m.finish(self.root, "fixture-session")
+        self.assertIn("arms/with/pro-worktree/later.txt", done["closeout"]["unclassified"])
+        m.register_output(self.root, "fixture-session", declaration, replace=True)
+        self.assertEqual(m.finish(self.root, "fixture-session")["state"], "finished")
+        self.assertEqual(later.read_text(), "later retained work")
+
+    def test_retained_only_links_and_fifo_are_never_opened_or_retired(self):
+        self.prepare()
+        directory = self.root / "artifacts/retained"
+        directory.mkdir()
+        original = directory / "original"
+        original.write_text("unique")
+        os.link(original, directory / "hardlink")
+        outside = self.base / "outside.txt"
+        outside.write_text("outside remains outside")
+        (directory / "link").symlink_to(outside)
+        os.mkfifo(directory / "pipe")
+        declaration = self.output_manifest("artifacts/retained", kind="evidence", retention_only=True)
+        with mock.patch.object(m, "digest_chunks", side_effect=AssertionError("retained-only paths must not be hashed/opened")):
+            m.register_output(self.root, "fixture-session", declaration)
+        done = m.finish(self.root, "fixture-session")
+        self.assertEqual(done["state"], "finished")
+        retired = self.retire()
+        self.assertEqual(retired["output_retirement"]["removed"], [])
+        self.assertEqual(retired["output_retirement"]["retained"], ["artifacts/retained"])
+        self.assertTrue((directory / "pipe").exists())
+        self.assertEqual((directory / "link").readlink(), outside)
+        self.assertEqual(outside.read_text(), "outside remains outside")
+        self.assertEqual(original.stat().st_nlink, 2)
+
+    def test_retained_only_manifest_cannot_authorize_disposal_or_escape_root(self):
+        self.prepare()
+        (self.root / "artifacts/preview").write_text("payload")
+        for kind in ("rebuildable", "transport"):
+            with self.subTest(kind=kind), self.assertRaises(m.MaterializationError):
+                self.register(kind=kind, retention_only=True)
+        for value in (None, "", 1, "true"):
+            with self.subTest(retention_only=value), self.assertRaises(m.MaterializationError):
+                self.register(kind="unique", retention_only=value)
+        for path in ("../outside", "/tmp/outside", ".", m.STATE, m.LOCK, "arms/foreign/work"):
+            with self.subTest(path=path), self.assertRaises(m.MaterializationError):
+                self.register(path, kind="unique", retention_only=True)
+        self.assertNotIn("outputs", self.read())
+
+    def test_persisted_retained_only_cannot_be_relabelled_as_disposable(self):
+        self.prepare()
+        (self.root / "artifacts/preview").write_text("unique")
+        self.register(kind="unique", retention_only=True)
+        record = self.read()
+        record["outputs"][0]["kind"] = "rebuildable"
+        m.save(self.root, record)
+        with self.assertRaises(m.MaterializationError):
+            self.retire()
+        self.assertEqual((self.root / "artifacts/preview").read_text(), "unique")
+
     def test_registration_overlap_and_corrupt_persisted_inventory_fail_closed(self):
         self.prepare()
         path = self.root / "artifacts/preview"

@@ -241,6 +241,7 @@ Existing unrelated processes are not selected or stopped.
 | `21` | Free space below the explicit reserve |
 | `22` | Measurement or run I/O unknown; treat as failure |
 | `23` | Child failed; its exact return code is in the receipt |
+| `24` | Closeout incomplete: classify unknown work, restore missing retained entries, or consume and retire disposable outputs |
 | `130` | Interrupted; evidence remains |
 
 ## Finish on success, failure and interruption
@@ -365,8 +366,9 @@ independently retained Git source after input cleanup. It creates the manifest
 after the payload exists, consumes the page and retires its containing directory.
 Read back that `task/artifacts/preview` is absent and the receipt/logs remain.
 
-Registration snapshots each physical regular file's hash, permission mode and
-identity. It rejects symlinks, hard links, special files and symlinked ancestors.
+Default registration snapshots each physical regular file's hash, permission mode
+and identity. It rejects Git metadata, symlinks, hard links, special files and
+symlinked ancestors.
 Paths must name exact non-runner entries inside the task root, including root-level
 files. `artifacts/` and `arms/<arm>/` themselves, undeclared arms, runner metadata
 and disposable `artifacts/run-NNNN/` logs are excluded. Declared inputs can only
@@ -378,6 +380,27 @@ needs reclassification, explicitly repeat `register-output --replace` with a
 manifest for the same exact registered path. It snapshots the current contents,
 records the replaced classification's digest and retains the cumulative budget.
 It does not delete the replaced payload or override an active consumer.
+
+For a necessary worktree or evidence containing Git metadata, links or special
+files, explicitly register a retained-only snapshot:
+
+```json
+{
+  "path": "arms/implementation/retained-worktree",
+  "kind": "unique",
+  "consumer": "source-owner",
+  "retention_only": true
+}
+```
+
+`retention_only` accepts only a JSON boolean and is allowed only for `unique` or
+`evidence`. It inventories exact paths and metadata without following links or
+reading special-file payloads; it does not certify content hashes. Git metadata
+may be retained through this explicit mode. Symlinked ancestors, outside paths,
+undeclared arms and runner metadata remain forbidden. `retire` preserves every
+retained-only entry, including after `--consumed`; this mode cannot authorize
+deletion. New descendants still block closeout until an explicit exact-path
+`register-output --replace` refreshes the retained snapshot.
 
 `retire --consumer <name> --consumed` removes only that consumer's registered,
 unchanged `rebuildable`/`transport` regular files. Changed content, mode, identity,
