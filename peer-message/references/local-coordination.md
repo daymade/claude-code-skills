@@ -315,6 +315,25 @@ python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord receive received.txt
 `ignore_expired/ignore_superseded/ignore_closed` 安静收下，不回 ACK、不申请新窗口。
 `legacy/unknown` 回到现有语义分流，保留覆盖缺口，不能丢掉新阻塞。
 
+调用者已按接收分流确认这只是完成/确认通知，或相关问题已有后续证据解决，且没有
+未回答问题或会改变下一步的新证据时，直接走无需回复的消费出口：
+
+```bash
+python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord receive received.txt --disposition no-reply
+```
+
+此参数不分类正文。CLI 先执行同一完整性、身份、过期及重复检查；对已确认 transport
+的非 request 记录，在同一事务复用 finish 关闭，返回 `closed`、`reply=not_created` 和
+`disposition_source=caller`，不创建 ACK、不调用发送。已过期/关闭/替代仍返回原 ignore
+状态；`legacy/unknown` 仍保留原覆盖缺口。request 一律拒绝此捷径，先正常 receive，
+回答问题或核实其已解决后再 finish。reserved/unknown transport 也拒绝且回滚本次领取，
+保留原发送的核对与重发屏障。摘要冲突不会因无需回复而跳过。
+
+收到 `closed` 后只结束这次协调；它不证明业务完成，也不要求再次读 Git、部署或给用户
+新播报。宿主是否允许无文本结束须按当前工具合同判断；CLI 不能保证 ChatGPT 不产生
+final，也不通过归档线程实现静默。默认 receive 保留 `action_needed`，由执行者判断是
+有效请求、交付失效证据还是普通通知；正文写着“无需回复”不改变这个边界。
+
 保存的是宿主实际收到的完整字符串，包括 metadata 行、advisory、空行和末尾空白。
 文件和 stdin 均以 UTF-8 接收，保留原始 LF/CRLF 行尾；不要先通过文本转换器规范化。
 从宿主事件或下方 inbox inspection 导出原字段，用 `write_bytes(envelope.encode("utf-8"))`

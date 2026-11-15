@@ -729,7 +729,9 @@ class Board:
             raise CoordinationError("coordination content conflicts with prepared record; retain input and state")
         return "verified_prepared_core"
 
-    def receive(self, envelope, actor):
+    def receive(self, envelope, actor, *, disposition=None):
+        if disposition not in (None, "no-reply"):
+            raise CoordinationError("unsupported receiver disposition")
         # A complete Codex delegation wrapper loses exactly one XML carrier
         # layer; digest and identity checks still govern the decoded core.
         if isinstance(envelope, str) and envelope.startswith("<codex_delegation>"):
@@ -791,16 +793,33 @@ class Board:
                 # reopen the work or erase its closure.
                 action = "action_needed"
                 self.db.execute("UPDATE messages SET received_at=? WHERE id=?", (self.clock(), message_id))
+            if disposition == "no-reply" and action in ("action_needed", "already_processing"):
+                # This is an explicit caller decision, not a content classifier.
+                # An unanswered request and an uncertain send must retain their
+                # normal resolution path even if the caller picked this shortcut.
+                if row["kind"] == "request":
+                    raise CoordinationError("no-reply cannot close a request; address its question, then finish")
+                if row["state"] != "accepted":
+                    raise CoordinationError("no-reply requires confirmed transport; reconcile the original send")
+                self._finish_row(row, actor)
+                return {"status": "closed", "message_id": message_id, "integrity": integrity,
+                        "received_status": action, "disposition": "no-reply",
+                        "disposition_source": "caller", "reply": "not_created",
+                        "next_action": "end coordination; no ACK or repeated verification",
+                        "business_completion": "not_established"}
         return {"status": action, "message_id": message_id, "integrity": integrity,
                 "authority": "coordination_only; verify current business facts before acting"}
+
+    def _finish_row(self, row, actor):
+        if not row or actor not in (row["sender"], row["target"]):
+            raise CoordinationError("only a participant may close this coordination")
+        if row["state"] in ("reserved", "unknown") and row["closed_at"] is None and (
+                actor != row["target"] or row["received_at"] is None):
+            raise CoordinationError("ambiguous transport needs commit reconciliation, not closure")
+        self.db.execute("UPDATE messages SET closed_at=? WHERE id=?", (self.clock(), row["id"]))
 
     def finish(self, message_id, actor):
         with self.transaction():
             row = self.db.execute("SELECT * FROM messages WHERE id=?", (message_id,)).fetchone()
-            if not row or actor not in (row["sender"], row["target"]):
-                raise CoordinationError("only a participant may close this coordination")
-            if row["state"] in ("reserved", "unknown") and row["closed_at"] is None and (
-                    actor != row["target"] or row["received_at"] is None):
-                raise CoordinationError("ambiguous transport needs commit reconciliation, not closure")
-            self.db.execute("UPDATE messages SET closed_at=? WHERE id=?", (self.clock(), message_id))
+            self._finish_row(row, actor)
         return {"status": "closed", "message_id": message_id, "business_completion": "not_established"}

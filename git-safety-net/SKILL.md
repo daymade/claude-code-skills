@@ -395,6 +395,9 @@ The load-bearing few:
   and hooks, and do not copy ignored dependencies. When approved, a linked worktree is safer than
   an invisible independent clone but remains a separately audited retirement target.
   (§ Audit every authorized worktree before retirement.)
+- **For an authorized sparse worktree, initialize and verify the complete index** through
+  [Initialize an authorized sparse worktree](references/prevention_practices.md#initialize-an-authorized-sparse-worktree)
+  before editing and after staging; a path-limited checkout does not seed the baseline.
 - **Handoff and merge by exact commit, then finish with an AND gate.** Record branch, local `HEAD`,
   and fresh remote tip; require them to equal the handoff SHA. Direct merges name that SHA, not the
   branch. Hosted merges use an expected-head-SHA precondition when available, or an immediately
@@ -759,8 +762,10 @@ never tell a user to run bare `git_verify_branch_merged.sh` unless `command -v` 
 | `scripts/git_verify_closeout.py --repo PATH --expected-common-dir PATH --target-manifest TSV --expected-manifest-sha256 SHA256 [postcondition options]` | Verify only requested resource postconditions against the first frozen original manifest: ref absence or explicit caller retention, exact path/worktree absence, and optional primary-main/cleanliness conditions. JSON keeps business content delivery unassessed; initial-inventory completeness, semantic delivery, publication, and deletion authority remain with the caller | Nothing (read-only, no fetch or writes to refs, objects, index, worktrees, or files) |
 | `scripts/git_prepare_clone_retirement.sh --clone PATH --survivor PATH --out DIR [--full-backup]` | Default: prove every clone object retained by an independent survivor's refs, record exact recovery identities and copy only unique metadata. Refuse gaps rather than silently creating a full bundle; `--full-backup` explicitly retains the self-contained export branch. Run `--verify-current DIR` after standalone occupancy and immediately before the authorized removal/move. | Writes only the new external evidence directory and any necessary metadata/export; disables lazy fetch/fsmonitor; never moves/deletes or changes refs |
 | `scripts/git_prepare_worktree_retirement.py` | Use within [Worktree retirement](references/merge_verification.md#worktree-retirement--prove-the-checkout-is-disposable-before-removal) for supported layouts. | Writes only external evidence; never changes source refs or removes a worktree |
+| `scripts/git_prepare_sparse_worktree.py init` / `verify` | Use [sparse initialization](references/prevention_practices.md#initialize-an-authorized-sparse-worktree) for a new authorized worktree and read-only baseline/scope verification after staging. | `init`: adds only a new task branch/worktree, seeds its full index and selected files; refuses existing targets. `verify`: read-only, never repairs an index |
 
-These helpers run from the repository root. They use read-only enumeration/configuration commands such as
+The sparse helper accepts an explicit repository root; run the other helpers from the repository root.
+They use read-only enumeration/configuration commands such as
 `find`, `config`, `symbolic-ref`, `submodule status`, `status`, `cat-file`, `rev-list`, `rev-parse`,
 `fsck`, `for-each-ref`, and `remote get-url`; plus scoped `fetch`, `archive`, `bundle create/verify`,
 metadata hashing/archive, and (preserve only) `update-ref` where each script's table row says so.

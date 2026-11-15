@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **git-safety-net** (v1.28.6 → v1.28.7): Initialize a complete baseline index before sparse materialization and verify the explicit change scope without repairing existing work.
+- **auto-repo-setup** (v2.2.1 → v2.2.2): Route isolated sparse preparation through the protected initializer and its read-only scope check.
+- **peer-message** (v1.27.0 → v1.27.1): Close accepted informational records without a reply while retaining request, integrity and unknown-send barriers.
+- **macos-cleaner** (`daymade-macos` v1.32.1 → v1.32.2): Require payload facts in cleanup plans, protect live or unique state, and reject unsupported historical retention and backup copies.
+
 - **skills-search** (`daymade-skill` v1.80.2): Align coverage documentation with source-row and overall statuses, document blocked ancestors, and add repository routes for project discovery and split-reference checks.
 
 - **skill-creator** (`daymade-skill` v1.80.1): Relocate temporary review-checkout bindings without changing the reviewed identities; distinguish current release verification from preserved historical evidence and verify consumers after retirement.
