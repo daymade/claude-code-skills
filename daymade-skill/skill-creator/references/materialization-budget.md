@@ -253,14 +253,29 @@ It refuses symlinks in the input path, checks file identity while hashing and
 requires the original permission mode. Permission-only changes remain work.
 Modified inputs, hard links, unknown files and all `artifacts/` files remain,
 with their paths in `cleanup.retained`; inspect those paths before further work.
-`finish` marks the whole root `finished`, not an individual arm. `run` rejects
-that state. Complete planned retries before finishing; preserve a finished receipt
+After input cleanup, `finish` checks the live task root for output disposition.
+Unclassified entries, missing preserved outputs or disposable outputs awaiting
+retirement leave `state=closeout_pending` and exit **24**. Nothing unknown is
+deleted. The full receipt's `closeout` lists the exact unresolved paths; the
+Agent entry returns counts and its receipt path. An unreadable inventory fails
+with exit 22 and cannot establish completed closeout.
+
+Register retained work as `unique` or `evidence`; an exact declared input can
+receive either classification and is then preserved during input cleanup.
+Register disposable outputs, finish their consumers, and explicitly retire them
+as described below. Repeat `finish` after resolving the listed paths.
+Only a complete input cleanup and output disposition produce `state=finished`
+and exit 0. `run` rejects both `finished` and `closeout_pending`.
+Complete planned retries before finishing; preserve a finished receipt
 rather than editing it or creating a new root to reset the same task's allowance.
 Empty directories and the receipt remain. There is no whole-root recursive delete
 and no scan/cleanup of unrelated temporary directories.
 
-The receipt records `outcome_before_finish`; `finished` means input cleanup ran,
-not that evaluation passed. Cleanup keeps evidence even when the budget is already
+The receipt records `outcome_before_finish`; `finished` means the task root's
+storage disposition is complete, not that evaluation passed or external resources
+were retired. Only the receipt, lock, declared input container directories and
+the recorded runs' exact stdout/stderr paths have built-in dispositions. Other
+files and empty output directories need an explicit classification. Cleanup keeps evidence even when the budget is already
 exceeded and its small final receipt needs additional bytes. Do not delete evidence
 to manufacture a green outcome.
 
@@ -283,8 +298,8 @@ from a process deliberately tampering with it.
 
 ## Register outputs and retire them after consumption
 
-`finish` cleans inputs; it does not retire task-created outputs. Before handing a
-build, preview or transport payload to its consumer, classify its exact in-root
+`finish` cleans inputs and gates output closeout; it never implicitly deletes
+task-created outputs. Before handing a build, preview or transport payload to its consumer, classify its exact in-root
 path with `register-output`. Use this JSON object for one file or directory:
 
 ```json
@@ -352,11 +367,17 @@ Read back that `task/artifacts/preview` is absent and the receipt/logs remain.
 
 Registration snapshots each physical regular file's hash, permission mode and
 identity. It rejects symlinks, hard links, special files and symlinked ancestors.
-Paths must be strict descendants of `artifacts/` or a declared `arms/<arm>/`;
-declared inputs and disposable `artifacts/run-NNNN/` logs are excluded. A directory
+Paths must name exact non-runner entries inside the task root, including root-level
+files. `artifacts/` and `arms/<arm>/` themselves, undeclared arms, runner metadata
+and disposable `artifacts/run-NNNN/` logs are excluded. Declared inputs can only
+receive an exact-file `unique`/`evidence` classification, never disposal. A directory
 registration freezes its existing descendants; files added later are unknown and
-remain. Registrations cannot overlap or be reclassified. Use a new output path
-for another build or retry, retaining the original classification and budget.
+remain and block closeout. Registrations cannot overlap. Use a new output path
+for another build or retry. When retained work changes or a failed retirement
+needs reclassification, explicitly repeat `register-output --replace` with a
+manifest for the same exact registered path. It snapshots the current contents,
+records the replaced classification's digest and retains the cumulative budget.
+It does not delete the replaced payload or override an active consumer.
 
 `retire --consumer <name> --consumed` removes only that consumer's registered,
 unchanged `rebuildable`/`transport` regular files. Changed content, mode, identity,
@@ -364,7 +385,9 @@ timestamps, links or parent identities preserve the affected path. It removes on
 registered empty directory shells with matching identities. It never recursively
 deletes a root or follows an external path. Both commands retain the existing
 owner/root checks and lock, and refuse an active runner child group. They also
-work after `finish`; neither reopens `run` on a finished root.
+work after input cleanup; neither reopens `run`. They refresh an existing closeout
+check, so registration of another disposable payload revokes a completed state
+until that payload has been consumed and retired.
 
 Read back `output_retirement.complete` and the full receipt's `removed`, `retained`,
 `missing` and `directories_removed` lists. A missing path is reported separately

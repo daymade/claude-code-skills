@@ -133,9 +133,11 @@ Treat “unsupported” as a hypothesis and investigate alternative documented p
 - For any necessary review/eval input copies, declare exact immutable inputs,
   cumulative bytes, reserve and session owner, then use
   [materialization prepare → run → finish](references/materialization-budget.md).
-  Finish inputs after success, failure or interruption. Explicitly register
-  task-created rebuildable preview/build/handoff/transport payloads and retire them
-  after their consumers finish; preserve modified inputs, evidence and unique work.
+  Finish inputs after success, failure or interruption. Classify all task-created
+  outputs; register rebuildable preview/build/handoff/transport payloads and retire
+  them after their consumers finish. Preserve modified inputs, evidence and unique
+  work with explicit retained classifications. `finish` exits 24 while output
+  disposition is unresolved; input cleanup alone is not completed task closeout.
 - For overlapping installed skills, follow
   [precedence and coexistence](references/skill-precedence-and-coexistence.md).
   Run the official-creator presence check there; absent/already configured means
