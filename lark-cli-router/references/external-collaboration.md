@@ -1,7 +1,7 @@
 # External customer groups and Wiki pages
 
-Use this recipe when a customer needs an external collaboration group and a
-bounded set of Wiki pages. It composes the CLI's embedded guides; it does not
+Use this recipe when an external collaboration group needs access to a bounded
+set of Wiki pages. It composes the CLI's embedded guides; it does not
 replace their current syntax, identity rules or confirmation gates.
 
 ## Bind the job and inspect first
@@ -76,11 +76,25 @@ place content in a real send box without authorization for its target/content.
 
 ## Organize the customer pages
 
-When the user chooses one shared external Wiki, use one customer page per
-customer, with that customer's work pages beneath it. The Wiki space is the
-overall container; do not insert another generic "knowledge base" page between
+When customers have separate audiences in one shared external Wiki, use one
+customer page per customer, with that customer's work pages beneath it. The Wiki
+space is the overall container; do not insert another generic "knowledge base" page between
 the space and the customer page. Keep separate spaces when that is the chosen
 structure. Do not consolidate other existing customer libraries automatically.
+
+When the user explicitly authorizes the same group to access every page in an
+existing space, use one shared parent page as the audience's permission boundary.
+Reuse the confirmed parent or create one if absent, move the other top-level
+nodes beneath it, and grant the confirmed group `container` access on that parent
+using the chosen role. Create
+future pages beneath it so they inherit the same grant. Do not use this pattern
+to combine different audiences or infer authorization for additional content.
+
+For example, if two project trees are both authorized for one external team,
+place both original trees beneath one shared parent. Follow the node-preservation
+checks below, then [enable targeted collaboration](#enable-targeted-external-collaboration)
+and [verify structure, grant and actual access separately](#verify-and-resume).
+If the projects belong to different customers, retain separate permission parents.
 
 Resolve `space_id`, `node_token`, underlying object token/type and current
 parents before changing structure. Prefer moving existing nodes to preserve
@@ -127,7 +141,8 @@ than resetting it blindly and undoing the customer's access boundary.
 Before a group grant, read the group's current members and explain that access is
 granted to the group, including subsequent members. Verify who can add members
 and whether joining requires approval; do not silently tighten those settings.
-Grant the customer's page, not the overall space or another customer's page.
+Grant the confirmed audience's parent page, not the overall space or pages outside
+that audience.
 
 After reading the current member-add reference, preview the exact grant:
 
