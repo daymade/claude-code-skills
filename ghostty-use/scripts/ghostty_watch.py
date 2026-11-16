@@ -696,7 +696,7 @@ def install(state, every_minutes=DEFAULT_EVERY_MINUTES, apply=False):
         system_run([uv, 'venv', '--python', '3.12', str(watcher / 'venv')])
     system_run([str(interpreter), '-c', 'import fcntl, json, plistlib; print("owned runtime ready")'])
     source = Path(__file__).resolve().parent
-    for filename in ('ghostty_watch.py', 'ghostty_storage.py', 'ghostty_session.py'):
+    for filename in ('ghostty_watch.py', 'ghostty_storage.py', 'ghostty_session.py', 'ghostty_windows.py'):
         data = (source / filename).read_bytes()
         installed = watcher / 'scripts' / filename
         if not installed.exists() or installed.read_bytes() != data:

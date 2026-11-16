@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **ghostty-use** (v1.13.0 → v1.14.0): Manual snapshots capture the Ghostty window/tab tree via the scripting dictionary (tab titles, `name override`, per-surface TTY/PID/cwd) and join tab TTYs to session anchors, with best-effort degradation to unknown mapping. Restore does not yet re-apply titles automatically; the recorded tree is evidence for manual re-tiling and re-titling.
+
 - **transcript-fixer** (`daymade-audio` v1.60.2 → v1.61.0): Optionally retain complete Stage 1 input/output baselines in daudio and recompute derived versions after shared rule or context updates. Preserve nonconflicting manual edits through guarded three-way file projection; retain conflicts, missing baselines and interrupted publication as pending without rerunning ASR or Stage 2.
 
 - **Claude Code profiles** (`daymade-claude-code` v5.1.20 → v5.1.21): Keep headless verification in a dedicated reference, route it from the Skill and repository instructions, and require an existing reviewed probe when the task is read-only. Preserve the exact-command and actual-result acceptance recipe.
