@@ -77,6 +77,23 @@ in `references/source-manifest.md`.
 
 ### 3. Retrieve across declared carriers
 
+For a follow-up on an already retrieved incident, check the existing session
+receipt before starting another full pass. A valid receipt permits reusing its
+verified originals while their scope, authority and inputs remain applicable;
+inspect only a decision-bearing gap or changed state. Answer a recurrence
+question from the old action/result and current identities, rather than
+substituting a new remedy for the explanation requested.
+
+The hook currently re-arms on an explicit strong historical signal even when
+an earlier receipt was valid; weak recall can reuse a valid receipt. If `check`
+reports an older prompt, complete the current requirement through this workflow.
+Do not edit receipt identities, call scope reclassification for a genuine
+history request, or remove required sources to avoid that pass. A repeat query
+is not itself evidence of a hook bug: distinguish an exact replay, a clarified
+question using the same evidence, and a request for different historical work
+before proposing any trigger change. Trigger changes require the hook owner's
+real-history false-positive and recall calibration.
+
 Write the user-world outcome separately from the proposed implementation. Then
 provide:
 
