@@ -887,9 +887,11 @@ isolation. This section covers the pieces.
   a dominant near-field speaker beats session-level ASR. Everything else uses
   the decoupled default.
 - **Voiceprint identification** — diarization labels are anonymous
-  (`SPEAKER_00`…) and per-file. To map them to real names, unify a speaker
-  across files, or collapse diarization's over-segmentation, use CAM++
-  voiceprints via `scripts/voiceprint_id.py`. Recipe **and the critical
+  (`SPEAKER_00`…) and per-file. To collect name candidates across files or
+  investigate over-segmentation, use CAM++ voiceprints via `scripts/voiceprint_id.py`.
+  Match saves source-bound candidates, scores and refusal reasons without changing
+  existing labels; legacy thresholds and source claims cannot confirm identity.
+  Recipe **and the critical
   acoustic-domain caveat** — a voiceprint built from one mic type matches the
   same person on a different mic far less well:
   `references/voiceprint_speaker_id.md`.
@@ -1037,7 +1039,7 @@ Substitute the resolved absolute path for `${CLAUDE_SKILL_DIR}` everywhere in th
 - `word_timestamps_whisper.py` — mlx-whisper word-level timestamps → JSON timing lattice (Apple Silicon)
 - `speaker_transcribe_cascade.py` — LEGACY cut-then-transcribe variant (extremely noisy / heavy-overlap audio only)
 - `diarize_speakers.py` — Speaker diarization alone (pyannote 3.1 @ MPS) → per-segment JSON
-- `voiceprint_id.py` — CAM++ voiceprint enroll/match: map anonymous SPEAKER_xx to real names
+- `voiceprint_id.py` — CAM++ enroll/match: preserve speaker-name candidates without relabeling originals
 - `overlap_merge_transcribe.py` — Chunked transcription with overlap merge (remote API fallback)
 - `generate_audit_html.py` — Build a self-contained HTML audit/review page from speaker-transcribe CSV outputs
 

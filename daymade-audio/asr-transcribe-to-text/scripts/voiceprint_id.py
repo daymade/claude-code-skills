@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Voiceprint speaker identification: map anonymous SPEAKER_xx to real names.
+"""Voiceprint matching: retain speaker-name candidates without relabeling audio.
 
 Uses CAM++ (iic/speech_campplus_sv_zh-cn_16k-common, 192-dim) speaker embeddings.
 funasr auto-downloads the model from ModelScope on first run.
@@ -8,10 +8,11 @@ Two modes:
   enroll  Build a reference centroid for a named person from clean audio spans,
           and add/update it in a reference JSON.
   match   For a diarized recording, embed each SPEAKER_xx (from its longest turns)
-          and match against the reference set. A speaker is named only when
+          and match against the reference set. A candidate clears the old gates when
           cosine >= --threshold AND (best - second_best) >= --margin, so an
           unknown person stays anonymous instead of being forced onto the
-          nearest name. Optionally rewrites the `speaker` column of a CSV.
+          nearest name. These gates are not calibrated identity confirmation.
+          Save a source-bound candidate report; never rewrite speaker labels.
 
 Reference JSON:
   {"model_fingerprint":"campplus_sv_zh-cn_16k-common","embedding_dim":192,
@@ -47,13 +48,16 @@ similarity gates remain candidate evidence, not calibrated identity confirmation
 # llvmlite (0.47) from wheels. `numba>=0.60` forces that modern, wheel-backed stack.
 # Verified: on 3.11 uv resolves llvmlite 0.47 / numba 0.65 from wheels (no source build).
 import argparse
-import csv as csvmod
+import hashlib
 import json
 import os
 import re
 import subprocess
 import sys
 import tempfile
+import uuid
+import urllib.request
+import urllib.parse
 from pathlib import Path
 
 os.environ.setdefault("TQDM_DISABLE", "1")
@@ -149,14 +153,71 @@ def _check_bank_reference(uri, scope):
         raise ValueError("--refs-scope is required with a daudio bank URI")
 
 
+class ReferenceBank(dict):
+    """Keep the reader's source claims alongside its unchanged native matcher shape."""
+
+    def __init__(self, native, evidence):
+        super().__init__(native)
+        self.evidence = evidence
+
+
+def _profile():
+    explicit = os.environ.get("DAYMADE_AUDIO_CONFIG")
+    root = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+    path = Path(explicit).expanduser() if explicit is not None else root / "daymade-audio/config.json"
+    if not path.exists() and explicit is None:
+        return {}
+    config = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(config, dict):
+        raise ValueError("audio profile must be an object")
+    return config
+
+
+def _file_evidence(path):
+    path = Path(path).resolve()
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return {"uri": path.as_uri(), "sha256": digest.hexdigest(), "size_bytes": path.stat().st_size}
+
+
+def _evaluate_candidates(voice):
+    """Use the common evaluator for diagnostics, never as trusted decision readback."""
+    try:
+        api = _profile().get("api")
+        if api is None:
+            return {"status": "unavailable", "reasons": ["identity_evaluator_not_configured"]}
+        if not isinstance(api, dict):
+            raise ValueError("invalid api configuration")
+        endpoint = api.get("endpoint")
+        parsed = urllib.parse.urlsplit(endpoint if isinstance(endpoint, str) else "")
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ValueError("invalid api.endpoint")
+        headers = {"Content-Type": "application/json"}
+        token_env = api.get("token_env", "DAUDIO_API_TOKEN")
+        if not isinstance(token_env, str) or not token_env:
+            raise ValueError("invalid api.token_env")
+        token = os.environ.get("DAUDIO_API_TOKEN") or os.environ.get(token_env)
+        if token:
+            headers["Authorization"] = "Bearer " + token
+        body = json.dumps({"voice_evidence": voice, "policy": None}).encode("utf-8")
+        request = urllib.request.Request(endpoint.rstrip("/") + "/v1/identity/evaluate", data=body, headers=headers, method="POST")
+        with urllib.request.urlopen(request, timeout=30) as response:
+            result = json.load(response)
+        if not isinstance(result, dict):
+            raise ValueError("invalid evaluator response")
+        return {"status": "evaluated", "result": result, "trusted_decision_readback": False}
+    except (OSError, ValueError, TypeError):
+        # A diagnostic service outage must not lose the native candidates or trigger inference again.
+        return {"status": "unavailable", "reasons": ["identity_evaluator_failed"]}
+
+
 def _read_bank(uri, scope):
     """Delegate bank validation to the user's reader; retain native legacy labels."""
     _check_bank_reference(uri, scope)
-    explicit = os.environ.get("DAYMADE_AUDIO_CONFIG")
-    root = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
-    profile = Path(explicit).expanduser() if explicit is not None else root / "daymade-audio/config.json"
     try:
-        config = json.loads(profile.read_text(encoding="utf-8"))
+        config = _profile()
         reader = config.get("identity_bank_reader") if isinstance(config, dict) else None
     except (OSError, ValueError) as error:
         raise ValueError("Configure identity_bank_reader in the audio user profile to read daudio refs") from error
@@ -180,15 +241,18 @@ def _read_bank(uri, scope):
             raise ValueError("native bank lacks centroids")
     except (ValueError, KeyError, TypeError) as error:
         raise ValueError("Identity bank reader returned no native voiceprint bank") from error
-    return native
+    return ReferenceBank(native, {"uri": uri, "scope": scope, "reader_view": view,
+                                 "reader_sha256": hashlib.sha256(result.stdout).hexdigest()})
 
 
 def load_refs(path, *, scope=None):
     if _bank_uri(path):
         return _read_bank(str(path), scope)
-    p = Path(path)
+    p = Path(path).resolve()
     if p.exists():
-        return json.loads(p.read_text(encoding="utf-8"))
+        raw = p.read_bytes()
+        return ReferenceBank(json.loads(raw), {"uri": p.as_uri(), "sha256": hashlib.sha256(raw).hexdigest(),
+                                               "size_bytes": len(raw)})
     return {"model_fingerprint": FINGERPRINT, "embedding_dim": DIM, "centroids": {}}
 
 
@@ -212,7 +276,19 @@ def cmd_enroll(model, args):
 
 
 def cmd_match(model, args):
+    sources = {"audio": _file_evidence(args.audio), "diarization": _file_evidence(args.diar)}
+    if args.csv:
+        sources["csv"] = _file_evidence(args.csv)
+        receipt = Path(args.csv).with_suffix(".receipt.json")
+        if receipt.is_file():
+            sources["receipt"] = _file_evidence(receipt)
     refs = args._resolved_refs if hasattr(args, "_resolved_refs") else load_refs(args.refs, scope=getattr(args, "refs_scope", None))
+    original_bank = getattr(refs, "evidence", {})
+    if str(original_bank.get("uri", "")).startswith("file:"):
+        sources["reference_bank"] = dict(original_bank)
+        path = urllib.request.url2pathname(urllib.parse.urlsplit(original_bank["uri"]).path)
+        if _file_evidence(path) != original_bank:
+            raise ValueError("source changed before voiceprint matching: local reference bank")
     names = list(refs["centroids"])
     if not names:
         sys.exit("Reference set is empty — enroll someone first.")
@@ -226,55 +302,59 @@ def cmd_match(model, args):
     for s in segs:
         by_spk.setdefault(s["speaker"], []).append(s)
 
-    mapping = {}
+    bank_evidence = dict(getattr(refs, "evidence", {}))
+    # Preserve the complete source view in memory; reports reference it without copying biometric vectors.
+    view = bank_evidence.pop("reader_view", {})
+    bank = view.get("bank", {}) if isinstance(view, dict) else {}
+    bank_evidence["bank_ref"] = {key: bank[key] for key in ("uri", "version", "version_uri") if key in bank}
+    bank_metadata = bank.get("metadata", {})
+    bank_evidence["source_claims"] = {key: bank_metadata[key] for key in ("identity_status", "source_ref", "model_space") if key in bank_metadata}
+    bank_evidence["reader_claims"] = {key: view[key] for key in ("voice_identity_verified", "cross_record_identity", "identity_status") if key in view}
+    bank_evidence["member_claims"] = [{key: item[key] for key in ("native_id", "status", "identity_status", "person_ref", "voiceprint_ref") if key in item}
+                                      for item in view.get("members", []) if isinstance(item, dict)]
+    candidates = []
     for spk, ss in by_spk.items():
         ss = sorted(ss, key=lambda x: -(x["end"] - x["start"]))[:30]
         embs = [embed_span(model, wav, sr, int(s["start"] * sr), int(s["end"] * sr)) for s in ss]
         embs = [e for e in embs if e is not None]
         if not embs:
+            candidates.append({"original_speaker": spk, "status": "unknown", "candidates": [],
+                               "reasons": ["no_usable_embeddings"]})
             continue
         c = centroid(embs)
         sims = ref_mat @ c
         order = np.argsort(sims)
-        best, second = float(sims[order[-1]]), (float(sims[order[-2]]) if len(order) > 1 else -1.0)
+        best, second = float(sims[order[-1]]), (float(sims[order[-2]]) if len(order) > 1 else None)
+        gap = best - second if second is not None else None
         name = names[int(order[-1])]
-        ok = best >= args.threshold and (best - second) >= args.margin
-        log(f"  {spk}: {'-> ' + name if ok else 'ANON'} (sim={best:.3f} margin={best - second:.3f})")
-        if ok:
-            mapping[spk] = name
+        ok = best >= args.threshold and (gap is None or gap >= args.margin)
+        log(f"  {spk}: candidate only (sim={best:.3f}); labels unchanged")
+        ranked = [{"native_label": names[int(i)], "score": float(sims[i])} for i in reversed(order)]
+        voice = {"model_fingerprint": refs.get("model_fingerprint"), "embedding_dim": refs.get("embedding_dim"),
+                 "acoustic_domain": getattr(args, "refs_scope", None), "candidates": ranked}
+        candidates.append({"original_speaker": spk, "status": "candidate", "candidate_label": name,
+                           "score": best, "margin": gap, "runner_up_missing": second is None,
+                           "passes_native_gates": bool(ok), "candidates": ranked,
+                           "spans": [{"start": s["start"], "end": s["end"]} for s in ss],
+                           "reasons": ["similarity_is_not_identity_confirmation", "missing_verified_identity_decision"],
+                           "common_evaluation": _evaluate_candidates(voice)})
 
-    if args.csv and mapping:
-        csv_path = Path(args.csv)
-        receipt_path = csv_path.with_name(f"{csv_path.stem}.receipt.json")
-        if receipt_path.is_file():
-            from speaker_transcribe import apply_speaker_mapping_transaction
-
-            apply_speaker_mapping_transaction(
-                csv_path.parent,
-                csv_path.stem,
-                mapping,
-                "voiceprint_id.py match",
-            )
-            log(f"Rewrote receipt-backed speaker bundle for {args.csv}")
-        else:
-            # Legacy standalone CSVs predate the final bundle receipt. Preserve
-            # that public behavior; receipt-backed bundles must use the atomic
-            # multi-artifact transaction above.
-            with csv_path.open(newline="", encoding="utf-8") as handle:
-                reader = csvmod.DictReader(handle)
-                fields = list(reader.fieldnames or [])
-                rows = list(reader)
-            if rows:
-                for row in rows:
-                    row["speaker"] = mapping.get(
-                        row["speaker"], row["speaker"]
-                    )
-                with csv_path.open("w", encoding="utf-8", newline="") as handle:
-                    writer = csvmod.DictWriter(handle, fieldnames=fields)
-                    writer.writeheader()
-                    writer.writerows(rows)
-                log(f"Rewrote legacy speaker column in {args.csv}")
-    print(json.dumps(mapping, ensure_ascii=False))
+    for source in sources.values():
+        if _file_evidence(urllib.request.url2pathname(urllib.parse.urlsplit(source["uri"]).path)) != source:
+            raise ValueError("source changed during voiceprint matching; candidates cannot be bound")
+    report = {"schema": "voiceprint-candidates/v1", "mapping": {}, "labels_changed": False,
+              "bank": bank_evidence, "sources": sources, "candidates": candidates,
+              "threshold": args.threshold, "margin": args.margin,
+              "identity_confirmation": "unverified"}
+    # Separate, exclusive artifact: existing human labels and committed bundle receipts remain byte-identical.
+    anchor = Path(args.csv or args.diar)
+    destination = anchor.with_name(anchor.stem + ".voiceprint-candidates." + uuid.uuid4().hex + ".json")
+    encoded = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
+    descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        handle.write(encoded)
+    report["candidate_artifact"] = str(destination.resolve())
+    print(json.dumps(report, ensure_ascii=False))
 
 
 def main():
@@ -293,7 +373,7 @@ def main():
     m.add_argument("--refs-scope", help="Required scope for a pinned daudio context bank; local JSON remains unchanged")
     m.add_argument("--audio", required=True)
     m.add_argument("--diar", required=True, help="diarization JSON (from diarize_speakers.py)")
-    m.add_argument("--csv", default=None, help="optional CSV whose speaker column to rewrite")
+    m.add_argument("--csv", default=None, help="optional unchanged CSV to bind the candidate report to")
     m.add_argument("--threshold", type=float, default=0.45)
     m.add_argument("--margin", type=float, default=0.05)
     args = ap.parse_args()

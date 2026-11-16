@@ -1,22 +1,24 @@
 # Voiceprint Speaker Identification
 
 Diarization (`references/speaker_diarization.md`) gives you anonymous `SPEAKER_00 /
-SPEAKER_01` labels — arbitrary and per-file. This is how you map them to **real
-names**, and unify the same person **across files**, using CAM++ voiceprints via
+SPEAKER_01` labels — arbitrary and per-file. Collect **name candidates** and
+investigate cross-file matches using CAM++ voiceprints via
 `scripts/voiceprint_id.py` (funasr auto-downloads the model from ModelScope).
 
 ## How it works
 
 CAM++ turns a speech clip into a 192-dim L2-normalized embedding. A person's
 **centroid** is the mean of several clip embeddings. To identify a speaker, take
-the cosine similarity of their centroid to each enrolled centroid and accept a name
-only when it clears BOTH gates:
+the cosine similarity of their centroid to each enrolled centroid. The native
+candidate gates remain:
 
 - `cosine >= threshold` (default 0.45), AND
 - `best - second_best >= margin` (default 0.05)
 
-The margin gate is what keeps an unknown person **anonymous** instead of being
-forced onto the nearest enrolled name. Tune both against your own audio.
+Neither gate is a calibrated probability or identity confirmation. All labels
+remain unchanged, even at cosine 1.0 or when a legacy bank claims “confirmed”.
+Missing calibration, independently bound enrollment or a verified source-bound
+identity decision must not become a certain name from context or self-introduction.
 
 ## Enroll (build the reference set)
 
@@ -30,22 +32,34 @@ uv run scripts/voiceprint_id.py enroll --refs refs.json --name Alice \
 Repeat per person into the same `refs.json`. More and longer clean spans → a
 sturdier centroid.
 
-## Match (name the speakers in a recording)
+## Match (retain candidates without changing speaker labels)
 
 ```bash
 uv run scripts/voiceprint_id.py match --refs refs.json --audio rec.wav \
     --diar rec.diarization.json --csv rec.csv
 ```
 
-For each `SPEAKER_xx` it embeds the longest turns, matches to `refs.json`, prints
-the mapping, and (with `--csv`) rewrites speaker labels. For a current
-receipt-backed bundle, this is one transaction across TXT, CSV, alignment
-mapping/turn hashes, and the final receipt; any exception restores the anonymous
-bundle. Replaying the same canonical-label mapping is byte-idempotent; trying to
-give an already committed canonical label a different name fails before any
-artifact changes. A legacy standalone CSV without a sibling receipt keeps the
-historical CSV-only behavior. Unmatched
-speakers keep their `SPEAKER_xx` label for a human to resolve.
+For each speaker, match embeds the longest turns and retains all ranked native
+labels, cosine scores, the old threshold/margin result, selected spans and refusal
+reasons. JSON stdout contains an empty `mapping`, `labels_changed=false`, candidates
+and the path of a new private `*.voiceprint-candidates.<invocation>.json` artifact.
+The artifact binds original audio/diarization and optional CSV/receipt SHA256s,
+plus the exact pinned bank reference or local bank fingerprint. It does not copy
+biometric vectors. Original bank bytes, existing human/source names, anonymous
+labels and receipt-backed TXT/CSV/alignment/receipt files remain untouched.
+
+When the existing audio profile declares `api.endpoint`, match calls daudio's
+`/v1/identity/evaluate` once per usable speaker for diagnostic reasons, with no
+calibration policy fabricated. An unconfigured/unavailable evaluator is recorded
+without retrying inference or discarding candidates. Even an evaluator response
+claiming “confirmed” is not independently verified decision readback and cannot
+enable relabeling. With no profile, local JSON matching still runs as candidates.
+
+Explicit human/source mappings continue to use the existing receipt-aware
+`apply_speaker_mapping_transaction`: TXT, CSV, alignment and final receipt commit
+together with rollback, idempotent replay and rejection of conflicting canonical
+labels. Voiceprint match does not call that writer. This entry does not yet have
+a verified identity-decision consumption path for automatic certain-name output.
 
 ## ⚠ The acoustic-domain caveat (the biggest real-world trap)
 
@@ -76,18 +90,19 @@ Resolve it in two passes:
 
 1. **Coarse pass** — match with whatever cross-domain reference you have. Even at
    ~0.48 the *relative* ranking is usually right (a person's own segments still
-   score highest against their own out-of-domain centroid), which is enough to tag
-   which `SPEAKER_xx` is them.
-2. **Rebuild in-domain** — take the segments just tagged as that person and `enroll`
+   score highest against their own out-of-domain centroid). Retain this as a
+   candidate for review, not a confirmed cross-record identity.
+2. **Rebuild in-domain** — after independently checking the selected person's
+   enrollment, take the reviewed segments and `enroll`
    a fresh centroid from THIS recording's audio. Re-match with it; the same person
-   now scores ~0.9+ (they're literally their own in-domain samples), and subsequent
-   recordings in this domain identify cleanly.
+   may score ~0.9+ on those same samples. This circular score is not independent
+   validation and cannot authorize confirming a name in later recordings.
 
 ## Other pitfalls
 
 - **Over-segmentation collapses for free.** If diarization split one person into
-  `SPEAKER_01` + `SPEAKER_05`, both match the same centroid → both get the same
-  name. Voiceprint ID is how you undo diarization's over-segmentation.
+  `SPEAKER_01` + `SPEAKER_05`, both may nominate the same centroid. Inspect the
+  candidate evidence before merging turns; matching does not rewrite either label.
 - **Don't force unknowns onto a name.** A recording will contain people not in your
   reference set (a one-off guest). The margin gate leaves them `SPEAKER_xx`; label
   those by hand rather than lowering the threshold until they snap onto a wrong name.

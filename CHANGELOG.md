@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **asr-transcribe-to-text** (`daymade-audio` v1.60.1 → v1.60.2): retain native voiceprint matches as source-bound candidates; cosine thresholds and legacy bank claims no longer rewrite speaker names. Existing human labels and committed bundles remain unchanged; the common identity evaluator provides diagnostics without being treated as verified decision readback.
+
 - **transcript-fixer** (`daymade-audio` v1.60.0 → v1.60.1): Read pinned shared dictionary, people-roster and domain-context sources through optional configured commands. Preserve native edits, exact-pair disables, risk policies and local writer IDs; pass selected source-bound context to Stage 2 and retain postcommit publication work without retrying the original correction or adding a scheduler.
 
 - **macos-load-doctor** (`daymade-macos` v1.34.4): Add scoped development-preview watcher diagnosis, exact-instance reuse and idle CPU plus page/HMR acceptance; distinguish shared-service respawn from a durable stop.
