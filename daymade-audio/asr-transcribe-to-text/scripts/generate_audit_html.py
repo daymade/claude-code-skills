@@ -24,6 +24,8 @@ import sys
 from pathlib import Path
 from datetime import datetime
 
+DEFAULT_SUBTITLE = "Qwen3-ASR + pyannote 说话人分割 · 本地审核"
+DEFAULT_TITLE = "ASR 转写审核"
 
 class Config:
     """Runtime paths and labels for the audit generator."""
@@ -2608,6 +2610,13 @@ def dispatch_registered_viewer(args):
         return False
     if entry.get('adopted') is not True:
         raise RuntimeError('Shared viewer migration is incomplete; retaining the existing reader')
+    for field in ['storage_key', 'known_speaker', 'material_final', 'material_rough']:
+        if getattr(args, field, None):
+            raise RuntimeError(f'{field} is managed by the adopted shared viewer; retaining the existing reader')
+    if getattr(args, 'subtitle', DEFAULT_SUBTITLE) != DEFAULT_SUBTITLE:
+        raise RuntimeError('Custom subtitle is not supported by the shared viewer handoff; retaining the existing reader')
+    if args.title != DEFAULT_TITLE and args.title != entry.get('title'):
+        raise RuntimeError('Set the shared viewer title in its registry before dispatch; retaining the existing reader')
     script = config.get('service_script')
     bridge = Path(script).with_name('asr_entry.py') if script else None
     if not bridge or not bridge.is_file():
@@ -2633,8 +2642,8 @@ def main():
     ap.add_argument("--audio-dir", type=Path, default=None, help="Directory containing audio files (default: PROJECT_DIR)")
     ap.add_argument("--original-dir", type=Path, default=None, help="Directory containing original media (optional)")
     ap.add_argument("--manifest", type=Path, default=None, help="Optional JSON manifest with file metadata")
-    ap.add_argument("--title", default="ASR 转写审核", help="Page title")
-    ap.add_argument("--subtitle", default="Qwen3-ASR + pyannote 说话人分割 · 本地审核", help="Page subtitle")
+    ap.add_argument("--title", default=DEFAULT_TITLE, help="Page title")
+    ap.add_argument("--subtitle", default=DEFAULT_SUBTITLE, help="Page subtitle")
     ap.add_argument("--storage-key", default=None, help="localStorage key prefix")
     ap.add_argument("--known-speaker", action="append", default=[], help='Known speaker color mapping, e.g. "张三=#0d6efd" or just "张三" (auto-color)')
     ap.add_argument("--material-final", action="append", default=[], help="Folder-name keywords treated as 成片")

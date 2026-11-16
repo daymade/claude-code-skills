@@ -16,7 +16,7 @@ class SharedViewerDispatchTests(unittest.TestCase):
         self.project=self.root/'project';self.project.mkdir()
         self.registry=self.root/'registry.json'
         self.bridge=self.root/'asr_entry.py';self.bridge.write_text('pass')
-        self.config={'service_script':str(self.root/'viewer_service.py'),'datasets':[{'type':'asr','assets_root':str(self.project),'adopted':True}]}
+        self.config={'service_script':str(self.root/'viewer_service.py'),'datasets':[{'type':'asr','assets_root':str(self.project),'adopted':True,'title':'Example'}]}
         self.write()
         self.args=argparse.Namespace(project_dir=self.project,original_dir=None,output=None,csv_dir=None,txt_dir=None,diarization_dir=None,audio_dir=None,manifest=None,title='Example')
         self.env=patch.dict('os.environ',{'MESSAGE_VIEWER_CONFIG':str(self.registry)});self.env.start()
@@ -48,5 +48,14 @@ class SharedViewerDispatchTests(unittest.TestCase):
         with patch.object(audit.subprocess,'run') as run:
             with self.assertRaises(RuntimeError):audit.dispatch_registered_viewer(self.args)
             run.assert_not_called()
+    def test_unsupported_legacy_presentation_options_are_not_silently_dropped(self):
+        for field,value in [('storage_key','old-browser-key'),('known_speaker',['A=red']),('material_final',['final']),('material_rough',['rough']),('subtitle','custom'),('title','Different')]:
+            with self.subTest(field=field):
+                before=getattr(self.args,field,None);setattr(self.args,field,value)
+                with patch.object(audit.subprocess,'run') as run:
+                    with self.assertRaises(RuntimeError):audit.dispatch_registered_viewer(self.args)
+                    run.assert_not_called()
+                if before is None:delattr(self.args,field)
+                else:setattr(self.args,field,before)
 
 if __name__=='__main__':unittest.main()

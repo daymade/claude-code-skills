@@ -939,6 +939,8 @@ or a failed handoff stop without replacing the existing reader. Unregistered
 projects retain the offline generator below. This optional handoff requires a
 separately installed shared-viewer owner: the registry's `service_script` points
 to its `viewer_service.py`, beside `asr_entry.py`.
+Legacy presentation overrides that the shared entry cannot apply stop with an
+error; configure them in the shared viewer rather than silently discarding them.
 
 ```bash
 uv run ${CLAUDE_SKILL_DIR}/scripts/generate_audit_html.py \
