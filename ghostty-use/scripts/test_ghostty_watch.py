@@ -428,8 +428,10 @@ class SnapshotTest(unittest.TestCase):
         self.state = Path(self.temp.name) / '.ghostty-session'
         self.latest = self.state / 'snapshots/latest.json'
 
-    def run_cycle(self, rows=None, unresolved=None):
-        return watch.cycle(self.state, lambda deadline: observation(rows, unresolved))
+    def run_cycle(self, rows=None, unresolved=None, capture=None):
+        stub = capture if capture is not None else {'captured': False}
+        with mock.patch('ghostty_windows.capture_window_structure', return_value=stub):
+            return watch.cycle(self.state, lambda deadline: observation(rows, unresolved))
 
     def archive_count(self):
         return len(list((self.state / 'snapshots').glob('snapshot-*.json')))
@@ -674,6 +676,23 @@ class SnapshotTest(unittest.TestCase):
                     gs.write_snapshot([session(S2)])
         self.assertEqual(self.latest.read_bytes(), before)
 
+    def test_automatic_manifest_carries_window_structure_on_publish(self):
+        block = {'captured': True, 'capture_channel': 'ghostty-applescript-dictionary',
+                 'coverage': {'tabs': 1, 'terminals': 1, 'sessions_matched': 0,
+                              'unmapped_tab_ttys': [], 'sessions_without_tab': []},
+                 'windows': [{'id': 'w1', 'name': 'W', 'tabs': []}]}
+        summary = self.run_cycle([session(S1)], capture=dict(block))
+        self.assertEqual(summary['state'], 'changed')
+        doc = json.loads(self.latest.read_text())
+        self.assertEqual(doc['window_tab_mapping'], 'known')
+        self.assertEqual(doc['windows']['captured'], True)
+
+    def test_automatic_manifest_records_capture_failure(self):
+        self.run_cycle([session(S1)])
+        doc = json.loads(self.latest.read_text())
+        self.assertFalse(doc['windows']['captured'])
+        self.assertEqual(doc['window_tab_mapping'], 'unknown')
+
     def test_automatic_full_selection_manual_active_default_unchanged(self):
         self.run_cycle([session(S1), session(S2)])
         args = argparse.Namespace(snapshot=str(self.latest), only=None, all=False, stale_too=False, dry_run=True, reconcile_seconds=0)
@@ -706,7 +725,7 @@ class SnapshotTest(unittest.TestCase):
             for index in range(count):
                 (history / f'synthetic-{index}.jsonl').write_text('{"type":"synthetic"}\n')
             history_reads.clear()
-            with mock.patch.object(builtins, 'open', guarded_builtin), mock.patch.object(io, 'open', guarded_io), mock.patch.object(sqlite3, 'connect', side_effect=AssertionError('history SQL forbidden')), mock.patch.object(gs, 'codex_liveness', side_effect=AssertionError('history read')), mock.patch.object(gs, 'claude_liveness', side_effect=AssertionError('history read')):
+            with mock.patch.object(builtins, 'open', guarded_builtin), mock.patch.object(io, 'open', guarded_io), mock.patch.object(sqlite3, 'connect', side_effect=AssertionError('history SQL forbidden')), mock.patch.object(gs, 'codex_liveness', side_effect=AssertionError('history read')), mock.patch.object(gs, 'claude_liveness', side_effect=AssertionError('history read')), mock.patch('ghostty_windows.capture_window_structure', return_value={'captured': False}):
                 cold = watch.cycle(self.state / str(count), lambda deadline: observation())
                 warm = watch.cycle(self.state / str(count), lambda deadline: observation())
                 delta = watch.cycle(self.state / str(count), lambda deadline: observation([session(S2)]))
@@ -751,6 +770,7 @@ class AutomaticNativeIdentityTest(unittest.TestCase):
                 return ''.join('p' + pid + '\nn' + cwd + '\n' for pid in command[3].split(','))
             with mock.patch.object(watch, 'run_bounded', side_effect=run), \
                     mock.patch.object(gs, 'HOME', str(home)), \
+                    mock.patch('ghostty_windows.capture_window_structure', return_value={'captured': False}), \
                     mock.patch.object(gs, '_codex_home', return_value=home / '.codex'), \
                     mock.patch.object(gs, '_proc_start', return_value=started), \
                     mock.patch.object(gs, '_stat_birth_mtime', return_value=(started + 1, started + 1)), \

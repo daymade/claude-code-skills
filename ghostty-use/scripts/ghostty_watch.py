@@ -570,9 +570,16 @@ def _cycle(state, observer):
         doc = {'kind': AUTO_KIND, 'scope': 'ghostty', 'captured_at': datetime.now(timezone.utc).isoformat(),
                'active_hours_threshold': gs.ACTIVE_HOURS, 'liveness': 'not-observed',
                'unresolved': result['unresolved'], 'sessions': sessions}
+        doc['window_tab_mapping'] = 'unknown'
         if 'terminal_inventory' in result:
             doc['terminal_inventory'] = result['terminal_inventory']
-            doc['window_tab_mapping'] = 'unknown'
+        from ghostty_windows import capture_window_structure, join_windows_to_sessions
+        capture_budget = max(0.2, min(15.0, DEADLINE_SECONDS - (time.monotonic() - started) - 0.5))
+        windows = capture_window_structure(timeout=capture_budget)
+        if windows.get('captured'):
+            windows = join_windows_to_sessions(windows, sessions)
+            doc['window_tab_mapping'] = 'known'
+        doc['windows'] = windows
         archive = latest.parent / ('snapshot-auto-' + datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f') + '-' + uuid.uuid4().hex[:8] + '.json')
         atomic_manifest(archive, doc, replace=False)
         atomic_manifest(latest, doc)

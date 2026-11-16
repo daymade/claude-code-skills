@@ -85,11 +85,16 @@ def parse_window_structure(text):
     return {"windows": [dict(w, tabs=by_window.get(w["id"], [])) for w in windows],
             "coverage": {"tabs": len(tabs), "terminals": sum(len(v) for v in terms.values())}}
 
-def capture_window_structure():
-    """Run the capture AppleScript; degrade to captured=False on any failure."""
+def capture_window_structure(timeout=15):
+    """Run the capture AppleScript; degrade to captured=False on any failure.
+
+    ``timeout`` bounds the osascript call; supervised callers pass their
+    remaining observation budget so a slow capture degrades instead of
+    exceeding the supervisor kill window.
+    """
     try:
         result = subprocess.run([OSASCRIPT, "-e", _WINDOW_STRUCTURE_APPLESCRIPT],
-                                capture_output=True, text=True, timeout=15)
+                                capture_output=True, text=True, timeout=timeout)
     except (OSError, subprocess.SubprocessError, UnicodeDecodeError) as error:
         return {"captured": False, "reason": f"osascript failed: {error}"}
     if result.returncode != 0:
