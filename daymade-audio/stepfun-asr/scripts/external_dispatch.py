@@ -114,7 +114,12 @@ def describe(producer_id, args):
         outputs.append(_artifact(args.output_json, "alignment", "diarization"))
     elif producer_id in {"voiceprint.match", "voiceprint.enroll"}:
         inputs.append(_artifact(args.audio, "recording", "source_audio"))
-        inputs.append(_artifact(args.refs, "voiceprint", "reference_vectors"))
+        if str(args.refs).startswith("daudio:"):
+            if producer_id != "voiceprint.match":
+                raise DispatchError("daudio reference banks are read-only match inputs")
+            inputs.append({"uri": args.refs, "kind": "context", "role": "reference_bank"})
+        else:
+            inputs.append(_artifact(args.refs, "voiceprint", "reference_vectors"))
         if producer_id == "voiceprint.enroll":
             outputs.append(_artifact(args.refs, "voiceprint", "raw_enrollment_vectors"))
         else:
