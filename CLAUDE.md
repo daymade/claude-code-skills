@@ -134,6 +134,8 @@ load its [Skill composition route](app-evolver/references/skill-composition.md);
 keep specialist selection and handoff boundaries in that owner.
 For publication value and delivery-scope acceptance, use its
 [publication case](app-evolver/references/implementation-and-acceptance.md#synthetic-pair-a-publications-first-useful-result).
+For integrating an approved workspace into an existing application, use its
+[application-integration case](app-evolver/references/implementation-and-acceptance.md#synthetic-pair-an-approved-workspace-inside-the-existing-application).
 Before collecting Mobbin screens or flows or selecting an adaptation, follow its
 [Mobbin evidence recipe](app-evolver/references/mobbin-evidence.md).
 For domain-role extraction or scattered policy, use its
@@ -351,6 +353,8 @@ For build reuse across source refs or a target redeployed during acceptance, loa
 [delivery verification procedure](frontend-visual-qa/references/delivery-verification.md).
 For changed asynchronous loading or saving, or nested zoomable workspaces, use its
 [journey and state matrix](frontend-visual-qa/references/journey-and-page-contracts.md#journey-and-state-matrix).
+For continuous zoom and level-of-detail changes on the same map, use its
+[continuous-map recipe](frontend-visual-qa/references/journey-and-page-contracts.md#continuous-zoomable-maps).
 For collection readiness, exact report reading or retained drafts and return state, use its
 [collection and context checks](frontend-visual-qa/references/journey-and-page-contracts.md#collection-readiness-and-retained-context).
 For save or confirmation controls replaced by a result, follow its
