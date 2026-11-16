@@ -628,10 +628,11 @@ Deploy scripts that `curl localhost` inside containers or Docker healthchecks th
 **Common symptoms**:
 - Container healthcheck shows `(unhealthy)` but the app inside is running fine
 - `wget: can't connect to remote host (127.0.0.1): Connection refused` in healthcheck logs (proxy port, not app port)
+- A host-side health RPC succeeds while a container's internal gRPC call or server self-client times out during startup.
 
-**Root cause**: Docker inherits uppercase AND lowercase proxy env vars from the host. Many tools only clear uppercase (`HTTP_PROXY=`) but forget lowercase (`http_proxy=http://127.0.0.1:1082`). The healthcheck `wget` uses lowercase.
+**Check the actual container environment before attribution.** Proxy variables can be supplied by Compose, explicit `docker run` arguments, or the Docker client's `proxies` configuration (normally `~/.docker/config.json`); the daemon's pull proxy is a separate setting. Inspect the selected container and the client configuration used to create it, reporting variable names/presence and bypass targets without printing credential-bearing proxy URLs. Many tools clear uppercase variables but leave lowercase ones; the healthcheck `wget` uses lowercase. A bypass for `localhost` alone does not cover a Compose service hostname or container IP used by an internal RPC client.
 
-**Fix in docker-compose.yml** — clear BOTH cases:
+**Fix in docker-compose.yml** — for an explicitly selected service whose calls should all be direct, clear BOTH cases:
 
 ```yaml
 environment:
@@ -640,9 +641,17 @@ environment:
   - HTTPS_PROXY=
   - http_proxy=
   - https_proxy=
+  - ALL_PROXY=
+  - all_proxy=
   - NO_PROXY=*
   - no_proxy=*
 ```
+
+Keep services that need outbound proxy access on their existing route; use exact internal bypass targets there instead of applying `NO_PROXY=*` globally. Do not remove the host/daemon proxy or restart the shared Docker daemon to repair one service.
+
+Verify from the failing consumer's network namespace, with the same endpoint, credentials and request budget. A host probe or another container's `127.0.0.1` is not that path. Where the client permits it, one bounded invocation with proxy variables cleared can distinguish a route hypothesis; preserve the original failure. Check the server's internal startup/self-client as well as the external health endpoint before declaring recovery. A changed server boot is a confounder, so report that limit rather than claiming a proxy-only A/B result. If the route change does not resolve the failure, stop attributing it to proxy configuration and inspect the native error through the application owner.
+
+On startup failure, retain the original subprocess exit/timeout and a bounded tail of only the affected service's logs in a private artifact. Empty time-filtered logs do not establish that the service emitted no error; compare clocks or use a bounded tail without a time filter. Do not enlarge timeouts or repeat the same empty observation as a repair.
 
 **Fix in deploy scripts**:
 
@@ -660,8 +669,9 @@ curl http://localhost:3001/health    # ❌ may still go through proxy
 **Verify the fix**:
 
 ```bash
-# Docker proxy check (should show proxy + no-proxy)
-docker info | grep -iE "proxy|No Proxy"
+# Daemon proxy presence only; inspect actual bypass targets privately.
+# An absent field is unknown, not proof that no proxy exists.
+docker info --format '{{json .}}' | python3 -c 'import json,sys; d=json.load(sys.stdin); print(json.dumps({k:bool(v) for k,v in d.items() if "proxy" in k.lower()}))'
 
 # Pull test
 docker pull --quiet hello-world
@@ -672,10 +682,14 @@ FROM alpine:latest
 RUN apk update && echo "BUILD OK"
 EOF
 
-# Container env check (no proxy leak)
-docker exec <container> env | grep -i proxy
-# Expected: all empty or not set
+# Selected container: output names/presence, never credential-bearing values.
+docker inspect --format '{{json .Config.Env}}' "$CONTAINER" | python3 -c 'import json,sys; rows=json.load(sys.stdin); print(json.dumps({k:bool(v) for row in rows for k,sep,v in [row.partition("=")] if k.lower() in {"http_proxy","https_proxy","all_proxy","no_proxy"}}))'
+# All-direct service: proxy values absent/empty; bypass remains explicitly set.
+# Outbound-proxy service: proxies may remain set; privately check exact bypass targets.
 ```
+
+Pull/build tests above apply only when those operations are failing; they do not
+verify an internal RPC route and are not prerequisites for its repair.
 
 ### Step 2H: SSH/Git Failing Through a TUN (`Connection closed by 198.18.x.x`)
 
