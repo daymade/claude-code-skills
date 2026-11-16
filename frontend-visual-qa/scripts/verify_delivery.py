@@ -13,7 +13,7 @@ from pathlib import Path
 import re
 import sys
 from urllib.error import HTTPError, URLError
-from urllib.parse import unquote, urlsplit
+from urllib.parse import unquote, urlsplit, urlunsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 
@@ -65,13 +65,38 @@ def equal_scalar(expected, observed):
     return type(expected) is type(observed) and expected == observed
 
 
+def request_url(value):
+    """Keep query identity; fragments are a separate browser-state check."""
+    if not isinstance(value, str) or not value or any(
+            char.isspace() or ord(char) < 32 or ord(char) > 127 for char in value):
+        raise InvalidManifest('entry URL must be an encoded HTTP(S) URL')
+    try:
+        origin(value)
+        parts = urlsplit(value)
+    except ValueError as error:
+        raise InvalidManifest('invalid entry URL') from error
+    if not parts.path.startswith('/') or '\\' in unquote(parts.path):
+        raise InvalidManifest('entry URL requires an absolute path')
+    return urlunsplit(parts._replace(fragment=''))
+
+
 def validate_manifest(value):
-    if not isinstance(value, dict) or set(value) != {'schema_version', 'artifact_ref', 'base_url', 'resources'}:
-        raise InvalidManifest('manifest requires schema_version, artifact_ref, base_url and resources')
-    if type(value['schema_version']) is not int or value['schema_version'] != 1:
+    if not isinstance(value, dict):
+        raise InvalidManifest('manifest must be an object')
+    version = value.get('schema_version')
+    fields = {'schema_version', 'artifact_ref', 'base_url', 'resources'}
+    if type(version) is not int or version not in (1, 2):
         raise InvalidManifest('unsupported manifest schema')
-    if not isinstance(value['artifact_ref'], str) or not re.fullmatch('[0-9a-f]{40}', value['artifact_ref']):
+    if version == 2:
+        fields = {'schema_version', 'artifact_sha256', 'base_url', 'resources', 'handoff'}
+    if set(value) != fields:
+        raise InvalidManifest('manifest keys do not match the selected schema')
+    if version == 1 and (not isinstance(value['artifact_ref'], str)
+                         or not re.fullmatch('[0-9a-f]{40}', value['artifact_ref'])):
         raise InvalidManifest('artifact_ref requires a full immutable commit identifier')
+    if version == 2 and (not isinstance(value['artifact_sha256'], str)
+                         or not re.fullmatch('[0-9a-f]{64}', value['artifact_sha256'])):
+        raise InvalidManifest('artifact_sha256 requires the frozen local entry digest')
     base = value['base_url']
     if not isinstance(base, str) or any(ord(char) < 32 for char in base):
         raise InvalidManifest('invalid base_url')
@@ -92,7 +117,7 @@ def validate_manifest(value):
         if not isinstance(path, str) or not path.startswith('/') or path.startswith('//'):
             raise InvalidManifest('resource path must be an origin-relative absolute path')
         parsed = urlsplit(path)
-        if parsed.scheme or parsed.netloc or parsed.query or parsed.fragment:
+        if parsed.scheme or parsed.netloc or parsed.fragment or (version == 1 and parsed.query):
             raise InvalidManifest('resource query, fragment and foreign origin are unsupported')
         decoded = unquote(path)
         if any(ord(char) < 32 for char in decoded) or '\\' in decoded or '..' in decoded.split('/'):
@@ -106,6 +131,24 @@ def validate_manifest(value):
                 raise InvalidManifest('json_fields requires nonempty literal top-level keys')
             if not all(scalar(v) for v in fields.values()):
                 raise InvalidManifest('json_fields supports finite JSON scalar values only')
+    if version == 2:
+        handoff = value['handoff']
+        if not isinstance(handoff, dict) or set(handoff) != {'current_url', 'legacy_urls'}:
+            raise InvalidManifest('handoff requires current_url and legacy_urls')
+        current = request_url(handoff['current_url'])
+        if origin(current) != origin(base):
+            raise InvalidManifest('current_url must use base_url origin')
+        legacy = handoff['legacy_urls']
+        if not isinstance(legacy, list) or len(legacy) > 16:
+            raise InvalidManifest('legacy_urls requires an explicit list of at most 16 URLs')
+        urls = [request_url(url) for url in legacy]
+        if len(set(urls + [current])) != len(urls) + 1:
+            raise InvalidManifest('entry URLs must be distinct')
+        parts = urlsplit(current)
+        path = parts.path + ('?' + parts.query if parts.query else '')
+        entries = [item for item in resources if item['path'] == path]
+        if len(entries) != 1 or entries[0].get('sha256') != value['artifact_sha256']:
+            raise InvalidManifest('current_url requires one resource with the frozen entry digest')
     return value
 
 
@@ -125,17 +168,91 @@ class SameOriginRedirect(HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
+class HandoffRouteMismatch(ValueError):
+    pass
+
+
+class HandoffRedirect(HTTPRedirectHandler):
+    """Follow declared aliases to the exact current entry, without loops."""
+    max_redirections = 17  # Sixteen declared aliases plus the current entry.
+
+    def __init__(self, initial, current, legacy):
+        self.current, self.legacy = current, set(legacy)
+        self.seen = {initial}
+        self.hops = []
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        hop = {'status': code, 'from_fingerprint': fingerprint(req.full_url),
+               'to_fingerprint': fingerprint(newurl)}
+        self.hops.append(hop)
+        try:
+            source, target = request_url(req.full_url), request_url(newurl)
+        except InvalidManifest:
+            fp.close()
+            raise HandoffRouteMismatch('invalid entry redirect') from None
+        if (source not in self.legacy or target in self.seen
+                or target not in self.legacy | {self.current}):
+            fp.close()
+            raise HandoffRouteMismatch('unexpected entry redirect')
+        self.seen.add(target)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def read_body(response, max_bytes):
+    if response.headers.get('Content-Encoding', 'identity').lower() not in ('', 'identity'):
+        raise ValueError('encoded response unsupported; use browser verification')
+    body = response.read(max_bytes + 1)
+    if len(body) > max_bytes:
+        raise ValueError('response exceeds byte allowance')
+    return body
+
+
 def fetch(opener, url, allowed, timeout, max_bytes):
     request = Request(url, method='GET', headers={'Accept-Encoding': 'identity', 'Cache-Control': 'no-cache'})
     with opener.open(request, timeout=timeout) as response:
         if origin(response.geturl()) != allowed or response.status != 200:
             raise ValueError('unexpected HTTP response')
-        if response.headers.get('Content-Encoding', 'identity').lower() not in ('', 'identity'):
-            raise ValueError('encoded response unsupported; use browser verification')
-        body = response.read(max_bytes + 1)
-        if len(body) > max_bytes:
-            raise ValueError('response exceeds byte allowance')
-        return body
+        return read_body(response, max_bytes)
+
+
+def verify_handoff(manifest, report, timeout, max_bytes):
+    handoff = manifest['handoff']
+    current = request_url(handoff['current_url'])
+    report['checked_entrypoints'] = 0
+    report['entrypoints'] = []
+    for role, supplied in [('current', handoff['current_url'])] + [
+            ('legacy', url) for url in handoff['legacy_urls']]:
+        requested = request_url(supplied)
+        redirect = HandoffRedirect(requested, current, [request_url(url)
+            for url in handoff['legacy_urls']] if role == 'legacy' else [])
+        observation = {'role': role, 'requested_fingerprint': fingerprint(supplied),
+                       'redirects': redirect.hops}
+        report['entrypoints'].append(observation)
+        ref = {'entrypoint_fingerprint': fingerprint(supplied), 'role': role}
+        try:
+            opener = build_opener(redirect)
+            request = Request(requested, method='GET', headers={
+                'Accept-Encoding': 'identity', 'Cache-Control': 'no-cache'})
+            with opener.open(request, timeout=timeout) as response:
+                if response.status != 200:
+                    raise ValueError('unexpected HTTP response')
+                final = request_url(response.geturl())
+                body = read_body(response, max_bytes)
+            report['checked_entrypoints'] += 1
+            observation['final_fingerprint'] = fingerprint(final)
+            if final != current or (role == 'legacy' and not redirect.hops):
+                report['mismatches'].append({**ref, 'kind': 'entrypoint_route'})
+            observed = hashlib.sha256(body).hexdigest()
+            observation['observed_sha256'] = observed
+            if observed != manifest['artifact_sha256']:
+                report['mismatches'].append({**ref, 'kind': 'entrypoint_bytes',
+                    'expected_sha256': manifest['artifact_sha256'], 'observed_sha256': observed})
+        except HandoffRouteMismatch:
+            report['mismatches'].append({**ref, 'kind': 'entrypoint_redirect'})
+        except (HTTPError, URLError, HTTPException, OSError, ValueError, OverflowError) as error:
+            if isinstance(error, HTTPError):
+                error.close()
+            report['unknown'].append({**ref, 'reason': type(error).__name__})
 
 
 def verify(manifest, timeout=5, max_bytes=16 * 1024 * 1024):
@@ -146,7 +263,8 @@ def verify(manifest, timeout=5, max_bytes=16 * 1024 * 1024):
     parts = urlsplit(manifest['base_url'])
     prefix = parts.scheme + '://' + parts.netloc
     opener = build_opener(SameOriginRedirect(allowed))
-    report = {'status': 'matched', 'artifact_ref': manifest['artifact_ref'],
+    identity_key = 'artifact_ref' if manifest['schema_version'] == 1 else 'artifact_sha256'
+    report = {'status': 'matched', identity_key: manifest[identity_key],
               'target_fingerprint': fingerprint(manifest['base_url']),
               'checked_resources': 0, 'checked_json_fields': 0,
               'mismatches': [], 'unknown': [],
@@ -177,6 +295,8 @@ def verify(manifest, timeout=5, max_bytes=16 * 1024 * 1024):
             if isinstance(error, HTTPError):
                 error.close()
             report['unknown'].append({'resource_fingerprint': ref, 'reason': type(error).__name__})
+    if manifest['schema_version'] == 2:
+        verify_handoff(manifest, report, timeout, max_bytes)
     if report['mismatches']:
         report['status'] = 'mismatched'
         return report, 1

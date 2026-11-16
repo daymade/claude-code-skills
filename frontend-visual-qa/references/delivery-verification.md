@@ -77,6 +77,79 @@ printing response bodies. Match fingerprints to the private manifest when
 investigating a failure. The timeout applies per blocking HTTP operation,
 not to the entire run; `--max-bytes` bounds each response body.
 
+## One current entry and retired links
+
+Use this route when a hosted report or draft has competing pickup links. Resolve
+one current entry from the user or artifact owner; do not choose by newest port,
+page title or HTTP status. Freeze the selected local entry's bytes and expected
+relative resources before checking the server. Preserve real directory names
+and the HTML's literal relative references; verify their exact resolved files.
+Keep customer files, URLs, manifests and screenshots in private task evidence.
+For a renamed historical reading copy, bind its download links to that historical
+HTML/text pair. Preserve the original bytes before repairing references; a newer
+draft that returns 200 is a different content identity, even with a similar name.
+
+Retain schema 1 for commit-bound releases. For an independently selected local
+HTML artifact without a commit, use schema 2 in the same command; never invent
+an `artifact_ref`. Set `artifact_sha256` to the selected entry file's SHA-256 and
+include that same digest in its one matching resource. This identifies the local
+entry, not its author, source revision or full dependency closure. Add hashes for
+the relevant linked files/assets from their selected local sources. Record that
+selection, exclusions and the manifest's own hash in the task evidence; do not
+derive expectations from the running endpoint.
+
+This synthetic example uses the HTML and SVG bytes in `test_verify_delivery.py`:
+
+```json
+{
+  "schema_version": 2,
+  "artifact_sha256": "553567a09235e2d447549f417920f6d2dcb24caba5304256f93d42e2e58cca68",
+  "base_url": "https://current.example.test/",
+  "resources": [
+    {"path": "/report.html", "sha256": "553567a09235e2d447549f417920f6d2dcb24caba5304256f93d42e2e58cca68"},
+    {"path": "/images/hero.svg", "sha256": "ed47ae055cff6e1a10d6246b90ec523dc78ec306a226b751ef253e16db2e5717"}
+  ],
+  "handoff": {
+    "current_url": "https://current.example.test/report.html",
+    "legacy_urls": ["https://old.example.test/report.html"]
+  }
+}
+```
+
+Supply encoded absolute URLs. Schema 2 resource paths may include a query;
+match it exactly to `current_url`. Fragments remain browser-state evidence.
+An explicit empty `legacy_urls` list declares a current-only check; missing,
+null or blank URLs are invalid. Each declared old URL must redirect through only
+declared aliases to the exact current entry. Cross-origin/port hops are allowed
+only along that explicit set. Loops, an unlisted destination, a login redirect,
+or a current entry that redirects are failures. A retired URL returning 200 at
+its own address fails the unique-entry contract even if its bytes match.
+
+The probe separately GETs and hashes the current entry and every old entry's
+final body. Read `checked_entrypoints`, each redirect observation, resource
+coverage, status and exit code together. A 200 response carrying another draft,
+an old body or a login form mismatches; unavailable resources remain unprovable.
+Default schema 1 cross-origin refusal remains unchanged.
+
+Open both the current and declared old links in the authorized real browser.
+Read the final URL, visible document/variant identity and distinctive expected
+content from the selected source, rather than trusting `<title>` alone. Exercise
+the affected selection/reading path, inspect its images at the actual reading
+size and open any screenshot used as evidence. Check image decoding and required
+relative resources separately: matching HTML alone cannot prove them. Reuse
+unchanged same-target/state evidence rather than recapturing the whole page.
+Record page availability and content identity separately from adoption,
+approval or publication; a usable draft page proves none of those decisions.
+
+Run the synthetic positive/negative transport controls without a live service:
+
+```bash
+python3 -m unittest discover -s tests -p test_verify_delivery.py
+```
+
+Treat those controls as probe calibration. Complete the real-browser gate above
+for the actual handoff; do not promote synthetic success into recipient evidence.
+
 ## Completion and recovery
 
 ### A deployment changes during acceptance
@@ -93,7 +166,8 @@ the target keeps changing, retain partial status and the precise unresolved
 identity; live values copied into a new expectation do not resolve it.
 
 The command only issues GETs, keeps ordinary proxy/TLS behavior, refuses
-cross-origin redirects, and does not deploy, restart, sign in or change accounts.
+cross-origin redirects except the schema 2 aliases explicitly bound above, and
+does not deploy, restart, sign in or change accounts.
 Encoded responses and login-dependent resources require the existing same-state
 browser or product-specific readback; an unsupported probe must not narrow the
 Skill's existing browser/native coverage.
