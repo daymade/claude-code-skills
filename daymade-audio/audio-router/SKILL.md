@@ -1,9 +1,8 @@
 ---
 name: audio-router
 description: >-
-  StepFun ASR/语音识别, StepFun TTS/配音, transcript/妙记→会议纪要,
-  merge/review minutes; generic ASR and correction stay direct.
-  daudio: 波形/吞字风险/尾衰 (waveform/cutpoint/tail).
+  StepFun ASR/TTS配音; transcript/妙记→纪要, merge/review minutes;
+  通用ASR/校字直达。daudio 波形/吞字/尾衰: waveform/cutpoint/tail.
 ---
 
 # Daymade audio router
