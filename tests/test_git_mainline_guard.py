@@ -66,6 +66,7 @@ class MainlineGuardTests(unittest.TestCase):
         shutil.copy2(GUARD_SOURCE, self.repo / "scripts/git-mainline-guard.mjs")
         shutil.copy2(CHECKER_SOURCE, self.repo / "scripts/ci/check_version_progression.py")
         shutil.copy2(REPO_ROOT / "scripts/ci/check_skill_release.py", self.repo / "scripts/ci/check_skill_release.py")
+        shutil.copy2(REPO_ROOT / "scripts/ci/git_projection.py", self.repo / "scripts/ci/git_projection.py")
         helpers = self.repo / "daymade-skill/skill-creator/scripts"
         helpers.mkdir(parents=True)
         for helper in ("release_readiness.py", "release_distribution.py", "packaging_policy.py"):

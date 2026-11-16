@@ -25,6 +25,15 @@ Bind a full immutable commit and explicit tracked files or directories; choose
 an unused task branch and a non-existent destination under a persistent parent.
 The caller still owns repository coordination, hook setup and publication.
 
+Before choosing `--path`, resolve the active hook configuration with
+`git config --show-origin --get core.hooksPath` and read the actual dispatcher
+through the repository's setup workflow. When unset, resolve this repository's
+default hook directory with `git rev-parse --git-path hooks` instead. Include its required repository-managed
+scripts and configuration as explicit `--path` selections: a complete index does
+not materialize hook dependencies. Keep external shared hooks with their existing
+owner; do not transplant runtime code from another checkout. Verify the preparation
+through the normal hooks when committing the authorized change, never by bypassing them.
+
 ```bash
 python3 "<git-safety-net-dir>/scripts/git_prepare_sparse_worktree.py" init \
   --repo "<source-repo>" --base <full-commit-id> \
@@ -52,8 +61,8 @@ Repeat `--allow-path` for each authorized file or directory. It accepts changes
 and deletions inside that literal scope and rejects changes outside it; a parent
 directory authorizes all its descendants. Omit it to require a clean baseline.
 Supply the current intended commit after committing; the check refuses a moved
-HEAD, missing/empty index or unresolved entries. JSON reports total counts and
-at most 20 records per change category. Exit 0 means verified, 1 means refused,
+HEAD, missing/empty index or unresolved entries. JSON reports counts and bounded
+records per change category. Exit 0 means verified, 1 means refused,
 and 2 means an argument, filesystem or Git failure; read the reason in either
 failure case.
 
@@ -63,6 +72,9 @@ creating a worktree, keep that exact path and failure output for inspection;
 do not rerun `read-tree` on it. Preserve any authored files and use a new named
 worktree, or enter the recovery procedure matching the observed state. Neither
 command removes a worktree, bypasses hooks or supplies deletion authority.
+If a later hook reports a missing dependency, preserve the task worktree and
+return to repository setup to extend its sparse selection with that exact tracked
+dependency. Do not rerun initialization or replace the index to address missing files.
 
 ## Shared checkout and concurrent sessions: one writer
 
@@ -699,6 +711,8 @@ including the lines you did not add:
 git add <the specific paths for THIS change>
 git diff --cached --name-status      # FULL staged set == your intent? `D` lines included
 ```
+
+Read that staged set in a separate tool call before committing.
 
 Use `--name-status` here, not `--name-only`: the status letter is what exposes a phantom `D` for a
 file you never deleted. Any entry you don't recognize — a collaborator's staged file, a deletion

@@ -52,9 +52,3 @@ python3 scripts/check_gate_plan.py \
   --table tests/fixtures/corpus/generated-payload-plan.md \
   --plan tests/fixtures/corpus/generated-payload-plan.md
 ```
-
-Expected: six payload facts examined, two `RETIRE-CANDIDATE` decisions and four
-`PRESERVE` decisions. The two candidates are an old release referenced only by an
-old plan and a CI source copy whose consumer finished; no new backup is proposed.
-The retained examples cover current use, unique state, an unresolved check and an
-explicit user instruction. The command only reads plans; it performs no cleanup.

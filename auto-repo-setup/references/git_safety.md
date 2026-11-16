@@ -33,9 +33,16 @@ commit to the authorized repository. Read that repository's setup and hook owner
 an independent clone can have different local configuration even with identical
 tracked files. Keep unrelated working-tree and index content outside the task.
 
-For an authorized sparse linked worktree, load `git-safety-net` and follow its
-[executable initialization and scope check](../../git-safety-net/references/prevention_practices.md#initialize-an-authorized-sparse-worktree).
-Use its new-worktree initializer before editing and its read-only verifier after staging.
+For an authorized sparse linked worktree, resolve `git-safety-net` through the
+current host's normal Skill discovery. If it is missing, use that host's normal
+installation or source-acquisition workflow to obtain the complete owner bundle
+from its [declared canonical source](https://github.com/daymade/claude-code-skills/blob/main/git-safety-net/SKILL.md);
+do not assume a particular installer is present. Confirm the actual bundle path,
+read its `SKILL.md` and [executable initialization and scope check](https://github.com/daymade/claude-code-skills/blob/main/git-safety-net/references/prevention_practices.md#initialize-an-authorized-sparse-worktree),
+then invoke its scripts from that verified path. If the owner cannot be obtained
+or verified, stop only this sparse operation and report the missing prerequisite;
+preserve any existing index and WIP. Do not guess a sibling relative path or
+borrow another person's checkout.
 
 - For Git LFS or custom storage, use the repository's declared setup and transfer
   adapter. A generic batch request failing does not establish that a referenced

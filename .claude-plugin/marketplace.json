@@ -117,7 +117,7 @@
       "description": "Bridge local Claude Code and Codex sessions only when the current host's native communication tools do not cover the target. Use for cross-product messages, hooks/scripts posting to sessions, fallback reply lookup and delivery verification, or diagnosing Held peer messages. Also use its coordination guidance when shared-work ownership or an inbound peer assertion needs verification. For ordinary parent/subagent, teammate, or independent-session communication, first discover and use available native tools; do not load this skill merely to send a native message. The bundled network preview for cross-machine pairing is deprecated (existing deployments only; invitations use the peer-message:v1 format). Never bypass a denied or Held message with another transport. Not for spawning agents, moving full history, or granting user approval. Triggers: 跨产品通信、原生工具未覆盖的会话、脚本回帖、peer 送达排查、共享在制品归属核实、peer-message:v1 邀请（既有部署）。",
       "source": "./peer-message",
       "strict": false,
-      "version": "1.27.1",
+      "version": "1.27.2",
       "category": "communication",
       "keywords": [
         "agent-communication",
@@ -349,7 +349,7 @@
       "description": "Apple-platform development and operations suite for macOS window capture, TCC and Keychain dialog diagnosis, Full Disk Access repair, iOS/macOS app development, disk cleanup, and launchd watchdogs.",
       "source": "./daymade-macos",
       "strict": false,
-      "version": "1.34.4",
+      "version": "1.34.5",
       "category": "suite",
       "keywords": [
         "suite",
@@ -403,7 +403,7 @@
       "description": "Daymade skills core suite. Bundles skill creation, quality review, real Claude/Codex Skill-surface governance, suite-migration reconciliation, and marketplace development tooling under one shared namespace. Skill governance separates canonical source, installed inventory, discovery policy, the fresh model-visible catalog, and router-resolved cold resources instead of optimizing cache counts; it preserves Claude's official versioned-cache lifecycle and verifies selected entries in the real host prompt. Skill verification separates risk classification from evaluation spend: bounded fixes use targeted checks, narrow behavior changes use sampled replays, and paired baselines, graders, benchmarks, or a viewer run only after explicit user authorization or a decision-bearing evidence plan plus opt-in; that authorization does not change the risk tier. Existing-skill edits retain an old-vs-new capability audit and content-bound packaging attestation so prompt compression cannot silently delete runtime contracts. When the official skill-creator plugin is also installed, skill-creator detects the coexistence and offers a consent-based, reversible SessionStart routing hook so the daymade edition wins deterministically; on machines without the official plugin nothing is ever installed.",
       "source": "./daymade-skill",
       "strict": false,
-      "version": "1.81.0",
+      "version": "1.81.1",
       "category": "suite",
       "keywords": [
         "suite",
@@ -568,7 +568,7 @@
       "description": "Audits, preserves and recovers local Git state before cleanup: unpushed or wrong-branch commits, dirty worktrees, duplicate clones, stashes, dangling commits, squash-merge uncertainty. Use when the user fears lost work, wants to recover a commit, asks if a branch is actually merged, asks whether a branch, worktree or clone is safe to delete, or wants one clean main (误删分支 / 还有没有丢的东西). Not for GitHub PR operations.",
       "source": "./git-safety-net",
       "strict": false,
-      "version": "1.28.7",
+      "version": "1.28.8",
       "category": "developer-tools",
       "keywords": [
         "git",
@@ -1008,7 +1008,7 @@
       "description": "Evidence-driven repository setup, repair, handoff, and safe Git workflow for Claude Code or Codex. Detects the actual stack from project instructions and manifests instead of assuming Python, ffmpeg, uv, or .env; preserves local work during sync/conflict handling; diagnoses repeated SessionStart output before editing config; and defaults routine startup behavior to AGENTS.md/CLAUDE.md or a normal Agent request. Lifecycle hooks are an explicit pre-prompt exception with guarded, idempotent Claude Code setup and runtime-specific Codex verification.",
       "source": "./auto-repo-setup",
       "strict": false,
-      "version": "2.2.2",
+      "version": "2.2.3",
       "category": "developer-tools",
       "keywords": [
         "repo-setup",

@@ -118,8 +118,9 @@ function preCommit() {
     fail("local main is a read-only runtime mirror; commit on a feature branch and ship through a PR.");
   }
 
+  let base;
   try {
-    gitCapture(
+    base = gitCapture(
       "rev-parse",
       "--verify",
       `refs/remotes/${canonical.name}/main^{commit}`,
@@ -127,7 +128,7 @@ function preCommit() {
   } catch {
     fail(`${canonical.name}/main is unavailable; fetch it before committing.`);
   }
-  runProgression(`refs/remotes/${canonical.name}/main`, ["--candidate-index"]);
+  runProgression(base, ["--candidate-index", "--projected-merge"]);
 }
 
 function parsePushInput(input) {
@@ -183,29 +184,32 @@ function prePush() {
   if (fetchResult.status !== 0) {
     fail("could not refresh current main; refusing to judge a push against stale authority.", 2);
   }
-  const base = `refs/remotes/${remoteName}/main`;
+  const base = gitCapture("rev-parse", "--verify", `refs/remotes/${remoteName}/main^{commit}`);
   const seen = new Set();
   for (const update of publicationUpdates) {
     if (!/^[0-9a-f]{40}$/.test(update.localSha)) {
       fail(`candidate SHA is not a full commit identity: ${update.localSha}`, 2);
     }
     const isTag = update.remoteRef.startsWith("refs/tags/");
-    const candidate = isTag
-      ? gitCapture("rev-parse", `${update.localSha}^{commit}`)
-      : update.localSha;
+    const candidate = gitCapture("rev-parse", "--verify", `${update.localSha}^{commit}`);
+    if (!isTag && candidate !== update.localSha) {
+      fail("a branch destination requires an exact commit object.", 2);
+    }
     if (isTag) {
       // Tagging an already published commit introduces no new Skill content.
       const published = run("git", ["merge-base", "--is-ancestor", candidate, base], { capture: true });
       if (published.status === 0) continue;
       if (published.status !== 1) fail("could not establish tag publication state.", 2);
-    } else {
-      runProgression(base, ["--candidate", candidate]);
     }
-    if (seen.has(candidate)) continue;
-    seen.add(candidate);
+    const modeArgs = isTag ? [] : ["--projected-merge"];
+    const key = `${candidate}:${isTag ? "snapshot" : "projected-merge"}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    runProgression(base, ["--candidate", candidate, ...modeArgs]);
     const release = run("python3", [
       path.join(REPO_ROOT, "scripts/ci/check_skill_release.py"),
       "--repo", REPO_ROOT, "--base", base, "--candidate", candidate,
+      ...modeArgs,
     ]);
     if (release.status !== 0) fail("current Skill release evidence is not ready.", 2);
   }

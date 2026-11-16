@@ -199,13 +199,16 @@ def verify(repo, candidate, paths):
     return record
 
 
-def rebind_record(repo, candidate, paths, original_candidate, base):
+def _rebind_proof(repo, candidate, paths, original_candidate, base):
+    """Recompute immutable evidence against its recorded integration frame."""
     identity(repo, candidate)
     identity(repo, original_candidate)
+    identity(repo, base)
     paths = scope(paths)
     if candidate == original_candidate:
         raise ReleaseError("rebind requires a different integrated candidate")
-    integrated_main(repo, candidate, base)
+    if git(repo, "merge-base", base, candidate) != base:
+        raise ReleaseError("recorded integration base is not included")
     if git(repo, "merge-base", original_candidate, candidate) != original_candidate:
         raise ReleaseError("original candidate must remain an ancestor; rebase or rewrite needs a new review")
     original = verify(repo, original_candidate, paths)
@@ -223,17 +226,19 @@ def rebind_record(repo, candidate, paths, original_candidate, base):
                 base=base, distribution=after, source_identity=source_identity(repo))
 
 
+def rebind_record(repo, candidate, paths, original_candidate, base):
+    identity(repo, candidate)
+    integrated_main(repo, candidate, base)
+    return _rebind_proof(repo, candidate, paths, original_candidate, base)
+
+
 def verify_rebind(repo, candidate, paths, record):
     if set(record) != {"schema", "candidate", "skill_paths", "original_candidate",
                        "original_receipt_sha256", "base", "distribution", "source_identity"}:
         raise ReleaseError("incomplete or unsupported rebind receipt")
-    # Re-evaluate current main rather than trusting the base observed at creation.
-    current_base = git(repo, "rev-parse", "refs/remotes/origin/main")
-    expected = rebind_record(repo, candidate, paths, record["original_candidate"], current_base)
-    identity(repo, record["base"])
-    if git(repo, "merge-base", record["base"], candidate) != record["base"]:
-        raise ReleaseError("recorded integration base is not included")
-    expected["base"] = record["base"]
+    # Historical proof is independent of later main advances. The publication
+    # checker separately decides admission against its fresh integration frame.
+    expected = _rebind_proof(repo, candidate, paths, record["original_candidate"], record["base"])
     if record != expected:
         raise ReleaseError("rebind evidence does not match immutable content and original review")
     return record

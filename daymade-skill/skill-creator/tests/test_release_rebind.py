@@ -302,13 +302,91 @@ class RebindTests(unittest.TestCase):
                     self.assertEqual(target.read_text(), content)
         target.write_bytes(valid)
         self.assertEqual(rr.verify(self.repo, candidate, self.paths)["candidate"], candidate)
+
+    def test_historical_proof_survives_main_advance_but_stale_creation_blocks(self):
+        candidate, base = self.integration()
+        target = rr.rebind(self.repo, candidate, self.paths, self.before, base)
+        valid = target.read_bytes()
         self.git(self.repo, "checkout", "--quiet", "new-main")
         self.write("other/next.md", "main advanced\n")
         next_main = self.commit(self.repo)
         self.git(self.repo, "update-ref", "refs/remotes/origin/main", next_main)
+        self.assertEqual(rr.verify(self.repo, candidate, self.paths)["base"], base)
+        result = subprocess.run([sys.executable, str(ROOT / "scripts/release_readiness.py"),
+                                 "verify", "--repo", str(self.repo), "--candidate", candidate,
+                                 "--skill-path", self.paths[0]], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        with self.assertRaisesRegex(rr.ReleaseError, "current fetched"):
+            rr.rebind(self.repo, candidate, self.paths, self.before, base)
         with self.assertRaisesRegex(rr.ReleaseError, "does not include"):
+            rr.rebind(self.repo, candidate, self.paths, self.before, next_main)
+        self.assertEqual(target.read_bytes(), valid)
+
+    def test_historical_reader_rejects_invalid_missing_and_nonancestor_base(self):
+        candidate, base = self.integration()
+        target = rr.rebind(self.repo, candidate, self.paths, self.before, base)
+        valid = target.read_bytes()
+        unrelated = self.git(self.repo, "commit-tree", self.git(self.repo, "rev-parse", candidate + "^{tree}"),
+                             "-m", "synthetic nonancestor base")
+        for invalid in (base[:12], "not-a-commit", "f" * 40, unrelated):
+            with self.subTest(base=invalid):
+                record = json.loads(valid)
+                record["base"] = invalid
+                content = json.dumps(record)
+                target.write_text(content)
+                with self.assertRaises(rr.ReleaseError):
+                    rr.verify(self.repo, candidate, self.paths)
+                self.assertEqual(target.read_text(), content)
+        target.write_bytes(valid)
+        self.assertEqual(rr.verify(self.repo, candidate, self.paths)["base"], base)
+
+    def test_historical_reader_recomputes_receipt_hash_distribution_and_identity(self):
+        candidate, base = self.integration()
+        target = rr.rebind(self.repo, candidate, self.paths, self.before, base)
+        valid = target.read_bytes()
+        for key in ("original_receipt_sha256", "source_identity", "distribution"):
+            with self.subTest(key=key):
+                record = json.loads(valid)
+                if key == "original_receipt_sha256":
+                    record[key] = "0" * 64
+                elif key == "source_identity":
+                    record[key]["origin"] = "https://example.invalid/forged.git"
+                else:
+                    record[key]["entries"]["suite/a/SKILL.md"][1] = "0" * 40
+                target.write_text(json.dumps(record))
+                with self.assertRaisesRegex(rr.ReleaseError, "does not match"):
+                    rr.verify(self.repo, candidate, self.paths)
+        target.write_bytes(valid)
+        self.original_receipt.write_bytes(self.original_bytes + b"\n")
+        with self.assertRaisesRegex(rr.ReleaseError, "does not match"):
+            rr.verify(self.repo, candidate, self.paths)
+        self.original_receipt.write_bytes(self.original_bytes)
+        self.git(self.repo, "remote", "set-url", "origin", "https://example.invalid/changed.git")
+        with self.assertRaisesRegex(rr.ReleaseError, "source identity"):
+            rr.verify(self.repo, candidate, self.paths)
+        self.git(self.repo, "remote", "set-url", "origin", "https://example.invalid/skills.git")
+        (self.archive / self.review_path).write_bytes(self.archive_bytes + b"dirty\n")
+        with self.assertRaisesRegex(rr.ReleaseError, "dirty"):
             rr.verify(self.repo, candidate, self.paths)
         self.assertEqual(target.read_bytes(), valid)
+
+    def test_historical_reader_rejects_changed_candidate_content(self):
+        candidate, base = self.integration()
+        target = rr.rebind(self.repo, candidate, self.paths, self.before, base)
+        valid = json.loads(target.read_text())
+        for name in ("suite/b/SKILL.md", "shared/helper.py", POLICY_PATH):
+            with self.subTest(path=name):
+                self.write(name, "changed candidate content\n")
+                changed = self.commit(self.repo)
+                forged = dict(valid, candidate=changed)
+                path = rr.receipt_path(self.repo, changed)
+                path.write_text(json.dumps(forged))
+                persisted = path.read_bytes()
+                with self.assertRaisesRegex(rr.ReleaseError, "distributed plugin"):
+                    rr.verify(self.repo, changed, self.paths)
+                self.assertEqual(path.read_bytes(), persisted)
+                self.write(name, "synthetic stable content\n")
+                self.commit(self.repo)
 
     def test_deciding_equivalence_mutation_is_detected(self):
         candidate, base = self.integration({"suite/b/SKILL.md": "changed sibling\n"})
