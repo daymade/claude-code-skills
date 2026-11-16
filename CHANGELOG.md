@@ -7,8 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **macos-load-doctor** (`daymade-macos` v1.34.2): Add scoped development-preview watcher diagnosis, exact-instance reuse and idle CPU plus page/HMR acceptance; distinguish shared-service respawn from a durable stop.
-- **prior-work-retrieval** (`daymade-claude-code` v5.1.17): Clarify valid-receipt reuse for follow-up questions and the current strong-signal rearm boundary without weakening hook or source requirements.
+- **macos-load-doctor** (`daymade-macos` v1.34.3): Add scoped development-preview watcher diagnosis, exact-instance reuse and idle CPU plus page/HMR acceptance; distinguish shared-service respawn from a durable stop.
+- **prior-work-retrieval** (`daymade-claude-code` v5.1.18): Clarify valid-receipt reuse for follow-up questions and the current strong-signal rearm boundary without weakening hook or source requirements.
+- **Claude Code profiles** (`daymade-claude-code` v5.1.16 → v5.1.17): Verify non-secret environment pins with an exact approved condition through the profile launcher, without printing environment values; distinguish tool success from process exit and bind acceptance to the tested model, permissions and consumer. Clarify absolute file-rule syntax without changing global permission defaults.
 
 - **tunnel-doctor** (v1.17.17 → v1.17.18): Bind Peer Relay acceptance to the observed business path and network topology; separate relay availability, workload throughput and LAN capacity claims while preserving existing trust and change authority.
 - **report-with-html** (v1.7.3): Keep reading disclosure rules in their canonical reference; use repository, Skill and overview-example entries only as routes instead of duplicating those rules.
