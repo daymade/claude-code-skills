@@ -744,6 +744,7 @@ Correct speech-to-text (ASR/STT) errors with a Stage 1 dictionary pre-filter, a 
 - Domain-specific dictionaries (general, embodied_ai, finance, medical)
 - SQLite-based correction repository
 - Team collaboration with import/export
+- Optional [versioned Stage 1 history](daymade-audio/transcript-fixer/references/historical_stage1.md) with shared-source refresh and guarded preservation of manual file edits
 - GLM API integration for AI corrections
 - Cost optimization through dictionary promotion
 

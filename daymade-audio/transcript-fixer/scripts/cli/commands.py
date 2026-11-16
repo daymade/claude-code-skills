@@ -1622,6 +1622,7 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
     # rationale holds per-rule.
     domains = _parse_domains(args.domain)
     corrections, correction_meta = service.get_corrections_with_metadata(domains)
+    history_dictionary_keys = set(corrections)
     # Context rules follow the same domain scoping as corrections: global
     # (domain-less) rules always load; a domain-named rule loads only when its
     # domain is active. None = no filter, the legacy union behavior.
@@ -1746,8 +1747,9 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
         )
         sys.exit(1)
     original_bytes = input_path.read_bytes()
-    with open(input_path, 'r', encoding='utf-8') as f:
-        original_text = f.read()
+    # Decode the same captured bytes; a second open could read a different file.
+    import io
+    original_text = io.TextIOWrapper(io.BytesIO(original_bytes), encoding='utf-8').read()
     if len(original_text) > runtime_config.resources.max_text_length:
         print(
             "❌ Error: input text exceeds configured max_text_length "
@@ -2099,6 +2101,22 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
     # run, mirroring the "skip writing when byte-identical" contract above), and
     # input_unchanged is the authoritative no-op signal. Scope is Stage 1 status;
     # a --stage>=2 run still reports the Stage 1 result here.
+    if args.stage == 1 and not dry_run and stage1_output_written is not None:
+        from history_projection import capture_success
+        from shared_evidence import current
+        import hashlib
+        evidence = current()
+        recipe = {"revision": hashlib.sha256(Path(__file__).with_name("commands.py").read_bytes()).hexdigest(),
+            "domains": domains, "apply_all": apply_all,
+            "apply_domain": bool(getattr(args, "apply_domain", False)),
+            "trap_froms": sorted(demote_froms), "trap_keep": sorted(keep_tokens),
+            "shared_contexts": bool(evidence and "transcript-fixer.contexts" in evidence.bindings),
+            "speaker_labels": sorted(speaker_labels or []),
+            "fallback_corrections": {key: value for key, value in corrections.items() if key not in history_dictionary_keys},
+            "fallback_metadata": {key: correction_meta[key] for key in corrections if key not in history_dictionary_keys}}
+        capture_success(args=args, original_bytes=original_bytes, original_text=original_text,
+            output_path=stage1_output_written, output_text=stage1_text, recipe=recipe,
+            evidence_refs=evidence.references(domains) if evidence and evidence.bindings else [])
     status = {
         "applied": applied_count,
         "deferred": skipped_count,
