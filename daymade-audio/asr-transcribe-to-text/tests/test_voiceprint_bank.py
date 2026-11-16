@@ -83,6 +83,30 @@ class BankTests(unittest.TestCase):
         self.assertEqual(self.target.load_refs(self.root / "absent.json")["centroids"], {})
         self.assertFalse(self.capture.exists())
 
+    def test_local_bank_native_and_fingerprint_are_the_same_byte_snapshot(self):
+        local = self.root / "local-snapshot.json"
+        raw = json.dumps(self.native).encode()
+        local.write_bytes(raw)
+        replacement = json.dumps({**self.native, "centroids": {"Synthetic replacement": [0.] * 192}}).encode()
+        read_bytes = Path.read_bytes
+        def replace_after_read(path):
+            result = read_bytes(path)
+            if path == local.resolve():
+                local.write_bytes(replacement)
+            return result
+        with patch.object(Path, "read_bytes", replace_after_read):
+            snapshot = self.target.load_refs(local)
+        self.assertEqual(snapshot, self.native)
+        self.assertEqual(snapshot.evidence["sha256"], hashlib.sha256(raw).hexdigest())
+        self.assertNotEqual(snapshot.evidence["sha256"], hashlib.sha256(local.read_bytes()).hexdigest())
+        audio = self.root / "sample.wav"; audio.write_bytes(b"synthetic audio")
+        diar = self.root / "sample.json"; diar.write_text('{"segments":[]}')
+        args = SimpleNamespace(audio=str(audio), diar=str(diar), csv=None, _resolved_refs=snapshot)
+        with patch.object(self.target, "load_audio_16k") as acquisition:
+            with self.assertRaisesRegex(ValueError, "local reference bank"):
+                self.target.cmd_match(None, args)
+            acquisition.assert_not_called()
+
     def test_bank_failures_do_not_fallback_or_create_json_named_after_uri(self):
         for uri, scope in [("daudio://context/synthetic-bank", "synthetic-domain"),
                            ("daudio://voiceprint/synthetic-bank/versions/3", "synthetic-domain"),
@@ -240,6 +264,14 @@ class BankTests(unittest.TestCase):
         self.assertTrue(all(c["status"] == "unknown" and c["reasons"] == ["no_usable_embeddings"] for c in unknown["candidates"]))
         self.assertEqual({path: path.read_bytes() for path in before}, before)
         artifacts = list(self.root.glob("*.voiceprint-candidates.*.json"))
+        def changed_bank(*unused):
+            local.write_text(json.dumps({**self.native, "new_source_claim": "changed during matching"}))
+            return [1., 0.] + [0.] * 190
+        with patch.object(self.target, "embed_span", side_effect=changed_bank), contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaisesRegex(ValueError, "source changed"):
+                self.target.cmd_match(object(), args)
+        self.assertEqual(list(self.root.glob("*.voiceprint-candidates.*.json")), artifacts)
+        local.write_bytes(before[local])
         def changed_source(*unused):
             audio.write_bytes(b"source changed during acquisition")
             return [1., 0.] + [0.] * 190

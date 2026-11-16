@@ -248,9 +248,11 @@ def _read_bank(uri, scope):
 def load_refs(path, *, scope=None):
     if _bank_uri(path):
         return _read_bank(str(path), scope)
-    p = Path(path)
+    p = Path(path).resolve()
     if p.exists():
-        return ReferenceBank(json.loads(p.read_text(encoding="utf-8")), _file_evidence(p))
+        raw = p.read_bytes()
+        return ReferenceBank(json.loads(raw), {"uri": p.as_uri(), "sha256": hashlib.sha256(raw).hexdigest(),
+                                               "size_bytes": len(raw)})
     return {"model_fingerprint": FINGERPRINT, "embedding_dim": DIM, "centroids": {}}
 
 
@@ -281,6 +283,12 @@ def cmd_match(model, args):
         if receipt.is_file():
             sources["receipt"] = _file_evidence(receipt)
     refs = args._resolved_refs if hasattr(args, "_resolved_refs") else load_refs(args.refs, scope=getattr(args, "refs_scope", None))
+    original_bank = getattr(refs, "evidence", {})
+    if str(original_bank.get("uri", "")).startswith("file:"):
+        sources["reference_bank"] = dict(original_bank)
+        path = urllib.request.url2pathname(urllib.parse.urlsplit(original_bank["uri"]).path)
+        if _file_evidence(path) != original_bank:
+            raise ValueError("source changed before voiceprint matching: local reference bank")
     names = list(refs["centroids"])
     if not names:
         sys.exit("Reference set is empty — enroll someone first.")
