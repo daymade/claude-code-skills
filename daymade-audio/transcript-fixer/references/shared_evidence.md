@@ -69,6 +69,12 @@ private and never printed into logs or the compact outbox. The Skill does not
 retry the original correction or add a scheduler. The configured importer keeps
 its existing explicitly configured dependent-refresh behavior.
 
+To retain complete future Stage 1 baselines and update their native projections
+after a shared source changes, configure the separate optional
+[historical Stage 1 binding](historical_stage1.md). This requires its SDK runtime;
+unbound standalone use still needs no SDK. It does not reconstruct old partial
+history or repeat the Native AI/Stage 2 pass.
+
 Run the isolated real-CLI cases with the declared script dependencies:
 
 ```bash

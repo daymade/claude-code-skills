@@ -471,5 +471,9 @@ def evidence_operation():
             # pending state/audit cursor supplies the next ordinary-call replay.
             log.warning("Shared publication could not finish; native state is retained")
         finally:
+            if "history_projection" in evidence.profile:
+                from history_projection import flush_native
+                from utils.config import get_config
+                flush_native(get_config().paths.config_dir)
             _current.reset(token)
             evidence.close()
