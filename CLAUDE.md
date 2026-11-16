@@ -516,6 +516,8 @@ When a local job emitted a notification but its banner or card is not visible, f
 [local notification diagnosis](daymade-macos/macos-watchdog/references/alert-discipline.md#local-notifications-are-not-visible).
 For named macOS load/runaway alerts, follow
 [macos-load-doctor's intervention and diagnosis-completion contract](daymade-macos/macos-load-doctor/SKILL.md#5-act-within-the-boundary).
+For idle Node/Vite previews, enter its
+[watcher and exact-instance procedure](daymade-macos/macos-load-doctor/references/dev-server-watchers.md).
 For memory pressure or suspected child-process leaks, enter that Skill's
 [triage](daymade-macos/macos-load-doctor/SKILL.md#triage-read-do-in-order) and
 [memory evidence](daymade-macos/macos-load-doctor/SKILL.md#memory-evidence) before attributing the cause.
@@ -635,6 +637,8 @@ Wiki Base/Sheets capture uses
 
 For an explicit prior-work, reuse or history request, follow the
 [Prior Work operating contract](daymade-claude-code/prior-work-retrieval/SKILL.md).
+For follow-ups after a completed retrieval, use its
+[receipt reuse and rearm procedure](daymade-claude-code/prior-work-retrieval/SKILL.md#3-retrieve-across-declared-carriers).
 Requests to repeat a previously successful method or reuse/improve an older rendered artifact enter its
 [candidate verification](daymade-claude-code/prior-work-retrieval/SKILL.md#4-verify-candidates-at-authority).
 
