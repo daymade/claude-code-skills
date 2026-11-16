@@ -25,9 +25,8 @@ Intermediate legs are cached under OUTPUT_DIR/_align/ and reused only when a
 sidecar proves the source-audio bytes, producer bytes, parameters, and cached
 artifact bytes still match (pass --force to redo them).
 
-Speaker labels are anonymous (SPEAKER_00...). Collect name candidates with
-voiceprint_id.py; similarity alone does not relabel these files — see
-references/voiceprint_speaker_id.md. Explicit human/source mapping remains separate.
+Speaker labels are anonymous (SPEAKER_00...). Map them to real names with
+voiceprint_id.py — references/voiceprint_speaker_id.md.
 
 Prerequisite — HuggingFace token for pyannote (gated model). The script
 implements the missing-token state machine itself (not just documented):
