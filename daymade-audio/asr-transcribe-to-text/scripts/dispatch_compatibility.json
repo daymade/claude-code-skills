@@ -1,0 +1,23 @@
+{
+  "schema": "audio-dispatch-compatibility-v1",
+  "previous_git_commit": "f9d091ea16694caa3556f7f03766f68760075387",
+  "scope": "Only reviewed dispatch and exact cache-compatibility integration; native algorithms, model selection and quality bounds unchanged.",
+  "transitions": {
+    "speaker_transcribe.py": {
+      "previous_sha256": "ea1f760ca313cef6aa181948c051480d36295f9a4b144050e46028d7440f4863",
+      "current_sha256": "d91fe2a7fc8e33d4dd7fd4fac886ccdc616dbe42eb220e5be0ad48f53ed9a8ec"
+    },
+    "transcribe_local_mlx.py": {
+      "previous_sha256": "3b2d3987bbb1dace62514b7387431c1d10780ff38b3ace17483aadbe3b9ecd1e",
+      "current_sha256": "0b63641f37ef84fbe60b85a048b6cd61e4bbb62d7843d3136cd713d2b7186045"
+    },
+    "transcribe_long_whispercpp.py": {
+      "previous_sha256": "405c02dd383d1d569c7758392d0042081952dae17a4b596094dd9a9ee8cbfd7f",
+      "current_sha256": "b025b0b55d20be952a50a3710d2e95382b7255955c0e1b626b4dfd09fb7a491d"
+    },
+    "diarize_speakers.py": {
+      "previous_sha256": "dae53935168ff3d07d0b82377849d85eda91cf82eb51d68db5382bde503f01fd",
+      "current_sha256": "245cf069b5db458362ba72c947b860e04fa291b87b4cac9aa99f61087f93f2d0"
+    }
+  }
+}

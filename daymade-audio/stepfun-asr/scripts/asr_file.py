@@ -102,6 +102,13 @@ def main() -> int:
     ap.add_argument("--json", action="store_true", help="Full JSON instead of speaker-labeled text")
     a = ap.parse_args()
 
+    from importlib.util import module_from_spec, spec_from_file_location
+    spec = spec_from_file_location("_stepfun_asr_dispatch", Path(__file__).resolve().with_name("external_dispatch.py"))
+    bridge = module_from_spec(spec)
+    spec.loader.exec_module(bridge)
+    bridge.dispatch_cli("asr.stepfun_file", __file__, a,
+                        stdout={"kind": "transcript", "role": "raw_transcript"})
+
     audio = {k: v for k, v in (("format", a.format), ("codec", a.codec), ("rate", a.rate),
                                ("bits", a.bits), ("channel", a.channel)) if v is not None}
     res = transcribe(a.url, key=_key(), audio=audio, model=a.model)

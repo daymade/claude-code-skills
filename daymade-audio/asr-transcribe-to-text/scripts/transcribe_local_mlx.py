@@ -606,6 +606,24 @@ def transcribe_chunks(
     """Transcribe and atomically commit each upstream-equivalent audio chunk."""
     output_path = Path(output_path)
     checkpoint_dir = Path(checkpoint_dir)
+    from dispatch_compat import previous_checkpoint, write_reuse_record
+    previous = previous_checkpoint(
+        checkpoint_dir.parent, Path(identity.get("source", output_path)).stem, identity,
+        lambda value: _sha256_text(json.dumps(value, ensure_ascii=False, sort_keys=True)), __file__)
+    if previous and not (checkpoint_dir / "manifest.json").exists():
+        origin, old_identity = previous
+        old_manifest = _load_or_create_manifest(origin, old_identity, len(chunks))
+        parts = [_validated_completed_part(origin.parent, entry, index)
+                 for index, entry in enumerate(old_manifest["chunks"])]
+        if all(part is not None for part in parts):
+            text = " ".join(part.strip() for part in parts if part.strip())
+            _assert_transcript_quality(text, "complete transcript")
+            if old_manifest.get("output_sha256") == _sha256_text(text):
+                if not output_path.exists() or output_path.read_text(encoding="utf-8") != text:
+                    atomic_write_text(output_path, text)
+                write_reuse_record(origin, [Path(__file__)])
+                print("Complete checkpoint reused; no audio inference", file=sys.stderr, flush=True)
+                return text, old_manifest
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = checkpoint_dir / "manifest.json"
     manifest = _load_or_create_manifest(manifest_path, identity, len(chunks))
@@ -753,6 +771,9 @@ def require_metal(mx):
 def main():
     parser = build_parser()
     args = parser.parse_args()
+    if args.inputs:
+        from external_dispatch import dispatch_cli
+        dispatch_cli("asr.mlx", __file__, args)
     validate_args(parser, args)
 
     check_platform()

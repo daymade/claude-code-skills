@@ -132,6 +132,57 @@ def main():
         return build_speech_request(request=item.get("request"),
                                     extra=http.merge_request(extra, extra=item.get("extra")), **fields)
 
+    def dispatch_generation():
+        # Also support the documented flat llmreg loader, which does not add
+        # this scripts directory to sys.path. No synthesis/library API is wrapped.
+        path = Path(__file__).resolve().with_name("external_dispatch.py")
+        spec = importlib.util.spec_from_file_location("_stepfun_cli_dispatch", path)
+        bridge = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(bridge)
+
+        def artifacts():
+            inputs, outputs = [], []
+
+            def file(path, kind, role):
+                return {"path": str(Path(path).expanduser().resolve()), "kind": kind, "role": role}
+
+            def output(path, record=None):
+                out = Path(path)
+                outputs.extend([file(out, "synthesis", "generated_audio"),
+                                file(record or str(out) + ".response.json", "context", "native_response"),
+                                file(str(out) + ".response-body", "context", "native_response_body")])
+
+            if args.text is not None:
+                inputs.append({"text": args.text, "kind": "transcript", "role": "generation_text"})
+            for value, role in ((args.request, "native_request"), (args.batch, "batch_request")):
+                if value is not None:
+                    inputs.append(file(value, "context", role))
+            for value, role in ((args.extra, "native_extra"), (args.pronunciation_map, "pronunciation_map")):
+                if isinstance(value, str) and value.startswith("@"):
+                    inputs.append(file(value[1:], "context", role))
+            if args.batch is None:
+                output(args.out, args.record)
+            else:
+                # Description must not turn a later invalid row into an eager
+                # batch failure: the producer retains its original partial-run
+                # and error ordering. Do not make network calls while describing.
+                try:
+                    for item in read_batch(args.batch):
+                        identifier = item.get("id")
+                        if (not isinstance(identifier, str) or not identifier or Path(identifier).name != identifier
+                                or identifier in (".", "..")):
+                            break
+                        body = body_for(item)
+                        extension = body.get("response_format", "mp3")
+                        if not isinstance(extension, str) or not extension.isalnum():
+                            extension = "audio"
+                        output(args.out_dir / f"{identifier}.{extension}")
+                except (OSError, ValueError, TypeError, KeyError, AttributeError):
+                    pass
+            return inputs, outputs
+
+        bridge.dispatch_cli("tts.stepfun", __file__, args, artifacts=artifacts)
+
     if args.batch is None:
         if not args.dry_run and not args.out:
             parser.error("--out is required")
@@ -140,6 +191,7 @@ def main():
         if args.dry_run:
             print(json.dumps(body, ensure_ascii=False, allow_nan=False))
             return 0
+        dispatch_generation()
         result = synthesize(api_key=load_api_key(), request=body, endpoint=args.endpoint, timeout=args.timeout)
         _save_result(result, args.out, args.record)
         if not result["ok"]:
@@ -148,6 +200,8 @@ def main():
 
     if not args.dry_run and args.out_dir is None:
         parser.error("--out-dir is required with --batch")
+    if not args.dry_run:
+        dispatch_generation()
     if args.out_dir:
         args.out_dir.mkdir(parents=True, exist_ok=True)
     key = None if args.dry_run else load_api_key()

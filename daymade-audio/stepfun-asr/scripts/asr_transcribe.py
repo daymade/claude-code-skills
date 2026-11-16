@@ -255,6 +255,13 @@ def main() -> int:
         print(f"ERROR: audio file not found: {args.audio}", file=sys.stderr)
         return 2
 
+    from importlib.util import module_from_spec, spec_from_file_location
+    spec = spec_from_file_location("_stepfun_asr_dispatch", Path(__file__).resolve().with_name("external_dispatch.py"))
+    bridge = module_from_spec(spec)
+    spec.loader.exec_module(bridge)
+    bridge.dispatch_cli("asr.stepfun_sse", __file__, args,
+                        stdout={"kind": "transcript", "role": "raw_transcript"})
+
     api_key = load_api_key(args.key_env)
     fmt = detect_format(args.audio, args.format)
     result = transcribe(
