@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Claude Code profiles** (`daymade-claude-code` v5.1.16 → v5.1.17): Verify non-secret environment pins with an exact approved condition through the profile launcher, without printing environment values; distinguish tool success from process exit and bind acceptance to the tested model, permissions and consumer. Clarify absolute file-rule syntax without changing global permission defaults.
+
 - **tunnel-doctor** (v1.17.17 → v1.17.18): Bind Peer Relay acceptance to the observed business path and network topology; separate relay availability, workload throughput and LAN capacity claims while preserving existing trust and change authority.
 - **ASR voiceprint identification** (`daymade-audio` v1.59.0 → v1.60.0): Accept pinned daudio reference banks through an explicit user-configured reader, retain exact bank inputs in dispatch, and keep local JSON enrollment, native matching thresholds and legacy candidate output unchanged. Reject missing readers, unpinned banks, scope/model failures and URI enrollment before loading a model.
 
