@@ -81,3 +81,11 @@ lock arbitrary external editors.
 No historical fragment is promoted into a full baseline. Unbound use keeps its
 original behavior. Missing parent/source evidence retains the new native result
 as pending rather than guessing another source or overwriting an old file.
+
+## Integration checks
+
+Run `python -m pytest tests/test_history_projection.py -q` from this Skill with
+its declared test dependencies and daudio>=0.1.8 installed. The cases use temporary
+configuration, SQLite and synthetic files, and deny network access. The repository's
+dependency-free unittest discovery reports an explicit skip when pytest or daudio
+is absent; that skip does not validate historical projection or runtime activation.

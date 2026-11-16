@@ -6,14 +6,24 @@ import socket
 import subprocess
 import sys
 from unittest.mock import patch
+from unittest import SkipTest
 
-import pytest
+try:
+    import pytest
+except ModuleNotFoundError as error:
+    if error.name != "pytest":
+        raise
+    raise SkipTest("Optional history integration tests require pytest and daudio>=0.1.8") from error
 
-pytest.importorskip("daudio")
+try:
+    from daudio.client import Daudio
+    from daudio.imports import SourceImporter
+except ModuleNotFoundError as error:
+    if error.name != "daudio":
+        raise
+    raise SkipTest("Optional history integration tests require daudio>=0.1.8") from error
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
-from daudio.client import Daudio
-from daudio.imports import SourceImporter
 from core.correction_repository import CorrectionRepository
 from history_projection import flush, three_way
 
