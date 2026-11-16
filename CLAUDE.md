@@ -211,6 +211,8 @@ observations separate; this file does not define another batch recipe.
 For tunnel/proxy-path failures or slow throughput, enter
 [tunnel-doctor](tunnel-doctor/SKILL.md) first. For unresolved protocol, streaming or
 throughput investigations, use [debugging-network-issues](debugging-network-issues/SKILL.md).
+For named Peer Relay trials or network speed claims, use
+[business-path acceptance](tunnel-doctor/references/tailscale_peer_relay_acceptance.md).
 For content-encoding-dependent HTTP failures, use its
 [same-byte compression comparison](debugging-network-issues/references/compressed-request-comparison.md).
 Proxy-selection and disruptive VPN changes follow tunnel-doctor's
