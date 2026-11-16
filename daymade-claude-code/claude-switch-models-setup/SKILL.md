@@ -561,23 +561,27 @@ Retire by archiving, never by deleting outright:
 
 Verify that a new non-secret env pin reaches Bash in a real headless session.
 Use the profile launcher so provider settings and credential binding follow their
-existing owner. For an authorized effort-pin check, approve only its exact command:
+existing owner. For an authorized effort-pin check whose configured expected
+value is `max`, approve only its exact condition:
 
 ```bash
 claude-profile <name> --print --verbose --output-format stream-json \
   --permission-mode manual \
-  --allowedTools 'Bash(printenv CLAUDE_CODE_EFFORT_LEVEL)' \
-  -- 'Run exactly printenv CLAUDE_CODE_EFFORT_LEVEL via Bash and report its value.'
+  --allowedTools 'Bash(test "$CLAUDE_CODE_EFFORT_LEVEL" = max)' \
+  -- 'Run exactly test "$CLAUDE_CODE_EFFORT_LEVEL" = max via Bash and report whether it matched.'
 ```
 
-Replace the command and allow rule together for another authorized non-secret
-pin. Never print credentials: verify them through a real request succeeding, as
-in setup step 4. For structured capture, use the native-command entry above.
+Read the intended non-secret value from the provider settings first; change the
+condition, allow rule and prompt together when it differs. The condition emits
+no environment values: exit 0 means a match, exit 1 a mismatch (including missing
+or empty), and any other failure remains a failed check. Never print credentials:
+verify them through a real request succeeding, as in setup step 4. For structured
+capture, use the native-command entry above.
 
 In `--print`, an action needing approval can be denied without an interactive
 prompt. An unavailable auto-mode check or a zero process exit does not establish
-that Bash ran. Inspect the actual tool result and compare its value with the
-intended pin; a missing pin, denied command or failed tool leaves verification
+that Bash ran. Inspect the actual tool result and condition exit status;
+a missing pin, denied command or failed tool leaves verification
 incomplete. Do not repair a test by granting blanket shell access or changing
 global permission defaults. Use the current documented
 [permission modes](https://code.claude.com/docs/en/permission-modes).
