@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-permissions** (`daymade-macos` v1.34.5 → v1.34.6): Signed-app replacement with an enabled but ineffective grant.
 - **peer-message** (v1.27.2 → v1.27.3): Check and declare independent work atomically across clones and Forks, return existing owner/result leads before duplicate work, and retain unknown occupancy and current-host identity boundaries.
 
 - **daymade-claude-code** (v5.1.21 → v5.1.22): Run independent Codex takeover through PeerMessage's existing work-entry check before edits, reruns or dispatch, preserving its result and exit code.
