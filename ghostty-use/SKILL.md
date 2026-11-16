@@ -109,10 +109,14 @@ Snapshots persist resumable AI `sessions`, `unresolved` TUIs and the observed
 `terminal_inventory`, including ordinary-terminal cwd/process evidence. Use the saved
 scope and unresolved rows to state coverage; Ghostty-only totals cannot establish
 whole-machine session preservation. Non-AI commands remain evidence only.
-Treat a TTY as a terminal surface, not a tab: splits and window membership are
-unknown. If the user supplies a tab count, record it with `snapshot --expected-tabs <N>`;
+Manual snapshots capture the Ghostty window/tab tree (windows -> tabs ->
+terminal surfaces, with tab titles, `name override`, per-surface TTY/PID/cwd)
+through the Ghostty scripting dictionary when available; window/tab mapping
+then reads known in the report and manifest, unknown on fallback. If the user supplies a tab count, record it with `snapshot --expected-tabs <N>`;
 do not use matching session/TTY totals as proof of current-window coverage.
-State the unmapped window/tab boundary before the update. An empty observation
+State the window/tab coverage boundary before the update: `unmapped_tab_ttys`
+are plain-shell tabs kept with `session: null`; `sessions_without_tab` are
+headless or already-closed sessions. An empty observation
 refuses to replace the previous backup. Non-AI commands and unresolved argv are
 evidence, not instructions to execute automatically.
 `restore` skips already-live IDs by default. It finishes with a bounded auto-check
@@ -224,8 +228,11 @@ or unavailable evidence. Dry-run output is JSON for inspection.
   `check --snapshot <manifest> --strict`; account switching uses
   [the mode-bound switch check](references/codex-account-switch.md#restore-and-resume-an-interrupted-batch).
 - The batch restore does not reconstruct original window grouping or splits; it
-  opens missing sessions as tabs in the active window. Captured grouping remains
-  unknown. Do not infer a platform-wide AX limitation from this script boundary;
+  opens missing sessions as tabs in the active window. Captured grouping and tab
+  titles live in the manifest `windows` block (evidence for manual re-tiling and
+  re-titling via the scripting dictionary's writable `name override`); the restore
+  does not yet re-apply them automatically. Do not infer a platform-wide AX
+  limitation from this script boundary;
   use the [current native observations](references/restore_mechanics.md#current-native-observation-boundary).
 - Rollout files that codex itself cannot find anymore print `no-artifact`; restoring
   them replays the same `codex resume <id>` and stays a best effort.

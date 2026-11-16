@@ -639,15 +639,21 @@ def snapshot_sessions(sessions):
     return sessions
 
 
-def write_snapshot(sessions, out_path=None, *, expected_tabs=None):
+def write_snapshot(sessions, out_path=None, *, expected_tabs=None, windows=None):
     from ghostty_storage import atomic_manifest, snapshot_lock
+    from ghostty_windows import capture_window_structure, join_windows_to_sessions
+    if windows is None:
+        windows = capture_window_structure()
+    if windows.get("captured"):
+        windows = join_windows_to_sessions(windows, sessions)
     doc = {"captured_at": datetime.now().isoformat(timespec="seconds"),
            "active_hours_threshold": ACTIVE_HOURS, "sessions": list(sessions),
            "unresolved": getattr(sessions, 'unresolved', []),
            "terminal_inventory": getattr(sessions, 'terminal_inventory', []),
            "scope": ("all-cli" if isinstance(sessions, SessionList) and sessions.observation.get('scope') == 'all-cli'
                      else "Ghostty process descendants" if isinstance(sessions, SessionList) else "unspecified"),
-           "window_tab_mapping": "unknown"}
+           "window_tab_mapping": ("known" if windows.get("captured") else "unknown")}
+    doc["windows"] = windows
     if expected_tabs is not None:
         doc['expected_tab_count'] = expected_tabs
     path = out_path or os.path.join(SNAP_DIR, f"snapshot-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}.json")
@@ -667,14 +673,26 @@ def cmd_snapshot(args):
             if 'pid' in entry and 'process_started_epoch' not in entry:
                 entry['process_started_epoch'] = _proc_start(entry['pid'])
     sessions = snapshot_sessions(live)
-    path = write_snapshot(sessions, args.out, expected_tabs=getattr(args, 'expected_tabs', None))
+    from ghostty_windows import capture_window_structure
+    windows = capture_window_structure()
+    path = write_snapshot(sessions, args.out, expected_tabs=getattr(args, 'expected_tabs', None), windows=windows)
     unresolved = live.unresolved if isinstance(live, SessionList) else []
     anchored = len([s for s in sessions if s.get("anchor") == "transcript"])
     act = [s for s in sessions if s["status"].startswith("active")]
     print(f"captured {len(sessions)} sessions -> {path}")
     if isinstance(live, SessionList):
-        print(f"  scope: {scope}; terminal surfaces: {len(live.terminal_inventory)}; "
-              f"other terminals: {len(live.other_terminals)}; window/tab mapping: unknown")
+        if windows.get("captured"):
+            cov = windows["coverage"]
+            print(f"  scope: {scope}; terminal surfaces: {len(live.terminal_inventory)}; "
+                  f"other terminals: {len(live.other_terminals)}; windows: {len(windows['windows'])}; "
+                  f"tabs: {cov['tabs']}; tab↔session matched: {cov['sessions_matched']}; "
+                  f"window/tab mapping: known")
+            if cov['unmapped_tab_ttys']:
+                print(f"  unmapped tab ttys (tab without an AI session, kept with session:null): {cov['unmapped_tab_ttys']}")
+        else:
+            print(f"  scope: {scope}; terminal surfaces: {len(live.terminal_inventory)}; "
+                  f"other terminals: {len(live.other_terminals)}; "
+                  f"window/tab mapping: unknown ({windows.get('reason', 'capture unavailable')})")
     if getattr(args, 'expected_tabs', None) is not None:
         print(f"  user-reported tabs: {args.expected_tabs}; not comparable to TTY/session counts")
     print(f"  active(<{ACTIVE_HOURS}h): {len(act)}   other: {len(sessions) - len(act)}   "
@@ -715,6 +733,8 @@ def load_snapshot(path, optional=False):
         if field in doc and (not isinstance(doc[field], list)
                              or any(not isinstance(row, dict) for row in doc[field])):
             raise RecoveryError("snapshot " + field + " must be a list of records")
+    if 'windows' in doc and not isinstance(doc.get('windows'), dict):
+        raise RecoveryError("snapshot windows must be an object")
     seen = set()
     for s in doc["sessions"]:
         if not isinstance(s, dict) or s.get("tool") not in ("claude", "codex") or not UUID_RE.fullmatch(str(s.get("sid", ""))):
