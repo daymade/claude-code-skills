@@ -87,7 +87,7 @@ before choosing a permission repair.
 | Dialog reappears after clicking Allow; or a LaunchAgent / `uv run` job prompts every few minutes | `references/uv-fda-trap.md` (identify the requester; follow the automated repair route before adding a grant) |
 | Need the full kTCCService catalog, schema, auth_value/auth_reason semantics, `tccutil` | `references/tcc-mechanics.md` |
 | Reading TCC.db gives "Permission denied" | `references/tcc-mechanics.md` § SIP and the FDA bootstrap |
-| A granted permission silently stopped working after an update | `references/tcc-mechanics.md` § common failure modes (toggle off/on, or `tccutil reset <Service> <bundle-id>`) |
+| A granted permission silently stopped working after an update, rebuild or signer change | [Signed-app replacement](references/tcc-mechanics.md#signed-app-replacement-with-an-enabled-but-ineffective-grant); distinguish a stale code requirement from a changed requester before repairing |
 | Grant won't stick for Automation / Apple Events | `references/tcc-mechanics.md` — BOTH controller AND target need the grant |
 
 ## Core rules (each from a real incident)
@@ -96,10 +96,10 @@ before choosing a permission repair.
   is the accessing binary's basename and it drifts with versions. Grant by the real path.
   (2026-09-19: a `uv` FDA dialog showed `python3.11`; authorizing python, changing session type,
   and pinning the version all failed because the requester was `~/.local/bin/uv`.)
-- **Grants are keyed to the exact binary path, not identity.** An unsigned executable (uv-managed
-  python, per-version CLI, node helper) is a *new* app to TCC every time its path changes. This is
-  why "worked yesterday, prompts today" after any update. Same root cause as Claude Code issues
-  #74234 / #84948 / #86706.
+- **Match the requester and its code identity.** Path-based clients can lose a grant when
+  their executable path changes. Bundle-based clients can also fail at the same path and
+  bundle ID when the replacement no longer satisfies the recorded code requirement.
+  An enabled switch alone does not establish access; use the signed-app replacement route.
 - **"0 hits / can't catch it" is an instrument problem, not a conclusion.** `fs_usage` can emit 0
   bytes on some machines; short-lived processes fall between log time windows; an empty grep file
   looks identical to a real zero. To pin *which operation* triggers a prompt, use in-process

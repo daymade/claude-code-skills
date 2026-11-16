@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **github-ops** (v1.16.6 → v1.17.0): Inspect the authenticated repository's live visibility, paginated active branch rules and legacy protection before selecting direct publication or a pull request. Keep unreadable or unclassified policy unknown and retain existing checks, approvals and bypass boundaries.
 - **transcript-fixer** (`daymade-audio` v1.62.0 → v1.62.1): Bind auto-finalized Stage 1 results to a versioned canonical-path/SHA-256 receipt so callers distinguish an already-promoted result from a no-op without reapplying corrections.
+- **macos-permissions** (`daymade-macos` v1.34.5 → v1.34.6): Signed-app replacement with an enabled but ineffective grant.
 - **peer-message** (v1.27.2 → v1.27.3): Check and declare independent work atomically across clones and Forks, return existing owner/result leads before duplicate work, and retain unknown occupancy and current-host identity boundaries.
 
 - **daymade-claude-code** (v5.1.21 → v5.1.22): Run independent Codex takeover through PeerMessage's existing work-entry check before edits, reruns or dispatch, preserving its result and exit code.
