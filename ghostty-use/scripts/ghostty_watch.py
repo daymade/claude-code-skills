@@ -500,20 +500,29 @@ def deploy_freshness(state):
         stamp = json.loads((watcher / 'install-source.json').read_text())
         source = Path(stamp['source_dir'])
         fingerprints = stamp['files']
-    except (OSError, ValueError, KeyError):
+        if not isinstance(fingerprints, dict):
+            raise TypeError('stamp files must be a mapping')
+    except (OSError, ValueError, KeyError, TypeError):
         result['deploy'] = 'no-stamp'
         return result
     result['source_dir'] = str(source)
     if not source.is_dir():
         result['deploy'] = 'source-unavailable'
         return result
-    for filename in fingerprints:
+    for filename in sorted(fingerprints):
+        safe = os.path.basename(filename) == filename and filename not in ('.', '..')
         try:
-            same = (watcher / 'scripts' / filename).read_bytes() == (source / filename).read_bytes()
+            same = safe and (watcher / 'scripts' / filename).read_bytes() == (source / filename).read_bytes()
         except OSError:
             same = False
         if not same:
-            result['differing'].append(filename)
+            result['differing'].append(filename if safe else filename + ' (unmanaged key)')
+    try:
+        present = {entry.name for entry in (watcher / 'scripts').iterdir() if entry.suffix == '.py'}
+    except OSError:
+        present = set(fingerprints)
+    for extra in sorted(present - set(fingerprints)):
+        result['differing'].append(extra + ' (untracked by stamp)')
     result['deploy'] = 'stale' if result['differing'] else 'current'
     return result
 
@@ -734,6 +743,8 @@ def install(state, every_minutes=DEFAULT_EVERY_MINUTES, apply=False):
         system_run([uv, 'venv', '--python', '3.12', str(watcher / 'venv')])
     system_run([str(interpreter), '-c', 'import fcntl, json, plistlib; print("owned runtime ready")'])
     source = Path(__file__).resolve().parent
+    if source.resolve() == (watcher / 'scripts').resolve():
+        raise ValueError('install must run from the skill source, not the installed copy; refusing self-referential stamp')
     fingerprints = {}
     for filename in ('ghostty_watch.py', 'ghostty_storage.py', 'ghostty_session.py', 'ghostty_windows.py'):
         data = (source / filename).read_bytes()

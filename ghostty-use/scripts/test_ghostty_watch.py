@@ -1016,5 +1016,59 @@ class DeployFreshnessTest(unittest.TestCase):
         self.assertEqual(watch.deploy_freshness(self.state)['deploy'], 'no-stamp')
 
 
+
+
+class DeployFreshnessHardeningTest(unittest.TestCase):
+    """Round-3 review fixes: corrupt stamps, self-install guard, key hygiene."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix='ghostty-deploy-hard-test-')
+        self.state = Path(self.temp.name) / 'state'
+        (self.state / 'watcher' / 'scripts').mkdir(parents=True)
+        self.source = Path(self.temp.name) / 'src'
+        self.source.mkdir()
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def _stamp(self, payload):
+        (self.state / 'watcher' / 'install-source.json').write_text(json.dumps(payload))
+
+    def test_type_corrupt_stamps_degrade_to_no_stamp(self):
+        for payload in ([], 'hello', None,
+                        {'source_dir': 42, 'files': {}},
+                        {'source_dir': str(self.source), 'files': 7}):
+            self._stamp(payload)
+            self.assertEqual(watch.deploy_freshness(self.state)['deploy'], 'no-stamp')
+
+    def test_unmanaged_key_fails_loud(self):
+        (self.source / 'ghostty_watch.py').write_bytes(b'x')
+        (self.state / 'watcher' / 'scripts' / 'ghostty_watch.py').write_bytes(b'x')
+        self._stamp({'source_dir': str(self.source), 'files': {'/etc/hosts': 'z'}})
+        result = watch.deploy_freshness(self.state)
+        self.assertEqual(result['deploy'], 'stale')
+        self.assertTrue(result['differing'][0].endswith('(unmanaged key)'))
+
+    def test_extra_python_file_is_stale(self):
+        self._stamp({'source_dir': str(self.source), 'files': {'ghostty_watch.py': 'z'}})
+        (self.source / 'ghostty_watch.py').write_bytes(b'x')
+        (self.state / 'watcher' / 'scripts' / 'ghostty_watch.py').write_bytes(b'x')
+        (self.state / 'watcher' / 'scripts' / 'ghostty_extra.py').write_bytes(b'new')
+        result = watch.deploy_freshness(self.state)
+        self.assertEqual(result['deploy'], 'stale')
+        self.assertIn('ghostty_extra.py (untracked by stamp)', result['differing'])
+
+    def test_install_refuses_self_referential_source(self):
+        interpreter = watch.owned_interpreter(self.state)
+        interpreter.parent.mkdir(parents=True, exist_ok=True)
+        interpreter.write_text('synthetic runtime')
+        ok = lambda command, check=True: subprocess.CompletedProcess(command, 0, stdout='ok', stderr='')
+        with mock.patch.object(watch, 'launch_target', return_value=self.state / 'plist' / 'target.plist'), \
+                mock.patch.object(watch, 'system_run', side_effect=ok), \
+                mock.patch.object(watch, '__file__', str(self.state / 'watcher' / 'scripts' / 'ghostty_watch.py')), \
+                self.assertRaisesRegex(ValueError, 'self-referential'):
+            watch.install(self.state, apply=True)
+
+
 if __name__ == '__main__':
     unittest.main()
