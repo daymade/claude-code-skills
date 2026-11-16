@@ -90,7 +90,7 @@ def capture_window_structure():
     try:
         result = subprocess.run([OSASCRIPT, "-e", _WINDOW_STRUCTURE_APPLESCRIPT],
                                 capture_output=True, text=True, timeout=15)
-    except (OSError, subprocess.TimeoutExpired) as error:
+    except (OSError, subprocess.SubprocessError, UnicodeDecodeError) as error:
         return {"captured": False, "reason": f"osascript failed: {error}"}
     if result.returncode != 0:
         lines = (result.stderr or result.stdout or "").strip().splitlines()
@@ -106,6 +106,9 @@ def capture_window_structure():
 
 def join_windows_to_sessions(windows, sessions):
     """Attach session anchors to captured terminals by TTY basename.
+
+    Mutates ``windows`` in place and is not idempotent (repeat calls grow
+    ``unmapped_tab_ttys``); call once per parsed capture.
 
     unmapped_tab_ttys: tab TTYs with no snapshot session (plain shells).
     sessions_without_tab: snapshot sessions with no tab (headless or closed).

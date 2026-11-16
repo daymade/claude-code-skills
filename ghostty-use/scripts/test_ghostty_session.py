@@ -552,7 +552,8 @@ class RecoveryWorkflowTest(unittest.TestCase):
         inventory = [dict(tty='ttys001', kind='ai'), dict(tty='ttys003', kind='ai'), shell]
         live = gs.SessionList([entry()], unresolved=[unknown],
                               terminal_inventory=inventory, other_terminals=[shell])
-        path = gs.write_snapshot(live, expected_tabs=2)
+        with mock.patch('ghostty_windows.capture_window_structure', return_value={'captured': False}):
+            path = gs.write_snapshot(live, expected_tabs=2)
         raw = json.loads(Path(path).read_text())
         self.assertNotIn('terminal_surface_count', raw)
         self.assertNotIn('other_terminals', raw)
@@ -1022,7 +1023,9 @@ class ListSessionsAnchorTest(unittest.TestCase):
                                                "cmd": "claude --dangerously-skip-permissions"}])
         output = io.StringIO()
         with mock.patch.object(gs, "list_sessions", return_value=live), \
-             mock.patch.object(gs, "write_snapshot", return_value="x.json"), redirect_stdout(output):
+             mock.patch.object(gs, "write_snapshot", return_value="x.json"), \
+             mock.patch('ghostty_windows.capture_window_structure', return_value={'captured': False}), \
+             redirect_stdout(output):
             self.assertEqual(gs.cmd_snapshot(argparse.Namespace(out=None)), 0)
         self.assertIn("unresolved live TUIs", output.getvalue())
 

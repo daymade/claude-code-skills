@@ -668,7 +668,8 @@ class SnapshotTest(unittest.TestCase):
         with storage.snapshot_lock(self.state):
             with self.assertRaisesRegex(ValueError, 'another writer'):
                 self.run_cycle()
-            with mock.patch.object(gs, 'SNAP_DIR', str(self.latest.parent)):
+            with mock.patch.object(gs, 'SNAP_DIR', str(self.latest.parent)), \
+                 mock.patch('ghostty_windows.capture_window_structure', return_value={'captured': False}):
                 with self.assertRaisesRegex(ValueError, 'another writer'):
                     gs.write_snapshot([session(S2)])
         self.assertEqual(self.latest.read_bytes(), before)

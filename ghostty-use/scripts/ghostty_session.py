@@ -838,7 +838,7 @@ def cmd_reconstruct(args):
     # Preserve capture evidence; indexed reconstruction does not establish new
     # window membership or recover the unresolved/non-AI records by itself.
     for field in ('unresolved', 'terminal_inventory', 'scope',
-                  'window_tab_mapping', 'expected_tab_count'):
+                  'window_tab_mapping', 'expected_tab_count', 'windows'):
         if doc and field in doc:
             rebuilt[field] = doc[field]
     if doc and 'terminal_inventory' not in doc and 'other_terminals' in doc:
