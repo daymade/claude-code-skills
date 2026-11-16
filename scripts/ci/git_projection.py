@@ -72,16 +72,38 @@ def file_snapshot(path):
 
 @contextmanager
 def index_candidate(repo):
-    """Carry the effective index on HEAD without touching its cache-tree extension."""
+    """Carry the effective index on the pending commit's real parents."""
     head = commit_id(repo, "HEAD")
     head_ref = git(repo, "symbolic-ref", "--quiet", "HEAD")
     index = Path(git(repo, "rev-parse", "--path-format=absolute", "--git-path", "index"))
     observed = {index: file_snapshot(index)}
-
+    merge_head = Path(git(repo, "rev-parse", "--path-format=absolute", "--git-path", "MERGE_HEAD"))
+    try:
+        merge_observed = file_snapshot(merge_head)
+    except FileNotFoundError:
+        merge_observed = None
+    merge_parents = []
+    if merge_observed is not None:
+        values = merge_observed[2].decode("ascii").splitlines()
+        if len(values) != 1:
+            raise ProjectionError("MERGE_HEAD must contain one full commit identity; other merge shapes are unsupported")
+        for value in values:
+            if not re.fullmatch(r"[0-9a-f]{40}", value) or commit_id(repo, value) != value:
+                raise ProjectionError("MERGE_HEAD contains an invalid commit identity")
+            if value == head or value in merge_parents:
+                raise ProjectionError("MERGE_HEAD contains a duplicate commit parent")
+            merge_parents.append(value)
 
     def unchanged():
         if commit_id(repo, "HEAD") != head or git(repo, "symbolic-ref", "--quiet", "HEAD") != head_ref:
             raise ProjectionError("HEAD changed during index projection; no state was restored")
+        try:
+            current_merge = file_snapshot(merge_head)
+        except FileNotFoundError:
+            current_merge = None
+        if ((current_merge is None) != (merge_observed is None)
+                or (current_merge is not None and current_merge[:2] != merge_observed[:2])):
+            raise ProjectionError("MERGE_HEAD changed during index projection; no state was restored")
         for path, value in observed.items():
             if file_snapshot(path)[:2] != value[:2]:
                 raise ProjectionError("effective index changed during projection; no state was restored")
@@ -127,9 +149,9 @@ def index_candidate(repo):
                 (control / path.name).write_bytes(value[2])
             unchanged()
             tree = git(repo, "-c", "core.splitIndex=false", "write-tree", env=isolated)
-        if tree == git(repo, "rev-parse", head + "^{tree}"):
+        if not merge_parents and tree == git(repo, "rev-parse", head + "^{tree}"):
             raise ProjectionError("candidate index has no staged changes")
-        candidate = synthetic_commit(repo, tree, (head,))
+        candidate = synthetic_commit(repo, tree, (head, *merge_parents))
         try:
             yield candidate
         finally:

@@ -3233,43 +3233,34 @@ this list and describe defects you reach by asking a different question):
   caught only by the release review — this failure mode recurs even inside
   the document warning about it.
 
-## 62. Fleet-wide hook timeouts were an overloaded machine, not broken hooks — check load and the process census before touching any hook
+## 62. Check machine load before attributing fleet-wide hook timeouts
 
 - **Symptom:** every hook on the machine starts timing out at once —
   PreToolUse guards blowing their 60-second budgets, a SessionStart
   health check exceeding its deadline, a third-party hook reporting
   "protection check deadline exceeded". Each hook passes its own unit
   tests, and times out again on the very next call.
-- **Cause and fix:** the hooks are victims, not suspects. One parent
-  process — in the real case a per-thread MCP server spawner that never
-  reaped its children — had accumulated ~300 child processes (141 copies
-  of one stdio↔SSE proxy, 123 copies of a desktop-automation app) and
-  pushed the load average to 243 on a machine whose comfortable ceiling
-  is ~20. Every hook process simply could not get CPU before its
-  deadline. The one-minute diagnostic order: `sysctl -n vm.loadavg`
-  first — a fleet-wide symptom with load in the hundreds is an
-  environment problem, full stop; then `ps -Ao pid,ppid,command`
-  aggregated by PPID (e.g. `ps -Ao ppid= | sort | uniq -c | sort -rn |
-  head`) — one parent holding hundreds of children IS the leak, and no
-  automatic mechanism ever terminates a live process somebody else
-  spawned: launchd only reaps zombies, it never kills live adoptees, so
-  unless the spawner or the user kills them, they accumulate for days. The fix lives
-  at the daemon/config level, never inside any hook — and on a shared
-  machine, process-level remediation belongs to the user, not to an
-  agent: report the diagnosis, do not kill. (A standing rule born from
-  this incident: agents must not terminate other sessions' processes,
-  including via a "daemon restart" whose documented side effect is
-  killing its children.)
-- **Real case (2026-10-07):** codex app-server 0.160.1 spawned the full
-  enabled-MCP set for every conversation thread and never reaped them
-  when threads ended; 304 accumulated children — MCP proxies plus 123
-  GUI app copies, the latter also hammering WindowServer — produced
-  load average 243 and simultaneous "hook timeout" reports from three
-  independent agent fleets. A daemon restart brought load back to ~22
-  within minutes; every "failing" hook passed, untouched. The
-  hook-fleet lesson: a health check that only inspects hooks will
-  report this as "69 hooks unverified" and send you reading hook
-  source — the load check has to come before the hook check.
+- **Diagnostic order:** check `sysctl -n vm.loadavg` against the core count,
+  then parent/child counts and interval CPU through
+  [macos-load-doctor](https://github.com/daymade/claude-code-skills/blob/main/daymade-macos/macos-load-doctor/SKILL.md)
+  when available; otherwise retain the load, process census and interval timing
+  as observations without inferring a lifecycle defect.
+  Hundreds of retained children establish fan-out, not a leak. A leak needs
+  evidence that children outlive their intended work or grow after comparable
+  work completes. Preserve stateful REPL/browser heaps while establishing that
+  lifecycle. Do not terminate another session's processes without authorization;
+  a daemon restart can terminate other sessions just as a direct kill can.
+- **Historical evidence (2026-10-07):** the census recorded 304 children under
+  an app-server and load near 243; an owner-authorized restart was followed by
+  load near 22 and passing hooks. That supports mitigation, not proof of an
+  ended-thread leak or proof that every active task survived. The bounded
+  [historical case](https://github.com/daymade/claude-code-skills/blob/main/daymade-macos/macos-load-doctor/references/incident-playbook.md#case-1--historical-mcp-fan-out-with-unverified-lifecycle-attribution)
+  separates the observations and unknowns.
+- **Do not turn triage order into an exclusion rule.** Machine overload and
+  redundant hook work can coexist. Once bounded host timing or a same-input
+  reproduction identifies a handler defect, fix it without claiming it explains
+  all machine load. Use the [effect and cost audit](effect-and-cost-audit.md)
+  to separate handler latency, CPU, wrappers, business work and missing coverage.
 
 ## 63. A working main path proves nothing about the suppression/degraded path — calibrate each path bidirectionally, on its own corpus
 

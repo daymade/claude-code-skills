@@ -139,6 +139,63 @@ class ProjectionTests(unittest.TestCase):
                 new_head = self.commit("concurrent writer")
         self.assertEqual(run(self.repo, "git", "rev-parse", "HEAD").stdout.strip(), new_head)
 
+    def resolved_merge(self):
+        run(self.repo, "git", "switch", "-qc", "feature")
+        (self.repo / "CHANGELOG.md").write_text("- audio v1.0.0 -> v1.1.0: source release.\n")
+        head = self.release()
+        run(self.repo, "git", "switch", "-qc", "advanced", self.base)
+        self.write_manifest(manifest(docs="2.1.0"))
+        (self.repo / "CHANGELOG.md").write_text("- docs v2.0.0 -> v2.1.0: main release.\n")
+        base = self.commit("advanced main")
+        run(self.repo, "git", "switch", "feature")
+        merge = run(self.repo, "git", "merge", "--no-commit", "--no-ff", base, check=False)
+        self.assertNotEqual(merge.returncode, 0, "fixture must have a real merge conflict")
+        self.write_manifest(manifest(audio="1.1.0", docs="2.1.0"))
+        (self.repo / "CHANGELOG.md").write_text(
+            "- docs v2.0.0 -> v2.1.0: main release.\n"
+            "- audio v1.0.0 -> v1.1.0: source release.\n"
+        )
+        run(self.repo, "git", "add", ".claude-plugin/marketplace.json", "CHANGELOG.md")
+        return head, base
+
+    def test_resolved_merge_index_carries_both_real_commit_parents(self):
+        head, base = self.resolved_merge()
+        index = Path(run(self.repo, "git", "rev-parse", "--path-format=absolute", "--git-path", "index").stdout.strip())
+        merge_head = Path(run(self.repo, "git", "rev-parse", "--path-format=absolute", "--git-path", "MERGE_HEAD").stdout.strip())
+        before = (index.read_bytes(), index.stat().st_mtime_ns, merge_head.read_bytes(), merge_head.stat().st_mtime_ns)
+        result = self.check(base, index=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        with projection.index_candidate(self.repo) as carried:
+            parents = run(self.repo, "git", "rev-list", "--parents", "-n", "1", carried).stdout.split()[1:]
+            self.assertEqual(parents, [head, base])
+        self.assertEqual((index.read_bytes(), index.stat().st_mtime_ns, merge_head.read_bytes(), merge_head.stat().st_mtime_ns), before)
+        self.assertEqual(run(self.repo, "git", "rev-parse", "HEAD").stdout.strip(), head)
+
+    def test_merge_head_invalid_or_concurrently_changed_is_never_restored(self):
+        _, base = self.resolved_merge()
+        merge_head = Path(run(self.repo, "git", "rev-parse", "--path-format=absolute", "--git-path", "MERGE_HEAD").stdout.strip())
+        valid = merge_head.read_bytes()
+        for data in [b"", b"\n", b"HEAD\n", b"f" * 40 + b"\n", b"0" * 40 + b"\n"]:
+            with self.subTest(data=data):
+                merge_head.write_bytes(data)
+                result = self.check(base, index=True)
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(merge_head.read_bytes(), data)
+        merge_head.write_bytes(valid)
+        with self.assertRaisesRegex(projection.ProjectionError, "MERGE_HEAD changed"):
+            with projection.index_candidate(self.repo):
+                merge_head.write_text(self.base + "\n")
+        self.assertEqual(merge_head.read_text(), self.base + "\n")
+        merge_head.write_bytes(valid)
+        with self.assertRaisesRegex(projection.ProjectionError, "MERGE_HEAD changed"):
+            with projection.index_candidate(self.repo):
+                merge_head.unlink()
+        self.assertFalse(merge_head.exists())
+        with self.assertRaisesRegex(projection.ProjectionError, "MERGE_HEAD changed"):
+            with projection.index_candidate(self.repo):
+                merge_head.write_bytes(valid)
+        self.assertEqual(merge_head.read_bytes(), valid)
+
 
 if __name__ == "__main__":
     unittest.main()
