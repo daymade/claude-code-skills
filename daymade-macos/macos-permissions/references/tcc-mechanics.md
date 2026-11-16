@@ -177,8 +177,8 @@ the switch alone or apply it to a request that now succeeds.
    remove only that stale row and add the exact installed `.app` again. On a
    current system, inspect the actual pane and controls rather than relying on
    an older Accessibility label. Apple's [Accessibility permission guide](https://support.apple.com/guide/mac-help/allow-accessibility-apps-to-access-your-mac-mh43185/mac)
-   documents adding the selected app. An off/on toggle may retain the old
-   requirement; stop repeating it when evidence remains unchanged. Read back the
+   documents adding the selected app. If a toggle leaves the operation failing
+   and the old requirement unchanged, stop repeating it. Read back the
    removal/re-addition independently: the visible list can itself be stale.
 4. If the host refuses control of an authentication service, leave only that
    protected action to the user through the trusted system prompt; never request
@@ -192,7 +192,7 @@ the switch alone or apply it to a request that now succeeds.
 
 Observed boundary: replacing a Developer ID build with an ad hoc local build at
 the same bundle ID/path left an Accessibility switch on and an old signer-bound
-`csreq` in place. Off/on retained it; removing and adding the installed bundle
+`csreq` in place. Removing and adding the installed bundle
 restored actual window control. This does not imply every update needs reauthorization.
 
 ## Resetting grants — `tccutil`
