@@ -11,6 +11,7 @@ All database operations are atomic and properly handle errors.
 from __future__ import annotations
 
 import sqlite3
+import json
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
@@ -135,6 +136,7 @@ class CorrectionRepository:
         db_path: Path,
         max_connections: int = 5,
         initialize_schema: bool = True,
+        readonly: bool = False,
     ):
         """
         Initialize repository with database path.
@@ -160,10 +162,11 @@ class CorrectionRepository:
         # NEW: Proper connection pool with thread safety enforced
         self._pool = ConnectionPool(
             db_path=self.db_path,
-            max_connections=max_connections
+            max_connections=max_connections,
+            readonly=readonly,
         )
 
-        if initialize_schema:
+        if initialize_schema and not readonly:
             self._ensure_database_exists()
 
         logger.info(f"Repository initialized with {max_connections} max connections")
@@ -510,6 +513,58 @@ class CorrectionRepository:
                     """)
 
             return [self._row_to_correction(row) for row in cursor.fetchall()]
+
+    def get_context_rule_rows(self, domains=None, active_only=True):
+        """Original context-rule selection, including disabled rows for overlays."""
+        with self._pool.get_connection() as conn:
+            columns = {r[1] for r in conn.execute("PRAGMA table_info(context_rules)")}
+            clauses, values = [], []
+            if active_only:
+                clauses.append("is_active = 1")
+            if "domain" in columns and domains:
+                clauses.append("(domain IS NULL OR domain IN (" + ",".join("?" for _ in domains) + "))")
+                values.extend(domains)
+            where = " WHERE " + " AND ".join(clauses) if clauses else ""
+            rows = [dict(row) for row in conn.execute(
+                "SELECT * FROM context_rules" + where + " ORDER BY priority DESC", values)]
+            for row in rows:
+                row.setdefault("domain", None)  # Legacy schemas carry only global rules.
+            return rows
+
+    def get_shared_vetoes(self):
+        """Read exact-pair shared-source feedback from the existing native audit."""
+        with self._pool.get_connection() as conn:
+            rows = conn.execute("SELECT details FROM audit_log WHERE action='suppress_shared_pair'").fetchall()
+        values = []
+        for row in rows:
+            detail = json.loads(row[0])
+            if not all(isinstance(detail.get(k), str) and detail[k] for k in ("from_text", "to_text", "domain", "source_ref")):
+                raise ValidationError("shared feedback audit identity is incomplete")
+            values.append(detail)
+        return values
+
+    def suppress_shared_pair(self, correction, source_ref, reported_by):
+        """Record a native exact-pair veto without treating a foreign ID as local."""
+        with self._transaction() as conn:
+            existing = conn.execute(
+                "SELECT to_text,is_active FROM corrections WHERE from_text=? AND domain=?",
+                (correction.from_text, correction.domain)).fetchone()
+            if existing is not None and existing[1]:
+                return False  # Active native decisions win and use the native path.
+            details = json.dumps({"source_ref": source_ref,
+                "source_native_id": getattr(correction, "source_native_id", None),
+                "from_text": correction.from_text, "to_text": correction.to_text, "domain": correction.domain})
+            native_id = None
+            if existing is None:
+                cursor = conn.execute(
+                    "INSERT INTO corrections(from_text,to_text,domain,source,confidence,added_by,notes,is_active) "
+                    "VALUES(?,?,?,'manual',0.1,?,?,0)",
+                    (correction.from_text, correction.to_text, correction.domain, reported_by,
+                     "Shared-source false positive: " + source_ref))
+                native_id = cursor.lastrowid
+            self._audit_log(conn, action="suppress_shared_pair", entity_type="correction",
+                entity_id=native_id, user=reported_by, details=details)
+        return True
 
     def get_corrections_dict(self, domain: str = "general") -> Dict[str, str]:
         """Get corrections as a simple dictionary for processing."""

@@ -80,7 +80,7 @@ from cli import (
 )
 
 
-def main() -> None:
+def _main() -> None:
     """Main entry point - parse arguments and dispatch to commands"""
     parser = create_argument_parser()
     args = parser.parse_args()
@@ -270,6 +270,12 @@ def main() -> None:
             cmd_run_correction(args)
     else:
         parser.print_help()
+
+
+def main() -> None:
+    from shared_evidence import evidence_operation
+    with evidence_operation():
+        _main()
 
 
 if __name__ == "__main__":

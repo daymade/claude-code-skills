@@ -89,7 +89,8 @@ class ConnectionPool:
         db_path: Path,
         max_connections: int = MAX_CONNECTIONS,
         connection_timeout: float = CONNECTION_TIMEOUT,
-        pool_timeout: float = POOL_TIMEOUT
+        pool_timeout: float = POOL_TIMEOUT,
+        readonly: bool = False,
     ):
         """
         Initialize connection pool.
@@ -112,6 +113,7 @@ class ConnectionPool:
         if pool_timeout < 0:
             raise ValueError(f"pool_timeout must be >= 0, got {pool_timeout}")
 
+        self.readonly = readonly
         self.db_path = Path(db_path)
         if not self.db_path.parent.exists():
             raise FileNotFoundError(f"Database directory doesn't exist: {self.db_path.parent}")
@@ -203,7 +205,8 @@ class ConnectionPool:
         """
         try:
             conn = sqlite3.connect(
-                str(self.db_path),
+                (self.db_path.resolve().as_uri() + "?mode=ro&immutable=1") if self.readonly else str(self.db_path),
+                uri=self.readonly,
                 check_same_thread=False,  # Pool enforces one-thread-at-a-time via Queue
                 timeout=self.connection_timeout,
                 isolation_level='DEFERRED'  # Explicit transaction control
@@ -211,7 +214,11 @@ class ConnectionPool:
 
             # Enable Write-Ahead Logging for better concurrency
             # WAL allows multiple readers + one writer simultaneously
-            conn.execute('PRAGMA journal_mode=WAL')
+            if self.readonly:
+                conn.execute('PRAGMA query_only=ON')
+                conn.execute('PRAGMA trusted_schema=OFF')
+            else:
+                conn.execute('PRAGMA journal_mode=WAL')
 
             # Set busy timeout (how long to wait on locks)
             conn.execute(f'PRAGMA busy_timeout={BUSY_TIMEOUT}')

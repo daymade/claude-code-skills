@@ -136,8 +136,31 @@ def _get_service() -> CorrectionService:
     """Get configured CorrectionService instance."""
     # P1-5 FIX: Use centralized configuration
     config = get_config()
+    from shared_evidence import current
+    evidence = current()
     repository = CorrectionRepository(config.database.path)
-    return CorrectionService(repository)
+    return CorrectionService(repository, read_repository=evidence.attach(repository) if evidence else None)
+
+
+def _people_roster_path():
+    from shared_evidence import current
+    native = os.getenv("TRANSCRIPT_FIXER_PEOPLE_ROSTER") or get_config().paths.people_roster_path
+    evidence = current()
+    return evidence.roster_path(native) if evidence else native
+
+
+def _load_people_roster(path):
+    from shared_evidence import current
+    from core.people_roster import load_people_roster
+    evidence = current()
+    return evidence.people(path) if evidence else load_people_roster(path)
+
+
+def _load_roster_names(path):
+    from shared_evidence import current
+    from core.people_roster import load_roster_names
+    evidence = current()
+    return evidence.people(path, names=True) if evidence else load_roster_names(path)
 
 
 def _parse_domains(raw: str | None) -> list[str] | None:
@@ -164,17 +187,26 @@ def _load_trap_demotion_sets(domains: list[str] | None) -> tuple[frozenset, froz
     banned: set = set()
     keep: set = set()
     from utils.config import get_config
-    ctx_home = Path(get_config().paths.config_dir) / "contexts"
-    for domain in domains:
-        context_path = ctx_home / f"{domain}.md"
-        if not context_path.is_file():
-            continue
-        try:
-            sets = extract_demotion_sets(context_path.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-        banned.update(sets.banned_froms)
-        keep.update(sets.keep_tokens)
+    from shared_evidence import current
+    evidence = current()
+    if evidence and "transcript-fixer.contexts" in evidence.bindings:
+        texts = [text for _, _, text in evidence.contexts(domains, get_config().paths.config_dir)]
+        for text in texts:
+            sets = extract_demotion_sets(text)
+            banned.update(sets.banned_froms)
+            keep.update(sets.keep_tokens)
+    else:
+        ctx_home = Path(get_config().paths.config_dir) / "contexts"
+        for domain in domains:
+            context_path = ctx_home / f"{domain}.md"
+            if not context_path.is_file():
+                continue
+            try:
+                sets = extract_demotion_sets(context_path.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            banned.update(sets.banned_froms)
+            keep.update(sets.keep_tokens)
     return frozenset(banned), frozenset(keep)
 
 
@@ -734,7 +766,7 @@ def _retired_pairs(domains) -> set:
     scope = domains or None
     disabled = service.get_disabled_pairs(scope)
     active = {(c.from_text, c.to_text)
-              for c in service.repository.get_all_corrections(domain=scope, active_only=True)}
+              for c in service.read_repository.get_all_corrections(domain=scope, active_only=True)}
     return disabled - active
 
 
@@ -853,7 +885,7 @@ def cmd_lookup(args: argparse.Namespace) -> None:
     dictionary = [
         {"domain": c.domain, "from": c.from_text, "to": c.to_text, "is_active": bool(c.is_active),
          "confidence": c.confidence, "source": c.source, "added_at": c.added_at, "notes": c.notes}
-        for c in service.repository.get_all_corrections(domain=domains, active_only=False)
+        for c in service.read_repository.get_all_corrections(domain=domains, active_only=False)
         if hit(c.from_text, c.to_text)
     ]
     context_rules = [
@@ -864,12 +896,12 @@ def cmd_lookup(args: argparse.Namespace) -> None:
         and (not domains or not r["domain"] or r["domain"] in domains)   # global + the named domains
     ]
     roster: dict = {"path": None, "hits": [], "names": []}
-    roster_path = os.getenv("TRANSCRIPT_FIXER_PEOPLE_ROSTER") or get_config().paths.people_roster_path
+    roster_path = _people_roster_path()
     if roster_path:
         roster_file = Path(roster_path).expanduser()
         if roster_file.exists():
             from core.people_roster import load_people_roster, load_roster_names
-            variants, _ = load_people_roster(roster_file)
+            variants, _ = _load_people_roster(roster_file)
             hits = [
                 {"variant": v, "canonical": canon} for v, canon in variants.items()
                 if hit(v, canon)
@@ -881,7 +913,7 @@ def cmd_lookup(args: argparse.Namespace) -> None:
             claimed = {h["canonical"] for h in hits}
             names = [
                 {"name": name, "canonical": e["canonical"], "identity": e["identity"]}
-                for name, e in load_roster_names(roster_file).items()
+                for name, e in _load_roster_names(roster_file).items()
                 if hit(name) and e["canonical"] not in claimed
             ]
             roster = {"path": str(roster_file), "hits": hits, "names": names}
@@ -1186,6 +1218,10 @@ def _cmd_context_rule_state(
             required["--context-rule-pattern"],
             required["--reason"],
         )
+        from shared_evidence import current
+        evidence = current()
+        if evidence:
+            evidence.observe_native(repository)
         if active:
             result = service.enable_context_rule(
                 rule_id,
@@ -1384,7 +1420,7 @@ def cmd_list_corrections(args: argparse.Namespace) -> None:
         for wrong, correct in sorted(corrections.items()):
             print(f"  '{wrong}' → '{correct}'")
     else:
-        all_corrections = service.repository.get_all_corrections(active_only=True)
+        all_corrections = service.read_repository.get_all_corrections(active_only=True)
         for c in all_corrections:
             print(f"  [{c.domain}]  '{c.from_text}' → '{c.to_text}'")
     print()
@@ -1660,13 +1696,12 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
     from pathlib import Path as _Path
     from utils.config import get_config
     speaker_labels: set[str] = set()
-    roster_path = (os.getenv("TRANSCRIPT_FIXER_PEOPLE_ROSTER")
-                   or get_config().paths.people_roster_path)
+    roster_path = _people_roster_path()
     if roster_path:
         roster_path = _Path(roster_path).expanduser()
         if roster_path.exists():
             from core.people_roster import load_people_roster
-            roster_corr, _ = load_people_roster(roster_path)
+            roster_corr, _ = _load_people_roster(roster_path)
             speaker_labels.update(roster_corr)
             speaker_labels.update(roster_corr.values())
             # A rule disabled via --report-false-positive is *absent* from the
@@ -1927,7 +1962,13 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
             max_concurrent=config.resources.max_concurrent_tasks,
             speaker_labels=speaker_labels,
         )
-        stage2_text, stage2_changes = ai_processor.process(stage1_text)
+        from shared_evidence import current
+        evidence = current()
+        shared_context = evidence.stage2_context(domains, config.paths.config_dir) if evidence else None
+        if shared_context is None:
+            stage2_text, stage2_changes = ai_processor.process(stage1_text)
+        else:
+            stage2_text, stage2_changes = ai_processor.process(stage1_text, context=shared_context)
         stage2_failed_chunks = ai_processor.failed_chunks
         stage2_total_chunks = ai_processor.total_chunks
 
@@ -1975,6 +2016,7 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
             changes=applied_stage1 + stage2_changes,
             success=stage2_failed_chunks == 0,
             error_message=stage2_error,
+            **({"evidence_refs": evidence.references(domains)} if evidence and evidence.bindings else {}),
         )
 
         # Run learning only when enabled. Auto-approval is a separate, default-
@@ -2057,7 +2099,7 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
     # run, mirroring the "skip writing when byte-identical" contract above), and
     # input_unchanged is the authoritative no-op signal. Scope is Stage 1 status;
     # a --stage>=2 run still reports the Stage 1 result here.
-    return {
+    status = {
         "applied": applied_count,
         "deferred": skipped_count,
         "output_path": str(stage1_output_written) if stage1_output_written else None,
@@ -2079,6 +2121,11 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
         # checked", and automation cannot tell a healthy run from a disarmed one.
         "boundary_check_active": boundary_check_active,
     }
+    from shared_evidence import current
+    evidence = current()
+    if evidence and evidence.bindings:
+        status["evidence_sources"] = evidence.references(domains)
+    return status
 
 
 def cmd_review_learned(args: argparse.Namespace) -> None:
@@ -2524,8 +2571,7 @@ def _roster_supplies(from_text: str, to_text: str) -> tuple[bool, str | None]:
     project too. An instruction that expensive must not rest on an assumption:
     configured-but-absent and configured-but-doesn't-carry-it are both common.
     """
-    roster_path = (os.getenv("TRANSCRIPT_FIXER_PEOPLE_ROSTER")
-                   or get_config().paths.people_roster_path)
+    roster_path = _people_roster_path()
     if not roster_path:
         return False, None
     rp = Path(roster_path).expanduser()
@@ -2533,7 +2579,7 @@ def _roster_supplies(from_text: str, to_text: str) -> tuple[bool, str | None]:
         return False, str(roster_path)
     try:
         from core.people_roster import load_people_roster
-        roster_corr, _ = load_people_roster(rp)
+        roster_corr, _ = _load_people_roster(rp)
         return roster_corr.get(from_text) == to_text, str(roster_path)
     except Exception:
         # Unreadable is not the same as absent — say so rather than asserting
@@ -2731,7 +2777,7 @@ def _name_lookup(term: str):
     service = _get_service()
     needle = term.lower()
 
-    corrections = service.repository.get_all_corrections(domain=None, active_only=False)
+    corrections = service.read_repository.get_all_corrections(domain=None, active_only=False)
     dictionary_active_to = any(
         c.is_active and c.to_text == term for c in corrections
     )
@@ -2748,13 +2794,13 @@ def _name_lookup(term: str):
 
     roster_entry = False
     variant_of: str | None = None
-    roster_path = os.getenv("TRANSCRIPT_FIXER_PEOPLE_ROSTER") or get_config().paths.people_roster_path
+    roster_path = _people_roster_path()
     if roster_path:
         roster_file = Path(roster_path).expanduser()
         if roster_file.exists():
             from core.people_roster import load_people_roster, load_roster_names
-            variants, _ = load_people_roster(roster_file)
-            names = load_roster_names(roster_file)
+            variants, _ = _load_people_roster(roster_file)
+            names = _load_roster_names(roster_file)
             entry = names.get(term)
             if entry is not None and entry["canonical"] == term:
                 roster_entry = True
