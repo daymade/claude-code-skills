@@ -43,6 +43,8 @@ If the bundle location is genuinely unknown, use the installation-resolution pro
 For a clean document library, configure [background intermediate storage](references/intermediate_storage.md).
 The persisted setting controls ordinary CLI defaults; it does not settle pending items.
 
+To reuse versioned shared dictionaries, people rosters and domain contexts, configure the optional [source reader and native publication binding](references/shared_evidence.md). Unbound standalone behavior stays unchanged; shared names and context do not confirm speaker identities.
+
 ## Quick start
 
 Resolve `<domain-context.md>` through the [context location](references/domain_context_guide.md#location)

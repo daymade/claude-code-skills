@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **transcript-fixer** (`daymade-audio` v1.60.0 → v1.60.1): Read pinned shared dictionary, people-roster and domain-context sources through optional configured commands. Preserve native edits, exact-pair disables, risk policies and local writer IDs; pass selected source-bound context to Stage 2 and retain postcommit publication work without inference or a new scheduler.
+
 - **macos-load-doctor** (`daymade-macos` v1.34.4): Add scoped development-preview watcher diagnosis, exact-instance reuse and idle CPU plus page/HMR acceptance; distinguish shared-service respawn from a durable stop.
 - **prior-work-retrieval** (`daymade-claude-code` v5.1.20): Clarify valid-receipt reuse for follow-up questions and the current strong-signal rearm boundary without weakening hook or source requirements.
 - **macos-load-doctor** (`daymade-macos` v1.34.1 → v1.34.2): Calibrate CPU counters, distinguish surviving PIDs from observed process births, and verify application health after profiler cleanup. Treat retained children as fan-out until lifecycle evidence establishes a leak.

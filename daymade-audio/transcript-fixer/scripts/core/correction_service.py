@@ -62,7 +62,7 @@ class CorrectionService:
     - Integration with repository layer
     """
 
-    def __init__(self, repository: CorrectionRepository, rules: Optional[ValidationRules] = None):
+    def __init__(self, repository: CorrectionRepository, rules: Optional[ValidationRules] = None, *, read_repository=None):
         """
         Initialize service with repository.
 
@@ -71,6 +71,7 @@ class CorrectionService:
             rules: Validation rules (uses defaults if None)
         """
         self.repository = repository
+        self.read_repository = read_repository or repository
         self.rules = rules or ValidationRules()
         self.db_path = repository.db_path
         logger.info("CorrectionService initialized")
@@ -311,9 +312,9 @@ class CorrectionService:
         if domains:
             for d in domains:
                 self.validate_domain_name(d)
-            corrections = self.repository.get_all_corrections(domain=domains, active_only=True)
+            corrections = self.read_repository.get_all_corrections(domain=domains, active_only=True)
         else:
-            corrections = self.repository.get_all_corrections(active_only=True)
+            corrections = self.read_repository.get_all_corrections(active_only=True)
 
         # Cross-domain from_text collisions resolve deterministically: when
         # several named domains carry the same from_text, the EARLIEST domain
@@ -332,6 +333,8 @@ class CorrectionService:
                     continue  # earlier-named domain already claimed this key
             corrections_dict[c.from_text] = c.to_text
             metadata[c.from_text] = {"confidence": c.confidence, "notes": c.notes or "", "domain": c.domain}
+            if getattr(c, "source_ref", None):
+                metadata[c.from_text].update(source_ref=c.source_ref, source_native_id=c.source_native_id)
         return corrections_dict, metadata
 
     def get_disabled_pairs(self, domain: Optional[Union[str, List[str]]] = None) -> set:
@@ -352,7 +355,7 @@ class CorrectionService:
         that is correct — trading a visible wrong replacement for an invisible
         missing one, which is harder to notice.
         """
-        corrections = self.repository.get_all_corrections(
+        corrections = self.read_repository.get_all_corrections(
             domain=normalize_domains(domain) or None, active_only=False)
         return {(c.from_text, c.to_text) for c in corrections if not getattr(c, "is_active", True)}
 
@@ -371,7 +374,7 @@ class CorrectionService:
         if domains:
             for d in domains:
                 self.validate_domain_name(d)
-            corrections = self.repository.get_all_corrections(domain=domains, active_only=True)
+            corrections = self.read_repository.get_all_corrections(domain=domains, active_only=True)
             # Same deterministic collision rule as get_corrections_with_metadata:
             # earliest-named domain wins a from_text tie; no-filter keeps the
             # historical last-writer behavior.
@@ -386,7 +389,7 @@ class CorrectionService:
             return out
         else:
             # Get all domains
-            all_corrections = self.repository.get_all_corrections(active_only=True)
+            all_corrections = self.read_repository.get_all_corrections(active_only=True)
             return {c.from_text: c.to_text for c in all_corrections}
 
     def remove_correction(
@@ -536,7 +539,7 @@ class CorrectionService:
 
     def get_domain_stats(self) -> Dict[str, int]:
         """Get count of active corrections per domain."""
-        all_corrections = self.repository.get_all_corrections(active_only=True)
+        all_corrections = self.read_repository.get_all_corrections(active_only=True)
         stats: Dict[str, int] = {}
         for c in all_corrections:
             stats[c.domain] = stats.get(c.domain, 0) + 1
@@ -554,9 +557,9 @@ class CorrectionService:
         """
         if domain:
             self.validate_domain_name(domain)
-            corrections = self.repository.get_all_corrections(domain=domain, active_only=True)
+            corrections = self.read_repository.get_all_corrections(domain=domain, active_only=True)
         else:
-            corrections = self.repository.get_all_corrections(active_only=True)
+            corrections = self.read_repository.get_all_corrections(active_only=True)
 
         # Calculate statistics
         total = len(corrections)
@@ -648,43 +651,11 @@ class CorrectionService:
             List of rule dictionaries with pattern, replacement, description
         """
         try:
-            with self.repository._pool.get_connection() as conn:
-                has_domain_col = any(
-                    row[1] == "domain"
-                    for row in conn.execute("PRAGMA table_info(context_rules)")
-                )
-                if has_domain_col and domains:
-                    placeholders = ", ".join("?" for _ in domains)
-                    cursor = conn.execute(
-                        f"""
-                        SELECT pattern, replacement, description
-                        FROM context_rules
-                        WHERE is_active = 1
-                          AND (domain IS NULL OR domain IN ({placeholders}))
-                        ORDER BY priority DESC
-                        """,
-                        domains,
-                    )
-                else:
-                    cursor = conn.execute("""
-                        SELECT pattern, replacement, description
-                        FROM context_rules
-                        WHERE is_active = 1
-                        ORDER BY priority DESC
-                    """)
-
-                rules = []
-                for row in cursor.fetchall():
-                    rules.append({
-                        "pattern": row[0],
-                        "replacement": row[1],
-                        "description": row[2]
-                    })
-
-                logger.debug(f"Loaded {len(rules)} context rules")
-                return rules
-
+            rows = self.read_repository.get_context_rule_rows(domains)
+            return [{key: row[key] for key in ("pattern", "replacement", "description")} for row in rows]
         except Exception as e:
+            if self.read_repository is not self.repository:
+                raise  # Configured shared evidence fails closed.
             logger.error(f"Failed to load context rules: {e}")
             return []
 
@@ -787,6 +758,9 @@ class CorrectionService:
             List of rule dicts with id/pattern/replacement/description/
             priority/domain/is_active
         """
+        if self.read_repository is not self.repository:
+            return self.read_repository.get_context_rule_rows([domain] if domain else None,
+                                                               active_only=not include_inactive)
         with self.repository._pool.get_connection() as conn:
             has_domain_col = any(
                 row[1] == "domain"
@@ -1041,7 +1015,7 @@ class CorrectionService:
     def save_history(self, filename: str, domain: str, original_length: int,
                     stage1_changes: int, stage2_changes: int, model: str,
                     changes: List[Any], *, success: bool = True,
-                    error_message: Optional[str] = None) -> int:
+                    error_message: Optional[str] = None, evidence_refs=None) -> int:
         """
         Save correction run history for learning.
 
@@ -1121,6 +1095,11 @@ class CorrectionService:
 
             history_id = cursor.lastrowid
 
+            if evidence_refs:
+                self.repository._audit_log(conn, action="shared_evidence_read",
+                    entity_type="correction_history", entity_id=history_id,
+                    details=json.dumps({"domain": domain, "source_refs": evidence_refs}, ensure_ascii=False))
+
             # Insert individual changes
             for change in changes:
                 normalized = _normalize_change(change)
@@ -1172,6 +1151,10 @@ class CorrectionService:
             reported_by = os.getenv("USER") or os.getenv("USERNAME") or "unknown"
 
         correction = self.repository.get_correction(from_text, domain)
+        if correction is None and self.read_repository is not self.repository:
+            shared = self.read_repository.get_correction(from_text, domain)
+            if shared is not None and shared.to_text == to_text and getattr(shared, "source_ref", None):
+                return self.repository.suppress_shared_pair(shared, shared.source_ref, reported_by)
         if correction is None or correction.to_text != to_text:
             logger.warning(
                 f"No active rule '{from_text}' -> '{to_text}' in domain '{domain}'"
