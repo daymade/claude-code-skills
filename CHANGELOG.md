@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **asr-transcribe-to-text** (`daymade-audio` v1.62.0 → v1.63.0): Route explicitly adopted projects from the legacy audit command to their installed shared-viewer data entry. Preserve standalone output for unregistered projects and stop failed handoffs without overwriting the existing reader.
+
 - **audio-router** (`daymade-audio` v1.61.0 → v1.62.0): Route waveform, edit-boundary and tail-level diagnosis to an explicitly available daudio runtime. Preserve source clocks and report acoustic risk separately from transcription, speaker identity and perceptual evaluation.
 - **tunnel-doctor** (v1.17.18 → v1.17.19): Diagnose container-injected proxies separately from daemon pull proxies; verify internal RPC/self-client paths from the failing consumer and retain private startup evidence without restarting shared Docker services.
 
