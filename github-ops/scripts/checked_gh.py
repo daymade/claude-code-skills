@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bind gh to an expected actor and keep PR merges on the policy-aware CLI.
+"""Bind gh to an expected actor; inspect publication routes and guard PR merges.
 
 No token is printed or persisted. This guards the gh channel only; it cannot
 attest a connector, browser, SSH remote, or another process's authentication.
@@ -27,6 +27,8 @@ _REJECTIONS = {
     "raw_merge_rejected": "Use guarded pr merge with --match-head-commit; keep the same target.",
     "preflight_unavailable": "Read the PR through the same channel and resolve access or service failure.",
     "preflight_invalid": "Read the PR again; required preflight fields are missing or invalid.",
+    "publication_unavailable": "Publication policy lookup failed; inspect the same repository and base before publishing.",
+    "publication_invalid": "Publication policy evidence is incomplete or invalid; retain unknown and inspect the named base.",
     "target_mismatch": "The resolved PR differs from the explicit repository; verify the target.",
     "pr_not_open": "The PR is not open; read its current state before proceeding.",
     "pr_draft": "The PR is draft or its draft state is unverified; read its current state.",
@@ -164,6 +166,108 @@ def _no_required_checks(repo, base, env, run):
         return False
 
 
+_LEGACY_PUBLICATION_FIELDS = (
+    "requiresApprovingReviews", "requiresCodeOwnerReviews", "requireLastPushApproval",
+    "requiresConversationResolution", "restrictsPushes", "lockBranch",
+    "requiresStatusChecks", "requiresStrictStatusChecks", "requiresCommitSignatures",
+    "requiresLinearHistory",
+)
+_NON_PR_PUBLICATION_RULES = {
+    "creation", "deletion", "non_fast_forward", "required_linear_history",
+    "required_signatures", "required_status_checks", "required_deployments",
+    "required_code_scanning", "required_workflows", "workflows", "code_scanning",
+    "commit_message_pattern", "commit_author_email_pattern", "committer_email_pattern",
+    "branch_name_pattern",
+}
+
+
+def _publication_json(command, env, run):
+    result = run(command, env=env, capture_output=True, text=True, timeout=30)
+    if result.returncode != 0:
+        # In particular, a REST 404 is not proof of absent branch protection.
+        raise GuardError("publication_unavailable")
+    try:
+        data = json.loads(result.stdout)
+    except (TypeError, ValueError):
+        raise GuardError("publication_invalid") from None
+    if isinstance(data, dict) and data.get("errors"):
+        raise GuardError("publication_unavailable")
+    return data
+
+
+def publication_preflight(repo, base, host, env, run):
+    """Read policy only; do not grant push, bypass, approval or merge authority."""
+    metadata = _publication_json(
+        ["gh", "api", "--hostname", host, f"repos/{repo}"], env, run)
+    if (not isinstance(metadata, dict)
+            or not isinstance(metadata.get("full_name"), str)
+            or metadata["full_name"].casefold() != repo.casefold()
+            or metadata.get("visibility") not in {"public", "private", "internal"}
+            or type(metadata.get("private")) is not bool
+            or metadata["private"] != (metadata["visibility"] != "public")):
+        raise GuardError("publication_invalid")
+    # --slurp keeps page boundaries explicit; [] is not a successful empty page.
+    pages = _publication_json(
+        ["gh", "api", "--hostname", host, "--paginate", "--slurp",
+         f"repos/{repo}/rules/branches/{quote(base, safe='')}?per_page=100"], env, run)
+    if (not isinstance(pages, list) or not pages
+            or any(not isinstance(page, list) for page in pages)):
+        raise GuardError("publication_invalid")
+    rules = [row for page in pages for row in page]
+    if any(not isinstance(row, dict) or not isinstance(row.get("type"), str)
+           or not row["type"].strip() for row in rules):
+        raise GuardError("publication_invalid")
+    owner, name = repo.split("/")
+    query = ("query($owner:String!,$name:String!,$ref:String!){repository(owner:$owner,name:$name)"
+             "{nameWithOwner ref(qualifiedName:$ref){name target{... on Commit{oid}}"
+             " branchProtectionRule{" + " ".join(_LEGACY_PUBLICATION_FIELDS) + "}}}}")
+    protection = _publication_json(
+        ["gh", "api", "--hostname", host, "graphql", "-f", "query=" + query,
+         "-f", "owner=" + owner, "-f", "name=" + name, "-f", "ref=refs/heads/" + base], env, run)
+    try:
+        resolved = protection["data"]["repository"]
+        ref = resolved["ref"]
+        legacy = ref["branchProtectionRule"]
+        oid = ref["target"]["oid"]
+        valid = (isinstance(resolved["nameWithOwner"], str)
+                 and resolved["nameWithOwner"].casefold() == repo.casefold()
+                 and ref["name"] == base
+                 and isinstance(oid, str) and re.fullmatch(r"[0-9a-f]{40}", oid)
+                 and (legacy is None or (isinstance(legacy, dict)
+                      and all(type(legacy.get(key)) is bool for key in _LEGACY_PUBLICATION_FIELDS))))
+    except (KeyError, TypeError):
+        valid = False
+    if not valid:
+        raise GuardError("publication_invalid")
+    types = sorted({row["type"] for row in rules})
+    legacy_pr = bool(legacy and any(legacy[key] for key in _LEGACY_PUBLICATION_FIELDS[:4]))
+    pr_required = "pull_request" in types or "merge_queue" in types or legacy_pr
+    unknown = sorted(set(types) - _NON_PR_PUBLICATION_RULES - {"pull_request", "merge_queue", "update"})
+    if "update" in types or (legacy and legacy["lockBranch"]):
+        route, reason = "blocked", "base_update_restricted"
+    elif pr_required:
+        route, reason = "pull_request", "pull_request_required"
+    elif unknown or (legacy and legacy["restrictsPushes"]):
+        route, reason = "unknown", "additional_policy_requires_inspection"
+    else:
+        route, reason = "direct", "no_pull_request_requirement"
+    return {
+        "schema_version": 1, "status": "ready" if route in {"direct", "pull_request"} else route,
+        "scope": "publication_route_only", "host": host, "repository": metadata["full_name"],
+        "base": base, "base_oid": oid, "visibility": metadata["visibility"],
+        "route": route, "reason": reason, "pull_request_required": pr_required,
+        "active_rule_types": types, "active_rule_pages": len(pages),
+        "legacy_protection": legacy, "unclassified_rule_types": unknown,
+        "git_transport_identity": "not_verified",
+        "remaining_gates": "task authorization, repository checks and existing approval/merge policy",
+    }
+
+
+def _publication_unknown(code):
+    print(json.dumps({"schema_version": 1, "status": "unknown", "route": "unknown",
+                      "scope": "publication_route_only", "reason": code}))
+
+
 def _merge_preflight(command, data_indices, host, env, run, acknowledgement):
     operation = next((i for i in range(1, len(command))
                       if i not in data_indices and not command[i].startswith("-")), None)
@@ -269,7 +373,8 @@ def _merge_preflight(command, data_indices, host, env, run, acknowledgement):
 
 
 def checked_invocation(expected_login: str, host: str, command: list[str],
-                       *, run=subprocess.run, merge_bypass: str | None = None) -> int:
+                       *, run=subprocess.run, merge_bypass: str | None = None,
+                       publication: str | None = None, base: str | None = None) -> int:
     if not expected_login.strip() or not host.strip() or "/" in host:
         raise ValueError("expected login and a hostname are required")
     if command and command[0] in {"auth", "alias", "extension", "config"}:
@@ -300,6 +405,19 @@ def checked_invocation(expected_login: str, host: str, command: list[str],
         if len(parts) != 2 or not all(parts):
             raise GuardError("target_required")
         return host + "/" + "/".join(parts)
+    publication_repo = None
+    if publication is not None:
+        if (command or merge_bypass or not isinstance(base, str) or not base
+                or base.startswith(("-", "/")) or base.endswith(("/", ".", ".lock"))
+                or any(part in base for part in ("..", "@{", "//"))
+                or re.search(r"[\x00-\x20\x7f~^:?*\[\\]", base)
+                or any(part.endswith(".lock") or part.startswith(".") for part in base.split("/"))):
+            raise GuardError("invalid_input")
+        publication_repo = qualified_repo(publication).removeprefix(host + "/")
+        if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", publication_repo):
+            raise GuardError("target_required")
+    elif base is not None:
+        raise GuardError("invalid_input")
     for index, arg in enumerate(command):
         if index in data_indices:
             # An option's string value is data even if it begins with -R,
@@ -354,6 +472,8 @@ def checked_invocation(expected_login: str, host: str, command: list[str],
                    capture_output=True, text=True, timeout=30)
     if captured.returncode != 0 or not captured.stdout.strip():
         _report_rejection("credential_unavailable")
+        if publication is not None:
+            _publication_unknown("credential_unavailable")
         return 2
     env = {key: value for key, value in os.environ.items()
            if key not in {"GH_REPO", "GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN",
@@ -365,6 +485,8 @@ def checked_invocation(expected_login: str, host: str, command: list[str],
                    capture_output=True, text=True, timeout=30)
     if identity.returncode != 0:
         _report_rejection("identity_unavailable")
+        if publication is not None:
+            _publication_unknown("identity_unavailable")
         return 2
     try:
         actual = json.loads(identity.stdout).get("login")
@@ -372,9 +494,16 @@ def checked_invocation(expected_login: str, host: str, command: list[str],
         actual = None
     if not isinstance(actual, str) or actual.casefold() != expected_login.casefold():
         _report_rejection("actor_mismatch")
+        if publication is not None:
+            _publication_unknown("actor_mismatch")
         return 1
     print(json.dumps({"channel": "gh", "host": host, "login": actual,
                       "identity": "verified_for_this_invocation"}), file=sys.stderr)
+    if publication_repo is not None:
+        result = publication_preflight(publication_repo, base, host, env, run)
+        result["actor"] = actual
+        print(json.dumps(result))
+        return 0 if result["status"] == "ready" else 2
     if not command:
         return 0
     _merge_preflight(command, data_indices, host, env, run, merge_bypass)
@@ -389,22 +518,34 @@ def main() -> int:
     parser.add_argument("--expected-login", required=True)
     parser.add_argument("--host", default="github.com")
     parser.add_argument("--ack-merge-bypass", help="separately authorized --admin target: OWNER/REPO#PR@FULL_SHA")
+    parser.add_argument("--publication-preflight", metavar="OWNER/REPO",
+                        help="read live visibility, active rules and legacy protection before the first push; no gh command")
+    parser.add_argument("--base", help="explicit existing base branch for --publication-preflight")
     parser.add_argument("command", nargs=argparse.REMAINDER,
                         help="gh arguments after --; omit to perform a read-only identity check")
     args = parser.parse_args()
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
     try:
-        return checked_invocation(args.expected_login, args.host, command, merge_bypass=args.ack_merge_bypass)
+        return checked_invocation(args.expected_login, args.host, command, merge_bypass=args.ack_merge_bypass,
+                                  publication=args.publication_preflight, base=args.base)
     except GuardError as exc:
+        if args.publication_preflight is not None:
+            _publication_unknown(exc.code)
         _report_rejection(exc.code)
         return 2
     except ValueError:
+        if args.publication_preflight is not None:
+            _publication_unknown("invalid_input")
         _report_rejection("invalid_input")
         return 2
     except OSError:
+        if args.publication_preflight is not None:
+            _publication_unknown("io_unavailable")
         _report_rejection("io_unavailable")
         return 2
     except subprocess.TimeoutExpired:
+        if args.publication_preflight is not None:
+            _publication_unknown("command_timeout")
         _report_rejection("command_timeout")
         return 2
 
