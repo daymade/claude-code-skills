@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **macos-permissions** (`daymade-macos` v1.34.5 → v1.34.6): Signed-app replacement with an enabled but ineffective grant.
+- **peer-message** (v1.27.2 → v1.27.3): Check and declare independent work atomically across clones and Forks, return existing owner/result leads before duplicate work, and retain unknown occupancy and current-host identity boundaries.
+
+- **daymade-claude-code** (v5.1.21 → v5.1.22): Run independent Codex takeover through PeerMessage's existing work-entry check before edits, reruns or dispatch, preserving its result and exit code.
+
+- **frontend-visual-qa** (v1.21.49 → v1.21.50): Verify one selected local artifact and every declared retired link by content digest and explicit redirect identity, while retaining real-browser acceptance.
 
 - **audio-router** (`daymade-audio` v1.61.0 → v1.62.0): Route waveform, edit-boundary and tail-level diagnosis to an explicitly available daudio runtime. Preserve source clocks and report acoustic risk separately from transcription, speaker identity and perceptual evaluation.
 - **tunnel-doctor** (v1.17.18 → v1.17.19): Diagnose container-injected proxies separately from daemon pull proxies; verify internal RPC/self-client paths from the failing consumer and retain private startup evidence without restarting shared Docker services.

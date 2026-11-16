@@ -67,16 +67,36 @@ verified parent snapshot. A local cue is not a standalone goal.
 
 1. Read the current target project's `AGENTS.md`/`CLAUDE.md`.
 2. Confirm cwd, branch, working tree, relevant files, and external state.
-3. Verify that recorded patches, commits, pushes, downloads, jobs, or Agent outputs
+3. Before independent takeover edits, reruns or dispatch, execute this Skill's
+   `scripts/start_work.py` against the loaded `peer-message` Skill. Retain the
+   recovered stable task key and owned paths across Forks, but obtain the actor
+   from the current host; never adopt a parent/history/context-pack ID. Native
+   parent/worker work retains the host task tree and skips independent registration.
+
+   ```bash
+   python3 '<loaded-continue-codex-work>/scripts/start_work.py' \
+     --peer-skill '<absolute-loaded-peer-message>' -- \
+     --repo '<absolute-target-checkout>' --path '<owned-repo-relative-file-or-directory>' \
+     --task '<stable-issue-or-deliverable>' --actor '<exact-current-host-address>'
+   ```
+
+   The wrapper runs the existing `peer.py coord start` and preserves its result
+   and exit code. On exit 3, use its existing owner/result lead before starting
+   replacement work. An empty registry retains unknown occupancy. Resolve a
+   missing dependency through the existing Skill owner; do not create a second
+   board. Follow peer-message's current work-entry/reconciliation contract for
+   non-Git resources, changed identities and released declarations. This checks
+   the invoked entry; it does not enforce all host file writes.
+4. Verify that recorded patches, commits, pushes, downloads, jobs, or Agent outputs
    actually landed; rollouts record attempted actions too.
-4. Retrieve and reuse prior successful assets before creating a replacement.
-5. For transient failures such as usage limits or service errors, verify whether the
+5. Retrieve and reuse prior successful assets before creating a replacement.
+6. For transient failures such as usage limits or service errors, verify whether the
    original process later resumed and finished before duplicating work.
    For an existing native Goal, use [Native Goal reconciliation](references/native-goal-reconciliation.md)
    to distinguish unfinished business, runtime status, supported recovery and observed
    automatic continuation. An absent recovery tool in one tool menu is not proof that
    the live host has no recovery control.
-6. Check what was **in flight** when the session stopped. A long task may survive
+7. Check what was **in flight** when the session stopped. A long task may survive
    its controller; a start record proves neither completion nor process death.
    Read its existing receipt/output and verify the current process before deciding
    whether to monitor, finish archival or rerun. If the process is gone and the
