@@ -559,21 +559,40 @@ Retire by archiving, never by deleting outright:
 - Orphan profiles (directory exists, no `settings/<name>.json`) are covered in
   Troubleshooting — the same audit applies before reviving or removing one.
 
-Verify that a new env pin in a provider file reaches a real session headlessly,
-without opening a window:
+Verify that a new non-secret env pin reaches Bash in a real headless session.
+Use the profile launcher so provider settings and credential binding follow their
+existing owner. For an authorized effort-pin check, approve only its exact command:
 
 ```bash
-CLAUDE_CONFIG_DIR=~/.claude-profiles/<name> claude --settings ~/.claude/settings/<name>.json \
-  -p 'run printenv <VAR_NAME> via Bash and reply with only its value'
+claude-profile <name> --print --verbose --output-format stream-json \
+  --permission-mode manual \
+  --allowedTools 'Bash(printenv CLAUDE_CODE_EFFORT_LEVEL)' \
+  -- 'Run exactly printenv CLAUDE_CODE_EFFORT_LEVEL via Bash and report its value.'
 ```
 
-A launched session's Bash inherits the settings `env`, so the printed value
-proves the whole launch path — config dir, provider file, env application —
-end to end. This is the read-back for the `CLAUDE_CODE_EFFORT_LEVEL` pin
-described under How It Works. Never point this printenv pattern at a
-credential: tokens are verified by a real request succeeding (e.g.
-`-p 'reply with ok'`), not by printing their value — see the credential
-sourcing rule in setup step 4.
+Replace the command and allow rule together for another authorized non-secret
+pin. Never print credentials: verify them through a real request succeeding, as
+in setup step 4. For structured capture, use the native-command entry above.
+
+In `--print`, an action needing approval can be denied without an interactive
+prompt. An unavailable auto-mode check or a zero process exit does not establish
+that Bash ran. Inspect the actual tool result and compare its value with the
+intended pin; a missing pin, denied command or failed tool leaves verification
+incomplete. Do not repair a test by granting blanket shell access or changing
+global permission defaults. Use the current documented
+[permission modes](https://code.claude.com/docs/en/permission-modes).
+
+For file-scoped approvals, use `Edit(//absolute/path)` for both Edit and Write;
+`Edit(/path)` anchors at the settings source, and `Write(path)` is not a matching
+file permission rule. Match shell commands exactly, including interpreter,
+arguments and absolute versus relative paths. Preserve existing deny/ask rules;
+see [permission rule syntax](https://code.claude.com/docs/en/permissions).
+
+Record the native executable/version, launch entry, profile/settings source,
+model, permission mode, installed consumer and exact approved command in local
+verification evidence, excluding secrets. A passing named-command test proves
+that invocation's env delivery; it does not repair or validate a different
+permission mode or the user's unchanged daily launcher. Report those separately.
 
 ## Security Notes
 
