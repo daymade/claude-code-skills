@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -292,6 +293,156 @@ class VersionProgressionTests(unittest.TestCase):
         )
         self.assertEqual(trusted_result.returncode, 1)
         self.assertIn("version did not strictly increase", trusted_result.stderr)
+
+
+class CiVersionContextTests(unittest.TestCase):
+    setUp = VersionProgressionTests.setUp
+    write_manifest = VersionProgressionTests.write_manifest
+    commit = VersionProgressionTests.commit
+
+    def workflow_check(self, event: dict[str, str], *, unset: str | None = None):
+        workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text()
+        step = workflow.split(
+            "      - name: Reject stale or reused marketplace versions\n", 1
+        )[1].splitlines()
+        env = {**os.environ, **HERMETIC_GIT, "TMPDIR": str(self.repo)}
+        body = []
+        in_run = False
+        for line in step:
+            if line == "        run: |":
+                in_run = True
+            elif in_run:
+                if line and not line.startswith("          "):
+                    break
+                body.append(line[10:] if line else "")
+            else:
+                binding = re.fullmatch(r"          (\w+): \$\{\{ (.*?) \}\}", line)
+                if binding:
+                    env[binding[1]] = event.get(binding[2], "")
+        self.assertTrue(body, "version workflow run block not found")
+        if unset is not None:
+            env.pop(unset, None)
+        return subprocess.run(
+            ["bash", "-c", "\n".join(body)], cwd=self.repo, env=env,
+            text=True, capture_output=True, check=False,
+        )
+
+    def make_pr(self, head: str) -> dict[str, str]:
+        run(self.repo, "git", "switch", "-qc", "event-merge", self.base)
+        run(self.repo, "git", "merge", "--no-ff", "--no-edit", head)
+        merge = run(self.repo, "git", "rev-parse", "HEAD").stdout.strip()
+        return {
+            "github.event_name": "pull_request",
+            "github.base_ref": "main",
+            "github.event.repository.default_branch": "main",
+            "github.event.pull_request.base.sha": self.base,
+            "github.event.pull_request.head.sha": head,
+            "github.sha": merge,
+        }
+
+    def healthy_pr(self) -> dict[str, str]:
+        (self.repo / "README.md").write_text("docs\n", encoding="utf-8")
+        return self.make_pr(self.commit())
+
+    def test_pr_uses_event_pair_after_remote_main_advances(self) -> None:
+        event = self.healthy_pr()
+        run(self.repo, "git", "update-ref", "refs/heads/main", self.base)
+        run(self.repo, "git", "remote", "add", "origin", str(self.repo))
+        run(self.repo, "git", "switch", "main")
+        self.write_manifest(manifest(docs="2.1.0"))
+        advanced = self.commit("unrelated later release")
+        run(self.repo, "git", "switch", "event-merge")
+        wrong_pair = run(
+            self.repo, sys.executable, str(CHECKER), "--repo", str(self.repo),
+            "--base", advanced, "--candidate", event["github.sha"], check=False,
+        )
+        self.assertEqual(wrong_pair.returncode, 1)
+        self.assertIn("plugin 'docs' regresses", wrong_pair.stderr)
+        result = self.workflow_check(event)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(event["github.sha"], result.stdout)
+
+    def test_pr_still_rejects_real_regression(self) -> None:
+        self.write_manifest(manifest(docs="1.9.9"))
+        result = self.workflow_check(self.make_pr(self.commit()))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("plugin 'docs' regresses", result.stderr)
+
+    def test_pr_still_rejects_unbumped_content_using_base_checker(self) -> None:
+        skill = self.repo / "daymade-audio/transcript-fixer/SKILL.md"
+        skill.write_text(skill.read_text() + "changed\n", encoding="utf-8")
+        (self.repo / "scripts/ci/check_version_progression.py").write_text(
+            "raise SystemExit(0)\n", encoding="utf-8"
+        )
+        result = self.workflow_check(self.make_pr(self.commit()))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("version did not strictly increase", result.stderr)
+
+    def test_pr_rejects_missing_empty_and_invalid_event_identity(self) -> None:
+        event = self.healthy_pr()
+        for expression, name in [
+            ("github.event.pull_request.base.sha", "PR_BASE_SHA"),
+            ("github.event.pull_request.head.sha", "PR_HEAD_SHA"),
+            ("github.sha", "EVENT_SHA"),
+        ]:
+            for value in [None, "", " ", "0" * 40, "HEAD"]:
+                with self.subTest(field=name, value=value):
+                    changed = {**event, expression: value or ""}
+                    result = self.workflow_check(
+                        changed, unset=name if value is None else None
+                    )
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("FAIL: PR event", result.stderr)
+
+    def test_pr_rejects_head_and_parent_mismatches(self) -> None:
+        event = self.healthy_pr()
+        for expression in [
+            "github.sha", "github.event.pull_request.base.sha",
+            "github.event.pull_request.head.sha",
+        ]:
+            with self.subTest(field=expression):
+                result = self.workflow_check({**event, expression: "f" * 40})
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("FAIL: PR event", result.stderr)
+
+    def test_pr_requires_a_test_merge_with_two_parents(self) -> None:
+        event = self.healthy_pr()
+        head = event["github.event.pull_request.head.sha"]
+        run(self.repo, "git", "switch", "--detach", head)
+        result = self.workflow_check({**event, "github.sha": head})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("FAIL: PR event", result.stderr)
+        tree = run(self.repo, "git", "rev-parse", event["github.sha"] + "^{tree}").stdout.strip()
+        octopus = run(
+            self.repo, "git", "commit-tree", tree, "-p", self.base, "-p", head,
+            "-p", event["github.sha"], "-m", "three parents",
+        ).stdout.strip()
+        run(self.repo, "git", "switch", "--detach", octopus)
+        result = self.workflow_check({**event, "github.sha": octopus})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("FAIL: PR event", result.stderr)
+
+    def test_push_uses_before_without_pr_context(self) -> None:
+        (self.repo / "README.md").write_text("docs\n", encoding="utf-8")
+        self.commit()
+        event = {"github.event_name": "push", "github.event.before": self.base}
+        result = self.workflow_check(event)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        skill = self.repo / "daymade-audio/transcript-fixer/SKILL.md"
+        skill.write_text(skill.read_text() + "changed\n", encoding="utf-8")
+        self.commit()
+        result = self.workflow_check(event)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("version did not strictly increase", result.stderr)
+
+    def test_push_rejects_missing_or_zero_before(self) -> None:
+        for before in ["", "0" * 40]:
+            with self.subTest(before=before):
+                result = self.workflow_check(
+                    {"github.event_name": "push", "github.event.before": before}
+                )
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("push event has no usable before SHA", result.stderr)
 
 
 if __name__ == "__main__":
