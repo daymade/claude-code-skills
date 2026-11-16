@@ -75,6 +75,32 @@ isolated fixture state and resource namespaces; retain the owner's concurrency
 limits. Stop when the selected fallback or stage is explained and the affected
 decision and cost claims have deciding evidence.
 
+## Localize repeated startup and lookup work
+
+Use this when real timing or a reproduction points to per-call overhead. Separate
+the outer shell/interpreter startup from the engine's internal duration and the
+business command itself. Compare the actual launch mode and inherited environment:
+a fresh shell can take a fast path while an agent's inherited Node selection
+falls back to repeated discovery. Preserve version selection, PATH and configuration
+rejections when optimizing that path; a faster empty command alone is insufficient.
+
+For a handler delay, locate the wait's predicate before adding a cache. A quoted
+absolute script path can be misclassified as relative, causing an unnecessary
+transcript lookup to run to its deadline. An unreadable transcript does not make
+an absolute source path unreadable. Keep source-content inspection and genuine
+relative-path lookup, including mixed commands, intact. Rejecting unrelated source
+text before AST parsing can avoid work only when the same necessary condition
+already existed later; do not skip dangerous contents hidden behind a harmless
+filename. Verify decision/exit equivalence and the actual native timing after
+adoption, not just the isolated helper's speed.
+
+When replacing a real failure with a synthetic regression, preserve the syntax
+that reached its failing predicate. Adding spaces to a path can make the old
+regex stop matching, so a test passes without exercising the fix. Run the final
+fixture against the known-bad implementation and a healthy counterpart; the
+known-bad case must fail for the intended reason. The calibration principle is
+[pitfall 46](hook_pitfalls.md#46-a-green-suite-says-nothing-until-every-assertion-has-a-mutation-that-kills-it--a-dead-probe-reads-exactly-like-a-pass).
+
 ## Reuse the existing reader
 
 Resolve the optional
