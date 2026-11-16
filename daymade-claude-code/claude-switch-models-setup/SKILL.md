@@ -562,20 +562,27 @@ Retire by archiving, never by deleting outright:
 Verify that a new non-secret env pin reaches Bash in a real headless session.
 Use the profile launcher so provider settings and credential binding follow their
 existing owner. For an authorized effort-pin check whose configured expected
-value is `max`, approve only its exact condition (Python is already a profile
-manager prerequisite):
+value is `max`, put this condition in a reviewed task-owned scratch file such as
+`pin_probe.py` (Python is already a profile-manager prerequisite):
+
+```python
+import os
+print(os.environ.get("CLAUDE_CODE_EFFORT_LEVEL") == "max")
+```
+
+Use that file's literal absolute path in both the approval and prompt:
 
 ```bash
-pin_probe="python3 -c 'import os; print(os.environ.get(\"CLAUDE_CODE_EFFORT_LEVEL\") == \"max\")'"
 claude-profile <name> --print --verbose --output-format stream-json \
   --permission-mode manual \
-  --allowedTools "Bash($pin_probe)" \
-  -- "Run exactly $pin_probe via Bash; report whether its actual output is True."
+  --allowedTools 'Bash(python3 /absolute/task/pin_probe.py)' \
+  -- 'Run exactly python3 /absolute/task/pin_probe.py via Bash; report whether its actual output is True.'
 ```
 
 Read the intended non-secret value from the provider settings first; change the
-condition when it differs; the variable supplies the same exact command to the
-allow rule and prompt. The probe emits only `True` or `False`, never environment
+condition when it differs. Keep this temporary probe with local task evidence,
+outside the distributed Skill, and preserve its reviewed bytes during the run.
+The probe emits only `True` or `False`, never environment
 values. Only literal `True` in the successful tool result establishes a match;
 `False`, missing/empty pins, empty output, denial or a failed tool leave the pin
 unverified. Never print credentials:
