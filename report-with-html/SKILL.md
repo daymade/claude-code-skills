@@ -46,9 +46,7 @@ nodes and stable material IDs; verify lesson resources, actual PDF pages and med
 play/seek through the existing source-owned asset server.
 
 For bookmark, annotation or passage readers, follow
-[reading-surface disclosure](references/reading-surface-disclosure.md): primary
-passages start expanded; overview drill-down and technical details retain their
-own disclosure behavior. This does not change every report into an expanded reader.
+[reading-surface disclosure](references/reading-surface-disclosure.md).
 
 The default delivery is the verified HTML opened in a browser. A PNG is a QA artifact
 and is delivered only when the user asks for an image. If the user needs editable

@@ -1,7 +1,6 @@
 # Reading-surface disclosure
 
-Choose disclosure by the reader's task. In an overview, secondary detail can
-start collapsed. In a bookmark, annotation or source-passage reader, the original
+Choose disclosure by the reader's task. In a bookmark, annotation or source-passage reader, the original
 passage/page is the main content: show it without a separate click for each item.
 This contract applies to that reading job, not every report or every use of details.
 
@@ -25,4 +24,4 @@ Acceptance: on initial load the reader can read each visible item's source
 without opening it; after selecting another book or a new filter the matching
 passages remain visible and legible. Raw technical positions remain secondary.
 Check a long passage, an image page and the filter transition in the browser.
-An overview control case may keep secondary details collapsed.
+Use the [approved overview examples](approved-examples.md) as the disclosure control.

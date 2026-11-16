@@ -276,6 +276,8 @@ For transcript speaker-label updates, later reconciliation and consumer readback
 follow its [maintenance contract](report-with-html/references/long-lived-report-maintenance.md).
 For a hierarchical course/archive reader,
 use the [archive reader procedure](report-with-html/references/archive-reader.md).
+For bookmark and annotation source readers, follow
+[reading-surface disclosure](report-with-html/references/reading-surface-disclosure.md).
 
 For citation previews and in-place source inspection, enter
 [report-with-html's interaction owner](report-with-html/references/interaction-components.md)
