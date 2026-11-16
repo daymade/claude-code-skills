@@ -12,6 +12,7 @@ import sys
 import tempfile
 import unittest
 import argparse
+import hashlib
 from pathlib import Path
 
 # Add parent directory to path
@@ -248,7 +249,7 @@ class TestStage1AutoFinalize(unittest.TestCase):
 
         result = cmd_run_correction(argparse.Namespace(
             input=str(self.input_file),
-            output=None,
+            output=str(self.test_dir),
             stage=1,
             domain=None,
             dry_run=False,
@@ -280,6 +281,12 @@ class TestStage1AutoFinalize(unittest.TestCase):
                 # downstream, where boundary_refused=0 would be read as
                 # "nothing straddled" by a consumer that never saw the flag.
                 "boundary_check_active": True,
+                "stage1_publication": {
+                    "schema_version": 1,
+                    "state": "already_promoted",
+                    "canonical_path": str(self.input_file.resolve()),
+                    "sha256": hashlib.sha256(b"corrected text\n").hexdigest(),
+                },
             },
         )
 

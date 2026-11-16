@@ -98,6 +98,8 @@ The Stage 1 JSON contract is:
 
 Read every field in the result. `boundary_refused` counts dictionary matches the word-boundary check refused this run — neither applied nor deferred, so a caller comparing runs can see why a deferral disappeared; `--apply-all` switches that check off. `stage1_only_incomplete` is additive to the original caller contract and must remain true for a Stage 1 script run; only the caller can close it by running Native AI, or by explicitly choosing the agent-less Stage 2/3 route. The `stage2_*` telemetry fields are always present: Stage 1 reports `0`, `0`, and `false`; Stage 2/3 replace them with the actual API outcome. Do not infer no-op or success from whether a sidecar exists.
 
+When a rerun auto-finalizes an earlier Stage 1 sidecar, `applied=0` counts new corrections in this invocation while `input_unchanged=false` records the promotion. The result also carries `stage1_publication: {"schema_version":1,"state":"already_promoted","canonical_path":"<absolute-input>","sha256":"<current-canonical-sha256>"}`. Validate this complete object, require `output_path` to resolve to the same regular canonical file, and compare its current bytes with the supplied SHA-256 before continuing. Do not promote the canonical again or accept this state on a dry run, alongside new corrections/deferrals, or without a matching digest. Missing publication evidence does not relax the ordinary no-op/sidecar contract; stale bytes require a fresh result rather than an overwrite.
+
 For a native end-to-end example, read [references/example_session_dji_minutes.md](references/example_session_dji_minutes.md).
 
 ## Choose the route
