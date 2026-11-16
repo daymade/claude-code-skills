@@ -562,27 +562,31 @@ Retire by archiving, never by deleting outright:
 Verify that a new non-secret env pin reaches Bash in a real headless session.
 Use the profile launcher so provider settings and credential binding follow their
 existing owner. For an authorized effort-pin check whose configured expected
-value is `max`, approve only its exact condition:
+value is `max`, approve only its exact condition (Python is already a profile
+manager prerequisite):
 
 ```bash
+pin_probe="python3 -c 'import os; print(os.environ.get(\"CLAUDE_CODE_EFFORT_LEVEL\") == \"max\")'"
 claude-profile <name> --print --verbose --output-format stream-json \
   --permission-mode manual \
-  --allowedTools 'Bash(test "$CLAUDE_CODE_EFFORT_LEVEL" = max)' \
-  -- 'Run exactly test "$CLAUDE_CODE_EFFORT_LEVEL" = max via Bash and report whether it matched.'
+  --allowedTools "Bash($pin_probe)" \
+  -- "Run exactly $pin_probe via Bash; report whether its actual output is True."
 ```
 
 Read the intended non-secret value from the provider settings first; change the
-condition, allow rule and prompt together when it differs. The condition emits
-no environment values: exit 0 means a match, exit 1 a mismatch (including missing
-or empty), and any other failure remains a failed check. Never print credentials:
+condition when it differs; the variable supplies the same exact command to the
+allow rule and prompt. The probe emits only `True` or `False`, never environment
+values. Only literal `True` in the successful tool result establishes a match;
+`False`, missing/empty pins, empty output, denial or a failed tool leave the pin
+unverified. Never print credentials:
 verify them through a real request succeeding, as in setup step 4. For structured
 capture, use the native-command entry above.
 
 In `--print`, an action needing approval can be denied without an interactive
 prompt. An unavailable auto-mode check or a zero process exit does not establish
-that Bash ran. Inspect the actual tool result and condition exit status;
-a missing pin, denied command or failed tool leaves verification
-incomplete. Do not repair a test by granting blanket shell access or changing
+that Bash ran. Empty success-looking tool feedback is insufficient too. Inspect
+the actual condition output rather than inferring a match from process or tool
+exit alone. Do not repair a test by granting blanket shell access or changing
 global permission defaults. Use the current documented
 [permission modes](https://code.claude.com/docs/en/permission-modes).
 
