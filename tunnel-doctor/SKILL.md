@@ -669,8 +669,9 @@ curl http://localhost:3001/health    # ❌ may still go through proxy
 **Verify the fix**:
 
 ```bash
-# Docker proxy check (should show proxy + no-proxy)
-docker info | grep -iE "proxy|No Proxy"
+# Daemon proxy presence only; inspect actual bypass targets privately.
+# An absent field is unknown, not proof that no proxy exists.
+docker info --format '{{json .}}' | python3 -c 'import json,sys; d=json.load(sys.stdin); print(json.dumps({k:bool(v) for k,v in d.items() if "proxy" in k.lower()}))'
 
 # Pull test
 docker pull --quiet hello-world
@@ -681,10 +682,14 @@ FROM alpine:latest
 RUN apk update && echo "BUILD OK"
 EOF
 
-# Container env check (no proxy leak)
-docker exec <container> env | grep -i proxy
-# Expected: all empty or not set
+# Selected container: output names/presence, never credential-bearing values.
+docker inspect --format '{{json .Config.Env}}' "$CONTAINER" | python3 -c 'import json,sys; rows=json.load(sys.stdin); print(json.dumps({k:bool(v) for row in rows for k,sep,v in [row.partition("=")] if k.lower() in {"http_proxy","https_proxy","all_proxy","no_proxy"}}))'
+# All-direct service: proxy values absent/empty; bypass remains explicitly set.
+# Outbound-proxy service: proxies may remain set; privately check exact bypass targets.
 ```
+
+Pull/build tests above apply only when those operations are failing; they do not
+verify an internal RPC route and are not prerequisites for its repair.
 
 ### Step 2H: SSH/Git Failing Through a TUN (`Connection closed by 198.18.x.x`)
 
