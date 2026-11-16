@@ -466,6 +466,10 @@ def main() -> int:
         description="Reject stale marketplace versions and missing Skill release bumps"
     )
     parser.add_argument("--base", required=True, help="Current authoritative base commit")
+    parser.add_argument(
+        "--projected-merge", action="store_true",
+        help="Validate a branch's three-way merge projection onto the frozen base",
+    )
     candidate = parser.add_mutually_exclusive_group(required=True)
     candidate.add_argument("--candidate", help="Candidate commit")
     candidate.add_argument(
@@ -483,7 +487,7 @@ def main() -> int:
 
     try:
         repo = Path(git(args.repo, "rev-parse", "--show-toplevel").strip())
-        if args.candidate_index:
+        if args.candidate_index and not args.projected_merge:
             # WHY(2026-09-21): `--candidate-index` reads the manifest blob out of the
             # git index. With nothing staged that blob is HEAD's copy, so this form
             # re-verifies the commit you already hold and reports "no regression"
@@ -510,8 +514,20 @@ def main() -> int:
                     file=sys.stderr,
                 )
                 return 2
-        failures = check(repo, args.base, None if args.candidate_index else args.candidate)
-    except CheckError as exc:
+        if args.projected_merge:
+            # The trusted CI checker is copied as one file; snapshot mode has no
+            # dependency on this branch-publication helper.
+            from git_projection import index_candidate, projected_merge
+            if args.candidate_index:
+                with index_candidate(repo) as source:
+                    base, _, projected = projected_merge(repo, args.base, source)
+                    failures = check(repo, base, projected)
+            else:
+                base, _, projected = projected_merge(repo, args.base, args.candidate)
+                failures = check(repo, base, projected)
+        else:
+            failures = check(repo, args.base, None if args.candidate_index else args.candidate)
+    except (CheckError, ValueError, OSError, ImportError) as exc:
         print(f"FAIL: version progression could not be evaluated: {exc}", file=sys.stderr)
         return 2
 
@@ -522,6 +538,8 @@ def main() -> int:
         return 1
 
     candidate_label = "index" if args.candidate_index else args.candidate
+    if args.projected_merge:
+        candidate_label = f"branch projection {projected} of {candidate_label} onto {base} (not the pushed snapshot)"
     print(f"OK: {candidate_label} has no version regression and every changed plugin is bumped")
     return 0
 

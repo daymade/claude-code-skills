@@ -1152,9 +1152,9 @@ A shared checkout's `marketplace.json` may already carry another session's stage
 or saved version bump; that working copy cannot establish the baseline.
 
 Diagnose CI version comparisons through the
-[workflow's event-pair contract](.github/workflows/ci.yml). For local marketplace
-or push guards, or a source candidate missing current main, follow
-[integration before review binding](daymade-skill/skill-creator/references/release-readiness.md#integrate-current-main-before-binding-review).
+[workflow's event-pair contract](.github/workflows/ci.yml). For source review,
+branch merge admission or snapshot/tag publication, follow
+[release readiness](daymade-skill/skill-creator/references/release-readiness.md).
 
 ## Available Skills
 

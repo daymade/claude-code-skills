@@ -166,6 +166,128 @@ class ReleaseTests(MainlineGuardTests):
         head = run(self.repo, "git", "rev-parse", "HEAD").stdout.strip()
         self.assertEqual(affected(self.repo, self.head, head), [])
 
+    def test_unpublished_tag_also_requires_version_progression(self):
+        manifest = self.repo / ".claude-plugin/marketplace.json"
+        data = json.loads(manifest.read_text())
+        data["plugins"][0]["version"] = "1.0.0"
+        manifest.write_text(json.dumps(data))
+        run(self.repo, "git", "add", "--", ".claude-plugin/marketplace.json")
+        run(self.repo, "git", "commit", "-qm", "unbumped tag fixture")
+        head = run(self.repo, "git", "rev-parse", "HEAD").stdout.strip()
+        rr.attest(self.repo, head, [self.skill], review_not_required="format-only", reason="fixture")
+        stdin = f"refs/heads/feature {head} refs/tags/new {'0'*40}\n"
+        result = self.guard("pre-push", stdin, "origin", str(self.remote))
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("version did not strictly increase", result.stderr)
+
+    def test_branch_destination_rejects_tag_object_even_with_reviewed_commit(self):
+        rr.attest(self.repo, self.head, [self.skill], review_not_required="format-only", reason="fixture")
+        run(self.repo, "git", "tag", "-a", "annotated-source", "-m", "fixture", self.head)
+        tag = run(self.repo, "git", "rev-parse", "annotated-source").stdout.strip()
+        stdin = f"refs/tags/annotated-source {tag} refs/heads/feature {'0'*40}\n"
+        result = self.guard("pre-push", stdin, "origin", str(self.remote))
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("exact commit object", result.stderr)
+
+    def test_projected_branch_keeps_exact_review_after_unrelated_advance(self):
+        rr.attest(self.repo, self.head, [self.skill], review_not_required="format-only", reason="fixture exact source")
+        run(self.repo, "git", "switch", "-qc", "advanced-main", self.base)
+        (self.repo / "unrelated.txt").write_text("advance\n")
+        run(self.repo, "git", "add", "unrelated.txt")
+        run(self.repo, "git", "commit", "-qm", "advance")
+        run(self.repo, "git", "push", "origin", "HEAD:main")
+        run(self.repo, "git", "switch", "feature")
+        branch = f"refs/tags/local-name {self.head} refs/heads/feature {'0'*40}\n"
+        result = self.guard("pre-push", branch, "origin", str(self.remote))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        tag = f"refs/heads/feature {self.head} refs/tags/new {'0'*40}\n"
+        for updates in (branch + tag, tag + branch):
+            result = self.guard("pre-push", updates, "origin", str(self.remote))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("integration drift", result.stderr)
+
+    def test_mixed_branch_and_tag_execute_both_modes_with_one_frozen_base(self):
+        rr.attest(self.repo, self.head, [self.skill], review_not_required="format-only", reason="fixture")
+        log = self.root / "calls.jsonl"
+        for name in ("check_version_progression", "check_skill_release"):
+            file = self.repo / "scripts/ci" / (name + ".py")
+            actual = file.with_name(name + "_actual.py")
+            file.rename(actual)
+            move_tracking_ref = (
+                f"import subprocess; subprocess.run(['git','update-ref','refs/remotes/origin/main',{self.head!r}],check=True)\n"
+                if name == "check_version_progression" else ""
+            )
+            file.write_text(
+                "import json,runpy,sys\n"
+                f"with open({str(log)!r},'a') as out: out.write(json.dumps([sys.argv[0],sys.argv[1:]])+'\\n')\n"
+                + move_tracking_ref +
+                f"runpy.run_path({str(actual)!r},run_name='__main__')\n"
+            )
+        branch = f"refs/tags/local-name {self.head} refs/heads/feature {'0'*40}\n"
+        tag = f"refs/heads/feature {self.head} refs/tags/new {'0'*40}\n"
+        for updates in (branch + tag, tag + branch):
+            log.write_text("")
+            run(self.repo, "git", "update-ref", "refs/remotes/origin/main", self.base)
+            result = self.guard("pre-push", updates, "origin", str(self.remote))
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            calls = [json.loads(line) for line in log.read_text().splitlines()]
+            self.assertEqual(len(calls), 4)
+            for checker in ("check_version_progression.py", "check_skill_release.py"):
+                args = [a for file, a in calls if file.endswith(checker)]
+                self.assertEqual(sorted("--projected-merge" in a for a in args), [False, True])
+                self.assertEqual({a[a.index("--base") + 1] for a in args}, {self.base})
+
+    def test_projected_scope_subset_still_verifies_entire_original_receipt(self):
+        docs = "daymade-docs"
+        (self.repo / docs).mkdir()
+        (self.repo / docs / "SKILL.md").write_text("---\nname: docs\ndescription: fixture\n---\n")
+        manifest = self.repo / ".claude-plugin/marketplace.json"
+        data = json.loads(manifest.read_text())
+        data["metadata"]["version"] = "1.1.0"
+        data["plugins"].append(dict(name="docs", source="./daymade-docs", description="docs", version="1.0.0"))
+        manifest.write_text(json.dumps(data, indent=2))
+        run(self.repo, "git", "add", ".claude-plugin/marketplace.json", docs)
+        run(self.repo, "git", "commit", "-qm", "two source roots")
+        source = run(self.repo, "git", "rev-parse", "HEAD").stdout.strip()
+        file = self.review / self.path
+        file.write_text("<!-- skill-release-review\n" + json.dumps(dict(schema=1, candidate=source, skill_paths=[self.skill, docs], result="passed")) + "\n-->\n")
+        run(self.review, "git", "add", "--", self.path)
+        run(self.review, "git", "commit", "-qm", "full review")
+        rr.attest(self.repo, source, [self.skill, docs], self.review, run(self.review, "git", "rev-parse", "HEAD").stdout.strip(), self.path)
+        run(self.repo, "git", "switch", "-qc", "advanced", self.base)
+        run(self.repo, "git", "restore", "--source", source, "--", docs)
+        data["plugins"][0]["version"] = "1.0.0"
+        manifest.write_text(json.dumps(data, indent=2))
+        run(self.repo, "git", "add", ".claude-plugin/marketplace.json", docs)
+        run(self.repo, "git", "commit", "-qm", "docs already published")
+        base = run(self.repo, "git", "rev-parse", "HEAD").stdout.strip()
+        def check():
+            return run(self.repo, sys.executable, "scripts/ci/check_skill_release.py", "--repo", str(self.repo), "--base", base, "--candidate", source, "--projected-merge", check=False)
+        result = check()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(self.skill, result.stdout)
+        self.assertNotIn("daymade-docs", result.stdout)
+        file.write_text(file.read_text() + "dirty\n")
+        self.assertEqual(check().returncode, 2)
+        run(self.review, "git", "add", "--", self.path)
+        run(self.review, "git", "commit", "-qm", "changed evidence")
+        self.assertEqual(check().returncode, 2)
+        receipt = rr.receipt_path(self.repo, source)
+        record = json.loads(receipt.read_text())
+        record["skill_paths"] = [self.skill]
+        receipt.write_text(json.dumps(record))
+        self.assertEqual(check().returncode, 2)
+        rr.attest(self.repo, source, [docs], review_not_required="format-only", reason="insufficient scope fixture")
+        result = check()
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("does not cover all projected", result.stderr)
+        for invalid in [None, [], {}, {"skill_paths": None}, {"skill_paths": []}]:
+            with self.subTest(invalid=invalid):
+                receipt.write_text(json.dumps(invalid))
+                result = check()
+                self.assertEqual(result.returncode, 2)
+                self.assertNotIn("Traceback", result.stderr)
+
     def test_stale_main_is_diagnosed_before_review_scope_and_new_head_rebinds(self):
         rr.attest(self.repo, self.head, [self.skill], review_not_required="format-only", reason="fixture exact-head binding")
         run(self.repo, "git", "switch", "-qc", "advanced-main", self.base)
