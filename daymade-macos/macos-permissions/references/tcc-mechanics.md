@@ -77,8 +77,9 @@ last_modified INTEGER -- unix epoch
 -- newer macOS adds columns; the above is the stable core
 ```
 
-`client_type` is the whole story of the attribution trap: `1` (path) means unsigned/bundless, so
-the grant keys on a path that changes with versions; `0` (bundle ID) means it survives.
+`client_type` identifies the client representation: `1` is a path and `0` is a bundle ID.
+It does not prove update continuity. Also inspect the recorded `csreq` when readable:
+a replacement at the same path and bundle ID may no longer satisfy that code requirement.
 
 `auth_reason` values:
 - `0` = not set
@@ -152,6 +153,47 @@ sudo -n sqlite3 '/Library/Application Support/com.apple.TCC/TCC.db' \
 
 The system DB needs `sudo`; both databases need the reading process to hold FDA. If the query
 cannot read the database, grant state is unknown and the job's protected read remains decisive.
+
+## Signed-app replacement with an enabled but ineffective grant
+
+Use this branch when a rebuilt/re-signed app still fails its original protected
+operation although its permission row is enabled. Do not infer this cause from
+the switch alone or apply it to a request that now succeeds.
+
+1. Bind the running requester to its PID, installed bundle/executable path and
+   bundle ID; distinguish an old running instance or helper from the replacement.
+   Inspect the installed signature with `codesign -dv --verbose=4 <exact-app-path>`
+   and its designated requirement with `codesign -dr - <exact-app-path>`.
+2. Correlate the failing operation with the affected service/client. If already
+   readable, inspect that exact TCC row including `client_type`, `auth_value` and
+   `csreq`; decode the requirement through a permitted read-only tool if needed.
+   Compare what the stored requirement accepts with the installed code, not just
+   two differently printed strings. Apple's [code-signing requirements](https://developer.apple.com/documentation/Technotes/tn3127-inside-code-signing-requirements)
+   explain why development and distribution signing can produce different requirements.
+   If the database or requirement cannot be read, retain that uncertainty; do not
+   add FDA merely to obtain this optional diagnostic or call the mismatch proven.
+3. When evidence establishes a stale requirement for this exact app/service,
+   preserve the application's work, then use the permitted System Settings UI to
+   remove only that stale row and add the exact installed `.app` again. On a
+   current system, inspect the actual pane and controls rather than relying on
+   an older Accessibility label. Apple's [Accessibility permission guide](https://support.apple.com/guide/mac-help/allow-accessibility-apps-to-access-your-mac-mh43185/mac)
+   documents adding the selected app. If a toggle leaves the operation failing
+   and the old requirement unchanged, stop repeating it. Read back the
+   removal/re-addition independently: the visible list can itself be stale.
+4. If the host refuses control of an authentication service, leave only that
+   protected action to the user through the trusted system prompt; never request
+   or persist their password in chat. Resume with fresh state after they return.
+   Do not switch input channels to bypass the refusal.
+5. Repeat the original protected operation through the verified requester and
+   follow [the request lifecycle](../SKILL.md#after-a-grant-or-reset) if a relaunch
+   is necessary. Stop on that operation's success; the new row or enabled switch
+   is supporting evidence only. Preserve other apps' grants; do not write TCC.db
+   or perform a global reset for this repair.
+
+Observed boundary: replacing a Developer ID build with an ad hoc local build at
+the same bundle ID/path left an Accessibility switch on and an old signer-bound
+`csreq` in place. Removing and adding the installed bundle
+restored actual window control. This does not imply every update needs reauthorization.
 
 ## Resetting grants — `tccutil`
 
