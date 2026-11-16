@@ -42,7 +42,8 @@ class FixtureTransport(HTTPSHandler):
         parts = probe.urlsplit(request.full_url)
         fixture = Server.registry[parts.scheme+'://'+parts.netloc]
         fixture.requests.append((request.get_method(), parts.path))
-        status, headers, body = fixture.responses.get(parts.path, (404, {}, b''))
+        response = fixture.responses.get(parts.path, (404, {}, b''))
+        status, headers, body = response() if callable(response) else response
         message = Message()
         for name, value in headers.items():
             message[name] = value
@@ -230,6 +231,161 @@ sys.exit(fixture.probe.main(['--manifest',sys.argv[2]]))
         self.assertEqual(result.returncode, 1)
         self.assertEqual(json.loads(result.stdout)['status'], 'mismatched')
         self.assertNotIn('PRIVATE_BODY_MARKER', result.stdout)
+
+
+class HandoffTests(unittest.TestCase):
+    ENTRY = b'<!doctype html><title>Two projects</title><h1>Parallel plans A-F</h1>'
+    IMAGE = b'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"/>'
+
+    def setUp(self):
+        DeliveryTests.setUp(self)
+        self.old = Server()
+        self.addCleanup(self.old.close)
+        self.current = self.server.base + '/report.html'
+        self.server.responses['/report.html'] = (200, {}, self.ENTRY)
+        self.server.responses['/images/hero.svg'] = (200, {}, self.IMAGE)
+        self.old.responses['/old.html'] = (302, {'Location': self.current}, b'')
+
+    def local_manifest(self):
+        digest = hashlib.sha256(self.ENTRY).hexdigest()
+        return {'schema_version': 2, 'artifact_sha256': digest,
+                'base_url': self.server.base,
+                'resources': [{'path': '/report.html', 'sha256': digest},
+                              {'path': '/images/hero.svg', 'sha256': hashlib.sha256(self.IMAGE).hexdigest()}],
+                'handoff': {'current_url': self.current,
+                            'legacy_urls': [self.old.base + '/old.html']}}
+
+    def test_frozen_local_entry_and_explicit_cross_origin_alias_match(self):
+        report, code = probe.verify(self.local_manifest())
+        self.assertEqual((report['status'], code), ('matched', 0))
+        self.assertNotIn('artifact_ref', report)
+        self.assertEqual((report['checked_resources'], report['checked_entrypoints']), (2, 2))
+        self.assertEqual([row['observed_sha256'] for row in report['entrypoints']],
+                         [hashlib.sha256(self.ENTRY).hexdigest()] * 2)
+        self.assertEqual([len(row['redirects']) for row in report['entrypoints']], [0, 1])
+
+    def test_legacy_body_is_checked_after_following_the_approved_redirect(self):
+        responses = iter([(200, {}, self.ENTRY), (200, {}, self.ENTRY),
+                          (200, {}, b'<title>Old draft</title>')])
+        self.server.responses['/report.html'] = lambda: next(responses)
+        report, code = probe.verify(self.local_manifest())
+        self.assertEqual(code, 1)
+        self.assertEqual([(r['role'], r['kind']) for r in report['mismatches']],
+                         [('legacy', 'entrypoint_bytes')])
+
+    def test_http_200_wrong_draft_login_and_empty_body_are_not_identity(self):
+        for body in (b'<title>Two projects</title><h1>Retired draft</h1>',
+                     b'<title>Sign in</title><form>Password</form>', b''):
+            with self.subTest(body=body):
+                self.server.responses['/report.html'] = (200, {}, body)
+                report, code = probe.verify(self.local_manifest())
+                self.assertEqual((report['status'], code), ('mismatched', 1))
+                self.assertEqual(report['checked_entrypoints'], 2)
+                self.assertEqual([r['role'] for r in report['mismatches']
+                                  if r['kind'] == 'entrypoint_bytes'], ['current', 'legacy'])
+
+    def test_same_bytes_at_an_unretired_legacy_address_still_fail_route(self):
+        self.old.responses['/old.html'] = (200, {}, self.ENTRY)
+        report, code = probe.verify(self.local_manifest())
+        self.assertEqual(code, 1)
+        self.assertEqual(report['mismatches'], [{
+            'entrypoint_fingerprint': probe.fingerprint(self.old.base + '/old.html'),
+            'role': 'legacy', 'kind': 'entrypoint_route'}])
+
+    def test_login_and_unlisted_redirects_are_not_followed(self):
+        other = Server()
+        self.addCleanup(other.close)
+        for destination in (self.server.base + '/login', other.base + '/private-target'):
+            with self.subTest(destination=destination):
+                self.old.responses['/old.html'] = (302, {'Location': destination}, b'')
+                report, code = probe.verify(self.local_manifest())
+                self.assertEqual(code, 1)
+                self.assertTrue(any(r['kind'] == 'entrypoint_redirect' for r in report['mismatches']))
+                self.assertEqual(other.requests, [])
+                self.assertNotIn(('GET', '/login'), self.server.requests)
+                self.assertNotIn(destination, json.dumps(report))
+
+    def test_canonical_redirect_and_alias_loop_cannot_pass(self):
+        for destination in (self.server.base + '/app.js', self.old.base + '/old.html'):
+            with self.subTest(destination=destination):
+                self.server.responses['/report.html'] = (302, {'Location': destination}, b'')
+                report, code = probe.verify(self.local_manifest())
+                self.assertEqual(code, 1)
+                self.assertEqual([r['role'] for r in report['mismatches']
+                                  if r['kind'] == 'entrypoint_redirect'], ['current', 'legacy'])
+
+    def test_declared_alias_chain_passes_but_repeated_alias_is_a_loop(self):
+        intermediate = self.old.base + '/older.html'
+        self.old.responses['/old.html'] = (302, {'Location': intermediate}, b'')
+        self.old.responses['/older.html'] = (302, {'Location': self.current}, b'')
+        manifest = self.local_manifest()
+        manifest['handoff']['legacy_urls'].append(intermediate)
+        report, code = probe.verify(manifest)
+        self.assertEqual(code, 0)
+        self.assertEqual(report['checked_entrypoints'], 3)
+        self.assertEqual([len(r['redirects']) for r in report['entrypoints']], [0, 2, 1])
+        self.old.responses['/older.html'] = (302, {'Location': self.old.base + '/old.html'}, b'')
+        self.assertEqual(probe.verify(manifest)[1], 1)
+
+    def test_changed_and_missing_relative_assets_do_not_pass(self):
+        self.server.responses['/images/hero.svg'] = (200, {}, b'wrong image')
+        self.assertEqual(probe.verify(self.local_manifest())[1], 1)
+        self.server.responses['/images/hero.svg'] = (404, {}, b'')
+        report, code = probe.verify(self.local_manifest())
+        self.assertEqual((report['status'], code), ('unprovable', 2))
+        self.assertEqual(report['checked_entrypoints'], 2)
+
+    def test_full_sixteen_alias_allowance_is_healthy_but_seventeen_is_invalid(self):
+        aliases = [self.old.base + f'/legacy-{i}.html' for i in range(16)]
+        for i, url in enumerate(aliases):
+            target = aliases[i + 1] if i < 15 else self.current
+            self.old.responses[f'/legacy-{i}.html'] = (302, {'Location': target}, b'')
+        manifest = self.local_manifest()
+        manifest['handoff']['legacy_urls'] = aliases
+        report, code = probe.verify(manifest)
+        self.assertEqual(code, 0)
+        self.assertEqual(report['checked_entrypoints'], 17)
+        self.assertEqual(len(report['entrypoints'][1]['redirects']), 16)
+        manifest['handoff']['legacy_urls'].append(self.old.base + '/seventeenth.html')
+        previous_requests = len(self.server.requests) + len(self.old.requests)
+        with self.assertRaises(probe.InvalidManifest):
+            probe.verify(manifest)
+        self.assertEqual(len(self.server.requests) + len(self.old.requests), previous_requests)
+
+    def test_query_identity_is_retained_and_fragments_need_browser_evidence(self):
+        manifest = self.local_manifest()
+        manifest['resources'][0]['path'] += '?edition=current'
+        manifest['handoff']['current_url'] += '?edition=current#part-b'
+        self.old.responses['/old.html'] = (302, {'Location': self.current + '?edition=current#part-b'}, b'')
+        self.assertEqual(probe.verify(manifest)[1], 0)
+        self.old.responses['/old.html'] = (302, {'Location': self.current + '?edition=old'}, b'')
+        self.assertEqual(probe.verify(manifest)[1], 1)
+
+    def test_missing_null_empty_and_unbound_handoff_fields_never_request(self):
+        invalid = []
+        for value in (None, {}, {'current_url': self.current},
+                      {'current_url': '', 'legacy_urls': []},
+                      {'current_url': self.current, 'legacy_urls': None},
+                      {'current_url': self.current, 'legacy_urls': ['']},
+                      {'current_url': self.current, 'legacy_urls': [self.current]}):
+            manifest = self.local_manifest()
+            manifest['handoff'] = value
+            invalid.append(manifest)
+        for digest in (None, '', 'a' * 40, '0' * 64):
+            manifest = self.local_manifest()
+            manifest['artifact_sha256'] = digest
+            invalid.append(manifest)
+        for manifest in invalid:
+            with self.subTest(manifest=manifest), self.assertRaises(probe.InvalidManifest):
+                probe.verify(manifest)
+        self.assertEqual(self.server.requests + self.old.requests, [])
+
+    def test_declared_no_legacy_addresses_is_a_current_only_check(self):
+        manifest = self.local_manifest()
+        manifest['handoff']['legacy_urls'] = []
+        report, code = probe.verify(manifest)
+        self.assertEqual(code, 0)
+        self.assertEqual(report['checked_entrypoints'], 1)
 
 
 if __name__ == '__main__':

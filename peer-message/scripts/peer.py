@@ -40,6 +40,12 @@ _coord_spec = importlib.util.spec_from_file_location(
 coordination = importlib.util.module_from_spec(_coord_spec)
 _coord_spec.loader.exec_module(coordination)
 
+_work_spec = importlib.util.spec_from_file_location(
+    "peer_work_start", Path(__file__).with_name("work_start.py")
+)
+work_start = importlib.util.module_from_spec(_work_spec)
+_work_spec.loader.exec_module(work_start)
+
 
 EXIT_USAGE = 2
 EXIT_TARGET = 3
@@ -1875,6 +1881,39 @@ def cmd_native_coord(args):
         board.close()
 
 
+def cmd_work_start(args):
+    # Native parent/worker coordination retains its host task tree. Do not even
+    # initialize the independent-session database or resolve inherited env IDs.
+    if args.mode == "native-task":
+        print(json.dumps({"status": "native_task_tree", "registered": False,
+                          "next_action": "use native parent and task ownership"}))
+        return 0
+    try:
+        if not args.actor:
+            raise ValueError("independent work start requires --actor from the current host, never a history/pack ID")
+        actor = coordination_actor_key(coordination_current_address(args))
+        resources = list(args.resource)
+        scope = args.scope
+        if args.repo:
+            repo_scope, git_resources = work_start.resource_identity(args.repo, args.path, remote=args.remote)
+            scope = scope or repo_scope
+            resources.extend(git_resources)
+        elif args.path:
+            raise ValueError("--path requires --repo")
+        if not scope or not args.task:
+            raise ValueError("independent work start requires a stable task and repository/project scope")
+        board = coordination.Board(args.state_dir)
+        try:
+            result = work_start.start(board, scope, args.task, actor, resources,
+                                      reconciled=args.reconciled_declaration, limit=args.limit)
+        finally:
+            board.close()
+    except ValueError as exc:
+        raise PeerError(str(exc), EXIT_TARGET) from exc
+    print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+    return 0 if result["status"] == "registered" else EXIT_TARGET
+
+
 def cmd_coord(args):
     if args.operation == "status" and args.details and args.output is None:
         raise PeerError("coord status --details requires --output to a new file")
@@ -1996,6 +2035,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     coord_parser = subparsers.add_parser("coord", help="maintain local ownership and message lifecycle")
     operations = coord_parser.add_subparsers(dest="operation", required=True)
+    start_parser = operations.add_parser("start", help="atomic work-entry lookup and claim across clones/Forks")
+    start_parser.add_argument("--mode", choices=("independent", "native-task"), default="independent",
+                              help="native parent/worker tasks keep host ownership and do not register")
+    start_parser.add_argument("--repo", type=Path, help="Git checkout; canonical origin identifies all its clones")
+    start_parser.add_argument("--remote", default="origin")
+    start_parser.add_argument("--path", action="append", default=[], help="file/directory relative to repo root; repeat for owned scope")
+    start_parser.add_argument("--resource", action="append", default=[], help="stable non-Git resource key; repeat as needed")
+    start_parser.add_argument("--scope", help="project scope, defaults to canonical Git origin")
+    start_parser.add_argument("--task", help="stable issue/deliverable key, retained across Forks")
+    start_parser.add_argument("--actor", help="exact current-host identity; inherited historical IDs are not accepted")
+    start_parser.add_argument("--reconciled-declaration", action="append", default=[],
+                              help="exact returned released declaration ID, only after checking owner and actual result")
+    start_parser.add_argument("--limit", type=int, default=10, help="matching declarations per class, 1..10; reconciled rows leave the next page")
+    start_parser.set_defaults(handler=cmd_work_start)
     status_parser = operations.add_parser("status")
     status_parser.add_argument("--scope")
     status_parser.add_argument("--owners-only", action="store_true", help="omit message rows; counts remain visible")
