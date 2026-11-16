@@ -1,23 +1,24 @@
 ---
 name: audio-router
 description: >-
-  Routes audio: StepFun ASR/语音识别, StepFun TTS/配音, transcript/妙记→会议纪要,
-  merge/review minutes. Reads one bundled specialist; generic ASR and correction
-  stay direct.
+  StepFun ASR/语音识别, StepFun TTS/配音, transcript/妙记→会议纪要,
+  merge/review minutes; generic ASR and correction stay direct.
+  daudio: 波形/吞字风险/尾衰 (waveform/cutpoint/tail).
 ---
 
 # Daymade audio router
 
-Choose a bundled specialist by the requested result. Locate **this loaded**
+Choose the route by the requested result. Locate **this loaded**
 `audio-router/SKILL.md` in the active catalog or invocation, follow symlinks
 to its canonical path, and verify its parent is `audio-router`. Its parent's
-parent is the audio suite root. Resolve the selected relative path against
+parent is the audio suite root. For a bundled specialist, resolve its relative path against
 the router directory and verify it is a direct sibling `SKILL.md` under that
 root. Do not anchor resolution to the task's working directory or a remembered
 cache path. `${CLAUDE_PLUGIN_ROOT}` may exist in Claude Code but is absent in
 Codex; stop if the active Router path is ambiguous.
 
-Read the selected child `SKILL.md` **in full** before acting. Continue a
+For the three specialist rows below, read the selected child `SKILL.md`
+**in full** before acting. Continue a
 truncated read and load that child's task-required references. The children
 and their scripts remain installed; only their automatic catalog entries are
 hidden. Claude users can still invoke their original
@@ -28,6 +29,12 @@ hidden. Claude users can still invoke their original
 | Transcribe with StepFun `stepaudio-3-asr-max`, obtain its independent speaker timeline, migrate older StepFun ASR, or diagnose the misleading “model not supported” endpoint error | `../stepfun-asr/SKILL.md` |
 | Synthesize Chinese/Japanese speech or voiceover with StepFun, including prosody, emotions, or a compatible cloned voice | `../stepfun-tts/SKILL.md` |
 | Turn an existing meeting transcript or 妙记 text, with optional participant notes, into 会议纪要; merge multiple minute drafts, review existing minutes against supplied sources, or reconcile speaker labels from verified evidence | `../meeting-minutes-taker/SKILL.md` |
+
+For waveform/波形 analysis, speech cutpoints/吞字风险, or tail energy/尾衰,
+read [Acoustic diagnostics](references/acoustic-diagnostics.md) in full before
+acting. Resolve this reference inside the canonical router directory; the
+direct-sibling check above applies to the three specialist rows. Use the
+diagnostic route's runtime checks and recovery path before executing daudio.
 
 Do not select StepFun merely because a user says “transcribe this audio.”
 General audio/video transcription, speaker diarization, audio preprocessing,
