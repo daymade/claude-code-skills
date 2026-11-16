@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **report-with-html** (v1.7.3): Keep reading disclosure rules in their canonical reference; use repository, Skill and overview-example entries only as routes instead of duplicating those rules.
+- **ASR / transcript-fixer / StepFun ASR and TTS** (`daymade-audio` v1.58.4 → v1.59.0): Add optional user-configured external dispatch at the real audio CLI entries, preserving standalone execution, original arguments, streams and exit behavior. Reject configured dispatch failures instead of silently bypassing the orchestrator; reuse completed ASR caches only across pinned dispatch-only source transitions while preserving original receipts and input/model/parameter checks.
 
 - **macos-cleaner** (`daymade-macos` v1.34.0 → v1.34.1): Consolidate Docker cleanup instructions into their canonical procedure, remove the stale blanket-prune prohibition and copied object commands, preserve stopped-container checks, and correct rollback selection and Dockerfile working directories. Route build-cache operations from the project instructions, refresh maintained validation quotes to their canonical sources, and align the idle-probe documentation with its exit-status and stripped-output checks.
 - **app-evolver** (v1.1.15 → v1.1.16): Distinguish a standalone prototype, a stale embedded document and the requested application increment; preserve approved structure and interaction during integration.
