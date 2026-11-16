@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-load-doctor** (`daymade-macos` v1.34.4): Add scoped development-preview watcher diagnosis, exact-instance reuse and idle CPU plus page/HMR acceptance; distinguish shared-service respawn from a durable stop.
+- **prior-work-retrieval** (`daymade-claude-code` v5.1.20): Clarify valid-receipt reuse for follow-up questions and the current strong-signal rearm boundary without weakening hook or source requirements.
 - **macos-load-doctor** (`daymade-macos` v1.34.1 → v1.34.2): Calibrate CPU counters, distinguish surviving PIDs from observed process births, and verify application health after profiler cleanup. Treat retained children as fan-out until lifecycle evidence establishes a leak.
 - **claude-code-hooks** (`daymade-claude-code` v5.1.17 → v5.1.18): Allow shared machine pressure and individual hook defects to coexist; localize inherited shell startup and quoted-path lookup cost, and require synthetic regression inputs to reproduce the known-bad predicate.
 - **Claude Code profiles** (`daymade-claude-code` v5.1.16 → v5.1.17): Verify non-secret environment pins with an exact approved condition through the profile launcher, without printing environment values; distinguish tool success from process exit and bind acceptance to the tested model, permissions and consumer. Clarify absolute file-rule syntax without changing global permission defaults.
@@ -3465,7 +3467,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **peer-message** (v1.25.2 → v1.25.3): Add owner-release, successor-claim and readback steps; distinguish resource-window release from responsibility for the consumer's result.
 - **tech-selection** (`daymade-claude-code` v5.1.4 → v5.1.5): Assign hosted-database and object-storage responsibilities before capacity comparisons; retain justified binary fields and unknown provider/account constraints.
 
-- **git-safety-net v1.28.8 / auto-repo-setup v2.2.3 / peer-message v1.27.2 / daymade-macos v1.34.3**: Keep hook-dependency preparation, staged-set inspection and peer receipt rules in their canonical SOPs, resolve sparse setup across plugin boundaries, and remove derived payload-example summaries.
+- **git-safety-net v1.28.8 / auto-repo-setup v2.2.3 / peer-message v1.27.2 / daymade-macos v1.34.5**: Keep hook-dependency preparation, staged-set inspection and peer receipt rules in their canonical SOPs, resolve sparse setup across plugin boundaries, and remove derived payload-example summaries.
 
 - **skill-creator** (`daymade-skill` v1.81.0 → v1.81.1): Verify schema-2 evidence against its recorded integration base while recomputing the original review, receipt and distribution; retain current-main checks when creating a rebind and distinguish exact source review from current PR admission.
 

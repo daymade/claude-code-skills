@@ -90,6 +90,11 @@ die), and who is allowed to stop it.
 
 ### 4. Classify the shape before proposing a fix
 
+For an idle Node/Vite preview, follow
+[development preview watchers](references/dev-server-watchers.md) before changing
+the shared process. It covers effective watcher scope, safe reuse and page/HMR
+preservation alongside CPU measurement.
+
 | Shape | Signature | Typical cause |
 |---|---|---|
 | **Leak candidate** | retained child count grows after comparable work finishes, or helpers outlive their documented lifecycle | missing cleanup; confirm workload and lifecycle before calling it a leak |
@@ -105,6 +110,12 @@ scan disabled, a cascade wants fewer new processes, not faster ones.
 ### 5. Act within the boundary
 
 On a shared machine, **diagnosis is read-only; remediation has an owner**.
+
+A verified PID identifies the target; it does not establish exclusive use.
+In a Spotlight case, normal exit was followed immediately by launchd restart
+for unfinished work or IPC despite disabled overrides. Treat that observation
+as a failed durable stop, not permission to chase new PIDs or restart the login
+session. A lost override's cause remains unknown unless its change is traced.
 
 - Never terminate another session's, agent's or user's processes. A "service
   restart" whose side effect is killing the daemon's children is the same
