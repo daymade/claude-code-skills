@@ -574,7 +574,8 @@ def _cycle(state, observer):
         if 'terminal_inventory' in result:
             doc['terminal_inventory'] = result['terminal_inventory']
         from ghostty_windows import capture_window_structure, join_windows_to_sessions
-        windows = capture_window_structure()
+        capture_budget = max(0.2, min(15.0, DEADLINE_SECONDS - (time.monotonic() - started) - 0.5))
+        windows = capture_window_structure(timeout=capture_budget)
         if windows.get('captured'):
             windows = join_windows_to_sessions(windows, sessions)
             doc['window_tab_mapping'] = 'known'

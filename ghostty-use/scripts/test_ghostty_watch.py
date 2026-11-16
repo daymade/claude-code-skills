@@ -725,7 +725,7 @@ class SnapshotTest(unittest.TestCase):
             for index in range(count):
                 (history / f'synthetic-{index}.jsonl').write_text('{"type":"synthetic"}\n')
             history_reads.clear()
-            with mock.patch.object(builtins, 'open', guarded_builtin), mock.patch.object(io, 'open', guarded_io), mock.patch.object(sqlite3, 'connect', side_effect=AssertionError('history SQL forbidden')), mock.patch.object(gs, 'codex_liveness', side_effect=AssertionError('history read')), mock.patch.object(gs, 'claude_liveness', side_effect=AssertionError('history read')):
+            with mock.patch.object(builtins, 'open', guarded_builtin), mock.patch.object(io, 'open', guarded_io), mock.patch.object(sqlite3, 'connect', side_effect=AssertionError('history SQL forbidden')), mock.patch.object(gs, 'codex_liveness', side_effect=AssertionError('history read')), mock.patch.object(gs, 'claude_liveness', side_effect=AssertionError('history read')), mock.patch('ghostty_windows.capture_window_structure', return_value={'captured': False}):
                 cold = watch.cycle(self.state / str(count), lambda deadline: observation())
                 warm = watch.cycle(self.state / str(count), lambda deadline: observation())
                 delta = watch.cycle(self.state / str(count), lambda deadline: observation([session(S2)]))
@@ -770,6 +770,7 @@ class AutomaticNativeIdentityTest(unittest.TestCase):
                 return ''.join('p' + pid + '\nn' + cwd + '\n' for pid in command[3].split(','))
             with mock.patch.object(watch, 'run_bounded', side_effect=run), \
                     mock.patch.object(gs, 'HOME', str(home)), \
+                    mock.patch('ghostty_windows.capture_window_structure', return_value={'captured': False}), \
                     mock.patch.object(gs, '_codex_home', return_value=home / '.codex'), \
                     mock.patch.object(gs, '_proc_start', return_value=started), \
                     mock.patch.object(gs, '_stat_birth_mtime', return_value=(started + 1, started + 1)), \

@@ -139,7 +139,10 @@ Each published automatic manifest also records the Ghostty window/tab tree with
 tab titles, `name override` values and TTY-to-session anchors
 (`window_tab_mapping: known` on success); the tree refreshes only when a change
 triggers a publish, so the pre-reboot manual snapshot stays authoritative for
-tab order and titles.
+tab order and titles. The launchd runtime needs one-time Automation
+(Apple-events) authorization for its Python to control Ghostty; without it the
+capture degrades to `captured: false` with that reason, and the last manual
+archive keeps the authoritative manual tree.
 
 ## Partial UUID coverage
 
