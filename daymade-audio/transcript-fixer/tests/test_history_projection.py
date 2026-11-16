@@ -188,12 +188,12 @@ def test_projection_oserror_keeps_complete_evidence_and_restart_recovers(journey
     receipt = prepared_unprojected_update(j)
     native_before = j["output"].read_bytes()
     from history_projection import os as history_os
-    original = history_os.replace
+    original = history_os.link
     def fail_native(source, destination):
-        if Path(destination) == j["output"]:
+        if Path(destination) == j["output"] and Path(source).name.startswith(".stage1-projection-"):
             raise OSError("synthetic native filesystem unavailable")
         return original(source, destination)
-    with patch.object(history_os, "replace", fail_native):
+    with patch.object(history_os, "link", fail_native):
         flush(j["state"])
     assert j["output"].read_bytes() == native_before
     failed = next(iter(json.loads(j["state"].read_text())["receipts"].values()))
@@ -226,14 +226,14 @@ def test_projection_readback_mismatch_preserves_external_content(journey):
     j = journey
     prepared_unprojected_update(j)
     from history_projection import os as history_os
-    original = history_os.replace
+    original = history_os.link
     manual = "人工在原子替换后编辑。\n".encode()
     def interleaved(source, destination):
         result = original(source, destination)
         if Path(destination) == j["output"]:
             j["output"].write_bytes(manual)
         return result
-    with patch.object(history_os, "replace", interleaved):
+    with patch.object(history_os, "link", interleaved):
         flush(j["state"])
     receipt = next(iter(json.loads(j["state"].read_text())["receipts"].values()))
     assert receipt["status"] == "pending" and j["output"].read_bytes() == manual
@@ -330,3 +330,108 @@ def test_prepared_native_write_survives_process_interruption_before_checkpoint(j
     recovered = next(iter(json.loads(j["state"].read_text())["receipts"].values()))
     assert recovered["status"] == "current" and recovered["baseline_ref"] == interrupted["projecting_ref"]
     assert j["output"].read_bytes() == before
+
+
+def test_final_rename_boundary_retains_the_actual_manual_preimage(journey):
+    j = journey
+    before = prepared_unprojected_update(j)
+    import history_projection as history
+    original = history.os.rename
+    manual = b"manual change at the final rename boundary\n"
+    def write_before_rename(source, destination):
+        if Path(source) == j["output"]:
+            j["output"].write_bytes(manual)
+        return original(source, destination)
+    with patch.object(history.os, "rename", write_before_rename):
+        flush(j["state"])
+    receipt = next(iter(json.loads(j["state"].read_text())["receipts"].values()))
+    assert receipt["status"] == "pending" and receipt["baseline_ref"] == before["baseline_ref"]
+    assert j["output"].read_bytes() == manual
+    preimage = j["client"].get(receipt["preimage_ref"])
+    assert history.decoded(preimage["metadata"]["original_bytes_base64"]) == manual
+    assert Path(receipt["recovery_path"]).read_bytes() == manual
+
+
+def test_editor_recreated_destination_is_never_overwritten_by_install(journey):
+    j = journey
+    before = prepared_unprojected_update(j)
+    import history_projection as history
+    original = history.os.link
+    manual = b"atomic editor replacement during the destination gap\n"
+    def recreate_before_link(source, destination):
+        if Path(destination) == j["output"]:
+            j["output"].write_bytes(manual)
+        return original(source, destination)
+    with patch.object(history.os, "link", recreate_before_link):
+        flush(j["state"])
+    receipt = next(iter(json.loads(j["state"].read_text())["receipts"].values()))
+    assert receipt["status"] == "pending" and receipt["baseline_ref"] == before["baseline_ref"]
+    assert j["output"].read_bytes() == manual
+    assert receipt["candidate_ref"] and receipt["preimage_ref"]
+
+
+def test_prepared_foreign_device_never_reads_or_advances_native_baseline(journey, monkeypatch):
+    j = journey
+    before = prepared_unprojected_update(j)
+    import history_projection as history
+    client = j["client"]
+    state = json.loads(j["state"].read_text())
+    receipt = next(iter(state["receipts"].values()))
+    prepared = history._project(client, receipt)
+    j["output"].write_bytes(prepared[2])
+    j["state"].write_text(json.dumps(state))
+    config_path = Path(os.environ["DAUDIO_CONFIG"])
+    config = json.loads(config_path.read_text())
+    config["device"]["id"] = "synthetic-foreign-device"
+    config_path.write_text(json.dumps(config))
+    original = Path.read_bytes
+    reads = []
+    def read(path):
+        if path == j["output"]:
+            reads.append(str(path))
+            pytest.fail("prepared foreign receipt opened the native path")
+        return original(path)
+    monkeypatch.setattr(Path, "read_bytes", read)
+    flush(j["state"])
+    after = next(iter(json.loads(j["state"].read_text())["receipts"].values()))
+    assert reads == [] and after["baseline_ref"] == before["baseline_ref"]
+    assert after["status"] == "pending"
+
+
+def test_rename_before_install_interruption_recovers_the_original_entry(journey):
+    j = journey
+    prepared_unprojected_update(j)
+    import history_projection as history
+    original = history.os.link
+    def stop_before_install(source, destination):
+        if Path(source).name.startswith(".stage1-projection-"):
+            raise SystemExit("synthetic process stop after native preimage move")
+        return original(source, destination)
+    with patch.object(history.os, "link", stop_before_install):
+        with pytest.raises(SystemExit):
+            flush(j["state"])
+    receipt = next(iter(json.loads(j["state"].read_text())["receipts"].values()))
+    assert receipt["status"] == "prepared" and not j["output"].exists()
+    assert Path(receipt["recovery_path"]).exists()
+    subprocess.run([sys.executable, str(j["helper"]), "flush", "--state", str(j["state"])], check=True, capture_output=True)
+    after = next(iter(json.loads(j["state"].read_text())["receipts"].values()))
+    assert after["status"] == "current" and "recovery_path" not in after
+    assert "zzcanonicaltwo" in j["output"].read_text()
+
+
+def test_derived_version_changed_during_install_stays_pending(journey):
+    j = journey
+    before = prepared_unprojected_update(j)
+    import history_projection as history
+    original = history.os.link
+    def update_after_install(source, destination):
+        result = original(source, destination)
+        if Path(destination) == j["output"]:
+            target = j["client"].get(before["target_uri"])
+            j["client"].registry.revise(target["uri"], metadata={**target["metadata"], "concurrent": True}, expected_version=target["version"])
+        return result
+    with patch.object(history.os, "link", update_after_install):
+        flush(j["state"])
+    receipt = next(iter(json.loads(j["state"].read_text())["receipts"].values()))
+    assert receipt["status"] == "pending" and receipt["baseline_ref"] == before["baseline_ref"]
+    assert receipt["candidate_ref"] and receipt["preimage_ref"]

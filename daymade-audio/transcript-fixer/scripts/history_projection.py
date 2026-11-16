@@ -202,10 +202,14 @@ def _evidence_copy(client, raw, key, refs):
         "sha256": digest(raw), "role": "native_projection_observation"}, refs=refs)
 
 
-def _project(client, receipt):
+def _require_device(client, receipt):
     scope = client.config.get("device", {}).get("id")
     if not scope or scope != receipt["locator_scope"]:
         raise ValueError("native projection belongs to another or unknown device")
+
+
+def _project(client, receipt):
+    _require_device(client, receipt)
     target = client.get(receipt["target_uri"])
     baseline = client.get(receipt["baseline_ref"])
     if target["version_uri"] == baseline["version_uri"]:
@@ -223,12 +227,25 @@ def _project(client, receipt):
     receipt["candidate_ref"] = candidate["version_uri"]
     receipt["expected_native_sha256"] = digest(current)
     receipt["projecting_ref"] = target["version_uri"]
+    receipt["recovery_path"] = str(path.parent / (".stage1-preimage-" + uuid.uuid4().hex))
     receipt["status"] = "prepared"
-    return path, current, merged, target
+    return path, current, merged, target, receipt
+
+
+def _preserve_preimage(client, receipt):
+    _require_device(client, receipt)
+    path = Path(receipt["recovery_path"])
+    raw = path.read_bytes()
+    resource = _evidence_copy(client, raw, "fixer-replaced-preimage:" + digest(str(path).encode() + raw),
+        [{"uri": client.get(receipt["projecting_ref"])["uri"],
+          "version": client.get(receipt["projecting_ref"])["version"], "relation": "proposed_projection"}])
+    receipt["preimage_ref"] = resource["version_uri"]
+    return raw
 
 
 def _replace_projection(client, prepared):
-    path, current, merged, target = prepared
+    path, current, merged, target, receipt = prepared
+    _require_device(client, receipt)
     if client.get(target["uri"])["version"] != target["version"] or path.read_bytes() != current:
         raise ValueError("projection compare-and-swap failed")
     fd, temporary = tempfile.mkstemp(prefix=".stage1-projection-", dir=path.parent)
@@ -240,9 +257,36 @@ def _replace_projection(client, prepared):
         os.chmod(temporary, path.stat().st_mode & 0o777)
         if path.read_bytes() != current or client.get(target["uri"])["version"] != target["version"]:
             raise ValueError("projection changed before native replacement")
-        os.replace(temporary, path)
+        recovery = Path(receipt["recovery_path"])
+        if recovery.exists():
+            raise ValueError("projection preimage destination is already occupied")
+        # Capture the actual directory entry at the write boundary. A final
+        # read/check alone cannot preserve a last-window external replacement.
+        os.rename(path, recovery)
+        preimage = _preserve_preimage(client, receipt)
+        if preimage != current:
+            if not path.exists():
+                os.link(recovery, path)  # No overwrite if an editor recreated it.
+            raise ValueError("native preimage changed at the replacement boundary")
+        # Publish only to an empty destination; an editor's recreated file wins.
+        # Unsupported hardlink filesystems retain the preimage and stay pending.
+        try:
+            os.link(temporary, path)
+        except Exception:
+            if not path.exists():
+                try:
+                    os.link(recovery, path)
+                except OSError:
+                    pass  # The durable preimage still names the native bytes.
+            raise
+        if _preserve_preimage(client, receipt) != current:
+            raise ValueError("native preimage changed during projection")
         if path.read_bytes() != merged:
             raise ValueError("native projection readback differs; retain evidence")
+        if client.get(target["uri"])["version"] != target["version"]:
+            raise ValueError("derived version changed during native projection")
+        recovery.unlink()  # Exact preimage bytes are already in the registry.
+        receipt.pop("recovery_path", None)
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
@@ -267,6 +311,20 @@ def flush(path):
             if receipt.get("status") == "superseded":
                 continue
             try:
+                _require_device(client, receipt)
+                if receipt.get("recovery_path") and Path(receipt["recovery_path"]).exists():
+                    preimage = _preserve_preimage(client, receipt)
+                    native = Path(receipt["output_path"])
+                    if not native.exists():
+                        os.link(receipt["recovery_path"], native)
+                    if native.read_bytes() == preimage:
+                        Path(receipt["recovery_path"]).unlink()
+                        receipt.pop("recovery_path", None)
+                    elif digest(preimage) != receipt["expected_native_sha256"]:
+                        raise ValueError("retained native preimage requires conflict resolution")
+                    else:
+                        Path(receipt["recovery_path"]).unlink()
+                        receipt.pop("recovery_path", None)
                 if receipt.get("status") == "prepared":
                     candidate = client.get(receipt["candidate_ref"])
                     current = Path(receipt["output_path"]).read_bytes()

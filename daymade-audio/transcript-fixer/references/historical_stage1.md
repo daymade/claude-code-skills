@@ -70,9 +70,13 @@ After a derived revision commits, projection compares the previous derived text,
 current native file and new derived text. Nonoverlapping edits preserve manual
 content. Overlap, missing baselines, foreign devices, file/version drift or failed
 readback remain pending with both observed and proposed bytes retained. Writes
-use an atomic replacement guarded by current bytes and registry version; later
-ordinary work points recover a prepared write after interruption. This is an
-optimistic file check, not a lock respected by arbitrary external editors.
+first move the actual native entry to a recoverable preimage, then link the full
+candidate only into an empty destination. A recreated destination is never
+overwritten. Both preimage and candidate have versioned registry evidence;
+contention stays pending. Later ordinary work points recover a prepared write
+after interruption. Filesystems without hardlink support retain the preimage
+and remain pending instead of falling back to an overwrite. These checks do not
+lock arbitrary external editors.
 
 No historical fragment is promoted into a full baseline. Unbound use keeps its
 original behavior. Missing parent/source evidence retains the new native result
