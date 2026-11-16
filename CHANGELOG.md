@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **audio-router** (`daymade-audio` v1.61.0 → v1.62.0): Route waveform, edit-boundary and tail-level diagnosis to an explicitly available daudio runtime. Preserve source clocks and report acoustic risk separately from transcription, speaker identity and perceptual evaluation.
+- **tunnel-doctor** (v1.17.18 → v1.17.19): Diagnose container-injected proxies separately from daemon pull proxies; verify internal RPC/self-client paths from the failing consumer and retain private startup evidence without restarting shared Docker services.
 
 - **ghostty-use** (v1.14.1 → v1.14.2): Deployment freshness becomes mechanically observable: install stamps the recorded source, `status` reports `deploy: current/stale/source-unavailable/no-stamp`, and every cycle persists the same verdict into its health record, so a merged watcher change that was never refreshed is visible within one round instead of silently running old copies.
 
