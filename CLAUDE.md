@@ -838,6 +838,9 @@ receipt, and an automatic outbox path gets one non-retrying HTTP attempt.
 
 ### Testing Skills Locally
 
+For provider-pin changes or headless Claude permission/result failures, follow
+[headless profile verification](daymade-claude-code/claude-switch-models-setup/references/headless-verification.md).
+
 For affected executable entries before release and after source synchronization,
 follow [source location and activation](daymade-skill/skill-creator/references/source-location-and-activation.md).
 
