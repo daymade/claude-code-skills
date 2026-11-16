@@ -231,6 +231,10 @@ For GET-readable web resources, follow
 manifest comparison before claiming a matched deployment. Include separately
 served embedded components. Its result establishes only the supplied identity
 checks; keep pixel inspection and the actual user journey as independent gates.
+For a hosted local artifact with competing current/old links, use that reference's
+[current-entry handoff](references/delivery-verification.md#one-current-entry-and-retired-links)
+to bind the selected local content, verify every declared old link and inspect the
+actual recipient page; HTTP 200 or a correct redirect alone does not pass.
 
 Without identity mapping, a freshness/deployment claim is **unprovable**; when
 neither is claimed, use **not applicable**. Current pixels remain independently verifiable.

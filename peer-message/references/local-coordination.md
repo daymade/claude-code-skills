@@ -26,15 +26,37 @@ test -f "$PEER_SKILL_ROOT/scripts/peer.py"
 
 ## 开工、范围变化和退出
 
-先核对用户分工、明确任务引用及实际要争用的资源。任务 key 用工单或交付物的稳定
-标识；scope 用规范仓库/项目标识；resource 用同一共享资源的精确标识。
-不从相似标题推断同一任务，不把每个 clone 都命名成不同的共享发布资源。
+执行者在独立会话首次编辑、重跑或派发前运行 `coord start`；Fork 也用相同入口。
+任务 key 用工单或交付物的稳定标识，跨 clone/Fork 不改名；从当前宿主取 actor，
+不复制历史原件或 context pack 里的宿主 ID。身份相互冲突时保留 unknown，
+不清空环境变量绕过现有身份检查。
 
 ```bash
-python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord status --scope '<project>'
-python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord claim --scope '<project>' --task '<issue-or-deliverable>' \
-  --resource '<shared-repository>:publish'
+python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord start \
+  --repo '<absolute-target-checkout>' --path '<owned-repo-relative-file-or-directory>' \
+  --task '<stable-issue-or-deliverable>' --actor '<exact-current-host-address>'
 ```
+
+重复 `--path` 只声明本次实际负责的文件或目录。入口按 origin 的远端身份与仓内路径
+识别不同 clone，目录与子路径也相交；不使用 cwd、clone 名或相似标题判断同一事项。
+缺远端、路径越界、空资源或错误 actor 明确失败。非 Git 资源使用稳定 `--scope` 与
+`--resource`；同一桌面或发布窗口在各会话中保持同一 key。不要把整个仓库声明成
+一项小改动的资源，从而阻断独立文件。实现与 CLI 帮助由 `scripts/work_start.py` 和
+`scripts/peer.py coord start --help` 维护。
+
+`registered`（退出 0）只表示同一事务内完成已参与调用者的检查和本人登记，
+`occupancy` 仍为 unknown。`conflict`（退出 3）给出现有负责人，直接定向协调，
+先核实它的在制品或已有成果；不因陈旧而抢占。`reconciliation_required`（退出 3）
+给出已释放声明的线索；release 不证明成果已交付。先读实际代码/PR/产物并向原负责人
+核对仍缺的范围，确认确有新工作后，将返回的精确 `declaration_id` 作为
+`--reconciled-declaration` 再运行同一入口。该参数只声明执行者已核验，不代替证据。
+多页线索按 `unreconciled_total` 处理：传入已核过的 ID 后，下一次返回其余未核行；
+声明变化会使旧 ID 失效。摘要有截断标记时不从截短身份猜地址，回同库定向 `status`。
+
+范围变化时重跑同一 `start`；完成或已确认交接时仍由本人 `release`。
+原生 parent/subagent 和团队内部委派直接沿宿主关联，不调用独立开工登记；
+需要统一 CLI 分支的调用方可用 `--mode native-task`，它不查 actor、不打开协调库。
+这些入口没有拦截所有文件写入；调用者仍按自己的开工/接续流程实际调用。
 
 `coord status` 读取现存当前版本数据库时不申请写事务，也不执行清理；另一写者持有
 RESERVED 锁时仍可读取已提交状态。首次建库及旧版本迁移保留原初始化路径；不支持的版本、
@@ -71,7 +93,8 @@ stdout 只回文件定位、大小和分页信息，不覆盖旧证据。普通 
 首次使用的空表只表示尚无参与登记，仍核对实际写者；登记是声明，不是资源锁、
 权限或“无人占用”的证明。独立范围可并行，交接仍沿实际执行权合同核验。
 
-开始、阶段切换或资源集合变化时由本人更新 claim。负责人的更新时间只表示声明
+低层 `claim` 与现有交接命令保留；独立开工与范围变化使用上面的 `start`，不要以裸
+`claim` 替代跨 clone 路径检查。负责人的更新时间只表示声明
 新鲜度；陈旧声明保留并返回 stale，不自动换负责人。完成或已核实交接后由本人释放：
 
 ```bash
