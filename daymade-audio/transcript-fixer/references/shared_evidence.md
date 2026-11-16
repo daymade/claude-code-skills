@@ -7,10 +7,11 @@ their original behavior. The Skill does not require a Python SDK or daemon.
 
 ```json
 {
+  "device": {"id": "configured-device-id"},
   "source_reader": {"protocol": 1, "argv": ["/absolute/runtime/bin/daudio", "get"]},
   "source_publisher": {"protocol": 1, "argv": ["/absolute/runtime/bin/daudio", "import"]},
   "evidence_bindings": {
-    "transcript-fixer.dictionary": {"uri": "daudio://dictionary/RESOURCE_ID", "domain": null},
+    "transcript-fixer.dictionary": {"uri": "daudio://dictionary/RESOURCE_ID", "domain": null, "owner_device_id": "configured-device-id"},
     "transcript-fixer.roster": {"uri": "daudio://context/ROSTER_ID/versions/1", "domain": null},
     "transcript-fixer.contexts": [
       {"uri": "daudio://context/CONTEXT_ID", "domain": "project-domain"}
@@ -49,6 +50,12 @@ Names, context text and source claims do not confirm a speaker identity.
 source original file URI to match the native dictionary path and its source key
 to belong to `source-import:dictionary:`. It does not derive a write command from
 the reader or publish another owner's path.
+
+Publishing also requires the same profile's nonempty `device.id` to match the
+dictionary binding's `owner_device_id`. Missing or foreign identity leaves work
+pending; a device change cannot relabel another device's pending work. Reads can
+share sources across devices. This is a configured identity boundary, not
+hardware attestation or protection against copying the same identity profile.
 
 After native commits, `shared-publications.json` under the native configuration
 directory records pending audit cursors before attempting publication. Failures

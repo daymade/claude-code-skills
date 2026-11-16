@@ -234,6 +234,8 @@ value['metadata']['sqlite_snapshot']['tables']['audit_log']['rows'].append({'id'
 print(json.dumps(value))
 """)
         self.profile["source_publisher"] = {"protocol": 1, "argv": [sys.executable, str(publisher), str(fail), str(publisher_calls), str(Path(__file__).resolve())]}
+        self.profile["device"] = {"id": "synthetic-device-A"}
+        self.profile["evidence_bindings"]["transcript-fixer.dictionary"]["owner_device_id"] = "synthetic-device-A"
         self.write()
         evidence = self.evidence()
         service = CorrectionService(self.native, read_repository=evidence.attach(self.native))
@@ -244,6 +246,37 @@ print(json.dumps(value))
         self.assertEqual(len(state["pending"]), 1)
         self.assertEqual(service.get_corrections("alpha")["新增错字"], "新增正字")
         fail.unlink()
+        good_profile = copy.deepcopy(self.profile)
+        # The publisher is now available: each wrong/unknown identity must still
+        # retain A's pending work and make zero additional import calls.
+        for device, owner in (("missing", "synthetic-device-A"), (None, "synthetic-device-A"), ({}, "synthetic-device-A"),
+                              ({"id": None}, "synthetic-device-A"), ({"id": ""}, "synthetic-device-A"),
+                              ({"id": "synthetic-device-B"}, "synthetic-device-A"),
+                              ({"id": "synthetic-device-A"}, "missing"),
+                              ({"id": "synthetic-device-A"}, None), ({"id": "synthetic-device-A"}, ""),
+                              ({"id": "synthetic-device-B"}, "synthetic-device-B")):
+            with self.subTest(device=device, owner=owner):
+                self.profile = copy.deepcopy(good_profile)
+                if device == "missing":
+                    self.profile.pop("device")
+                else:
+                    self.profile["device"] = device
+                binding = self.profile["evidence_bindings"]["transcript-fixer.dictionary"]
+                if owner == "missing":
+                    binding.pop("owner_device_id")
+                else:
+                    binding["owner_device_id"] = owner
+                self.write()
+                foreign = self.evidence()
+                foreign.attach(self.native)
+                foreign.publish(self.config)
+                held = json.loads(statefile.read_text())
+                pending = held["pending"][str(self.native_db.resolve())]
+                self.assertEqual(pending["device_id"], "synthetic-device-A")
+                self.assertEqual(pending["owner_device_id"], "synthetic-device-A")
+                self.assertEqual(len(publisher_calls.read_text().splitlines()), 1)
+        self.profile = good_profile
+        self.write()
         service.add_correction("再次错字", "再次正字", "alpha")
         replay = self.evidence()
         replay.attach(self.native)
@@ -252,6 +285,7 @@ print(json.dumps(value))
         self.assertEqual(state["pending"], {})
         receipt = state["receipts"][str(self.native_db.resolve())]
         self.assertEqual(receipt["captured_through_audit_cursor"], 2)
+        self.assertEqual(receipt["device_id"], "synthetic-device-A")
         self.assertEqual(receipt["version_uri"], self.resources[0]["uri"] + "/versions/2")
         self.assertNotIn("新增正字", statefile.read_text())
         self.assertEqual(len(publisher_calls.read_text().splitlines()), 2)

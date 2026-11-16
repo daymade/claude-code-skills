@@ -349,6 +349,13 @@ class SharedEvidence:
             baseline = self._audit_cursor(self.path(binding, "dictionary"))
             self._native.setdefault(path, baseline)
 
+    def _publication_devices(self, binding):
+        def configured_id(value):
+            return value if isinstance(value, str) and value and not any(c.isspace() or ord(c) < 32 for c in value) else None
+        device = self.profile.get("device")
+        current = configured_id(device.get("id")) if isinstance(device, dict) else None
+        return current, configured_id(binding.get("owner_device_id"))
+
     def publish(self, config_dir):
         if not self.publisher or "transcript-fixer.dictionary" not in self.bindings:
             return
@@ -360,14 +367,23 @@ class SharedEvidence:
             binding = self.bindings["transcript-fixer.dictionary"][0]
             resource = self.resource(binding, "dictionary")
             key = resource["source_key"][len("source-import:dictionary:"):]
+            current_device, owner_device = self._publication_devices(binding)
             for native, before in self._native.items():
                 cursor = self._audit_cursor(native)
-                recorded = state["receipts"].get(native, {}).get("captured_through_audit_cursor", 0)
+                old_receipt = state["receipts"].get(native, {})
+                recorded = old_receipt.get("captured_through_audit_cursor", 0) if (
+                    old_receipt.get("device_id") == current_device and old_receipt.get("owner_device_id") == owner_device) else 0
                 if type(recorded) is not int or recorded < 0:
                     raise EvidenceError("publication receipt cursor is invalid")
                 before = max(before, recorded)
                 if cursor > before:
-                    state["pending"][native] = {"audit_cursor": cursor, "source_key": key, "uri": resource["uri"], "domain": binding["domain"]}
+                    prior = state["pending"].get(native, {})
+                    if (prior.get("device_id") not in (None, current_device)
+                            or prior.get("owner_device_id") not in (None, owner_device)):
+                        continue  # Preserve another configured identity's pending work.
+                    state["pending"][native] = {"audit_cursor": cursor, "source_key": key,
+                        "uri": resource["uri"], "domain": binding["domain"],
+                        "device_id": current_device, "owner_device_id": owner_device}
             def save():
                 data = json.dumps(state, ensure_ascii=False)
                 fd, temporary = tempfile.mkstemp(prefix=".shared-publications-", dir=path.parent)
@@ -385,7 +401,13 @@ class SharedEvidence:
             save()  # Durable pending precedes any external publication attempt.
             for native, pending in list(state["pending"].items()):
                 # A changed owner binding cannot publish a previous owner's file.
-                if pending["uri"] != resource["uri"] or pending["source_key"] != key:
+                if (pending["uri"] != resource["uri"] or pending["source_key"] != key
+                        or pending["domain"] != binding["domain"]):
+                    continue
+                if (not current_device or not owner_device or current_device != owner_device
+                        or pending.get("device_id") not in (None, current_device)
+                        or pending.get("owner_device_id") not in (None, owner_device)):
+                    log.warning("Shared publication retained: configured device is missing or not the source owner")
                     continue
                 if Path(native).resolve().as_uri() != resource["metadata"]["source"].get("uri"):
                     log.warning("Shared publication retained: pending path differs from configured owner")
@@ -403,6 +425,7 @@ class SharedEvidence:
                     if captured < pending["audit_cursor"]:
                         raise EvidenceError("published snapshot precedes committed audit cursor")
                     state["receipts"][native] = {"version_uri": receipt["version_uri"], "captured_through_audit_cursor": captured,
+                        "device_id": current_device, "owner_device_id": owner_device,
                         "source_sha256": metadata["source"]["sha256"], "sqlite_snapshot_sha256": metadata["sqlite_snapshot"]["sha256"]}
                     del state["pending"][native]
                 except (EvidenceError, KeyError, TypeError, ValueError, sqlite3.Error):
