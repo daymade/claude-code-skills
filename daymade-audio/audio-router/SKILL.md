@@ -1,9 +1,9 @@
 ---
 name: audio-router
 description: >-
-  Routes StepFun ASR/语音识别, StepFun TTS/配音, transcript/妙记→会议纪要 and
-  merge/review minutes; waveform/波形, cutpoint/吞字风险 and tail/尾衰 diagnostics
-  use daudio. Reads the selected owner; generic ASR and correction stay direct.
+  StepFun ASR/语音识别, StepFun TTS/配音, transcript/妙记→会议纪要,
+  merge/review minutes; generic ASR and correction stay direct.
+  daudio: 波形/吞字风险/尾衰 (waveform/cutpoint/tail).
 ---
 
 # Daymade audio router
