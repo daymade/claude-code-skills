@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **ghostty-use** (v1.14.0 → v1.14.1): Automatic change-only backups now record the Ghostty window/tab tree with tab titles, `name override` values and TTY-to-session anchors on each publish, with the same known/unknown mapping contract as manual snapshots. Refreshing installed watcher copies is required after upgrade; the pre-reboot manual snapshot stays authoritative for tab order and titles.
+
 - **ghostty-use** (v1.13.0 → v1.14.0): Manual snapshots capture the Ghostty window/tab tree via the scripting dictionary (tab titles, `name override`, per-surface TTY/PID/cwd) and join tab TTYs to session anchors, with best-effort degradation to unknown mapping. Restore does not yet re-apply titles automatically; the recorded tree is evidence for manual re-tiling and re-titling.
 
 - **transcript-fixer** (`daymade-audio` v1.60.2 → v1.61.0): Optionally retain complete Stage 1 input/output baselines in daudio and recompute derived versions after shared rule or context updates. Preserve nonconflicting manual edits through guarded three-way file projection; retain conflicts, missing baselines and interrupted publication as pending without rerunning ASR or Stage 2.

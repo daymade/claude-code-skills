@@ -428,8 +428,10 @@ class SnapshotTest(unittest.TestCase):
         self.state = Path(self.temp.name) / '.ghostty-session'
         self.latest = self.state / 'snapshots/latest.json'
 
-    def run_cycle(self, rows=None, unresolved=None):
-        return watch.cycle(self.state, lambda deadline: observation(rows, unresolved))
+    def run_cycle(self, rows=None, unresolved=None, capture=None):
+        stub = capture if capture is not None else {'captured': False}
+        with mock.patch('ghostty_windows.capture_window_structure', return_value=stub):
+            return watch.cycle(self.state, lambda deadline: observation(rows, unresolved))
 
     def archive_count(self):
         return len(list((self.state / 'snapshots').glob('snapshot-*.json')))
@@ -673,6 +675,23 @@ class SnapshotTest(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'another writer'):
                     gs.write_snapshot([session(S2)])
         self.assertEqual(self.latest.read_bytes(), before)
+
+    def test_automatic_manifest_carries_window_structure_on_publish(self):
+        block = {'captured': True, 'capture_channel': 'ghostty-applescript-dictionary',
+                 'coverage': {'tabs': 1, 'terminals': 1, 'sessions_matched': 0,
+                              'unmapped_tab_ttys': [], 'sessions_without_tab': []},
+                 'windows': [{'id': 'w1', 'name': 'W', 'tabs': []}]}
+        summary = self.run_cycle([session(S1)], capture=dict(block))
+        self.assertEqual(summary['state'], 'changed')
+        doc = json.loads(self.latest.read_text())
+        self.assertEqual(doc['window_tab_mapping'], 'known')
+        self.assertEqual(doc['windows']['captured'], True)
+
+    def test_automatic_manifest_records_capture_failure(self):
+        self.run_cycle([session(S1)])
+        doc = json.loads(self.latest.read_text())
+        self.assertFalse(doc['windows']['captured'])
+        self.assertEqual(doc['window_tab_mapping'], 'unknown')
 
     def test_automatic_full_selection_manual_active_default_unchanged(self):
         self.run_cycle([session(S1), session(S2)])

@@ -135,6 +135,12 @@ an automatic manifest once. Later equal observations write health only. The defa
 remain available. Restore selection and retry options follow the
 [canonical quick start](../SKILL.md#quick-start).
 
+Each published automatic manifest also records the Ghostty window/tab tree with
+tab titles, `name override` values and TTY-to-session anchors
+(`window_tab_mapping: known` on success); the tree refreshes only when a change
+triggers a publish, so the pre-reboot manual snapshot stays authoritative for
+tab order and titles.
+
 ## Partial UUID coverage
 
 When the previous `latest.json` is an all-CLI manual snapshot, retain only its
