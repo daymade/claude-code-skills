@@ -8,10 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **macos-load-doctor** (`daymade-macos` v1.34.3): Add scoped development-preview watcher diagnosis, exact-instance reuse and idle CPU plus page/HMR acceptance; distinguish shared-service respawn from a durable stop.
-- **prior-work-retrieval** (`daymade-claude-code` v5.1.18): Clarify valid-receipt reuse for follow-up questions and the current strong-signal rearm boundary without weakening hook or source requirements.
+- **prior-work-retrieval** (`daymade-claude-code` v5.1.19): Clarify valid-receipt reuse for follow-up questions and the current strong-signal rearm boundary without weakening hook or source requirements.
+- **macos-load-doctor** (`daymade-macos` v1.34.1 → v1.34.2): Calibrate CPU counters, distinguish surviving PIDs from observed process births, and verify application health after profiler cleanup. Treat retained children as fan-out until lifecycle evidence establishes a leak.
+- **claude-code-hooks** (`daymade-claude-code` v5.1.17 → v5.1.18): Allow shared machine pressure and individual hook defects to coexist; localize inherited shell startup and quoted-path lookup cost, and require synthetic regression inputs to reproduce the known-bad predicate.
 - **Claude Code profiles** (`daymade-claude-code` v5.1.16 → v5.1.17): Verify non-secret environment pins with an exact approved condition through the profile launcher, without printing environment values; distinguish tool success from process exit and bind acceptance to the tested model, permissions and consumer. Clarify absolute file-rule syntax without changing global permission defaults.
 
 - **tunnel-doctor** (v1.17.17 → v1.17.18): Bind Peer Relay acceptance to the observed business path and network topology; separate relay availability, workload throughput and LAN capacity claims while preserving existing trust and change authority.
+- **ASR voiceprint identification** (`daymade-audio` v1.59.0 → v1.60.0): Accept pinned daudio reference banks through an explicit user-configured reader, retain exact bank inputs in dispatch, and keep local JSON enrollment, native matching thresholds and legacy candidate output unchanged. Reject missing readers, unpinned banks, scope/model failures and URI enrollment before loading a model.
+
 - **report-with-html** (v1.7.3): Keep reading disclosure rules in their canonical reference; use repository, Skill and overview-example entries only as routes instead of duplicating those rules.
 - **ASR / transcript-fixer / StepFun ASR and TTS** (`daymade-audio` v1.58.4 → v1.59.0): Add optional user-configured external dispatch at the real audio CLI entries, preserving standalone execution, original arguments, streams and exit behavior. Reject configured dispatch failures instead of silently bypassing the orchestrator; reuse completed ASR caches only across pinned dispatch-only source transitions while preserving original receipts and input/model/parameter checks.
 

@@ -27,6 +27,15 @@ Usage:
       --audio alice.wav --spans "0-30,45-62"
   uv run voiceprint_id.py match --refs refs.json --audio rec.wav \
       --diar rec.diarization.json [--csv rec.csv] [--threshold 0.45] [--margin 0.05]
+
+match also accepts --refs daudio://context/BANK/versions/N --refs-scope DOMAIN.
+The user profile selected by DAYMADE_AUDIO_CONFIG, or otherwise
+$XDG_CONFIG_HOME/daymade-audio/config.json (default ~/.config), must declare
+identity_bank_reader={"protocol":1,"argv":["your-reader","identity-read"]}.
+The reader receives URI, --scope, --model-fingerprint and --embedding-dim;
+it must validate the pinned bank and return a JSON view containing native.
+There is no local-file fallback for a failed reader. Native legacy names and
+similarity gates remain candidate evidence, not calibrated identity confirmation.
 """
 # /// script
 # requires-python = ">=3.10,<3.12"
@@ -41,6 +50,7 @@ import argparse
 import csv as csvmod
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -128,7 +138,54 @@ def centroid(embs):
     return v / n if n > 0 else None
 
 
-def load_refs(path):
+def _bank_uri(value):
+    return str(value).startswith("daudio:")
+
+
+def _check_bank_reference(uri, scope):
+    if not re.fullmatch(r"daudio://context/[A-Za-z0-9][A-Za-z0-9._~-]{0,127}/versions/[1-9][0-9]*", uri):
+        raise ValueError("--refs requires a pinned daudio context bank URI (.../versions/N)")
+    if not isinstance(scope, str) or not scope.strip():
+        raise ValueError("--refs-scope is required with a daudio bank URI")
+
+
+def _read_bank(uri, scope):
+    """Delegate bank validation to the user's reader; retain native legacy labels."""
+    _check_bank_reference(uri, scope)
+    explicit = os.environ.get("DAYMADE_AUDIO_CONFIG")
+    root = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+    profile = Path(explicit).expanduser() if explicit is not None else root / "daymade-audio/config.json"
+    try:
+        config = json.loads(profile.read_text(encoding="utf-8"))
+        reader = config.get("identity_bank_reader") if isinstance(config, dict) else None
+    except (OSError, ValueError) as error:
+        raise ValueError("Configure identity_bank_reader in the audio user profile to read daudio refs") from error
+    if (not isinstance(reader, dict) or type(reader.get("protocol")) is not int
+            or reader["protocol"] != 1 or not isinstance(reader.get("argv"), list)
+            or not reader["argv"] or any(not isinstance(arg, str) or not arg or "\0" in arg
+                                         for arg in reader["argv"])):
+        raise ValueError("identity_bank_reader requires protocol=1 and a nonempty literal argv array")
+    command = [*reader["argv"], uri, "--scope", scope,
+               "--model-fingerprint", FINGERPRINT, "--embedding-dim", str(DIM)]
+    try:
+        result = subprocess.run(command, stdout=subprocess.PIPE, check=False)
+    except OSError as error:
+        raise ValueError("Configured identity bank reader could not execute") from error
+    if result.returncode != 0:
+        raise ValueError(f"Identity bank reader failed (exit {result.returncode}); no local-file fallback")
+    try:
+        view = json.loads(result.stdout)
+        native = view["native"]
+        if not isinstance(native, dict) or not isinstance(native.get("centroids"), dict):
+            raise ValueError("native bank lacks centroids")
+    except (ValueError, KeyError, TypeError) as error:
+        raise ValueError("Identity bank reader returned no native voiceprint bank") from error
+    return native
+
+
+def load_refs(path, *, scope=None):
+    if _bank_uri(path):
+        return _read_bank(str(path), scope)
     p = Path(path)
     if p.exists():
         return json.loads(p.read_text(encoding="utf-8"))
@@ -155,7 +212,7 @@ def cmd_enroll(model, args):
 
 
 def cmd_match(model, args):
-    refs = load_refs(args.refs)
+    refs = args._resolved_refs if hasattr(args, "_resolved_refs") else load_refs(args.refs, scope=getattr(args, "refs_scope", None))
     names = list(refs["centroids"])
     if not names:
         sys.exit("Reference set is empty — enroll someone first.")
@@ -232,17 +289,30 @@ def main():
     e.add_argument("--spans", required=True, help='seconds, e.g. "0-30,45-62"')
 
     m = sub.add_parser("match")
-    m.add_argument("--refs", required=True)
+    m.add_argument("--refs", required=True, help="Local reference JSON or pinned daudio://context/BANK/versions/N")
+    m.add_argument("--refs-scope", help="Required scope for a pinned daudio context bank; local JSON remains unchanged")
     m.add_argument("--audio", required=True)
     m.add_argument("--diar", required=True, help="diarization JSON (from diarize_speakers.py)")
     m.add_argument("--csv", default=None, help="optional CSV whose speaker column to rewrite")
     m.add_argument("--threshold", type=float, default=0.45)
     m.add_argument("--margin", type=float, default=0.05)
     args = ap.parse_args()
+    if _bank_uri(args.refs):
+        if args.mode != "match":
+            ap.error("enroll writes a local JSON file; daudio bank URIs are read-only match inputs")
+        try:
+            _check_bank_reference(args.refs, args.refs_scope)
+        except ValueError as error:
+            ap.error(str(error))
 
     from external_dispatch import dispatch_cli
     dispatch_cli(f"voiceprint.{args.mode}", __file__, args,
                  stdout={"kind": "context", "role": "raw_voiceprint_candidate_mapping"} if args.mode == "match" else None)
+    if _bank_uri(args.refs):
+        try:
+            args._resolved_refs = load_refs(args.refs, scope=args.refs_scope)
+        except ValueError as error:
+            ap.error(str(error))
     from funasr import AutoModel
     model = AutoModel(model=MODEL, device=args.device, disable_update=True)
     (cmd_enroll if args.mode == "enroll" else cmd_match)(model, args)
