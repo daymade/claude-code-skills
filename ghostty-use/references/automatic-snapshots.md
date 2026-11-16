@@ -77,6 +77,10 @@ Wait for an in-flight observation before applying an update that would reload th
 job. Do not boot it out to speed up deployment. Read back the installed script
 copies against the selected source and verify a completed native round as below;
 an install receipt or source-link update alone does not prove the observer changed.
+A refreshed install writes `watcher/install-source.json`; `status` reports
+`deploy: current` only while the installed copies match that recorded source and
+`stale` once the source moves on — treat a merged watcher change as delivered only
+when a completed native round reports `deploy: current`.
 
 The default suits recovery metadata for long-lived sessions: IDs, working
 directories and launch parameters. Chat-body persistence belongs to the conversation

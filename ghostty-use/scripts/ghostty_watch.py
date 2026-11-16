@@ -488,6 +488,36 @@ def finish_attempt(state, attempt, result=None, *, error=None, timeout=False):
     return record
 
 
+def deploy_freshness(state):
+    """Compare installed watcher copies against the source recorded at install.
+
+    Returns {'deploy': current|stale|source-unavailable|no-stamp, ...}; never
+    raises — deployment telemetry must not break an observation round.
+    """
+    watcher = Path(state) / 'watcher'
+    result = {'deploy': 'unknown', 'source_dir': None, 'differing': []}
+    try:
+        stamp = json.loads((watcher / 'install-source.json').read_text())
+        source = Path(stamp['source_dir'])
+        fingerprints = stamp['files']
+    except (OSError, ValueError, KeyError):
+        result['deploy'] = 'no-stamp'
+        return result
+    result['source_dir'] = str(source)
+    if not source.is_dir():
+        result['deploy'] = 'source-unavailable'
+        return result
+    for filename in fingerprints:
+        try:
+            same = (watcher / 'scripts' / filename).read_bytes() == (source / filename).read_bytes()
+        except OSError:
+            same = False
+        if not same:
+            result['differing'].append(filename)
+    result['deploy'] = 'stale' if result['differing'] else 'current'
+    return result
+
+
 def cycle(state, observer=None, *, attempt=None):
     attempt = attempt or begin_attempt(state)
     started = time.monotonic()
@@ -499,6 +529,7 @@ def cycle(state, observer=None, *, attempt=None):
                        or 'deadline expired' in str(error))
         raise
     result['duration_seconds'] = time.monotonic() - started
+    result['deploy'] = deploy_freshness(state)
     finish_attempt(state, attempt, result)
     return result
 
@@ -703,13 +734,18 @@ def install(state, every_minutes=DEFAULT_EVERY_MINUTES, apply=False):
         system_run([uv, 'venv', '--python', '3.12', str(watcher / 'venv')])
     system_run([str(interpreter), '-c', 'import fcntl, json, plistlib; print("owned runtime ready")'])
     source = Path(__file__).resolve().parent
+    fingerprints = {}
     for filename in ('ghostty_watch.py', 'ghostty_storage.py', 'ghostty_session.py', 'ghostty_windows.py'):
         data = (source / filename).read_bytes()
+        fingerprints[filename] = hashlib.sha256(data).hexdigest()
         installed = watcher / 'scripts' / filename
         if not installed.exists() or installed.read_bytes() != data:
             atomic_bytes(installed, data)
         if installed.read_bytes() != data:
             raise ValueError('installed watcher source readback mismatch')
+    atomic_bytes(watcher / 'install-source.json', (json.dumps(
+        {'source_dir': str(source), 'installed_at': datetime.now(timezone.utc).isoformat(),
+         'files': fingerprints}, sort_keys=True) + '\n').encode())
     for filename in ('out.log', 'err.log'):
         log = watcher / filename
         if not log.exists():
@@ -777,6 +813,7 @@ def status(state):
                                      'identified_at_capture': len(doc['sessions']) - retained,
                                      'coverage': gs.snapshot_coverage(doc),
                                      'unresolved': len(doc.get('unresolved', [])), 'retained_unverified': retained}
+    result.update(deploy_freshness(state))
     result['last_cycle'] = cycle_status(state)
     result['meaning'] = ('last_cycle.attempted_at is the last attempt; last_successful_observation_at '
                          'is complete coverage; last_snapshot_change_at is the last saved change')

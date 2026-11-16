@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **ghostty-use** (v1.14.1 → v1.14.2): Deployment freshness becomes mechanically observable: install stamps the recorded source, `status` reports `deploy: current/stale/source-unavailable/no-stamp`, and every cycle persists the same verdict into its health record, so a merged watcher change that was never refreshed is visible within one round instead of silently running old copies.
+
 - **ghostty-use** (v1.14.0 → v1.14.1): Automatic change-only backups now record the Ghostty window/tab tree with tab titles, `name override` values and TTY-to-session anchors on each publish, with the same known/unknown mapping contract as manual snapshots. Refreshing installed watcher copies is required after upgrade; the pre-reboot manual snapshot stays authoritative for tab order and titles.
 
 - **ghostty-use** (v1.13.0 → v1.14.0): Manual snapshots capture the Ghostty window/tab tree via the scripting dictionary (tab titles, `name override`, per-surface TTY/PID/cwd) and join tab TTYs to session anchors, with best-effort degradation to unknown mapping. Restore does not yet re-apply titles automatically; the recorded tree is evidence for manual re-tiling and re-titling.
