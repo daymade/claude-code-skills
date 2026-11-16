@@ -87,6 +87,7 @@ must judge protocol fit and user intent; no bundled checker establishes either.
 
 Determine which scenario applies:
 
+- **A task names a Tailscale Peer Relay, or a relay/throughput test is being used to claim WAN or LAN performance** → use [path-bound Peer Relay acceptance](references/tailscale_peer_relay_acceptance.md) before selecting a repair or interpreting the measurement.
 - **Public gateway returns 502 while its backend responds normally, or the dedicated SSH tunnel key is rejected as `correct key but not from a permitted host`** → read [SSH tunnel source restrictions](references/ssh_tunnel_source_restriction.md) before changing TUN/firewall rules or treating a running process as recovery.
 - **Browser returns HTTP 503, but `curl` and SSH both work** → System proxy bypass conflict (Step 2C)
 - **`local.<domain>` fails in browser/default `curl`, but direct/no-proxy request works** → Local vanity domain proxy interception (Step 2C-1)
