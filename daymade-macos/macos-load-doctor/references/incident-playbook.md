@@ -157,6 +157,53 @@ to be noticed. Only the cumulative-TIME reading finds it. The app's own
 periodic-scan feature was the loop; disabling that feature (owner's call)
 ended the burn without touching the app.
 
+## Measurement controls
+
+Use these controls when snapshot counts or computed CPU rates could change the
+diagnosis. Stop measuring once the mechanism and the next authorized action are
+decided; these controls do not require a new monitor or a fleet-wide replay.
+
+- **Calibrate CPU units before reporting percentages.** Record the API/version,
+  field layout, counter units and time conversion. Compare an owned short CPU
+  workload against an independent CPU-time source such as `getrusage`, or compare
+  a stable PID's interval with `ps` cumulative `TIME`. In one Apple Silicon probe,
+  treating the observed Mach ticks as nanoseconds underestimated CPU by about
+  41.7 times. Obtain the current `mach_timebase_info` ratio when the counter is
+  Mach time; do not reuse that factor on another API or machine. A disagreement
+  invalidates the rate until explained. Retain the original result and label its
+  corrected derivative; withdraw dependent claims at their actual consumers.
+- **Bind an interval to a process identity.** Check PID and birth identity before
+  subtracting counters; exits, permission failures and PID reuse are unknown,
+  not zero. Divide by measured monotonic elapsed time. Name the denominator:
+  100% of one core differs from 100% of the whole machine. Keep own CPU, live
+  child CPU and reaped-child accounting separate to avoid double-counting.
+- **Sample short-lived work before it disappears.** When two snapshots leave a
+  coverage gap, use a short bounded process-list sample through the native API
+  in one already-running observer, rather than spawning `ps` in a tight loop.
+  Capture a new PID's parent identity and executable immediately, including its
+  parent chain while available. Keep unavailable ownership unknown. Exclude the
+  observer's own work, record the actual interval/cadence, and report distinct
+  observed births per elapsed second as a lower bound. Even rapid polling misses
+  lifetimes shorter than its cadence; only a complete, appropriately authorized
+  event trace can support a complete event count. Do not dump argv or environment
+  contents to attribute a process.
+
+### A profiler's cleanup must preserve the application
+
+Use this when a diagnostic signal, inspector or injected callback changes a live
+process. Prefer an owned isolated process with the same runtime version; exercise
+both probe entry and cleanup there before applying an authorized live probe.
+Retain the target's PID/birth identity, original business health and recovery
+entry. Do not evaluate an untested cleanup callback inside the live service.
+
+A closed debugging port is not proof of successful cleanup: the application may
+have crashed. Read the process identity and business endpoint independently after
+cleanup, then verify the original activity (for example, a natural collection
+round) advances. If the application exited, label the probe failed, preserve the
+error and restore the authorized version through its existing service owner.
+Report the interruption and verify recovery before continuing performance work.
+Peer agreement alone does not authorize interrupting another session's work.
+
 ## Writing the report
 
 Hand the owner a self-contained bundle:
