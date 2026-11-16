@@ -149,6 +149,8 @@ def main():
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--force", action="store_true", help="Explicitly replace existing text; otherwise reuse valid provenance or preserve it")
     args = parser.parse_args()
+    from external_dispatch import dispatch_cli
+    dispatch_cli("asr.remote", __file__, args)
     try:
         result = transcribe(args.source, args.output,
                             json.loads(args.config.read_text(encoding="utf-8")), force=args.force)

@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **git-safety-net v1.28.8 / auto-repo-setup v2.2.3 / peer-message v1.27.2 / daymade-macos v1.34.2**: Keep hook-dependency preparation, staged-set inspection and peer receipt rules in their canonical SOPs, resolve sparse setup across plugin boundaries, and remove derived payload-example summaries.
+- **ASR / transcript-fixer / StepFun ASR and TTS** (`daymade-audio` v1.58.4 → v1.59.0): Add optional user-configured external dispatch at the real audio CLI entries, preserving standalone execution, original arguments, streams and exit behavior. Reject configured dispatch failures instead of silently bypassing the orchestrator; reuse completed ASR caches only across pinned dispatch-only source transitions while preserving original receipts and input/model/parameter checks.
 
 - **macos-cleaner** (`daymade-macos` v1.34.0 → v1.34.1): Consolidate Docker cleanup instructions into their canonical procedure, remove the stale blanket-prune prohibition and copied object commands, preserve stopped-container checks, and correct rollback selection and Dockerfile working directories. Route build-cache operations from the project instructions, refresh maintained validation quotes to their canonical sources, and align the idle-probe documentation with its exit-status and stripped-output checks.
 - **app-evolver** (v1.1.15 → v1.1.16): Distinguish a standalone prototype, a stale embedded document and the requested application increment; preserve approved structure and interaction during integration.
@@ -3456,6 +3456,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **terraform-skill** (v1.5.13 → v1.5.14): Route restoration through the existing release checks; verify separately owned DNS, consumer hostname TLS and selected SSH arguments before resuming application acceptance.
 - **peer-message** (v1.25.2 → v1.25.3): Add owner-release, successor-claim and readback steps; distinguish resource-window release from responsibility for the consumer's result.
 - **tech-selection** (`daymade-claude-code` v5.1.4 → v5.1.5): Assign hosted-database and object-storage responsibilities before capacity comparisons; retain justified binary fields and unknown provider/account constraints.
+
+- **git-safety-net v1.28.8 / auto-repo-setup v2.2.3 / peer-message v1.27.2 / daymade-macos v1.34.2**: Keep hook-dependency preparation, staged-set inspection and peer receipt rules in their canonical SOPs, resolve sparse setup across plugin boundaries, and remove derived payload-example summaries.
 
 ## [1.82.0] - 2026-07-07
 

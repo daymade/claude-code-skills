@@ -48,8 +48,6 @@ from pathlib import Path
 
 os.environ.setdefault("TQDM_DISABLE", "1")
 import numpy as np
-import soundfile as sf
-from funasr import AutoModel
 
 MODEL = "iic/speech_campplus_sv_zh-cn_16k-common"
 FINGERPRINT = "campplus_sv_zh-cn_16k-common"
@@ -64,6 +62,7 @@ def log(m):
 
 def load_audio_16k(path):
     """Decode any format to 16k mono float32 via ffmpeg (robust to wav/ogg/opus)."""
+    import soundfile as sf
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tf:
         tmp = tf.name
     try:
@@ -241,6 +240,10 @@ def main():
     m.add_argument("--margin", type=float, default=0.05)
     args = ap.parse_args()
 
+    from external_dispatch import dispatch_cli
+    dispatch_cli(f"voiceprint.{args.mode}", __file__, args,
+                 stdout={"kind": "context", "role": "raw_voiceprint_candidate_mapping"} if args.mode == "match" else None)
+    from funasr import AutoModel
     model = AutoModel(model=MODEL, device=args.device, disable_update=True)
     (cmd_enroll if args.mode == "enroll" else cmd_match)(model, args)
 
