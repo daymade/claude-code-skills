@@ -177,12 +177,17 @@ jobs:
               fi
               read -r tested_merge tested_base tested_head extra \
                 <<<"$(git rev-list --parents -n 1 "$candidate")"
-              if [[ "$tested_base" != "$PR_BASE_SHA" || "$tested_head" != "$PR_HEAD_SHA" || -n "$extra" ]]; then
-                echo "FAIL: PR event base/head do not match the test merge parents" >&2
+              if [[ -z "$tested_base" || "$tested_head" != "$PR_HEAD_SHA" || -n "$extra" ]]; then
+                echo "FAIL: PR event head or shape does not match the two-parent test merge" >&2
                 exit 1
               fi
-              # Judge the frozen event pair; current main may have advanced since checkout.
-              base="$PR_BASE_SHA"
+              if ! git merge-base --is-ancestor "$PR_BASE_SHA" "$tested_base"; then
+                echo "FAIL: PR event base ancestry is unconfirmed for the tested merge base" >&2
+                exit 1
+              fi
+              # The payload base can lag GitHub's test merge. Judge its frozen
+              # first parent; live main may have advanced again since checkout.
+              base="$tested_base"
               ;;
             push)
               case "${PUSH_BEFORE}" in

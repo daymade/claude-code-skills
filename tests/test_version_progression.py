@@ -362,6 +362,58 @@ class CiVersionContextTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn(event["github.sha"], result.stdout)
 
+    def test_pr_payload_base_may_lag_tested_merge_and_live_main(self) -> None:
+        checker = self.repo / "scripts/ci/check_version_progression.py"
+        checker.write_text("raise SystemExit(0)\n")
+        self.base = self.commit("old payload base has a permissive checker")
+        (self.repo / "README.md").write_text("candidate docs\n", encoding="utf-8")
+        head = self.commit("PR source")
+        run(self.repo, "git", "switch", "-qc", "tested-main", self.base)
+        self.write_manifest(manifest(docs="2.1.0"))
+        checker.write_text("print('ACTUAL_BASE_CHECKER')\nexec(" + repr(CHECKER.read_text()) + ")\n")
+        tested_base = self.commit("main advanced before test merge")
+        run(self.repo, "git", "switch", "-qc", "event-merge")
+        run(self.repo, "git", "merge", "--no-ff", "--no-edit", head)
+        merge = run(self.repo, "git", "rev-parse", "HEAD").stdout.strip()
+        event = {
+            "github.event_name": "pull_request",
+            "github.event.pull_request.base.sha": self.base,
+            "github.event.pull_request.head.sha": head,
+            "github.sha": merge,
+        }
+        run(self.repo, "git", "switch", "tested-main")
+        self.write_manifest(manifest(docs="2.2.0"))
+        live_main = self.commit("main advanced after test merge")
+        run(self.repo, "git", "update-ref", "refs/remotes/origin/main", live_main)
+        run(self.repo, "git", "switch", "event-merge")
+        result = self.workflow_check(event)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("ACTUAL_BASE_CHECKER", result.stdout)
+        self.assertIn(merge, result.stdout)
+        # A real release check, not a marker-only stub, must still reject a
+        # new payload under the actual main's already-published version.
+        run(self.repo, "git", "switch", "-qc", "invalid-head", tested_base)
+        skill = self.repo / "daymade-docs/SKILL.md"
+        skill.write_text(skill.read_text() + "unbumped payload\n")
+        invalid = self.commit("unbumped change")
+        run(self.repo, "git", "switch", "-qc", "invalid-merge", tested_base)
+        run(self.repo, "git", "merge", "--no-ff", "--no-edit", invalid)
+        invalid_merge = run(self.repo, "git", "rev-parse", "HEAD").stdout.strip()
+        result = self.workflow_check({**event, "github.event.pull_request.head.sha": invalid, "github.sha": invalid_merge})
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("ACTUAL_BASE_CHECKER", result.stdout)
+        self.assertIn("version did not strictly increase", result.stderr)
+
+    def test_pr_rejects_payload_base_outside_tested_base_history(self) -> None:
+        event = self.healthy_pr()
+        run(self.repo, "git", "switch", "-qc", "other-base", self.base)
+        (self.repo / "other.md").write_text("unrelated base advance\n")
+        other = self.commit("not an ancestor of tested base")
+        run(self.repo, "git", "switch", "event-merge")
+        result = self.workflow_check({**event, "github.event.pull_request.base.sha": other})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("FAIL: PR event", result.stderr)
+
     def test_pr_still_rejects_real_regression(self) -> None:
         self.write_manifest(manifest(docs="1.9.9"))
         result = self.workflow_check(self.make_pr(self.commit()))
