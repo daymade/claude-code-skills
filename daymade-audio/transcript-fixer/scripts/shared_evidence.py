@@ -377,9 +377,10 @@ class SharedEvidence:
                     raise EvidenceError("publication receipt cursor is invalid")
                 before = max(before, recorded)
                 if cursor > before:
-                    prior = state["pending"].get(native, {})
-                    if (prior.get("device_id") not in (None, current_device)
-                            or prior.get("owner_device_id") not in (None, owner_device)):
+                    prior = state["pending"].get(native)
+                    if prior is not None and (not prior.get("device_id") or not prior.get("owner_device_id")
+                            or prior.get("device_id") != current_device
+                            or prior.get("owner_device_id") != owner_device):
                         continue  # Preserve another configured identity's pending work.
                     state["pending"][native] = {"audit_cursor": cursor, "source_key": key,
                         "uri": resource["uri"], "domain": binding["domain"],
@@ -405,8 +406,8 @@ class SharedEvidence:
                         or pending["domain"] != binding["domain"]):
                     continue
                 if (not current_device or not owner_device or current_device != owner_device
-                        or pending.get("device_id") not in (None, current_device)
-                        or pending.get("owner_device_id") not in (None, owner_device)):
+                        or pending.get("device_id") != current_device
+                        or pending.get("owner_device_id") != owner_device):
                     log.warning("Shared publication retained: configured device is missing or not the source owner")
                     continue
                 if Path(native).resolve().as_uri() != resource["metadata"]["source"].get("uri"):

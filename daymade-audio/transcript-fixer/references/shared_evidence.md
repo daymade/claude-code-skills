@@ -56,6 +56,8 @@ dictionary binding's `owner_device_id`. Missing or foreign identity leaves work
 pending; a device change cannot relabel another device's pending work. Reads can
 share sources across devices. This is a configured identity boundary, not
 hardware attestation or protection against copying the same identity profile.
+Historical pending work with missing identity remains pending after profile
+repair; the original owner must resolve it explicitly rather than infer ownership.
 
 After native commits, `shared-publications.json` under the native configuration
 directory records pending audit cursors before attempting publication. Failures
@@ -63,8 +65,9 @@ retain the native commit and pending work; a later ordinary CLI operation
 replays it. A receipt records the pinned version and the consistent snapshot's
 `captured_through_audit_cursor`; several commits captured together are one
 snapshot, not fabricated intermediate versions. Captured command output is
-private and never printed into logs or the compact outbox. This source transport
-does not create a scheduler or run inference.
+private and never printed into logs or the compact outbox. The Skill does not
+retry the original correction or add a scheduler. The configured importer keeps
+its existing explicitly configured dependent-refresh behavior.
 
 Run the isolated real-CLI cases with the declared script dependencies:
 

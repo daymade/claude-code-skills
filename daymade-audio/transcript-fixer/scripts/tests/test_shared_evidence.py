@@ -290,6 +290,50 @@ print(json.dumps(value))
         self.assertNotIn("新增正字", statefile.read_text())
         self.assertEqual(len(publisher_calls.read_text().splitlines()), 2)
 
+    def test_unknown_pending_identity_cannot_be_assigned_after_profile_repair(self):
+        import shared_evidence
+        self.resources[0] = dictionary_resource(self.native_db)
+        self.profile["source_publisher"] = {"protocol": 1, "argv": ["synthetic-publisher"]}
+        self.write()
+        evidence = self.evidence()
+        evidence.attach(self.native)
+        self.native.add_correction("synthetic_unknown_from", "synthetic_unknown_to", "alpha")
+        original_invoke = shared_evidence._invoke
+        calls = []
+
+        def publisher(argv):
+            if argv[0] == "synthetic-publisher":
+                calls.append(argv)
+                value = dictionary_resource(self.native_db)
+                value.update(version=2, version_uri=value["uri"] + "/versions/2")
+                return value
+            return original_invoke(argv)
+
+        with patch.object(shared_evidence, "_invoke", publisher):
+            evidence.publish(self.config)
+        state_path = self.config / "shared-publications.json"
+        before = json.loads(state_path.read_text())
+        self.assertEqual(len(before["pending"]), 1)
+        self.assertFalse(calls)
+        self.profile["device"] = {"id": "synthetic-device-B"}
+        self.profile["evidence_bindings"]["transcript-fixer.dictionary"]["owner_device_id"] = "synthetic-device-B"
+        self.write()
+        repaired = self.evidence()
+        repaired.attach(self.native)
+        with patch.object(shared_evidence, "_invoke", publisher):
+            repaired.publish(self.config)
+        self.assertEqual(json.loads(state_path.read_text()), before)
+        self.assertFalse(calls)
+        # Old records without the keys are a distinct negative from JSON null.
+        for pending in before["pending"].values():
+            pending.pop("device_id")
+            pending.pop("owner_device_id")
+        state_path.write_text(json.dumps(before))
+        with patch.object(shared_evidence, "_invoke", publisher):
+            repaired.publish(self.config)
+        self.assertEqual(json.loads(state_path.read_text()), before)
+        self.assertFalse(calls)
+
     def cli(self, args, *, fake_ai=False):
         entry = SCRIPTS / "fix_transcription.py"
         if fake_ai:
