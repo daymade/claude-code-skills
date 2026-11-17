@@ -23,6 +23,12 @@ and their scripts remain installed; only their automatic catalog entries are
 hidden. Claude users can still invoke their original
 `/daymade-audio:<child>` commands manually.
 
+In a deployment already integrated with daudio, read
+[Shared service access](references/shared-service-access.md) before selecting an
+application SDK, runtime or processing location. Use its configured thin-client
+entry by default; preserve the selected specialist, source evidence and output
+contract. It does not install a service or change unbound standalone routes.
+
 | Requested result | Read this exact file |
 |---|---|
 | Transcribe with StepFun `stepaudio-3-asr-max`, obtain its independent speaker timeline, migrate older StepFun ASR, or diagnose the misleading “model not supported” endpoint error | `../stepfun-asr/SKILL.md` |

@@ -37,6 +37,10 @@ continuing ordinary correction; resolve only the missing authorization scope.
    frequency or another model's agreement alone does not bind a person to a turn.
    Audio absence does not block this authorized branch: record it and retain the
    uncertainty; voice resemblance alone does not confirm identity.
+   When a name appears in self-introduction, address or quoted speech, first
+   resolve its referent with the [contrast cases](#self-introduction-address-and-quotation).
+   Record the speaking turn, the person being addressed/quoted and the evidence
+   for each; do not transfer a caller's self-description to the other party.
 4. Keep one evidence row per original speaker label, including those left
    anonymous: original label, candidate or `unknown`, quoted dialogue/context
    locators, external authority and its limit (or unavailable), counterevidence,
@@ -96,3 +100,22 @@ ordinary correction; do not assign names from the agenda. If the user separately
 says “Speaker B is Guest Alpha,” cite that exact mapping as human authority,
 preserve it, and keep A/C anonymous. An explicit mapping authorizes that mapping,
 not inference for the other speakers.
+
+### Self-introduction, address and quotation
+
+These synthetic contrasts test reference attribution, not voice confirmation.
+Apply the named transcript's grant and existing human mappings before using them.
+
+| Current dialogue and context | Permitted attribution and remaining limit |
+|---|---|
+| A offers a sales consultation, then says “我姓林”; B describes their house | The self-description belongs to A. A may have the caller/sales role; B's surname remains unknown. The text alone does not confirm A's full identity. |
+| A says “林先生您好，我是陈顾问”; B responds to that greeting | “林先生” addresses B; “陈顾问” describes A. Keep role/name candidates separate and preserve any authoritative mappings. |
+| A says “客户当时说：‘我姓林’” | The quoted self-description concerns the reported customer. It supplies no surname for A or an otherwise unidentified current listener. |
+| Recording B also contains `Speaker A`, after recording A was human-mapped | Re-evaluate B within its own recording and turn range; do not carry A's mapping across recordings. |
+| A has an explicit record-local human mapping, while another name is mentioned | Preserve that mapping; record the other name's actual referent rather than replacing the confirmed speaker. |
+
+For a replay, require locatable evidence for the candidate's referent and turn
+range, preserve raw labels/bodies/times, and inspect both correct retention and
+wrong-person assignment. Leaving every row anonymous does not test attribution;
+correctly attributing a self-description does not authorize confirmed-name or
+voiceprint-bank writes.

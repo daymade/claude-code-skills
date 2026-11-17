@@ -92,6 +92,9 @@ can prove its control interface starts; it cannot prove login, privileged access
 or the business operation. Report unavailable live cases as unverified.
 When building an executable, verify the artifact actually running corresponds to
 the selected source; an existing file or a successful source build alone is not proof.
+When a binding selects a frozen helper or separate interpreter, use the
+[installed consumer projection](stateful-script-verification.md#installed-consumer-projection)
+controls before claiming that the ordinary entry has changed.
 
 Separate dependency readiness from task acceptance. A model loading is not a
 correct transcript; a service responding is not a correct-account record read.
