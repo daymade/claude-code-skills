@@ -23,7 +23,7 @@ import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, NamedTuple, Optional
 from collections import Counter, defaultdict
 
 
@@ -1004,6 +1004,15 @@ def search_kimi_wires(
     return matches
 
 
+class ClaudeSessionBounds(NamedTuple):
+    """File-derived fields needed to group copies and order sessions."""
+
+    session_id: str
+    created_at: Optional[float]
+    updated_at: Optional[float]
+    timestamp_count: int
+
+
 class SessionAnalyzer:
     """Analyze Claude Code session history files across all config homes."""
 
@@ -1012,6 +1021,8 @@ class SessionAnalyzer:
         homes: Optional[List[Path]] = None,
         sources: Optional[List[HistorySource]] = None,
         warnings: Optional[List[str]] = None,
+        *,
+        session_bounds: Optional[Callable[[Path], ClaudeSessionBounds]] = None,
     ):
         """
         Initialize analyzer.
@@ -1045,6 +1056,7 @@ class SessionAnalyzer:
             warnings = (warnings or []) + discovered_warnings
         self.homes = [source.home for source in self.sources]
         self.warnings = list(warnings or [])
+        self._session_bounds = session_bounds
 
     def find_project_sessions(self, project_path: str) -> List[Dict[str, Any]]:
         """
@@ -1132,7 +1144,7 @@ class SessionAnalyzer:
                     else None
                 )
                 if summary is None:
-                    summary = scan_claude_session(file)
+                    summary = (self._session_bounds or scan_claude_session)(file)
                 sid = summary.session_id
                 copies = [
                     {

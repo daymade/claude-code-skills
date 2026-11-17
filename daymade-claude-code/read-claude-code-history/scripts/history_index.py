@@ -20,13 +20,14 @@ import os
 import platform
 import shutil
 import sqlite3
+import stat
 import subprocess
 import sys
 import tempfile
 import time
 import urllib.request
 import zipfile
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 try:
@@ -43,6 +44,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+from _core.claude import scan_claude_session  # noqa: E402
 from _core.parse import parse_timestamp  # noqa: E402
 from _core.sources import (  # noqa: E402
     SUPPORTED_PROVIDERS,
@@ -70,6 +72,7 @@ from _core.kimi import (  # noqa: E402
     scrub_kimi_prompt,
 )
 from analyze_sessions import (  # noqa: E402
+    ClaudeSessionBounds,
     SessionAnalyzer,
     _record_identity,
     codex_searchable_segments,
@@ -999,27 +1002,123 @@ def _session_copies(ref: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
-def _file_sha256(path: Path) -> str:
+def _file_identity(info: os.stat_result) -> tuple[int, ...]:
+    # ctime catches in-place edits even if the writer restores mtime. Device
+    # and inode catch replacement. None of these fields changes the fingerprint.
+    return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+
+
+class _SourceFileCache:
+    """Optional, disposable observations stored in the index transaction."""
+
+    # Use a new table name when cached discovery fields or their readers change.
+    _table = "source_file_cache_v1"
+
+    def __init__(self, connection: sqlite3.Connection) -> None:
+        self._previous: dict[tuple[str, str], tuple[str, str]] = {}
+        self._seen: dict[tuple[str, str], tuple[str, str]] = {}
+        self._exists = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (self._table,)
+        ).fetchone() is not None
+        if self._exists:
+            self._previous = {
+                (kind, path): (identity, payload)
+                for kind, path, identity, payload in connection.execute(
+                    f"SELECT kind,path,identity,payload FROM {self._table}"
+                )
+            }
+
+    def read(
+        self,
+        kind: str,
+        path: Path,
+        load: Callable[[tuple[int, ...] | None], tuple[Any, bool]],
+        *,
+        info: os.stat_result | None = None,
+    ) -> Any:
+        if info is None:
+            try:
+                info = path.stat()
+            except OSError:
+                return load(None)[0]
+        if not stat.S_ISREG(info.st_mode) or not info.st_ino or not info.st_ctime_ns:
+            return load(None)[0]
+
+        key = (kind, str(path.absolute()))
+        identity = _file_identity(info)
+        encoded = json.dumps(identity)
+        previous = self._seen.get(key, self._previous.get(key))
+        if previous is not None and previous[0] == encoded:
+            self._seen[key] = previous
+            return json.loads(previous[1])
+
+        self._seen.pop(key, None)
+        value, stable = load(identity)
+        try:
+            stable = stable and _file_identity(path.stat()) == identity
+        except OSError:
+            stable = False
+        if stable:
+            self._seen[key] = (encoded, json.dumps(value))
+        return value
+
+    def store(self, connection: sqlite3.Connection) -> None:
+        """Reconcile cache rows with the inputs observed by this update."""
+        if not connection.in_transaction:
+            connection.execute("BEGIN")
+        if not self._exists:
+            connection.execute(
+                f"CREATE TABLE IF NOT EXISTS {self._table}("
+                "kind TEXT NOT NULL, path TEXT NOT NULL, identity TEXT NOT NULL, "
+                "payload TEXT NOT NULL, PRIMARY KEY(kind,path)) WITHOUT ROWID"
+            )
+        connection.executemany(
+            f"DELETE FROM {self._table} WHERE kind=? AND path=?",
+            self._previous.keys() - self._seen.keys(),
+        )
+        connection.executemany(
+            f"INSERT OR REPLACE INTO {self._table} VALUES(?,?,?,?)",
+            ((*key, *entry) for key, entry in self._seen.items()
+             if self._previous.get(key) != entry),
+        )
+
+
+def _file_sha256(
+    path: Path, identity: tuple[int, ...] | None = None
+) -> tuple[str, bool]:
+    """Hash the file and report whether the same version supplied every byte."""
     digest = hashlib.sha256()
+    size = 0
     with path.open("rb") as handle:
+        before = _file_identity(os.fstat(handle.fileno()))
         while block := handle.read(1024 * 1024):
             digest.update(block)
-    return digest.hexdigest()
+            size += len(block)
+        stable = before == identity == _file_identity(os.fstat(handle.fileno()))
+    return digest.hexdigest(), stable and size == before[2]
 
 
-def _session_fingerprint(ref: dict[str, Any]) -> str:
+def _session_fingerprint(
+    ref: dict[str, Any], cache: _SourceFileCache | None = None
+) -> str:
     facts = []
     for copy in _session_copies(ref):
         path = copy["path"]
         try:
-            stat = path.stat()
+            info = path.stat()
+            digest = (
+                cache.read(
+                    "sha256", path, lambda identity: _file_sha256(path, identity), info=info
+                )
+                if cache is not None else _file_sha256(path)[0]
+            )
             facts.append(
                 {
                     "path": copy["physical"],
                     "labels": copy["labels"],
-                    "size": stat.st_size,
-                    "mtime_ns": stat.st_mtime_ns,
-                    "sha256": _file_sha256(path),
+                    "size": info.st_size,
+                    "mtime_ns": info.st_mtime_ns,
+                    "sha256": digest,
                 }
             )
         except OSError as error:
@@ -1493,10 +1592,32 @@ def _cwd_matches_project(cwd: Any, project_path: str | None) -> bool:
         return False
 
 
+def _discover_file_fields(
+    cache: _SourceFileCache | None, kind: str, path: Path, load: Callable[[], Any]
+) -> Any:
+    if cache is None:
+        return load()
+    return cache.read(kind, path, lambda _identity: (load(), True))
+
+
+def _claude_index_bounds(path: Path, cache: _SourceFileCache) -> ClaudeSessionBounds:
+    def load() -> tuple[str, float | None, float | None, int]:
+        summary = scan_claude_session(path)
+        return (summary.session_id, summary.created_at, summary.updated_at, summary.timestamp_count)
+
+    return ClaudeSessionBounds(*_discover_file_fields(cache, "claude-bounds", path, load))
+
+
+def _codex_index_meta(path: Path) -> dict[str, Any]:
+    meta = codex_meta_from_rollout(path) or {}
+    return {"id": meta.get("id"), "cwd": meta.get("cwd")}
+
+
 def _codex_session_refs(
     source: HistorySource,
     project_path: str | None,
     warnings: list[str] | None = None,
+    cache: _SourceFileCache | None = None,
 ) -> list[dict[str, Any]]:
     """Enumerate Codex rollouts as session refs.
 
@@ -1510,14 +1631,21 @@ def _codex_session_refs(
     by_session: dict[str, dict[str, Any]] = {}
     for path in discover_codex_rollouts(source.home):
         try:
-            meta = codex_meta_from_rollout(path) or {}
+            meta = _discover_file_fields(
+                cache, "codex-meta", path, lambda: _codex_index_meta(path)
+            )
             session_id = codex_session_id(meta, path)
             if not session_id:
                 continue
             cwd = meta.get("cwd")
             if not _cwd_matches_project(cwd, project_path):
                 continue
-            time_range = codex_rollout_time_range(path)
+
+            def bounds() -> tuple[float | None, float | None]:
+                time_range = codex_rollout_time_range(path)
+                return time_range.earliest, time_range.latest
+
+            earliest, latest = _discover_file_fields(cache, "codex-bounds", path, bounds)
         except (OSError, ValueError) as error:
             if warnings is not None:
                 warnings.append(
@@ -1534,8 +1662,8 @@ def _codex_session_refs(
                 "provider": "codex",
                 "sources": [source],
                 "copies": [{"path": path, "source": source}],
-                "created_at": time_range.earliest,
-                "updated_at": time_range.latest,
+                "created_at": earliest,
+                "updated_at": latest,
             }
             continue
         # Resuming a Codex session writes a second rollout that keeps the
@@ -1546,7 +1674,7 @@ def _codex_session_refs(
         entry["created_at"] = min(
             [
                 value
-                for value in (entry["created_at"], time_range.earliest)
+                for value in (entry["created_at"], earliest)
                 if value is not None
             ],
             default=None,
@@ -1554,7 +1682,7 @@ def _codex_session_refs(
         entry["updated_at"] = max(
             [
                 value
-                for value in (entry["updated_at"], time_range.latest)
+                for value in (entry["updated_at"], latest)
                 if value is not None
             ],
             default=None,
@@ -1566,6 +1694,7 @@ def _kimi_session_refs(
     source: HistorySource,
     project_path: str | None,
     warnings: list[str] | None = None,
+    cache: _SourceFileCache | None = None,
 ) -> list[dict[str, Any]]:
     # Newer Kimi CLI builds drop ``cwd`` (and ``id``) from state.json and keep
     # the working directory only in session_index.jsonl, so read that map once
@@ -1585,7 +1714,12 @@ def _kimi_session_refs(
             cwd = state.get("cwd") or workdirs.get(session_dir.name)
             if not _cwd_matches_project(cwd, project_path):
                 continue
-            time_range = kimi_wire_time_range(wire_path)
+
+            def bounds() -> tuple[float | None, float | None]:
+                time_range = kimi_wire_time_range(wire_path)
+                return time_range.earliest, time_range.latest
+
+            earliest, latest = _discover_file_fields(cache, "kimi-bounds", wire_path, bounds)
         except (OSError, ValueError) as error:
             if warnings is not None:
                 warnings.append(
@@ -1602,17 +1736,17 @@ def _kimi_session_refs(
                 "provider": "kimi",
                 "sources": [source],
                 "copies": [{"path": wire_path, "source": source}],
-                "created_at": time_range.earliest,
-                "updated_at": time_range.latest,
+                "created_at": earliest,
+                "updated_at": latest,
             }
             continue
         entry["copies"].append({"path": wire_path, "source": source})
         entry["created_at"] = min(
-            [value for value in (entry["created_at"], time_range.earliest) if value],
+            [value for value in (entry["created_at"], earliest) if value],
             default=None,
         )
         entry["updated_at"] = max(
-            [value for value in (entry["updated_at"], time_range.latest) if value],
+            [value for value in (entry["updated_at"], latest) if value],
             default=None,
         )
     if skipped_internal and warnings is not None:
@@ -1624,14 +1758,20 @@ def _kimi_session_refs(
     return list(by_session.values())
 
 
-def _session_refs(scope: IndexScope) -> list[dict[str, Any]]:
+def _session_refs(
+    scope: IndexScope, cache: _SourceFileCache | None = None
+) -> list[dict[str, Any]]:
     claude_sources = [
         source for source in scope.sources if source.provider == "claude"
     ]
     refs: list[dict[str, Any]] = []
     if claude_sources:
         analyzer = SessionAnalyzer(
-            sources=claude_sources, warnings=scope.warnings
+            sources=claude_sources,
+            warnings=scope.warnings,
+            session_bounds=(
+                (lambda path: _claude_index_bounds(path, cache)) if cache is not None else None
+            ),
         )
         if scope.project_path:
             claude_refs = analyzer.find_project_sessions(scope.project_path)
@@ -1643,11 +1783,11 @@ def _session_refs(scope: IndexScope) -> list[dict[str, Any]]:
     for source in scope.sources:
         if source.provider == "codex":
             refs.extend(
-                _codex_session_refs(source, scope.project_path, scope.warnings)
+                _codex_session_refs(source, scope.project_path, scope.warnings, cache)
             )
         elif source.provider == "kimi":
             refs.extend(
-                _kimi_session_refs(source, scope.project_path, scope.warnings)
+                _kimi_session_refs(source, scope.project_path, scope.warnings, cache)
             )
     return refs
 
@@ -1705,7 +1845,8 @@ def update_index(
         print(migration_note, file=sys.stderr)
 
     try:
-        refs = _session_refs(scope)
+        cache = _SourceFileCache(connection)
+        refs = _session_refs(scope, cache)
         for warning in scope.warnings:
             print(f"Warning: {warning}", file=sys.stderr)
         current = {ref["session_id"]: ref for ref in refs}
@@ -1725,7 +1866,7 @@ def update_index(
             _freeze_retired_records(connection, retirement)
         for index, ref in enumerate(refs, start=1):
             session_id = ref["session_id"]
-            fingerprint = _session_fingerprint(ref)
+            fingerprint = _session_fingerprint(ref, cache)
             ref["_fingerprint"] = fingerprint
             if known.get(session_id) == fingerprint:
                 unchanged += 1
@@ -1788,6 +1929,7 @@ def update_index(
             str(max((ref.get("updated_at") or 0 for ref in refs), default=0)),
         )
         _meta_set(connection, "build_complete", "true")
+        cache.store(connection)
         connection.commit()
         _validate_schema(connection)
         if target != db_path:
@@ -2962,8 +3104,9 @@ def index_status(
                 "Status source check scope does not match the database scope; refusing "
                 "to label out-of-scope sessions stale."
             )
-        refs = _session_refs(scope)
-        current = {ref["session_id"]: _session_fingerprint(ref) for ref in refs}
+        cache = _SourceFileCache(connection)
+        refs = _session_refs(scope, cache)
+        current = {ref["session_id"]: _session_fingerprint(ref, cache) for ref in refs}
         indexed = {
             row["session_id"]: row["fingerprint"]
             for row in connection.execute("SELECT session_id,fingerprint FROM sessions")
