@@ -7,7 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **read-claude-code-history** (`daymade-claude-code` v5.2.0 → v5.2.1): Reuse discovery metadata and verified content digests for unchanged session files during incremental indexing.
+- **asr-transcribe-to-text** (`daymade-audio` v1.65.1 → v1.65.2): Use the installed shared viewer to generate offline pages for unregistered ASR projects. Preserve an existing legacy page for review export and retain standalone generation on installations without a shared viewer.
+
+- **ghostty-use** (v1.14.2 → v1.15.0): Restore recorded relative tab order and tab-level custom titles while preserving unrelated live sessions and external selection. Automatic backups now publish title/order changes, retain the last captured layout across capture failures and refresh its provenance after recovery.
+- **macos-watchdog** (`daymade-macos` v1.34.8 → v1.34.9): Require byte-copy observers to prove source-to-install freshness through managed-file hashes and a completed native round, rather than treating healthy source or an install receipt as deployment evidence.
 - **prior-work-retrieval** (`daymade-claude-code` v5.1.25 → v5.2.0): Require task-specific filesystem scope before launching search or Git freshness probes. Keep out-of-scope sources visible as coverage gaps; preserve scoped searches, indexed adapters and manual verification.
 - **macos-watchdog** (`daymade-macos` v1.34.7 → v1.34.8): Distinguish closed writers from complete captures, preserve interrupted batches and retry cleared recovery blockers without reusing startup proof for live children.
 - **debugging-network-issues** (v1.12.3 → v1.12.4): Accept collector recovery through fresh post-fault work, destination-verified custody and the deployed monitoring consumer while retaining historical gaps.
@@ -20,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **macos-load-doctor / macos-watchdog** (`daymade-macos` v1.34.6 → v1.34.7): Explain process activity by business task and lifecycle evidence; preserve stateful shared workloads and verify the effective background job separately from its UI.
 - **claude-code-hooks** (`daymade-claude-code` v5.1.23 → v5.1.24): Audit hot-path cost by actual trigger frequency while preserving verdicts, authoritative rereads, input-bound check reuse and deployed-consumer verification.
 - **read-claude-code-history** (`daymade-claude-code` v5.1.22 → v5.1.23): Pure BM25 returns this same lexical order directly; oversampling only contributes candidates when there is a vector leg to fuse with it.
+- **read-claude-code-history** (`daymade-claude-code` v5.2.0 → v5.2.1): Reuse discovery metadata and verified content digests for unchanged session files during incremental indexing.
 
 - **audio-router / transcript-fixer** (`daymade-audio` v1.64.2 → v1.65.0): Guide configured deployments through independent thin SDKs and distinguish self-introduction, address and quotation before speaker identity writes.
 - **skill-creator** (`daymade-skill` v1.81.1 → v1.81.2): Check actual installed consumer bindings and exercise optional-dependency imports through the repository runner.

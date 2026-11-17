@@ -967,6 +967,108 @@ def reconcile(sessions, timeout=10):
         time.sleep(min(0.5, max(0, deadline - time.monotonic())))
 
 
+def _restore_layout_plan(doc, sessions):
+    """Order the selected set by recorded tabs and retain title expectations."""
+    if doc.get('window_tab_mapping') != 'known':
+        return sessions, None
+    from ghostty_windows import recorded_single_window_layout
+    recorded = recorded_single_window_layout(doc.get('windows'))
+    if recorded is None:
+        return sessions, None
+    positions = {sid: index for index, sid in enumerate(recorded['order'])}
+    original = {sid: index for index, sid in enumerate(s['sid'] for s in sessions)}
+    ordered = sorted(sessions, key=lambda s: (positions.get(s['sid'], len(positions)),
+                                              original[s['sid']]))
+    selected = {s['sid'] for s in ordered}
+    return ordered, {'order': [s['sid'] for s in ordered],
+                     'titles': {sid: title for sid, title in recorded['titles'].items()
+                                if sid in selected}}
+
+
+def _selected_tab_id():
+    from ghostty_windows import capture_window_structure
+    tree = capture_window_structure(timeout=10)
+    if not tree.get('captured'):
+        return None
+    selected = [tab['tab_id'] for window in tree.get('windows', [])
+                for tab in window.get('tabs', []) if tab.get('selected')]
+    return selected[0] if len(selected) == 1 else None
+
+
+def _restore_recorded_layout(plan, live_sessions, initiating_tab_id=None, last_pending_sid=None):
+    """Reapply and independently verify tab layout after process reconciliation."""
+    from ghostty_windows import (apply_recorded_tab_order, apply_tab_title_overrides,
+                                 capture_window_structure, join_windows_to_sessions,
+                                 recorded_single_window_layout, select_tab)
+    result = {'order_match': False, 'titles_matched': 0,
+              'titles_total': len(plan['titles']), 'extra_sessions': 0,
+              'selection': 'not-requested', 'errors': []}
+    tree = capture_window_structure(timeout=15)
+    if not tree.get('captured'):
+        result['errors'].append('current window capture: ' + tree.get('reason', 'unknown'))
+        return result
+    tree = join_windows_to_sessions(tree, live_sessions)
+    if recorded_single_window_layout(tree) is None:
+        result['errors'].append('current layout is not one window with one terminal per mapped session')
+        return result
+    selected = {sid for sid in plan['order']}
+    ordered = apply_recorded_tab_order(tree, plan['order'])
+    if ordered['error']:
+        result['errors'].append(ordered['error'])
+    if ordered['missing']:
+        result['errors'].append('order targets missing: ' + ','.join(sid[:13] for sid in ordered['missing']))
+    applied = apply_tab_title_overrides(tree, plan['titles'])
+    if applied['error']:
+        result['errors'].append(applied['error'])
+    if applied['missing']:
+        result['errors'].append('title targets missing: ' + ','.join(sid[:13] for sid in applied['missing']))
+    if last_pending_sid and initiating_tab_id:
+        selected_tabs = [tab for window in tree['windows'] for tab in window['tabs']
+                         if tab.get('selected')]
+        selected_sids = [(term.get('session') or {}).get('sid')
+                         for tab in selected_tabs for term in tab['terminals']]
+        if selected_sids == [last_pending_sid]:
+            expected_tab_id = selected_tabs[0]['tab_id']
+            current_tab_id = _selected_tab_id()
+            if current_tab_id is None:
+                result['selection'] = 'failed: current selection capture unavailable'
+                result['errors'].append(result['selection'])
+            elif current_tab_id == expected_tab_id:
+                selection = select_tab(initiating_tab_id)
+                result['selection'] = 'returned' if selection['selected'] else 'failed: ' + selection['reason']
+                if not selection['selected']:
+                    result['errors'].append('initiating tab selection: ' + selection['reason'])
+            else:
+                result['selection'] = 'left-unchanged-after-external-selection'
+        else:
+            result['selection'] = 'left-unchanged-after-external-selection'
+    readback = capture_window_structure(timeout=15)
+    if not readback.get('captured'):
+        result['errors'].append('layout readback: ' + readback.get('reason', 'unknown'))
+        return result
+    readback = join_windows_to_sessions(readback, live_sessions)
+    actual = recorded_single_window_layout(readback)
+    if actual is None:
+        result['errors'].append('readback layout is unsupported')
+        return result
+    actual_selected_order = [sid for sid in actual['order'] if sid in selected]
+    result['order_match'] = actual_selected_order == plan['order']
+    if not result['order_match']:
+        result['errors'].append('recorded relative tab order does not match readback')
+    result['titles_matched'] = sum(actual['titles'].get(sid) == title
+                                   for sid, title in plan['titles'].items())
+    if result['titles_matched'] != result['titles_total']:
+        result['errors'].append('tab title overrides differ from readback')
+    result['extra_sessions'] = sum(sid not in selected for sid in actual['order'])
+    if result['selection'] == 'returned':
+        selected_ids = [tab['tab_id'] for window in readback['windows'] for tab in window['tabs']
+                        if tab.get('selected')]
+        if selected_ids != [initiating_tab_id]:
+            result['selection'] = 'failed: selection readback differs'
+            result['errors'].append('initiating tab selection readback differs')
+    return result
+
+
 def cmd_restore(args):
     doc = load_snapshot(args.snapshot)
     sel = requested_sessions(doc, args)
@@ -979,11 +1081,17 @@ def cmd_restore(args):
         sel = [s for s in sel if s.get("status", "").startswith("active")]
     if not sel:
         raise RecoveryError("no sessions selected; use --all or --only for waiting/stale/unknown records")
+    sel, layout_plan = _restore_layout_plan(doc, sel)
+    if doc.get('window_tab_mapping') == 'known' and layout_plan is None:
+        print("layout restore: unavailable for this recorded tree; using session-list order")
     # Prepare every command before any GUI side effects, including malformed snapshots.
     commands = {s["sid"]: restore_cmd(s) for s in sel}
-    live = {s["sid"] for s in list_sessions(scope='all-cli')}
+    live_rows = list_sessions(scope='all-cli')
+    live = {s["sid"] for s in live_rows}
     pending = [s for s in sel if s["sid"] not in live]
     print(f"selected {len(sel)} sessions; {len(sel) - len(pending)} already present; opening {len(pending)} missing")
+    if layout_plan:
+        print(f"layout restore: recorded relative tab order; {len(layout_plan['titles'])} custom titles after reconciliation")
     if args.dry_run:
         for s in pending:
             print(f"WOULD SEND {s['sid']} -> {commands[s['sid']]}")
@@ -992,12 +1100,29 @@ def cmd_restore(args):
         print("History readiness: unverified by this script. Use the authorized Kimi observation "
               "channel after process reconciliation; unavailable observation remains unverified.")
         print("Keep keyboard and mouse untouched until paste and reconciliation finish.", flush=True)
+    initiating_tab_id = _selected_tab_id() if pending and layout_plan else None
+    if pending and layout_plan and not initiating_tab_id:
+        raise RecoveryError("cannot capture one initiating tab before restore; no sessions were opened")
     for i, s in enumerate(pending, 1):
         ok = _paste_tab(commands[s["sid"]])
         print(f"  [{i}/{len(pending)}] {'SENT (unverified)' if ok else 'SEND FAILED'}: {s['sid'][:13]}")
     still_missing = reconcile(sel, args.reconcile_seconds)
     print(f"\nauto-check: {len(sel) - len(still_missing)}/{len(sel)} present")
     print("Process presence only; readable conversation history and task continuation are not verified.")
+    layout_failed = False
+    if layout_plan:
+        current_live = list_sessions(scope='all-cli')
+        layout = _restore_recorded_layout(
+            layout_plan, current_live, initiating_tab_id,
+            pending[-1]['sid'] if pending else None)
+        print(f"layout check: relative order match={layout['order_match']}; "
+              f"titles={layout['titles_matched']}/{layout['titles_total']}; "
+              f"other live sessions preserved={layout['extra_sessions']}; selection={layout['selection']}")
+        for error in layout['errors']:
+            print("  LAYOUT " + error)
+        layout_failed = bool(layout['errors']) or not layout['order_match'] or layout['titles_matched'] != layout['titles_total']
+        if layout_failed and not still_missing:
+            print("Layout remains incomplete; rerun this same restore invocation to retry without reopening present IDs.")
     for s in still_missing:
         print(f"  NOT OBSERVED {s['sid']} -> if still wanted: {commands[s['sid']]}")
     if still_missing:
@@ -1008,7 +1133,7 @@ def cmd_restore(args):
             retry += ["--snapshot", args.snapshot]
         retry += ["--only"] + [s["sid"] for s in still_missing]
         print("retry only missing: " + shlex.join(retry))
-    return 0 if not still_missing else 1
+    return 0 if not still_missing and not layout_failed else 1
 
 
 def _paste_tab(cmd, *, layout="tabs"):
