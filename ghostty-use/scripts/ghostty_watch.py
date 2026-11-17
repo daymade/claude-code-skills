@@ -546,6 +546,8 @@ def cycle(state, observer=None, *, attempt=None):
 def _cycle(state, observer):
     state = Path(state)
     started = time.monotonic()
+    from ghostty_windows import (canonical_layout, capture_window_structure,
+                                 join_windows_to_sessions)
     with snapshot_lock(state):
         result = observer(started + DEADLINE_SECONDS)
         if result['ghostty_processes'] == 0:
@@ -557,11 +559,12 @@ def _cycle(state, observer):
         mapping = profile_mapping(state)
         latest = state / 'snapshots' / 'latest.json'
         previous = None
-        old_rows, old_unknown = [], []
+        old_rows, old_unknown, old_layout = [], [], None
         if latest.exists():
             previous = read_manifest(latest)
             old_rows = canonical(previous['sessions'], mapping)
             old_unknown = canonical_unresolved(previous.get('unresolved', []))
+            old_layout = canonical_layout(previous.get('windows'))
             if previous.get('kind') == AUTO_KIND and (
                 'canonical_inventory' in previous or 'canonical_unresolved' in previous
             ) and (
@@ -594,11 +597,20 @@ def _cycle(state, observer):
                         if row.get('membership') == 'retained-unverified'}
         old_retained_ids = {(row['tool'], row['sid']) for row in (previous or {}).get('sessions', [])
                             if row.get('membership') == 'retained-unverified'}
-        if (previous is not None and previous.get('kind') == AUTO_KIND and rows == old_rows
-                and unknown == old_unknown and retained_ids == old_retained_ids):
-            return dict(summary, state='unchanged')
+        capture_budget = max(0.2, min(15.0, DEADLINE_SECONDS - (time.monotonic() - started) - 0.5))
+        windows = capture_window_structure(timeout=capture_budget)
+        current_layout = None
+        if windows.get('captured'):
+            windows = join_windows_to_sessions(windows, observed)
+            current_layout = canonical_layout(windows)
         if time.monotonic() - started >= DEADLINE_SECONDS:
-            raise ValueError('observation deadline expired before snapshot publish')
+            raise ValueError('observation deadline expired during window capture')
+        layout_unchanged = current_layout is None or (
+            current_layout == old_layout and previous.get('window_tab_mapping') == 'known'
+            and not previous.get('windows', {}).get('carried_forward'))
+        if (previous is not None and previous.get('kind') == AUTO_KIND and rows == old_rows
+                and unknown == old_unknown and retained_ids == old_retained_ids and layout_unchanged):
+            return dict(summary, state='unchanged')
         sessions = []
         by_id = {(row['tool'], row['sid']): row for row in rows}
         for row in observed:
@@ -613,13 +625,16 @@ def _cycle(state, observer):
         doc['window_tab_mapping'] = 'unknown'
         if 'terminal_inventory' in result:
             doc['terminal_inventory'] = result['terminal_inventory']
-        from ghostty_windows import capture_window_structure, join_windows_to_sessions
-        capture_budget = max(0.2, min(15.0, DEADLINE_SECONDS - (time.monotonic() - started) - 0.5))
-        windows = capture_window_structure(timeout=capture_budget)
         if windows.get('captured'):
-            windows = join_windows_to_sessions(windows, sessions)
             doc['window_tab_mapping'] = 'known'
-        doc['windows'] = windows
+            doc['windows'] = windows
+        elif previous and isinstance(previous.get('windows'), dict) and previous['windows'].get('captured'):
+            inherited = dict(previous['windows'])
+            inherited['carried_forward'] = True
+            inherited['capture_error'] = windows.get('reason', 'window capture unavailable')[:300]
+            doc['windows'] = inherited
+        else:
+            doc['windows'] = windows
         archive = latest.parent / ('snapshot-auto-' + datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f') + '-' + uuid.uuid4().hex[:8] + '.json')
         atomic_manifest(archive, doc, replace=False)
         atomic_manifest(latest, doc)

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **ghostty-use** (v1.14.2 → v1.15.0): Restore recorded relative tab order and tab-level custom titles while preserving unrelated live sessions and external selection. Automatic backups now publish title/order changes, retain the last captured layout across capture failures and refresh its provenance after recovery.
+- **macos-watchdog** (`daymade-macos` v1.34.7 → v1.34.8): Require byte-copy observers to prove source-to-install freshness through managed-file hashes and a completed native round, rather than treating healthy source or an install receipt as deployment evidence.
 - **prior-work-retrieval** (`daymade-claude-code` v5.1.24 → v5.1.25): Limit each ripgrep adapter to one worker and select the globally ranked top candidates without sorting the full candidate set. Preserve full search coverage, path enumeration and source integrity checks.
 
 - **Sparse worktree retirement** (`git-safety-net` v1.28.8 → v1.28.9): Accept proven absent, skipped filtered files in sparse checkouts while preserving refusal for materialized payloads, indirect paths and unproven omissions.

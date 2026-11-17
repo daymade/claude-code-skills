@@ -227,13 +227,20 @@ or unavailable evidence. Dry-run output is JSON for inspection.
   then reconcile after permitted execution. Reboot recovery uses read-only
   `check --snapshot <manifest> --strict`; account switching uses
   [the mode-bound switch check](references/codex-account-switch.md#restore-and-resume-an-interrupted-batch).
-- The batch restore does not reconstruct original window grouping or splits; it
-  opens missing sessions as tabs in the active window. Captured grouping and tab
-  titles live in the manifest `windows` block (evidence for manual re-tiling and
-  re-titling via the scripting dictionary's writable `name override`); the restore
-  does not yet re-apply them automatically. Do not infer a platform-wide AX
-  limitation from this script boundary;
-  use the [current native observations](references/restore_mechanics.md#current-native-observation-boundary).
+- With a captured single-window, one-terminal-per-session `windows` block, restore
+  orders missing sessions by recorded relative tab order, reapplies tab-level
+  `name override` values through the current TTY/session join, preserves unrelated
+  live tabs and independently reads back order and titles. It returns to the
+  initiating tab only while selection still shows the last restored session; an
+  external selection is left untouched. Unsupported or unknown layouts retain
+  session-list order and skip layout writes. Follow
+  [recorded tab layout restoration](references/restore_mechanics.md#restore-recorded-tab-order-and-titles).
+- The batch restore opens missing sessions as tabs in the active window; it does
+  not reconstruct multi-window placement, split geometry or readable history.
+  Process presence, layout readback and conversation readiness remain separate
+  acceptance layers. Do not infer a platform-wide AX limitation from this script
+  boundary; use the
+  [current native observations](references/restore_mechanics.md#current-native-observation-boundary).
 - Rollout files that codex itself cannot find anymore print `no-artifact`; restoring
   them replays the same `codex resume <id>` and stays a best effort.
 
