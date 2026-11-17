@@ -161,10 +161,18 @@ Implement in the observer and convergence worker:
    contents back with `plutil -p <plist>` to catch type errors before loading.
 2. Before replacing an existing job, verify EXACT ownership: both the label
    and the plist path belong to the job you intend to replace.
+   Trace the loaded launcher and any frozen release to the bytes actually
+   consumed; a merged source or closed GUI does not establish the background
+   observer's version or lifecycle. Explain its business work from the declared
+   inputs, current phase and latest completed outcome, including failed rounds.
 3. Inspect the exact service with `launchctl print gui/$(id -u)/<label>` and
    the worker's own task/queue state. A missing PID alone does not prove there
    is no pending work. Coordinate or defer replacement if ownership, active
    work or pending intent is unknown; preserve pending intent for recovery.
+   A shared daemon's PPID identifies a launcher, not a session. Low CPU, GUI exit
+   or process age does not prove an MCP kernel has no retained state or work.
+   Require the lifecycle owner's session/task evidence; unresolved attribution
+   stays read-only and cannot justify an automatic reaper.
 4. Verify a recovery path: keep the previous plist and be able to
    `bootout`/`bootstrap` back to it.
 5. Never automatically kill other jobs or sessions.

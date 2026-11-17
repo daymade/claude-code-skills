@@ -79,7 +79,14 @@ decision and cost claims have deciding evidence.
 
 Use this when real timing or a reproduction points to per-call overhead. Separate
 the outer shell/interpreter startup from the engine's internal duration and the
-business command itself. Compare the actual launch mode and inherited environment:
+business command itself. In the same bounded task window, report actual invocation
+frequency and per-call cost together. Count repeated interpreter/Git launches and
+full-tree reads; locate fixed sleeps, polling predicates and lock/admission waits
+separately from byte processing. Do not multiply a configured cadence by one slow
+sample or sum parallel work into a claimed event delay. Prefer the owner's existing
+cache or incremental path before adding another mechanism.
+
+Compare the actual launch mode and inherited environment:
 a fresh shell can take a fast path while an agent's inherited Node selection
 falls back to repeated discovery. Preserve version selection, PATH and configuration
 rejections when optimizing that path; a faster empty command alone is insufficient.
@@ -91,8 +98,21 @@ an absolute source path unreadable. Keep source-content inspection and genuine
 relative-path lookup, including mixed commands, intact. Rejecting unrelated source
 text before AST parsing can avoid work only when the same necessary condition
 already existed later; do not skip dangerous contents hidden behind a harmless
-filename. Verify decision/exit equivalence and the actual native timing after
-adoption, not just the isolated helper's speed.
+filename. A cheap shape check may reject inputs that cannot pass the existing
+proof. Treat its early read as rejection-only: retain the authoritative read
+after expensive work and all mutable identity/content checks. Cover healthy
+inputs, missing and empty fields separately, and a valid/absent early value
+changed during proof; the later read must still decide. Document conservative
+early refusal if malformed input could be repaired concurrently. For cache or
+incremental changes, verify new and reused paths against each owner-defined
+exit 0/1/2 and output channel, including unavailable-state controls.
+
+Verify decision/exit equivalence on the bound inputs and actual native timing
+after adoption, not just the isolated helper's speed. Read the consumed launcher,
+runtime path and source identity: a source merge does not prove adoption.
+Reuse completed CI for identical content and dependencies under the repository's
+contract; check the actual changed inputs after a base merge and run only their
+required delta. Report selected checks as selected, not as a new complete CI run.
 
 When replacing a real failure with a synthetic regression, preserve the syntax
 that reached its failing predicate. Adding spaces to a path can make the old

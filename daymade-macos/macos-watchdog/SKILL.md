@@ -67,7 +67,7 @@ stand down without waiting for a human to disable it.
 | Installing a NEW watchdog from scratch | Select the trigger through `references/event-driven-observers.md`, then § Deploy and § The quiet-watchdog contract |
 | Installing, upgrading, reusing or starting a persistent Python job | § Persistent Python runtime |
 | An evidence observer needs authentication or loses memory-only credentials on restart | § Authenticated evidence observers |
-| An existing watchdog misbehaves (spam, re-launches apps, hammers) | § Troubleshooting quick map：先对齐实际 actor，再按 § The quiet-watchdog contract 诊断违反的条款 |
+| An existing watchdog misbehaves (spam, re-launches apps, hammers) | First use the read-only ownership and business-state checks in `references/event-driven-observers.md` § Deployment SOP, then § Troubleshooting quick map and § The quiet-watchdog contract |
 | Stopping / disabling / restarting a job | § Stop semantics; before replacement follow `references/event-driven-observers.md` § Wait for an authorized unload before replacement |
 | Retiring a job and its tool permanently | § Stop semantics → Decommissioning a job permanently |
 | plist key details (KeepAlive forms, domains, logging, resource limits) | `references/launchd-plist-reference.md` |
@@ -227,17 +227,22 @@ in § Deploy and the current task's authorization boundary.
 | Intent | Command |
 |---|---|
 | Stop now, allow re-bootstrap later | `launchctl bootout gui/$(id -u)/<label>` (daemon: `sudo launchctl bootout system/<label>`) |
-| Prevent later loads across login (stop a loaded job separately) | `launchctl disable user/$(id -u)/<label>` (reverse: `enable`) |
+| Prevent later loads across login (stop a loaded job separately) | `launchctl disable <exact-domain>/<label>` using the inspected service's domain (reverse: `enable`) |
 | Edit then reload | `bootout` → bounded exact-service unload observation through the Deployment SOP → edit plist → `bootstrap` |
 
 Use `bootstrap`/`bootout` instead of deprecated `load`/`unload`. When a job
 must remain disabled across later loads, apply `disable`; stopping an instance
-alone does not establish that persistent override.
+alone does not establish that persistent override. Read back the exact domain's
+disabled override, service registration and owned process/task state separately.
+`disable` does not unload a job or prove its current work stopped; `bootout`
+does not establish the persistent override. Use the Deployment SOP's bounded
+unload observation; an unrecognized error is unknown, not absence.
 
 A temporary job that stays loaded keeps paying the § Deploy-9 transition tax
 (its every firing still feeds BTM broadcasts). When the task it served is
-done, `disable` it — do not leave a dead-purpose periodic job running because
-stopping it felt irreversible: `disable` is fully reversible (`enable` +
+done, prevent future loads with `disable` and, after the ownership and active-work
+checks, unload a remaining job with `bootout`. Verify both states before claiming
+the scheduled work has stopped. These transitions are reversible (`enable` +
 `bootstrap`), and the plist can stay on disk as the re-enable path.
 
 ### Decommissioning a job permanently
@@ -246,8 +251,11 @@ Retiring a job's whole line (job + plist + tool) is a different operation from
 stopping one, and it is safe to be thorough: every step except the last is
 recoverable.
 
-1. **Stop and capture.** `bootout` a loaded job; an already-disabled idle job
-   has nothing running. Read the plist once (`plutil -p`) and keep its content
+1. **Stop and capture.** After the ownership and active-work checks, `bootout`
+   a loaded job and observe its unload. Call a job already stopped only after
+   checking registration absence, no remaining owned PID and no in-flight business
+   work; a disabled flag or missing PID alone is insufficient. Read the plist once
+   (`plutil -p`) and keep its content
    in the session record — it names the tool path, log paths, and schedule you
    are about to remove.
 2. **Remove the plist** from `~/Library/LaunchAgents/`. A leftover

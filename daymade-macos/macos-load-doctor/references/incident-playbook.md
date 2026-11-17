@@ -127,6 +127,14 @@ not retrofitted after the incident. When diagnosing "high rate but owned"
 load, ask first "is some test/batch running unthrottled" before treating it
 as a runaway.
 
+For a Git-heavy test or validation chain, identify the exact suite and repeated
+operation before rerunning it. Reuse unchanged checks through the repository's
+CI owner and cover only changed inputs. Reduce repeated repository setup or
+proof work at its owning layer: an immutable seed with independent fixture copies
+can preserve isolation, while a cache needs explicit content/policy identity.
+Verify verdicts and isolation as well as invocation cost; fewer Git calls alone
+does not establish a correct or usable result.
+
 ## Case 3 — a fleet of guards: the irrelevant path's per-call cost
 
 **Symptom:** all-day elevated CPU with no runaway process anywhere; the
@@ -206,15 +214,38 @@ Peer agreement alone does not authorize interrupting another session's work.
 
 ## Writing the report
 
-Hand the owner a self-contained bundle:
+Explain the work in terms the owner can act on. For a process question, use a
+compact table such as:
 
-1. The load reading (`vm.loadavg`, all three numbers).
-2. The census excerpt that indicts (children-per-parent, cumulative time,
-   or instantaneous — whichever fired), with the suspect's full parent
-   chain up to something ownable.
-3. The classified shape (fan-out / pool / leak candidate / confirmed leak /
-   storm / busy loop / cascade) and the
-   one-line mechanism.
-4. The proposed remediation and its authorized executor.
-5. What you could not verify (probe blind spots, like Case 1's empty
-   client-side log) — named, not smoothed over.
+| Process / PID or task group | Product/task and actual operation | Evidence, current state and unknowns |
+|---|---|---|
+
+Name the concrete test, scan, export or collection job. A runtime such as Node,
+Python or a shared app-server is a host, not the final business attribution.
+Use parent/child links to group one operation; keep independent jobs and distinct
+repository refs separate. Where deployed code matters, read the effective
+executable/source path and version rather than substituting the checkout's HEAD.
+
+Capture PID and birth identity with the targeted command/parent evidence while
+the process is alive. For an exited process, consult an already-recorded,
+time-matched dossier or process snapshot, checking its capture status and identity.
+If none covers it, leave the work unknown; a reused PID or current parent does
+not identify the old process. Do not repeat a costly business job merely to
+recreate an attribution record. Keep credentials and full environment contents
+out of the report.
+
+Mark each row active, observed exited, or unknown at the stated observation
+time. For example, a migration-contract test can be sustained compute; an export
+launcher, Git and LFS helper can be one task; a collector can run after its page
+closes. Those observations establish what ran, not whether it was redundant,
+faulty or responsible for lag. When progress is unclear, name the bounded
+stack/progress observation needed to decide it.
+
+For a diagnosis or repair report, additionally include the original user-visible
+symptom, the relevant load/census window (retain all three `vm.loadavg` values),
+the supported workload shape and mechanism (or the exact remaining causal gap),
+and the proposed intervention, its authorized executor and recovery path.
+Read the actual consumer after intervention: usability and retained
+business capability decide recovery; a lower count, merged patch or green test
+alone does not. A snapshot-only explanation can end with the table and its
+evidence limits; it does not require inventing a fault or remediation.

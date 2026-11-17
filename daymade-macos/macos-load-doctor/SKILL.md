@@ -61,8 +61,9 @@ is not the Skill directory. The census readings answer different questions:
   a leak claim needs evidence that children outlive the work they serve or that
   retained counts grow after equivalent work completes. Do not terminate sessions
   to manufacture that evidence; use existing lifecycle records or your own test.
-- **By cumulative CPU time** — *who has been burning for hours?* A GUI app or
-  helper with days of CPU time at ~100% is a busy loop, not a spike.
+- **By cumulative CPU time** — *who has been burning for hours?* Distinguish
+  sustained work from a spike, then check expected work, progress and hot stacks
+  before calling it a busy loop. A legitimate test or export can also stay busy.
 - **By instantaneous %CPU** — *who is burning right now?* Catches the active
   storm that the cumulative view dilutes.
 
@@ -88,6 +89,19 @@ Attribution determines which product/session owns it, whether it is
 supposed to be long-lived (a daemon) or short-lived (a helper that forgot to
 die), and who is allowed to stop it.
 
+Continue past a generic interpreter or shared daemon to the actual business
+operation: use the relevant command, working directory, parent chain and, when
+needed, repository/ref or deployed version. Select only decision-bearing fields
+and redact credentials; never dump the environment. Group a launcher and its
+children as one task when the chain supports that grouping; distinguish separate
+jobs that happen to use the same executable or shared parent.
+
+For “what are these processes doing?”, lead with that work and its current
+state, not a CPU ranking. Follow [Writing the report](references/incident-playbook.md#writing-the-report)
+for the explanation format and short-lived-process evidence. Identify the work
+separately from whether it is faulty or causes the reported lag; keep an unknown
+task, owner, lifecycle or causal link explicit.
+
 ### 4. Classify the shape before proposing a fix
 
 For an idle Node/Vite preview, follow
@@ -100,7 +114,7 @@ preservation alongside CPU measurement.
 | **Leak candidate** | retained child count grows after comparable work finishes, or helpers outlive their documented lifecycle | missing cleanup; confirm workload and lifecycle before calling it a leak |
 | **Fan-out / pool** | many children correlate with active sessions or a stable configured pool | per-thread ownership can be expensive without being a leak |
 | **Storm** | many processes with seconds-short etimes, high fork rate | unthrottled loop (test replay, batch scan, retry without backoff) |
-| **Busy loop** | one process at ~100% with days of cumulative time | app polling without sleep |
+| **Busy loop candidate** | sustained CPU with repeated hot work and no expected progress; verify with a bounded stack/progress probe | app polling without sleep |
 | **Cascade** | load high but suspects scattered | a system service amplifying each new process (security scans, file-sync, Spotlight) |
 
 The fix is different for each: a confirmed leak wants the spawner fixed or restarted, a
@@ -187,15 +201,16 @@ Worked cases with real probe outputs live in
 when the census shows something you have not seen before, or when you need a
 precedent for the report you are about to write.
 
-- **Per-thread MCP spawners**: an agent runtime starts the full configured MCP
-  set per conversation thread and never reaps them; hundreds of proxy/helper
-  processes accumulate under one daemon over days. GUI-flavored MCP servers
-  additionally hammer WindowServer.
+- **Per-thread MCP spawners**: an agent runtime can retain separate proxy/helper
+  sets for resident conversations. Check its documented startup/unload behavior
+  and state ownership before calling retention a leak. GUI-flavored helpers can
+  add window-service work; attribute that cost rather than assuming it.
 - **Unthrottled batch loops**: a replay/fuzz/migration loop with no rate limit
   is indistinguishable from a fork bomb to the rest of the machine — same
   rate, same heat, same cascading security-scan load.
-- **GUI busy loops**: a menu-bar or settings app polling without sleep — one
-  core at 100% for days, invisible until cumulative-time census.
+- **GUI busy-loop candidates**: a menu-bar or settings app can poll without
+  sleep. Use cumulative time to locate it, then confirm repeated polling and
+  missing expected progress before naming that mechanism.
 - **Respawn loops**: a launchd job crashing and restarting every few seconds —
   `launchctl list` shows a non-zero last-exit code and a PID that keeps
   changing.
@@ -212,5 +227,6 @@ precedent for the report you are about to write.
 - **The obvious big-CPU process is innocent**: WindowServer, a terminal, or a
   screen-sharing client at high CPU is often *downstream* of the real cause
   (hundreds of GUI app copies each needing window service). Keep tracing.
-- **Everything points at a system service**: that is the cascade shape — the
-  fix is reducing the rate of new work reaching it, not the service itself.
+- **Everything points at a system service**: investigate a possible cascade.
+  Identify the work reaching it and distinguish normal upstream demand from a
+  defect in the service before choosing an intervention.
