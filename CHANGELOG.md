@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **tunnel-doctor v1.18.1**: Read transfer limits and proof expiry from the executable owner and its result instead of maintaining copied parameter values in the SOP.
+- **claude-code-hooks** (`daymade-claude-code` v5.2.5): Verify changed shared-runtime fields and helper bindings through registered capture and projection consumers before producer activation.
+
 - **ghostty-use** (v1.15.0 → v1.15.1): Require temporary watcher deployment sources to be rebound to the maintained primary checkout and verified through a completed native round before retirement.
 - **macos-watchdog** (`daymade-macos` v1.34.9 → v1.34.10): Bind observer health claims to exact completed attempts and distinguish one successful round from permanent future health.
 - **Worktree retirement helper** (`git-safety-net` v1.28.9 → v1.28.10): Prefer fixed task recovery refs over moving base branches in actively written shared repositories, with fail-closed checkpoint preparation after ref movement.
