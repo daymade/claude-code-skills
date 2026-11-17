@@ -3,10 +3,15 @@ import builtins
 import json
 import sys
 from pathlib import Path
+from unittest import SkipTest
 
-import pytest
-
-pytest.importorskip("daudio_client")
+try:
+    import pytest
+    import daudio_client
+except ModuleNotFoundError as error:
+    if error.name not in {"pytest", "daudio_client"}:
+        raise
+    raise SkipTest("Optional resource-client tests require pytest and daudio-client") from error
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from history_projection import _resource_client
 
