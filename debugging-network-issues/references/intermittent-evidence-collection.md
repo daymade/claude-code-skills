@@ -136,6 +136,18 @@ unobserved branches. At minimum establish:
 | Capture file with only its header | Report no observed packets, not successful radio coverage |
 | Child writes a large final stdout/stderr burst | Tail and final counters survive, or the loss is explicitly recorded |
 | Restart loses memory-only credentials | Authentication is unready until re-established; PID alone is not recovery |
+| Parent/host exits before terminal state is persisted | Prove old writers closed; retain missing/malformed terminal state as incomplete, then observe automatic fresh collection |
+| Closed incomplete batch followed by a valid new batch | Verify old bytes and the later complete batch at the archive destination; preserve historical gaps rather than rewriting completion |
+| Recovery blocker becomes valid while the supervisor stays alive | Reconciliation runs again and fresh collection resumes without another manual restart |
+
+Bind new-work evidence to the installed revision and the new run after the fault;
+an old job's final row inside a freshness window does not prove recovery. Where
+archiving and health publishing are deployed, trace the new batch through decode,
+destination payload verification and the actual monitoring consumer. Observe the
+failure-to-recovery transition while keeping network availability separate from
+collector health. Queue age, transfer progress and the last verified complete
+batch distinguish pending custody from a stalled or failed transfer; a fresh
+inventory or an empty pending queue alone does not prove delivery.
 
 Stop improving instrumentation when these checks cover the authorized question.
 Report exactly what new evidence can now decide and which original causal
