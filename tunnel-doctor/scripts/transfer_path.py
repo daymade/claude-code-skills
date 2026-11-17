@@ -299,7 +299,9 @@ def preflight(command,cwd):
     before=network(); targets=[]
     for item in items:
         config=ssh_options(item)
-        ssh=['ssh',*item['ssh'],'-o','BatchMode=yes','-o','ConnectTimeout=4','-o','StrictHostKeyChecking=yes']
+        # OpenSSH uses the first value: safety options must precede caller
+        # options, or BatchMode=no / StrictHostKeyChecking=no could defeat them.
+        ssh=['ssh','-o','BatchMode=yes','-o','ConnectTimeout=4','-o','StrictHostKeyChecking=yes',*item['ssh']]
         # SSH authentication verifies the target before considering discovered
         # interface addresses. A subnet match alone never establishes identity.
         remote=run([*ssh,item['host'],'hostname; id -un; ifconfig 2>/dev/null || ip -o -4 addr show'],timeout=8)

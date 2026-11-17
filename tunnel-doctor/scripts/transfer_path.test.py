@@ -3,6 +3,7 @@ import json
 import ipaddress
 from pathlib import Path
 import tempfile
+import subprocess
 import unittest
 from unittest.mock import patch
 import transfer_path as t
@@ -85,6 +86,19 @@ class TransferPath(unittest.TestCase):
             return json.dumps([dict(ifname='eth0',flags=['UP'],operstate='UP',addr_info=[dict(family='inet',local=address,prefixlen=24,valid_life_time=lifetime,preferred_life_time=lifetime)])])
         with patch.object(t.sys,'platform','linux'),patch.object(t,'run',side_effect=[addresses(100),'[]',addresses(99),'[]',addresses(99,'192.0.2.3'),'[]']):
             first=t.network();self.assertEqual(first,t.network());self.assertNotEqual(first,t.network())
+
+    def test_probe_safety_options_win_openssh_first_value_precedence(self):
+        cmd='rsync -a -e "ssh -F /dev/null -o BatchMode=no -o StrictHostKeyChecking=no -o ConnectTimeout=99" host:/data /tmp/data'
+        config={'hostname':['host'],'user':['tester']}
+        observed=dict(sample_bytes=1048576,seconds=.1,socket_peer='198.51.100.1',sample_path=dict(kind='wan-direct',samples=['198.51.100.1']))
+        with tempfile.TemporaryDirectory() as folder,patch.object(t,'STATE',Path(folder)),patch.object(t,'network',return_value='net'),patch.object(t,'ssh_options',return_value=config),patch.object(t,'target_route',return_value=dict(kind='wan-direct',samples=['198.51.100.1'])),patch.object(t,'sample',return_value=observed),patch.object(t,'run',return_value='node\ntester\n inet 192.0.2.9 netmask 0xffffff00') as probe,patch.object(t,'local_networks',return_value=[]):
+            t.preflight(cmd,'/tmp')
+            argv=probe.call_args_list[0].args[0]
+        inspected=subprocess.run(['ssh','-G',*argv[1:-1]],capture_output=True,text=True,check=True)
+        fields=dict(line.split(' ',1) for line in inspected.stdout.splitlines() if ' ' in line)
+        self.assertEqual(fields['batchmode'],'yes')
+        self.assertEqual(fields['stricthostkeychecking'],'true')
+        self.assertEqual(fields['connecttimeout'],'4')
 
 
 if __name__=='__main__':unittest.main()
