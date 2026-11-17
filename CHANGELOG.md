@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **read-claude-code-history** (`daymade-claude-code` v5.1.22 → v5.1.23): Pure BM25 returns this same lexical order directly; oversampling only contributes candidates when there is a vector leg to fuse with it.
+
 - **audio-router / transcript-fixer** (`daymade-audio` v1.64.2 → v1.65.0): Guide configured deployments through independent thin SDKs and distinguish self-introduction, address and quotation before speaker identity writes.
 - **skill-creator** (`daymade-skill` v1.81.1 → v1.81.2): Check actual installed consumer bindings and exercise optional-dependency imports through the repository runner.
 
