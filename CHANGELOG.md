@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **tunnel-doctor** (v1.17.19 → v1.18.0): Add read-only SSH transfer preflight with current LAN/Tailscale underlay, trusted identity, observed socket, bounded sample and exact-command evidence. Publish interception limits and unknown recovery.
+- **local-codex** (`daymade-codex` v2.4.15 → v2.4.16): Reuse verified release artifacts, preflight cross-machine package transfers and check the installer’s complete layout before adoption.
+- **claude-code-hooks** (`daymade-claude-code` v5.2.2 → v5.2.3): Route recurring transfer-path failures to one evidence owner and require historical recall, healthy cases and native remediation verification.
+
 - **asr-transcribe-to-text** (`daymade-audio` v1.65.1 → v1.65.2): Use the installed shared viewer to generate offline pages for unregistered ASR projects. Preserve an existing legacy page for review export and retain standalone generation on installations without a shared viewer.
 
 - **ghostty-use** (v1.14.2 → v1.15.0): Restore recorded relative tab order and tab-level custom titles while preserving unrelated live sessions and external selection. Automatic backups now publish title/order changes, retain the last captured layout across capture failures and refresh its provenance after recovery.

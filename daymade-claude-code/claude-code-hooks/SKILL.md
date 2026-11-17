@@ -1148,6 +1148,13 @@ the consent file) must back up and restore any real consent file around itself.
 
 ## Build order (in sequence)
 
+For recurring remote-transfer path mistakes, reuse tunnel-doctor's
+[transfer preflight owner](../../tunnel-doctor/references/transfer-path-preflight.md).
+Gate evidence freshness, target/options and observed underlay, not `100.*` addresses
+or the word `direct`. Before activation, replay real missed-transfer calls and
+healthy probes/copies, then verify a native blocked call and an allowed retry after
+preflight. Parser tests and a source registration do not establish host enforcement.
+
 Before writing or registering another hook, inspect existing engines by mechanism
 and host event. Prefer an in-process rule module that shares input parsing and
 lazy fact queries. Keep each rule's tool selector, authorization evidence, state
