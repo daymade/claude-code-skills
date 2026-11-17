@@ -415,6 +415,8 @@ For already-authorized Keychain recovery, follow
 [authorized credential-owner recovery](daymade-macos/macos-permissions/references/keychain-dialog-recovery.md#recover-through-an-authorized-credential-owner).
 For application-specific recurring prompts, follow
 [the credential-backend boundary](daymade-macos/macos-permissions/references/keychain-dialog-recovery.md#distinguish-application-credential-storage-from-permission-repair).
+For an enabled permission switch that fails after replacing a signed app, enter
+[signed-app replacement diagnosis](daymade-macos/macos-permissions/references/tcc-mechanics.md#signed-app-replacement-with-an-enabled-but-ineffective-grant).
 Keep detailed diagnosis and cancellation procedures with those Skills.
 
 ### Background protected-data access
