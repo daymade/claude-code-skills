@@ -190,7 +190,12 @@ class HistoryIndexTests(unittest.TestCase):
                         model_path=None, simple_root=None, role="user")
                     self.assertEqual(result["mode"], "bm25")
                     self.assertEqual([row["record_key"] for row in result["results"]], expected)
-        self.assertEqual(observed, [3, 3])
+                for limit, count in ((-1, 29), (0, 0)):
+                    result = history_index.recall(self.db, "marker", mode="bm25", limit=limit,
+                        project=None, exclude_sessions=[], include_agent_prompts=False,
+                        model_path=None, simple_root=None, role="user")
+                    self.assertEqual(len(result["results"]), count)
+        self.assertEqual(observed, [3, 3, 30, 0])
 
     def test_hybrid_vector_candidates_receive_and_obey_same_literal_role_filters(self):
         sid = "13131313-1313-4313-8313-131313131313"

@@ -2769,7 +2769,7 @@ def recall(
 
     # Pure BM25 returns this same lexical order directly; oversampling only
     # contributes candidates when there is a vector leg to fuse with it.
-    fts_limit = limit if actual_mode == "bm25" else max(limit * 6, 30)
+    fts_limit = limit if actual_mode == "bm25" and limit >= 0 else max(limit * 6, 30)
     vector_limit = max(limit * 6, 30)
     # --terms adds one extra ANDed FTS constraint with the exact same
     # simple_query semantics as the main query (libsimple does the
