@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **ghostty-use** (v1.15.0 → v1.15.1): Require temporary watcher deployment sources to be rebound to the maintained primary checkout and verified through a completed native round before retirement.
+- **macos-watchdog** (`daymade-macos` v1.34.9 → v1.34.10): Bind observer health claims to exact completed attempts and distinguish one successful round from permanent future health.
+- **Worktree retirement helper** (`git-safety-net` v1.28.9 → v1.28.10): Prefer fixed task recovery refs over moving base branches in actively written shared repositories, with fail-closed checkpoint preparation after ref movement.
+
 - **github-ops v1.17.2**: Preserve concurrent changelog additions during integration, scope the follow-up review to the changed inputs, and keep local uncommitted entries during supported synchronization.
 
 - **asr-transcribe-to-text** (`daymade-audio` v1.65.1 → v1.65.2): Use the installed shared viewer to generate offline pages for unregistered ASR projects. Preserve an existing legacy page for review export and retain standalone generation on installations without a shared viewer.
