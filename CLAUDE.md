@@ -783,6 +783,8 @@ For observer freshness, follow
 [observation-health verification](ghostty-use/references/automatic-snapshots.md#verify-observation-health).
 Before a restore or retry, follow its
 [current-set reconciliation](ghostty-use/references/restore_mechanics.md#reconcile-the-current-wanted-set).
+For recorded relative tab order and custom-title restoration, follow
+[recorded tab layout restoration](ghostty-use/references/restore_mechanics.md#restore-recorded-tab-order-and-titles).
 After process reconciliation, and before a complete GUI acceptance pass that must
 not foreground Ghostty, follow
 [history-readiness acceptance](ghostty-use/references/restore_mechanics.md#verify-history-readiness-after-process-reconciliation).

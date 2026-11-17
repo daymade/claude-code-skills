@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **ghostty-use** (v1.14.2 → v1.15.0): Restore recorded relative tab order and tab-level custom titles while preserving unrelated live sessions and external selection. Automatic backups now publish title/order changes, retain the last captured layout across capture failures and refresh its provenance after recovery.
+- **macos-watchdog** (`daymade-macos` v1.34.8 → v1.34.9): Require byte-copy observers to prove source-to-install freshness through managed-file hashes and a completed native round, rather than treating healthy source or an install receipt as deployment evidence.
 - **prior-work-retrieval** (`daymade-claude-code` v5.1.25 → v5.2.0): Require task-specific filesystem scope before launching search or Git freshness probes. Keep out-of-scope sources visible as coverage gaps; preserve scoped searches, indexed adapters and manual verification.
 - **macos-watchdog** (`daymade-macos` v1.34.7 → v1.34.8): Distinguish closed writers from complete captures, preserve interrupted batches and retry cleared recovery blockers without reusing startup proof for live children.
 - **debugging-network-issues** (v1.12.3 → v1.12.4): Accept collector recovery through fresh post-fault work, destination-verified custody and the deployed monitoring consumer while retaining historical gaps.

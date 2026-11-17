@@ -120,10 +120,14 @@ background permissions, sleep/wake continuity or power savings.
 
 Compare the complete restore inventory by tool, session UUID, cwd, profile and
 actual shell-quoted reopen command, including the relevant profile-env prefix.
-Ignore PID, TTY, process order, activity timestamps and age. Automatic snapshots
-freeze their reopen command so a later profile-map edit cannot silently change
-that backup's restoration context. The next observation detects the new mapping
-and saves a new version when it affects a covered session.
+Ignore PID, TTY, process order, activity timestamps and age. Independently compare
+the captured layout projection: native window/tab indexes, ordered session IDs and
+**tab-level** `title_override` values. Ignore automatic titles, selected state,
+window/tab IDs and terminal metadata. A failed or unknown layout capture cannot
+create a layout diff. Automatic snapshots freeze their reopen command so a later
+profile-map edit cannot silently change that backup's restoration context. The
+next observation detects the new mapping and saves a new version when it affects
+a covered session.
 
 Save a small complete manifest on change, not a transcript copy or a chain of
 deltas. Atomic private files and a shared nonblocking writer lock protect manual
@@ -139,14 +143,17 @@ an automatic manifest once. Later equal observations write health only. The defa
 remain available. Restore selection and retry options follow the
 [canonical quick start](../SKILL.md#quick-start).
 
-Each published automatic manifest also records the Ghostty window/tab tree with
-tab titles, `name override` values and TTY-to-session anchors
-(`window_tab_mapping: known` on success); the tree refreshes only when a change
-triggers a publish, so the pre-reboot manual snapshot stays authoritative for
-tab order and titles. The launchd runtime needs one-time Automation
-(Apple-events) authorization for its Python to control Ghostty; without it the
-capture degrades to `captured: false` with that reason, and the last manual
-archive keeps the authoritative manual tree.
+Each completed observation captures the Ghostty window/tab tree with tab titles,
+`name override` values and TTY-to-session anchors when authorized. A new manifest
+is published for either an inventory change or a layout-projection change, including
+setting, editing, clearing or reordering custom tab titles; equal observations
+write health only. On a publish whose current capture fails, the manifest carries
+forward the last captured tree with `carried_forward: true`, `capture_error` and
+`window_tab_mapping: unknown`; a later successful capture refreshes that provenance
+even when the layout itself is unchanged. The pre-reboot manual snapshot remains
+authoritative for changes after the last completed observation. The launchd runtime
+needs one-time Automation (Apple-events) authorization for its Python to control
+Ghostty; without it the capture degrades to `captured: false` with that reason.
 
 ## Partial UUID coverage
 
@@ -197,7 +204,9 @@ not resumable sessions; use explicit indexed reconstruction and identity
 verification if their session IDs must be recovered. Partial snapshots may retain
 already-closed sessions conservatively; follow
 [current-set reconciliation](restore_mechanics.md#reconcile-the-current-wanted-set)
-before selecting or retrying them. Window grouping remains unknown. Automatic and
+before selecting or retrying them. When a captured tree is available, follow
+[recorded tab layout restoration](restore_mechanics.md#restore-recorded-tab-order-and-titles);
+unknown or unsupported grouping retains the legacy process-only boundary. Automatic and
 manual inventories share UUID-less identity resolution (session file born after
 process start, same cwd, identity verified); unresolved or ambiguous identities
 remain explicit partial coverage. Calendar observation also cannot capture a
