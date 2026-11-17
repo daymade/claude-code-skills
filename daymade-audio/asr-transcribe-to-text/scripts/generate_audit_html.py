@@ -1,13 +1,8 @@
 #!/usr/bin/env python3
-"""Generate a self-contained HTML audit page for ASR transcripts.
+"""Refresh an adopted ASR audit dataset or generate an offline audit page.
 
-Reads speaker-labeled CSV/TXT/diarization files produced by speaker_transcribe.py
-and emits a single interactive HTML file with audio playback, per-turn flags/notes,
-speaker alias mapping, and export report.
-
-Usage:
-  uv run generate_audit_html.py PROJECT_DIR [--output OUTPUT_PATH]
-  uv run generate_audit_html.py PROJECT_DIR --manifest MANIFEST.json
+Pass the speaker-transcribe output directory. Use --help for the current
+arguments and the installed Skill's audit export workflow for route selection.
 """
 # /// script
 # dependencies = []

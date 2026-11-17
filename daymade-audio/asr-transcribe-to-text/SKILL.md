@@ -995,9 +995,14 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/generate_audit_html.py \
   --known-speaker "Speaker B"
 ```
 
-Run `generate_audit_html.py --help` from the installed Skill for the current
-options. Repeat speaker and material overrides as needed. Use `"Name=#hex"` to
-set an explicit speaker color or `"Name"` to assign one automatically.
+Get the current arguments from the installed script:
+
+```bash
+uv run "${CLAUDE_SKILL_DIR}/scripts/generate_audit_html.py" --help
+```
+
+Repeat speaker and material overrides as needed. Use `"Name=#hex"` to set an
+explicit speaker color or `"Name"` to assign one automatically.
 
 Open the fixed viewer URL for an adopted project, or open the generated HTML file for offline review. Use the review controls to flag and annotate turns, then export the report. Audio remains at its declared source paths.
 
