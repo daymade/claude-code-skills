@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **asr-transcribe-to-text** (`daymade-audio` v1.62.0 → v1.63.0): Route explicitly adopted projects from the legacy audit command to their installed shared-viewer data entry. Preserve standalone output for unregistered projects and stop failed handoffs without overwriting the existing reader.
 - **macos-permissions** (`daymade-macos` v1.34.5 → v1.34.6): Signed-app replacement with an enabled but ineffective grant.
 - **peer-message** (v1.27.2 → v1.27.3): Check and declare independent work atomically across clones and Forks, return existing owner/result leads before duplicate work, and retain unknown occupancy and current-host identity boundaries.
 
@@ -18,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **tunnel-doctor** (v1.17.18 → v1.17.19): Diagnose container-injected proxies separately from daemon pull proxies; verify internal RPC/self-client paths from the failing consumer and retain private startup evidence without restarting shared Docker services.
 
 - **github-ops** (v1.16.6 → v1.17.0): Inspect the authenticated repository's live visibility, paginated active branch rules and legacy protection before selecting direct publication or a pull request. Keep unreadable or unclassified policy unknown and retain existing checks, approvals and bypass boundaries.
-- **transcript-fixer** (`daymade-audio` v1.62.0 → v1.62.1): Bind auto-finalized Stage 1 results to a versioned canonical-path/SHA-256 receipt so callers distinguish an already-promoted result from a no-op without reapplying corrections.
+- **transcript-fixer** (`daymade-audio` v1.63.0 → v1.63.1): Bind auto-finalized Stage 1 results to a versioned canonical-path/SHA-256 receipt so callers distinguish an already-promoted result from a no-op without reapplying corrections.
 
 - **ghostty-use** (v1.14.1 → v1.14.2): Deployment freshness becomes mechanically observable: install stamps the recorded source, `status` reports `deploy: current/stale/source-unavailable/no-stamp`, and every cycle persists the same verdict into its health record, so a merged watcher change that was never refreshed is visible within one round instead of silently running old copies.
 
