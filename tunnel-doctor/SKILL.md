@@ -44,6 +44,10 @@ probe to verify that it stopped.
 
 ## Disruptive network changes
 
+Before a remote bulk copy, load [transfer path preflight](references/transfer-path-preflight.md).
+It owns the executable checks for LAN availability, actual Tailscale underlay,
+fresh evidence and bounded throughput sampling; an address or `direct` label is insufficient.
+
 Before any authorized VPN disconnect, app termination, route cutover, or service restart,
 read [network_change_recovery.md](references/network_change_recovery.md). Validate prerequisites
 before interruption, arm bounded recovery before the first disruptive action, and verify both
