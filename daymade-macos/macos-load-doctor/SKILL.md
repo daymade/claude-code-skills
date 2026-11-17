@@ -102,9 +102,9 @@ for the explanation format and short-lived-process evidence. Identify the work
 separately from whether it is faulty or causes the reported lag; keep an unknown
 task, owner, lifecycle or causal link explicit.
 
-For repeated conflicts or retries in scheduled jobs, trace [duplicate scheduled
-work](references/incident-playbook.md#duplicate-scheduled-work) through the active
-producer routes and their receiving system.
+For recurring conflicts, retries, or timeouts in scheduled jobs, trace
+[duplicate scheduled work](references/incident-playbook.md#duplicate-scheduled-work)
+through the active producer routes and their receiving system.
 
 ### 4. Classify the shape before proposing a fix
 
