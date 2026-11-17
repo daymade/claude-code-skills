@@ -353,7 +353,8 @@ For the pre-release ancillary-copy gate or density/layout comparisons, follow
 [information necessity](frontend-visual-qa/references/history-derived-checklist.md#information-necessity-before-layout).
 Before measuring loading speed, read its
 [cache and timing comparison](frontend-visual-qa/references/browser-driving-and-observation-traps.md#separate-freshness-checks-from-performance-comparisons).
-For build reuse across source refs or a target redeployed during acceptance, load its
+For build reuse across source refs, a target redeployed during acceptance, or competing
+current/old pickup URLs, load its
 [delivery verification procedure](frontend-visual-qa/references/delivery-verification.md).
 For changed asynchronous loading or saving, or nested zoomable workspaces, use its
 [journey and state matrix](frontend-visual-qa/references/journey-and-page-contracts.md#journey-and-state-matrix).
@@ -721,6 +722,8 @@ for candidate selection and commands; keep the detailed rules in those owners.
 For local transport selection or accepted/consumed delivery interpretation, enter
 [peer-message](peer-message/SKILL.md), starting with
 [current-host tool discovery](peer-message/references/local-coordination.md#先发现完整工具面再选通信通道).
+For independent work starts, scope changes or Fork handoff, use the
+[work-entry procedure](peer-message/references/local-coordination.md#开工范围变化和退出).
 For independent-session preflight and request lifecycle, follow the
 [local coordination workflow](peer-message/references/local-coordination.md#原生跨会话通信).
 For a native payload limit or a rejected preparation, use its

@@ -2610,13 +2610,8 @@ def dispatch_registered_viewer(args):
         return False
     if entry.get('adopted') is not True:
         raise RuntimeError('Shared viewer migration is incomplete; retaining the existing reader')
-    for field in ['storage_key', 'known_speaker', 'material_final', 'material_rough']:
-        if getattr(args, field, None):
-            raise RuntimeError(f'{field} is managed by the adopted shared viewer; retaining the existing reader')
-    if getattr(args, 'subtitle', DEFAULT_SUBTITLE) != DEFAULT_SUBTITLE:
-        raise RuntimeError('Custom subtitle is not supported by the shared viewer handoff; retaining the existing reader')
-    if args.title != DEFAULT_TITLE and args.title != entry.get('title'):
-        raise RuntimeError('Set the shared viewer title in its registry before dispatch; retaining the existing reader')
+    if getattr(args, 'storage_key', None):
+        raise RuntimeError('storage_key is managed by the adopted shared viewer; retaining the existing reader')
     script = config.get('service_script')
     bridge = Path(script).with_name('asr_entry.py') if script else None
     if not bridge or not bridge.is_file():
@@ -2624,10 +2619,24 @@ def dispatch_registered_viewer(args):
     if args.original_dir and (not entry.get('original_root') or args.original_dir.resolve() != Path(entry['original_root']).resolve()):
         raise RuntimeError('Original media directory differs from the shared viewer registry')
     command = [sys.executable, str(bridge), str(args.project_dir), '--config', str(registry)]
-    for field in ['output', 'csv_dir', 'txt_dir', 'diarization_dir', 'audio_dir', 'manifest', 'title']:
+    for field in ['output', 'csv_dir', 'txt_dir', 'diarization_dir', 'audio_dir', 'manifest']:
         value = getattr(args, field)
         if value is not None:
             command.extend(['--' + field.replace('_', '-'), str(value)])
+    if args.title != DEFAULT_TITLE:
+        command.extend(['--title', args.title])
+    subtitle = getattr(args, 'subtitle', DEFAULT_SUBTITLE)
+    if subtitle != DEFAULT_SUBTITLE:
+        command.extend(['--subtitle', subtitle])
+    for field in ['material_final', 'material_rough']:
+        for value in getattr(args, field, None) or []:
+            command.extend(['--' + field.replace('_', '-'), value])
+    for value in getattr(args, 'known_speaker', None) or []:
+        name, separator, color = value.partition('=')
+        if not name.strip():
+            continue
+        mapping = name.strip() + '=' + normalize_color(color.strip()) if separator else name.strip()
+        command.extend(['--known-speaker', mapping])
     subprocess.run(command, check=True)
     return True
 
