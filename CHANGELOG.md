@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **transcript-fixer** (`daymade-audio` v1.64.0 → v1.64.1): Make the Stage 1 result contract the shared documentation entry for callers and CLI parameters, preserving the inactive-boundary and degraded-API distinctions.
+- **github-ops** (v1.17.0 → v1.17.1): Correct shell continuation and path quoting in the publication-preflight example; route repository instructions to that procedure.
+
 - **transcript-fixer** (`daymade-audio` v1.63.2 → v1.64.0): Use the independent daudio thin client for Stage 1 history resources by default. Keep explicit trusted local-worker operation, original/native bytes, nonconflicting human edits and interrupted-publication recovery.
 
 - **audio-router** (`daymade-audio` v1.63.0 → v1.63.1): Keep the existing speech routes and Chinese/English acoustic diagnostic signals visible in the native Codex catalog window; align the prefix regression with actual host readback.
