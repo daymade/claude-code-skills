@@ -124,6 +124,27 @@ class LayoutProjectionTests(unittest.TestCase):
         self.assertEqual(failed['applied'], 0)
         self.assertIn('synthetic denied', failed['error'])
 
+    def test_order_writer_moves_existing_tab_by_joined_sid(self):
+        block = joined_layout()
+        with mock.patch.object(gw.subprocess, 'run',
+                               return_value=subprocess.CompletedProcess([], 0, stdout='', stderr='')) as run:
+            result = gw.apply_recorded_tab_order(block, ['s2', 's1'])
+        self.assertEqual(result, {'applied': 1, 'missing': [], 'error': None})
+        script = run.call_args.args[0][-1]
+        self.assertIn('if id of t is "tab-b" then', script)
+        self.assertIn('perform action "move_tab:-1" on (focused terminal of t)', script)
+        self.assertIn('if action_result is false then error "move_tab rejected"', script)
+
+    def test_order_writer_noop_and_missing_target_send_no_action(self):
+        block = joined_layout()
+        with mock.patch.object(gw.subprocess, 'run') as run:
+            self.assertEqual(gw.apply_recorded_tab_order(block, ['s1', 's2']),
+                             {'applied': 0, 'missing': [], 'error': None})
+            missing = gw.apply_recorded_tab_order(block, ['s1', 'absent'])
+        self.assertEqual(missing['missing'], ['absent'])
+        self.assertIn('missing', missing['error'])
+        run.assert_not_called()
+
 
 class CaptureDegradationTests(unittest.TestCase):
     def _capture_with(self, binary):

@@ -228,11 +228,13 @@ or unavailable evidence. Dry-run output is JSON for inspection.
   `check --snapshot <manifest> --strict`; account switching uses
   [the mode-bound switch check](references/codex-account-switch.md#restore-and-resume-an-interrupted-batch).
 - With a captured single-window, one-terminal-per-session `windows` block, restore
-  orders missing sessions by recorded relative tab order, reapplies tab-level
-  `name override` values through the current TTY/session join, preserves unrelated
-  live tabs and independently reads back order and titles. It returns to the
-  initiating tab only while selection still shows the last restored session; an
-  external selection is left untouched. Unsupported or unknown layouts retain
+  orders missing sessions by recorded relative tab order, moves existing selected
+  tabs through native `move_tab` actions and reapplies tab-level `name override`
+  values through the current TTY/session join. It preserves unrelated live tabs
+  and independently reads back order and titles. It returns to the initiating tab
+  only while selection still shows the last restored session; an external selection
+  is left untouched. If one initiating tab cannot be captured before a pending
+  restore, it stops before the first paste. Unsupported or unknown layouts retain
   session-list order and skip layout writes. Follow
   [recorded tab layout restoration](references/restore_mechanics.md#restore-recorded-tab-order-and-titles).
 - The batch restore opens missing sessions as tabs in the active window; it does

@@ -997,9 +997,9 @@ def _selected_tab_id():
 
 def _restore_recorded_layout(plan, live_sessions, initiating_tab_id=None, last_pending_sid=None):
     """Reapply and independently verify tab layout after process reconciliation."""
-    from ghostty_windows import (apply_tab_title_overrides, capture_window_structure,
-                                 join_windows_to_sessions, recorded_single_window_layout,
-                                 select_tab)
+    from ghostty_windows import (apply_recorded_tab_order, apply_tab_title_overrides,
+                                 capture_window_structure, join_windows_to_sessions,
+                                 recorded_single_window_layout, select_tab)
     result = {'order_match': False, 'titles_matched': 0,
               'titles_total': len(plan['titles']), 'extra_sessions': 0,
               'selection': 'not-requested', 'errors': []}
@@ -1012,6 +1012,11 @@ def _restore_recorded_layout(plan, live_sessions, initiating_tab_id=None, last_p
         result['errors'].append('current layout is not one window with one terminal per mapped session')
         return result
     selected = {sid for sid in plan['order']}
+    ordered = apply_recorded_tab_order(tree, plan['order'])
+    if ordered['error']:
+        result['errors'].append(ordered['error'])
+    if ordered['missing']:
+        result['errors'].append('order targets missing: ' + ','.join(sid[:13] for sid in ordered['missing']))
     applied = apply_tab_title_overrides(tree, plan['titles'])
     if applied['error']:
         result['errors'].append(applied['error'])
@@ -1023,10 +1028,18 @@ def _restore_recorded_layout(plan, live_sessions, initiating_tab_id=None, last_p
         selected_sids = [(term.get('session') or {}).get('sid')
                          for tab in selected_tabs for term in tab['terminals']]
         if selected_sids == [last_pending_sid]:
-            selection = select_tab(initiating_tab_id)
-            result['selection'] = 'returned' if selection['selected'] else 'failed: ' + selection['reason']
-            if not selection['selected']:
-                result['errors'].append('initiating tab selection: ' + selection['reason'])
+            expected_tab_id = selected_tabs[0]['tab_id']
+            current_tab_id = _selected_tab_id()
+            if current_tab_id is None:
+                result['selection'] = 'failed: current selection capture unavailable'
+                result['errors'].append(result['selection'])
+            elif current_tab_id == expected_tab_id:
+                selection = select_tab(initiating_tab_id)
+                result['selection'] = 'returned' if selection['selected'] else 'failed: ' + selection['reason']
+                if not selection['selected']:
+                    result['errors'].append('initiating tab selection: ' + selection['reason'])
+            else:
+                result['selection'] = 'left-unchanged-after-external-selection'
         else:
             result['selection'] = 'left-unchanged-after-external-selection'
     readback = capture_window_structure(timeout=15)
@@ -1088,6 +1101,8 @@ def cmd_restore(args):
               "channel after process reconciliation; unavailable observation remains unverified.")
         print("Keep keyboard and mouse untouched until paste and reconciliation finish.", flush=True)
     initiating_tab_id = _selected_tab_id() if pending and layout_plan else None
+    if pending and layout_plan and not initiating_tab_id:
+        raise RecoveryError("cannot capture one initiating tab before restore; no sessions were opened")
     for i, s in enumerate(pending, 1):
         ok = _paste_tab(commands[s["sid"]])
         print(f"  [{i}/{len(pending)}] {'SENT (unverified)' if ok else 'SEND FAILED'}: {s['sid'][:13]}")

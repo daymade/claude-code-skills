@@ -248,6 +248,81 @@ def apply_tab_title_overrides(windows, titles, timeout=15):
     return result
 
 
+def apply_recorded_tab_order(windows, order, timeout=15):
+    """Move selected existing tabs into recorded order without moving other tabs."""
+    result = {"applied": 0, "missing": [], "error": None}
+    try:
+        if len(windows.get("windows", [])) != 1:
+            result["error"] = "current order restore requires one window"
+            return result
+        tabs = sorted(windows["windows"][0]["tabs"], key=lambda row: row["index"])
+        if len(set(order)) != len(order):
+            result["error"] = "recorded order contains duplicate session IDs"
+            return result
+        selected = set(order)
+        by_sid, sid_rows = {}, []
+        for tab in tabs:
+            sids = [(term.get("session") or {}).get("sid") for term in tab.get("terminals", [])]
+            sids = [sid for sid in sids if isinstance(sid, str) and sid]
+            if len(sids) > 1:
+                result["error"] = "ambiguous current tab/session mapping"
+                return result
+            sid = sids[0] if sids else None
+            sid_rows.append(sid)
+            if sid in selected:
+                if sid in by_sid:
+                    result["error"] = "duplicate current tab/session mapping"
+                    return result
+                by_sid[sid] = tab
+        missing = sorted(selected - set(by_sid))
+        if missing:
+            result["missing"] = missing
+            result["error"] = "current order targets are missing"
+            return result
+        slots = [index for index, sid in enumerate(sid_rows) if sid in selected]
+        if len(slots) != len(order):
+            result["error"] = "current order mapping is not unambiguous"
+            return result
+        desired = list(tabs)
+        for slot, sid in zip(slots, order):
+            desired[slot] = by_sid[sid]
+        current, operations = list(tabs), []
+        for index, target in enumerate(desired):
+            if current[index]["tab_id"] == target["tab_id"]:
+                continue
+            source = next((j for j in range(index + 1, len(current))
+                           if current[j]["tab_id"] == target["tab_id"]), None)
+            if source is None:
+                result["error"] = "could not plan native tab movement"
+                return result
+            operations.append((target["tab_id"], index - source))
+            current.insert(index, current.pop(source))
+    except (KeyError, TypeError, AttributeError) as error:
+        result["error"] = f"invalid current window layout: {error}"
+        return result
+    if not operations:
+        return result
+    lines = ['tell application "Ghostty"']
+    for tab_id, delta in operations:
+        lines += ["  repeat with w in windows", "    repeat with t in tabs of w",
+                  f"      if id of t is {_applescript_quote(tab_id)} then",
+                  f"        set action_result to perform action {_applescript_quote('move_tab:' + str(delta))} on (focused terminal of t)",
+                  '        if action_result is false then error "move_tab rejected"',
+                  "      end if", "    end repeat", "  end repeat"]
+    lines.append("end tell")
+    try:
+        completed = subprocess.run([OSASCRIPT, "-e", "\n".join(lines)],
+                                   capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.SubprocessError, UnicodeDecodeError) as error:
+        result["error"] = f"osascript failed: {error}"
+        return result
+    if completed.returncode:
+        result["error"] = _applescript_error(completed, "native tab movement failed")
+        return result
+    result["applied"] = len(operations)
+    return result
+
+
 def select_tab(tab_id, timeout=15):
     """Select an existing native tab ID without synthesizing keyboard input."""
     script = ("tell application \"Ghostty\"\n"
