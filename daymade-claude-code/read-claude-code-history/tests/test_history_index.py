@@ -8,6 +8,7 @@ explicit smoke run on supported machines, never by the registered Linux suite.
 from __future__ import annotations
 
 import fcntl
+import hashlib
 import importlib.util
 import io
 import json
@@ -18,7 +19,7 @@ import sys
 import tempfile
 import types
 import unittest
-from contextlib import ExitStack, contextmanager, redirect_stderr, redirect_stdout
+from contextlib import ExitStack, closing, contextmanager, redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
@@ -879,6 +880,52 @@ class HistoryIndexTests(unittest.TestCase):
         )
         connection.close()
 
+    def test_cache_writes_and_session_removal_roll_back_together(self) -> None:
+        session_id = "99999999-9999-4999-8999-999999999995"
+        active = project_dir(self.active, self.workspace) / f"{session_id}.jsonl"
+        archive = project_dir(self.archive, self.workspace) / f"{session_id}.jsonl"
+        for path, text in ((active, "active turn"), (archive, "archive turn")):
+            write_jsonl(
+                path,
+                [user_record(session_id, self.workspace, text, "2026-08-01T00:00:00Z")],
+            )
+        scope = self.scope(self.active_source, self.archive_source)
+        table = history_index._SourceFileCache._table
+
+        def snapshot():
+            with closing(plain_connect(self.db, readonly=True)) as connection:
+                return (
+                    connection.execute(
+                        f"SELECT * FROM {table} ORDER BY kind,path"
+                    ).fetchall(),
+                    connection.execute("SELECT fingerprint FROM sessions").fetchall(),
+                    connection.execute("SELECT fts_text FROM records ORDER BY id").fetchall(),
+                )
+
+        original_store = history_index._SourceFileCache.store
+
+        def fail_after_store(cache, connection):
+            original_store(cache, connection)
+            raise RuntimeError("after cache writes")
+
+        with portable_backend():
+            history_index.update_index(self.db, scope)
+            before = snapshot()
+            archive.unlink()
+            with mock.patch.object(history_index._SourceFileCache, "store", fail_after_store):
+                with self.assertRaisesRegex(RuntimeError, "after cache writes"):
+                    history_index.update_index(self.db, scope)
+            self.assertEqual(snapshot(), before)
+            self.assertEqual(history_index.update_index(self.db, scope)["changed"], 1)
+            cache_rows, _, records = snapshot()
+            self.assertTrue(cache_rows)
+            self.assertTrue(all(Path(row["path"]) == active for row in cache_rows))
+            self.assertEqual([row[0] for row in records], ["active turn"])
+
+            active.unlink()
+            self.assertEqual(history_index.update_index(self.db, scope)["removed"], 1)
+            self.assertEqual(snapshot(), ([], [], []))
+
     def test_tokenizer_change_during_write_keeps_the_previous_index(self) -> None:
         sid = "77777777-7777-4777-8777-777777777777"
         path = project_dir(self.active, self.workspace) / f"{sid}.jsonl"
@@ -1624,6 +1671,103 @@ class MultiProviderIndexTests(unittest.TestCase):
             project_path=project_path,
             all_projects=project_path is None,
         )
+
+    def test_warm_index_opens_no_session_bodies_and_picks_up_an_append(self):
+        session_id = "019a0000-0000-7000-8000-000000000011"
+        rollout = self.codex_home / "sessions" / f"rollout-{session_id}.jsonl"
+        codex_rollout(rollout, session_id, self.workspace, [("user", "codex before")])
+        kimi_session_dir = kimi_session(
+            self.kimi_home, "conv-fixture", self.workspace, [("user", "kimi before")]
+        )
+        wire = kimi_session_dir / "agents" / "main" / "wire.jsonl"
+        claude_id = "019a0000-0000-7000-8000-000000000012"
+        transcript = project_dir(self.active, self.workspace) / f"{claude_id}.jsonl"
+        write_jsonl(
+            transcript,
+            [user_record(claude_id, self.workspace, "claude before", "2026-05-01T00:00:00Z")],
+        )
+        scope = self.scope(self.claude_source, self.codex_source, self.kimi_source)
+        blocked = {path.resolve() for path in (transcript, rollout, wire)}
+        original_open = Path.open
+
+        def reject_body_open(path, *args, **kwargs):
+            if path.resolve() in blocked:
+                self.fail(f"Warm index opened a session body: {path.name}")
+            return original_open(path, *args, **kwargs)
+
+        with portable_backend():
+            first = history_index.update_index(self.db, scope)
+            with mock.patch.object(Path, "open", reject_body_open):
+                warm = history_index.update_index(self.db, scope)
+            blocked.remove(rollout.resolve())
+            appended = {
+                "timestamp": "2026-05-01T00:00:02.000Z",
+                "ordinal": 2,
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "codex after"}],
+                },
+            }
+            with rollout.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(appended) + "\n")
+            with mock.patch.object(Path, "open", reject_body_open):
+                increment = history_index.update_index(self.db, scope)
+            blocked.add(rollout.resolve())
+            with mock.patch.object(Path, "open", reject_body_open):
+                rewarmed = history_index.update_index(self.db, scope)
+        self.assertEqual(first["added"], 3)
+        self.assertEqual(warm["unchanged"], 3)
+        self.assertEqual((increment["changed"], increment["unchanged"]), (1, 2))
+        self.assertEqual(rewarmed["unchanged"], 3)
+
+        facts = [{
+            "path": str(rollout.resolve()),
+            "labels": ["codex:active"],
+            "size": rollout.stat().st_size,
+            "mtime_ns": rollout.stat().st_mtime_ns,
+            "sha256": hashlib.sha256(rollout.read_bytes()).hexdigest(),
+        }]
+        canonical = json.dumps(facts, sort_keys=True, separators=(",", ":")).encode()
+        with closing(plain_connect(self.db, readonly=True)) as connection:
+            saved = connection.execute(
+                "SELECT fingerprint, ended FROM sessions WHERE session_id=?", (session_id,)
+            ).fetchone()
+            records = connection.execute(
+                "SELECT fts_text FROM records WHERE session_id=? ORDER BY seq", (session_id,)
+            )
+            self.assertEqual([row[0] for row in records], ["codex before", "codex after"])
+        self.assertEqual(saved["fingerprint"], "sha256:" + hashlib.sha256(canonical).hexdigest())
+        self.assertEqual(saved["ended"], history_index.parse_timestamp(appended["timestamp"]))
+
+    def test_project_scope_retries_failed_discovery_and_keeps_excluded_metadata_out(self):
+        wanted_id = "019a0000-0000-7000-8000-000000000013"
+        outside_id = "019a0000-0000-7000-8000-000000000014"
+        directory = self.codex_home / "sessions"
+        wanted = directory / f"rollout-{wanted_id}.jsonl"
+        outside = directory / f"rollout-{outside_id}.jsonl"
+        codex_rollout(wanted, wanted_id, self.workspace, [("user", "wanted turn")])
+        codex_rollout(outside, outside_id, self.workspace.parent, [("user", "outside turn")])
+        original_open = Path.open
+
+        def fail_wanted(path, *args, **kwargs):
+            if path == wanted:
+                raise OSError("transient fixture read failure")
+            return original_open(path, *args, **kwargs)
+
+        scope = self.scope(self.codex_source, project_path=str(self.workspace.resolve()))
+        with portable_backend():
+            with mock.patch.object(Path, "open", fail_wanted):
+                failed = history_index.update_index(self.db, scope)
+            recovered = history_index.update_index(self.db, scope)
+        self.assertEqual(failed["sessions"], 0)
+        self.assertEqual(recovered["added"], 1)
+        with closing(plain_connect(self.db, readonly=True)) as connection:
+            table = history_index._SourceFileCache._table
+            paths = {Path(row[0]) for row in connection.execute(f"SELECT path FROM {table}")}
+            self.assertEqual(paths, {wanted})
+            self.assertEqual(connection.execute("SELECT session_id FROM sessions").fetchone()[0], wanted_id)
 
     def test_codex_rollouts_index_with_provider_and_skip_injected_preamble(self) -> None:
         session_id = "019a0000-0000-7000-8000-000000000001"
