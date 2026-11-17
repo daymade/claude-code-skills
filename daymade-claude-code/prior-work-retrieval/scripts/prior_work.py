@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import heapq
 import importlib.util
 import json
 import os
@@ -555,6 +556,9 @@ def _filesystem_candidates(
     maximum = source["max_results"]
     command = [
         rg,
+        # Adapters already run in parallel; do not multiply their worker budget.
+        "--threads",
+        "1",
         "--json",
         "--fixed-strings",
         "--ignore-case",
@@ -645,7 +649,7 @@ def _filesystem_candidates(
         entries_by_path.setdefault(candidate_path, []).append(entry)
     path_output = ""
     if path_search_terms:
-        files_command = [rg, "--files", "--no-messages"]
+        files_command = [rg, "--threads", "1", "--files", "--no-messages"]
         for pattern in source["includes"]:
             files_command.extend(["--glob", pattern])
         for pattern in source["excludes"]:
@@ -714,7 +718,11 @@ def _filesystem_candidates(
             source["id"], f"{entry['path']}:{entry['line']}"
         )
         rows.append(entry)
-    rows.sort(
+    # Inspect every candidate before selecting: max_results limits output, not
+    # coverage. nsmallest preserves sorted(... )[:maximum] including stable ties.
+    limited = heapq.nsmallest(
+        maximum,
+        rows,
         key=lambda item: (
             AUTHORITY_ORDER[item["authority"]],
             -len(item["matched_terms"]),
@@ -722,7 +730,6 @@ def _filesystem_candidates(
             item["line"],
         )
     )
-    limited = rows[:maximum]
     git_cache: dict[Path, str | None] = {}
     if source_state is not None:
         _verify_source_scope(source, source_state)
