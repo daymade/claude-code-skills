@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **prior-work-retrieval** (`daymade-claude-code` v5.1.24 → v5.1.25): Limit each ripgrep adapter to one worker and select the globally ranked top candidates without sorting the full candidate set. Preserve full search coverage, path enumeration and source integrity checks.
+
 - **Sparse worktree retirement** (`git-safety-net` v1.28.8 → v1.28.9): Accept proven absent, skipped filtered files in sparse checkouts while preserving refusal for materialized payloads, indirect paths and unproven omissions.
 - **audio-router** (`daymade-audio` v1.65.0 → v1.65.1): Point result acceptance to the configured daudio owner instead of maintaining a second definition; align repository workflow entry points.
 
