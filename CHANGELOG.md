@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **read-claude-code-history** (`daymade-claude-code` v5.1.22 → v5.1.23): Pure BM25 returns this same lexical order directly; oversampling only contributes candidates when there is a vector leg to fuse with it.
+
 - **asr-transcribe-to-text** (`daymade-audio` v1.64.0 → v1.64.1): Forward adopted-viewer titles, subtitles, speaker colors and material keywords to the existing data owner without replacing its UI or default configuration.
 - **local-codex** (`daymade-codex` v2.4.14 → v2.4.15): Route existing Account Manager sessions through their deployed routine-switch SOP before native recovery; retain exact session and original-request boundaries.
 - **peer-message** (v1.27.3 → v1.27.4): Make the existing value-derived Codex native recipe the direct entry, align its route table, and send received envelopes to the complete-original intake procedure.
