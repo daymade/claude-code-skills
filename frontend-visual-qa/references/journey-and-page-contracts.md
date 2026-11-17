@@ -420,6 +420,20 @@ capabilities or decide data preservation. A copy-only edit does not require it.
    current page at Level A/B; source, build, and handler assertions alone cannot
    close the rendered finding. Leave unavailable page or write evidence explicit.
 
+For a message reader, use one archived reply whose source contains an attachment
+or a forwarded bundle. Follow the reply to its source, open the nested item,
+verify the actual attachment opens or plays, then close the detail and confirm
+return to the originating message. If the reader offers a thread view, repeat
+from that reply and reconcile the discussion root, original content, and reply
+relationships against the source. Include the original link or media card when
+it starts the discussion.
+
+For a virtualized list or a list performance fix, pick a target near the end of a
+representative real large list from authoritative data. Open its deep link and
+find it through ordinary search. Check the same item identity and visible content
+after both actions. Measure any claimed speedup from the user action until the
+correct item is usable. Report an isolated function timing as a component measure.
+
 For a catalog or topology refactor, apply the same preservation recipe to these
 representative reading tasks:
 

@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **ghostty-use** (v1.15.0 → v1.15.1): Require temporary watcher deployment sources to be rebound to the maintained primary checkout and verified through a completed native round before retirement.
 - **macos-watchdog** (`daymade-macos` v1.34.9 → v1.34.10): Bind observer health claims to exact completed attempts and distinguish one successful round from permanent future health.
 - **Worktree retirement helper** (`git-safety-net` v1.28.9 → v1.28.10): Prefer fixed task recovery refs over moving base branches in actively written shared repositories, with fail-closed checkpoint preparation after ref movement.
+- **frontend-visual-qa v1.21.51**: Verify nested message actions through the opened original and check deep links and search on real large lists.
+- **asr-transcribe-to-text** (`daymade-audio` v1.65.3): Document shared and standalone audit output and how to recover source-bound browser reviews before retiring a page.
 
 - **tunnel-doctor** (v1.17.19 → v1.18.0): Add read-only SSH transfer preflight with current LAN/Tailscale underlay, trusted identity, observed socket, bounded sample and exact-command evidence. Publish interception limits and unknown recovery.
 - **local-codex** (`daymade-codex` v2.4.15 → v2.4.16): Reuse verified release artifacts, preflight cross-machine package transfers and check the installer’s complete layout before adoption.
