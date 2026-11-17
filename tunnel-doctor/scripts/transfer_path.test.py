@@ -71,12 +71,20 @@ class TransferPath(unittest.TestCase):
     def test_live_preflight_wan_fallback_and_lan_preference(self):
         cmd='rsync -a host:/data /tmp/data';config={'hostname':['host'],'user':['tester']}
         observed=dict(sample_bytes=1048576,seconds=.1,socket_peer='198.51.100.1',sample_path=dict(kind='wan-direct',samples=['198.51.100.1']))
-        with tempfile.TemporaryDirectory() as folder,patch.object(t,'STATE',Path(folder)),patch.object(t,'network',return_value='net'),patch.object(t,'ssh_options',return_value=config),patch.object(t,'target_route',return_value=dict(kind='wan-direct',samples=['198.51.100.1'])),patch.object(t,'sample',return_value=observed),patch.object(t,'run',return_value='node\ntester\n inet 192.0.2.9 netmask 0xffffff00'),patch.object(t,'local_networks',return_value=[]):
+        with tempfile.TemporaryDirectory() as folder,patch.object(t,'STATE',Path(folder)),patch.object(t,'network',return_value='net'),patch.object(t,'ssh_options',return_value=config),patch.object(t,'target_route',return_value=dict(kind='wan-direct',samples=['198.51.100.1'])),patch.object(t,'sample',return_value=observed),patch.object(t,'run',return_value='node\ntester\n inet 192.0.2.9 netmask 0xffffff00') as probe,patch.object(t,'local_networks',return_value=[]):
             self.assertEqual(t.preflight(cmd,'/tmp')['status'],'ready')
             with patch.object(t,'local_networks',return_value=[ipaddress.ip_network('192.0.2.0/24')]):
                 with self.assertRaisesRegex(ValueError,'verified LAN endpoint available'):t.preflight(cmd,'/tmp')
+            self.assertFalse((Path(folder)/(t.key(cmd,'/tmp')+'.json')).exists())
+            self.assertTrue(any(call.args[0][-2]=='host' and 'HostName=192.0.2.9' in call.args[0] for call in probe.call_args_list))
             with patch.object(t,'run',return_value='node\ntester\n'):
                 with self.assertRaisesRegex(ValueError,'no addresses'):t.preflight(cmd,'/tmp')
+
+    def test_linux_network_identity_ignores_lifetime_countdown(self):
+        def addresses(lifetime,address='192.0.2.2'):
+            return json.dumps([dict(ifname='eth0',flags=['UP'],operstate='UP',addr_info=[dict(family='inet',local=address,prefixlen=24,valid_life_time=lifetime,preferred_life_time=lifetime)])])
+        with patch.object(t.sys,'platform','linux'),patch.object(t,'run',side_effect=[addresses(100),'[]',addresses(99),'[]',addresses(99,'192.0.2.3'),'[]']):
+            first=t.network();self.assertEqual(first,t.network());self.assertNotEqual(first,t.network())
 
 
 if __name__=='__main__':unittest.main()

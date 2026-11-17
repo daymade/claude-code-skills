@@ -131,8 +131,16 @@ def network():
     raw = run(['/sbin/ifconfig'] if sys.platform=='darwin' else ['ip','-j','address'])
     if sys.platform=='darwin':
         rows = [x.strip() for x in raw.splitlines() if re.search(r'(^\S+: flags=|\binet6? |status:)', x)]
-    else: rows = json.loads(raw)
+    else:
+        rows=[]
+        for interface in json.loads(raw):
+            addresses=[{key:a[key] for key in ('family','local','prefixlen','scope','flags') if key in a} for a in interface.get('addr_info',[])]
+            rows.append(dict(ifname=interface.get('ifname'),flags=sorted(interface.get('flags',[])),
+                             operstate=interface.get('operstate'),addresses=sorted(addresses,key=lambda a:json.dumps(a,sort_keys=True))))
+        rows.sort(key=lambda a:a['ifname'] or '')
     route = run(['/sbin/route','-n','get','default'] if sys.platform=='darwin' else ['ip','-j','route','show','default'])
+    if sys.platform!='darwin':
+        route=[{key:r[key] for key in ('dst','gateway','dev','prefsrc','metric','table','protocol','scope','type','multipath') if key in r} for r in json.loads(route)]
     return digest([rows,route])
 
 
@@ -286,6 +294,8 @@ def evaluate(event):
 def preflight(command,cwd):
     items=transfers(command,cwd)
     if not items: return dict(status='not-required')
+    # A failed refresh cannot leave the previous attempt's proof usable.
+    (STATE/(key(command,cwd)+'.json')).unlink(missing_ok=True)
     before=network(); targets=[]
     for item in items:
         config=ssh_options(item)
@@ -302,11 +312,13 @@ def preflight(command,cwd):
         for address in sorted(addresses):
             ip=ipaddress.ip_address(address)
             if not any(ip in n for n in local_networks()): continue
-            candidate=config['user'][0]+'@'+address
             # Retain the original host-key namespace; do not accept a new key.
+            # Override only the address, leaving the alias to resolve its Port,
+            # IdentityFile, user and trust options exactly as the real copy does.
             alias=config.get('hostkeyalias',config['hostname'])[0]
             try:
-                identity=run([*ssh,'-o','HostKeyAlias='+alias,candidate,'hostname; id -un'],timeout=6)
+                candidate=['ssh','-o','HostName='+address,'-o','HostKeyAlias='+alias,*ssh[1:]]
+                identity=run([*candidate,item['host'],'hostname; id -un'],timeout=6)
                 if identity.splitlines()[:2]==remote.splitlines()[:2]: lan.append(address)
             except (ValueError,subprocess.TimeoutExpired): pass
         if lan and route['kind']!='lan-direct':

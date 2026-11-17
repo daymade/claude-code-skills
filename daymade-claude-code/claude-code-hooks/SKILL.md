@@ -1149,7 +1149,9 @@ the consent file) must back up and restore any real consent file around itself.
 ## Build order (in sequence)
 
 For recurring remote-transfer path mistakes, reuse tunnel-doctor's
-[transfer preflight owner](../../tunnel-doctor/references/transfer-path-preflight.md).
+[transfer preflight owner](https://github.com/daymade/claude-code-skills/blob/main/tunnel-doctor/references/transfer-path-preflight.md).
+Load the separate `tunnel-doctor` Skill for its bundled helper; an absent dependency
+uses the Skill installation workflow, never a guessed sibling plugin-cache path.
 Gate evidence freshness, target/options and observed underlay, not `100.*` addresses
 or the word `direct`. Before activation, replay real missed-transfer calls and
 healthy probes/copies, then verify a native blocked call and an allowed retry after
