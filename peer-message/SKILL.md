@@ -22,11 +22,13 @@ Agent 自行执行；不让用户另装 Fleet、建台账或逐条维护。`coor
 
 先从明确任务引用和实际共享资源核对范围；已有负责人时直接定位该负责人，有疑点才定向问一次。空登记只表示尚未接入，陈旧登记只表示需要核验；二者都不授予执行权。开始或改变参与范围时登记，完成或交接时由本人释放，不把消息回执当成业务完成。
 
-`send/broadcast` 自动经过同一去重记录。短时窗口问题使用稳定 `--topic`、`--kind request` 和实际有效期；同一待答事项即使换措辞也不会重复投递。原生跨会话发送用 `coord prepare` → 原生工具 → `coord commit`，只记录一次，不追加脚本发送。收到 `[peer-coordination: ...]` 时先用 `coord receive` 判断是否仍需处理，关联问题处理完用 `coord finish` 关闭；旧信封没有该字段时沿下面的语义分流，不猜有效期。
+`send/broadcast` 自动经过同一去重记录。短时窗口问题使用稳定 `--topic`、`--kind request` 和实际有效期；同一待答事项即使换措辞也不会重复投递。
+
+Codex 独立 thread 的原生发送直接使用[返回值驱动入口](references/local-coordination.md#返回值驱动的-codex-原生执行)：从 prepare 原 JSON 派生 `native-call` 参数，再将同一 JSON 交给 `commit-native`，不手抄正文或 UUID。其他原生工具按实际 schema 使用 `coord prepare` → 原生工具 → `coord commit`；两者都只记录一次，不追加脚本发送。
+
+收到 `[peer-coordination: ...]` 时按[完整原件的收件流程](references/local-coordination.md#收件回信和关闭)保存宿主原件并运行 `coord receive`，不手工重建信封或补删行尾。关联问题处理完用 `coord finish` 关闭；旧信封没有该字段时沿下面的语义分流，不猜有效期。
 
 安装、绑定变更或原生发送前，执行 [原生协调与前置检查](references/local-coordination.md#原生跨会话通信)。从本次加载的 Skill 目录运行该 SOP 的绝对路径命令；按其覆盖与验收条款判断实际宿主是否生效。
-
-Codex 独立 thread 的原生发送使用[返回值驱动入口](references/local-coordination.md#返回值驱动的-codex-原生执行)，在同一次代码调用内从 prepare 原 JSON 派生原生参数和 commit ID。
 
 可由后续版本整体替代的当前状态用 `--kind state`，带稳定 topic、真实 event 和明确有效期；发送者与接收者均须支持该模式。按本地协调机制的「可被新版本替代的状态」执行：新版本生效后，旧版本不再触发核查或回信。累计通知和真实新阻塞保留 notice/request，不猜正文语义、不给旧信封补有效期。
 
@@ -55,7 +57,7 @@ Codex 独立 thread 的原生发送使用[返回值驱动入口](references/loca
 |---|---|
 | 跨机器邀请、配对联系人、获准资料问答 | 读取 `references/network-preview.md`，使用网络 CLI；未配对或未授权共享资料时不执行问答 |
 | 原生工具覆盖 parent/subagent 或当前团队内部成员 | 直接使用当前宿主工具、原生地址及回传；不查 `whoami`、不套脚本信封、不额外运行脚本验证 |
-| 原生工具覆盖独立 session | 按本地协调机制执行 `coord prepare` → 原生工具原样发送 `body` → `coord commit`；不追加 fallback 发送 |
+| 原生工具覆盖独立 session | Codex 使用上方返回值驱动入口；其他原生工具按实际 schema 执行 prepare／原样发送／commit；不追加 fallback 发送 |
 | 原生工具未覆盖已确认的 Claude 目标，且目标有本地 inbox | 用 `scripts/peer.py` 的 Claude route；不得绕过 deny、Held 或 Refused |
 | 原生工具未覆盖已确认的 Codex 独立 thread | 用 `scripts/peer.py` 的 Codex route；不要把内部 agent 地址当独立 thread UUID。**已归档 thread 不可投递**——脚本默认拒发（它永远不会再消费 queue）；给已退出属主留话钉在它的持久制品上（PR comment、文件），见 `references/coordination-and-learning-loop.md` §5.1「发现面不可达时」段 |
 | Claude 宿主内回复/发送给 `codex:` 目标 | **不走 SendMessage**——native guard 的 SendMessage 分支只对能解析成 Claude session 的目标放行，`codex:` 前缀必被拦；prepare→原生发送的路径对 Codex 目标不存在，直接 `scripts/peer.py send`。注意连坐：裸发被拦本身不落板（拦截早于 Board 打开），但为 `codex:` 目标跑 `coord prepare` 会留下 reserved 孤行（v1.21.3 之前的拦截文案会指引你跑 prepare），随后 `peer.py send` 同内容报 `suppressed_pending`——先 `coord commit --message-id <id> --outcome not_sent` 结清再重发（2026-10-10 实测） |
