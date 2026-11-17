@@ -356,6 +356,8 @@ For persistent Python service installation, environment reuse or startup, follow
 
 For acceptance of rendered UI and visible behavior, enter
 [frontend-visual-qa](frontend-visual-qa/SKILL.md) and follow its current entry route.
+For reader consolidation, nested message actions, or changes to large-list
+navigation, follow [Refactor Preservation](frontend-visual-qa/references/journey-and-page-contracts.md#refactor-preservation).
 For publication-wide clutter or AI Slop despite passing local checks, including
 controls, deks and expanded summaries, use its
 [publication journey calibration](frontend-visual-qa/references/publication-journey-cases.md).
@@ -551,6 +553,9 @@ For waveform, speech-cut or tail-level diagnosis, enter
 [audio-router's acoustic workflow](daymade-audio/audio-router/references/acoustic-diagnostics.md).
 
 ### Transcript Correction
+
+For refreshing an adopted audit dataset, generating offline review HTML, or
+migrating browser-local review reports, enter [ASR audit export](daymade-audio/asr-transcribe-to-text/SKILL.md#offline-audit-export).
 
 For local audio listening, speaker decisions, word edits and recovery of saved
 judgments, use [Listening Desk](daymade-audio/asr-transcribe-to-text/references/review_workbench.md).
