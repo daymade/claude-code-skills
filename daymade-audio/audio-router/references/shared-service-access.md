@@ -62,11 +62,10 @@ Python uses snake_case arguments and JS uses the documented camelCase fields.
 ## Read the usable result
 
 Keep the returned job identity, original source version and result references.
-Read the selected operation's actual payload: probe format/streams may live in
-`metadata.provider_result` with empty `outputs`; ASR needs its readable transcript,
-and TTS needs its accessible audio. A queued job, workflow success or an empty
-output list alone decides none of those outcomes. Replay the same request through
-the existing idempotency path; unknown completion is not permission to infer again.
+Use daudio's [operation-specific result acceptance](https://github.com/daymade/daudio/blob/main/docs/queue-execution.md#accept-the-operations-usable-result)
+from the deployment's matching source/release documentation. That private source
+must be available to the configured deployment; if it is not, obtain the guide
+from its owner before claiming result delivery. Recovery follows that same owner.
 
 Read shared dictionary, roster, context and identity evidence through their bound
 versioned resource references. Preserve human labels and the distinction between

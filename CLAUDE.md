@@ -48,6 +48,9 @@ claude plugin install daymade-skill@daymade-skills
 
 ### Skill Validation and Packaging
 
+For applications already served by daudio, use the
+[shared-service access route](daymade-audio/audio-router/references/shared-service-access.md).
+
 For StepFun speech controls, literal-text/directive ambiguity, cloning or streaming changes, read
 [`stepfun-tts`'s native API reference](daymade-audio/stepfun-tts/references/api_reference.md).
 Verify both the standalone CLI and the actual flat `llmreg.wrapper_for` loader;
@@ -158,6 +161,9 @@ For recovery/cache-test prerequisites, fixture isolation or invalid-fixture tria
 use its [recovery-test recipe](daymade-skill/skill-creator/references/stateful-script-verification.md#establish-recovery-test-prerequisites).
 For resumable writes to human-edited state, use its
 [interrupted-write controls](daymade-skill/skill-creator/references/stateful-script-verification.md#interrupted-writes-and-later-human-changes).
+For frozen helpers or separate interpreters, use its
+[installed-consumer checks](daymade-skill/skill-creator/references/stateful-script-verification.md#installed-consumer-projection);
+optional Python imports follow the [repository-runner controls](daymade-skill/skill-creator/references/stateful-script-verification.md#optional-dependencies-and-the-repository-test-entry).
 
 For its audit, release or source-contract commands from another working directory,
 or Agent-facing materialization from any directory, use the
@@ -548,7 +554,8 @@ judgments, use [Listening Desk](daymade-audio/asr-transcribe-to-text/references/
 Its saving, recovery and verification sections govern the browser and local
 service; keep the operating procedure there rather than in review artifacts.
 
-For explicit single-task speaker-inference requests, load
+For explicit single-task speaker-inference requests, including telephone
+self-introductions, forms of address and quoted names, load
 [scoped speaker inference](daymade-audio/transcript-fixer/references/scoped_speaker_inference.md).
 
 Use [transcript-fixer](daymade-audio/transcript-fixer/SKILL.md) for transcript
