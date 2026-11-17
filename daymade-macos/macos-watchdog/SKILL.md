@@ -67,6 +67,7 @@ stand down without waiting for a human to disable it.
 | Installing a NEW watchdog from scratch | Select the trigger through `references/event-driven-observers.md`, then § Deploy and § The quiet-watchdog contract |
 | Installing, upgrading, reusing or starting a persistent Python job | § Persistent Python runtime |
 | An evidence observer needs authentication or loses memory-only credentials on restart | § Authenticated evidence observers |
+| A batch collector restarts with missing, malformed or stale terminal state | [Interrupted-batch recovery](references/interrupted-batches.md); distinguish a closed writer from a complete capture before releasing or resuming work |
 | An existing watchdog misbehaves (spam, re-launches apps, hammers) | First use the read-only ownership and business-state checks in `references/event-driven-observers.md` § Deployment SOP, then § Troubleshooting quick map and § The quiet-watchdog contract |
 | Stopping / disabling / restarting a job | § Stop semantics; before replacement follow `references/event-driven-observers.md` § Wait for an authorized unload before replacement |
 | Retiring a job and its tool permanently | § Stop semantics → Decommissioning a job permanently |

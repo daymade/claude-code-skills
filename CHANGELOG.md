@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-watchdog** (`daymade-macos` v1.34.7 → v1.34.8): Distinguish closed writers from complete captures, preserve interrupted batches and retry cleared recovery blockers without reusing startup proof for live children.
+- **debugging-network-issues** (v1.12.3 → v1.12.4): Accept collector recovery through fresh post-fault work, destination-verified custody and the deployed monitoring consumer while retaining historical gaps.
+
 - **prior-work-retrieval** (`daymade-claude-code` v5.1.24 → v5.1.25): Limit each ripgrep adapter to one worker and select the globally ranked top candidates without sorting the full candidate set. Preserve full search coverage, path enumeration and source integrity checks.
 
 - **Sparse worktree retirement** (`git-safety-net` v1.28.8 → v1.28.9): Accept proven absent, skipped filtered files in sparse checkouts while preserving refusal for materialized payloads, indirect paths and unproven omissions.
