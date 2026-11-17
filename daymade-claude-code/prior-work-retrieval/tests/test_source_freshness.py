@@ -53,6 +53,7 @@ class SourceFreshnessTests(unittest.TestCase):
 
     def retrieve(self, *extra):
         result = self.cli("retrieve", "--business-outcome", "Reuse the verified provider contract.",
+                          "--filesystem-scope", str(self.repo),
                           "--outcome-term", "reusable", "--query", "reusable", "--term", "reusable",
                           "--session-id", "fixture", "--json", *extra)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -332,11 +333,15 @@ class SourceFreshnessTests(unittest.TestCase):
         self.assertIn("newer prompt", self.complete(run).stderr)
 
     def test_source_root_outside_git_preserves_nested_repository_support(self):
+        project = self.root / "project"
+        project.mkdir()
+        self.repo.rename(project / "repo")
+        self.repo = project / "repo"
         payload = json.loads(self.manifest.read_text())
-        payload["sources"][0]["root"] = str(self.root)
+        payload["sources"][0]["root"] = str(project)
         payload["sources"][0]["includes"] = ["**/*.md"]
         self.manifest.write_text(json.dumps(payload))
-        run = self.retrieve()
+        run = self.retrieve("--filesystem-scope", str(project))
         self.assertEqual(self.candidate["source_scope"], "legacy")
         self.assertEqual(self.complete(run).returncode, 0)
         (self.repo / "unrelated.txt").write_text("outside source root Git proof\n")

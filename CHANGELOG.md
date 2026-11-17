@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **prior-work-retrieval** (`daymade-claude-code` v5.1.25 → v5.2.0): Require task-specific filesystem scope before launching search or Git freshness probes. Keep out-of-scope sources visible as coverage gaps; preserve scoped searches, indexed adapters and manual verification.
+
 - **prior-work-retrieval** (`daymade-claude-code` v5.1.24 → v5.1.25): Limit each ripgrep adapter to one worker and select the globally ranked top candidates without sorting the full candidate set. Preserve full search coverage, path enumeration and source integrity checks.
 
 - **Sparse worktree retirement** (`git-safety-net` v1.28.8 → v1.28.9): Accept proven absent, skipped filtered files in sparse checkouts while preserving refusal for materialized payloads, indirect paths and unproven omissions.
