@@ -9,10 +9,19 @@ the call and its obtained result, not two inference runs.
 ## Bind the installed runtime
 
 Keep the existing source reader, external dispatcher, device identity and source
-ownership checks. Select an explicit Python runtime containing daudio 0.1.8 or
-newer and this Skill's existing `requirements.txt` dependencies. All paths below
+ownership checks. Select an explicit Python runtime containing `daudio-client`
+0.1.10 or newer and this Skill's existing `requirements.txt` dependencies. Configure
+the ordinary daudio service endpoint and the originating `device.id`; resource
+access uses HTTP and does not open a local registry on service failure. All paths below
 must refer to the same installed bundle and original native configuration directory.
 Do not infer a mutation command from the reader or install into an unrelated app.
+
+Set `api.endpoint` in the framework profile selected by `DAUDIO_CONFIG`, or set
+`DAUDIO_ENDPOINT`; retain the originating `device.id` in that framework profile.
+`DAYMADE_AUDIO_CONFIG` still selects this Skill's bindings and does not replace
+the framework profile. Install the thin package in the interpreter named by the
+history binding before retrying a missing-SDK or endpoint failure; pending native
+receipts remain available for that ordinary retry.
 
 Add to the existing audio profile:
 
@@ -25,6 +34,12 @@ Add to the existing audio profile:
   "history_projection_provider": "transcript-fixer.stage1-history"
 }
 ```
+
+The default `history_resource_mode` is `service`. A trusted worker explicitly
+operating on its own registry may set `history_resource_mode` to `local-worker`
+and install full daudio 0.1.8 or newer. This mode is opt-in; a missing SDK, endpoint,
+device identity or unavailable service never selects it automatically. The native
+configuration and human-edit merge remain local to their owning device in either mode.
 
 Configure this named provider in the same daudio profile used by the publisher:
 
@@ -85,7 +100,9 @@ as pending rather than guessing another source or overwriting an old file.
 ## Integration checks
 
 Run `python -m pytest tests/test_history_projection.py -q` from this Skill with
-its declared test dependencies and daudio>=0.1.8 installed. The cases use temporary
-configuration, SQLite and synthetic files, and deny network access. The repository's
-dependency-free unittest discovery reports an explicit skip when pytest or daudio
-is absent; that skip does not validate historical projection or runtime activation.
+its declared test dependencies, daudio>=0.1.8, daudio-client>=0.1.10 and service
+dependencies installed. The service cases use an isolated loopback HTTP endpoint,
+temporary registry and synthetic files; connections to unrelated endpoints are
+denied. Explicit local-worker controls preserve offline behavior. The repository's
+dependency-free unittest discovery reports an explicit skip when required test dependencies
+are absent; that skip does not validate historical projection or runtime activation.

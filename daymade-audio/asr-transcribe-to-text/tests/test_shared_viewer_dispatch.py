@@ -67,7 +67,8 @@ class SharedViewerDispatchTests(unittest.TestCase):
         self.assertNotIn('--title',command)
         self.assertIn('--subtitle',command);self.assertIn('Custom subtitle',command)
         self.assertEqual(command.count('--material-final'),2)
-        self.assertIn('Editor=#123456',command);self.assertIn('Reviewer='+audit.FALLBACK_PALETTE[1],command)
+        self.assertIn('Editor=#123456',command);self.assertIn('Reviewer',command)
+        self.assertFalse(any(value.startswith('Reviewer=') for value in command))
         self.args.title='New title'
         with patch.object(audit.subprocess,'run') as run:
             audit.dispatch_registered_viewer(self.args)

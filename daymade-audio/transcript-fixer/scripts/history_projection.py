@@ -1,7 +1,7 @@
 """Stage-1 history through daudio; native files change only after a three-way CAS.
 
-The optional history_projection binding is literal argv. Its interpreter must
-provide the installed daudio SDK; ordinary standalone correction needs no SDK.
+The optional history_projection binding is literal argv. Resource access defaults
+to the independent daudio thin SDK; standalone correction needs no audio SDK.
 """
 from __future__ import annotations
 
@@ -30,6 +30,20 @@ def encoded(value):
 
 def decoded(value):
     return base64.b64decode(value, validate=True)
+
+
+def _resource_client():
+    from shared_evidence import _profile
+    mode = _profile().get("history_resource_mode", "service")
+    if mode == "service":
+        from daudio_client import DaudioClient
+        return DaudioClient()
+    if mode == "local-worker":
+        from daudio.client import Daudio
+        client = Daudio()
+        client.device_id = client.config.get("device", {}).get("id")
+        return client
+    raise ValueError("history_resource_mode must be service or explicit local-worker")
 
 
 def atomic_json(path, value):
@@ -127,7 +141,7 @@ def _parent_source(client, payload):
     if (source["kind"] != "transcript" or digest(original) != payload["input_sha256"]
             or decoded(source["metadata"]["original_bytes_base64"]) != original):
         raise ValueError("read bytes do not match the pinned dispatch source")
-    scope = client.config.get("device", {}).get("id")
+    scope = client.device_id
     location = Path(payload["source_path"]).as_uri()
     if not scope or not any(item.get("uri") == location and item.get("locator_scope") == scope for item in source["locations"]):
         raise ValueError("source device/path is unknown or foreign")
@@ -203,7 +217,7 @@ def _evidence_copy(client, raw, key, refs):
 
 
 def _require_device(client, receipt):
-    scope = client.config.get("device", {}).get("id")
+    scope = client.device_id
     if not scope or scope != receipt["locator_scope"]:
         raise ValueError("native projection belongs to another or unknown device")
 
@@ -293,8 +307,7 @@ def _replace_projection(client, prepared):
 
 
 def flush(path):
-    from daudio.client import Daudio
-    client = Daudio()
+    client = _resource_client()
     with state_lock(path) as state:
         for identity, payload in list(state["pending"].items()):
             try:
@@ -339,7 +352,7 @@ def flush(path):
             except Exception as error:
                 receipt.update(status="pending", error_type=type(error).__name__)
                 try:
-                    if client.config.get("device", {}).get("id") == receipt["locator_scope"]:
+                    if client.device_id == receipt["locator_scope"]:
                         actual = Path(receipt["output_path"]).read_bytes()
                         observed = _evidence_copy(client, actual, "fixer-native-readback:" + digest(str(receipt["output_path"]).encode() + actual), [])
                         receipt["readback_ref"] = observed["version_uri"]
@@ -349,11 +362,10 @@ def flush(path):
 
 
 def recompute(options):
-    from daudio.client import Daudio
     from core.correction_repository import CorrectionRepository
     from core.correction_service import CorrectionService
     from core.dictionary_processor import DictionaryProcessor
-    client = Daudio()
+    client = _resource_client()
     recipe = options["recipe"]
     dictionaries = [client.get(ref["uri"], version=ref["version"]) for ref in options["evidence_refs"]
         if ref.get("relation") == "transcript-fixer.dictionary"]

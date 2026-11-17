@@ -2631,12 +2631,12 @@ def dispatch_registered_viewer(args):
     for field in ['material_final', 'material_rough']:
         for value in getattr(args, field, None) or []:
             command.extend(['--' + field.replace('_', '-'), value])
-    for index, value in enumerate(getattr(args, 'known_speaker', None) or []):
+    for value in getattr(args, 'known_speaker', None) or []:
         name, separator, color = value.partition('=')
         if not name.strip():
             continue
-        color = normalize_color(color.strip()) if separator else FALLBACK_PALETTE[index % len(FALLBACK_PALETTE)]
-        command.extend(['--known-speaker', name.strip() + '=' + color])
+        mapping = name.strip() + '=' + normalize_color(color.strip()) if separator else name.strip()
+        command.extend(['--known-speaker', mapping])
     subprocess.run(command, check=True)
     return True
 

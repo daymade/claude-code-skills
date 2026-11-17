@@ -5,6 +5,8 @@ from pathlib import Path
 import socket
 import subprocess
 import sys
+import threading
+import time
 from unittest.mock import patch
 from unittest import SkipTest
 
@@ -18,10 +20,13 @@ except ModuleNotFoundError as error:
 try:
     from daudio.client import Daudio
     from daudio.imports import SourceImporter
+    import daudio_client
+    import uvicorn
+    from daudio.app import create_app
 except ModuleNotFoundError as error:
-    if error.name != "daudio":
+    if error.name not in {"daudio", "daudio_client", "uvicorn", "fastapi"}:
         raise
-    raise SkipTest("Optional history integration tests require daudio>=0.1.8") from error
+    raise SkipTest("Optional history integration tests require daudio, daudio-client and service dependencies") from error
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 from core.correction_repository import CorrectionRepository
@@ -37,7 +42,17 @@ def journey(tmp_path, monkeypatch):
     config_dir.mkdir()
     guard = tmp_path / "guard"
     guard.mkdir()
-    (guard / "sitecustomize.py").write_text("import socket\ndef denied(*a,**k): raise RuntimeError('Network forbidden including17843')\nsocket.socket.connect=denied\nsocket.create_connection=denied\n")
+    with socket.socket() as reserved:
+        reserved.bind(("127.0.0.1", 0))
+        port = reserved.getsockname()[1]
+    endpoint = f"http://127.0.0.1:{port}"
+    monkeypatch.setenv("NO_PROXY", "127.0.0.1,localhost")
+    monkeypatch.setenv("no_proxy", "127.0.0.1,localhost")
+    (guard / "sitecustomize.py").write_text(
+        "import socket\n_original=socket.socket.connect\n"
+        "def controlled(sock,address):\n"
+        f" if not isinstance(address,tuple) or address[:2] != ('127.0.0.1',{port}): raise RuntimeError('Unrelated network forbidden')\n"
+        " return _original(sock,address)\nsocket.socket.connect=controlled\n")
     for key in ("HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME"):
         monkeypatch.setenv(key, str(tmp_path / key.lower()))
     monkeypatch.setenv("PYTHONDONTWRITEBYTECODE", "1")
@@ -46,7 +61,7 @@ def journey(tmp_path, monkeypatch):
     native_db = config_dir / "corrections.db"
     monkeypatch.setenv("TRANSCRIPT_FIXER_DB_PATH", str(native_db))
     monkeypatch.setenv("TRANSCRIPT_FIXER_ENABLE_LEARNING", "false")
-    monkeypatch.setenv("DAUDIO_ENDPOINT", "http://127.0.0.1:1")
+    monkeypatch.setenv("DAUDIO_ENDPOINT", endpoint)
     registry = tmp_path / "registry.sqlite3"
     monkeypatch.setenv("DAUDIO_DB", str(registry))
     daudio_profile, audio_profile = tmp_path / "daudio.json", tmp_path / "audio.json"
@@ -56,12 +71,25 @@ def journey(tmp_path, monkeypatch):
     provider = {"operations": ["correct-stage1"], "argv": [sys.executable, str(helper), "recompute", "--options", "{options_json}"],
         "stdout_format": "json", "result_kind": "transcript", "result_text_field": "text"}
     core_config = {"database": {"path": str(registry)}, "device": {"id": "synthetic-device-a"},
-        "providers": {"fixer-stage1": provider}}
+        "api": {"endpoint": endpoint}, "providers": {"fixer-stage1": provider}}
     daudio_profile.write_text(json.dumps(core_config))
     native = CorrectionRepository(native_db)
     native.add_correction("zzsynthetictpy", "zzcanonicalone", domain="alpha", confidence=.99, added_by="fixture")
     native.close()
     client = Daudio(registry, config=core_config)
+    app = create_app(client)
+    requests = []
+    @app.middleware("http")
+    async def count_requests(request, call_next):
+        requests.append((request.method, request.url.path))
+        return await call_next(request)
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error", lifespan="off"))
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    deadline = time.monotonic() + 5
+    while not server.started and thread.is_alive() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert server.started
     dictionary = SourceImporter(client.registry).import_dictionary(native_db, source_key="synthetic-owned-dictionary", domain=None)
     state = config_dir / "history-projections.json"
     publisher = [sys.executable, "-m", "daudio.cli", "import"]
@@ -85,10 +113,14 @@ def journey(tmp_path, monkeypatch):
         return run("--input", str(source), "--output", str(output), "--stage", "1", "--domain", "alpha", "--apply-domain", "--json")
     def change_rule(value):
         return run("--add", "zzsynthetictpy", value, "--domain", "alpha", "--force")
-    return {"root": tmp_path, "client": client, "native_db": native_db, "state": state,
+    yield {"root": tmp_path, "client": client, "native_db": native_db, "state": state,
         "source": source, "output": output, "ordinary": ordinary, "change_rule": change_rule,
         "helper": helper, "publisher": publisher, "profile": profile, "audio_profile": audio_profile,
-        "run": run, "guard": guard}
+        "run": run, "guard": guard, "http_requests": requests}
+    server.should_exit = True
+    thread.join(timeout=10)
+    assert not thread.is_alive()
+    client.registry.close()
 
 
 def test_actual_cli_dictionary_update_preserves_manual_edit_and_versions(journey):
@@ -100,6 +132,8 @@ def test_actual_cli_dictionary_update_preserves_manual_edit_and_versions(journey
     state = json.loads(j["state"].read_text())
     assert state["pending"] == {}, native_result.stderr.decode()
     assert len(state["receipts"]) == 1
+    assert ("POST", "/v1/results") in j["http_requests"]
+    assert ("GET", "/v1/resource") in j["http_requests"]
     receipt = next(iter(state["receipts"].values()))
     first = j["client"].get(receipt["baseline_ref"])
     assert first["metadata"]["text"] == "zzcanonicalone。\n人工备注：原文。\n"
@@ -118,6 +152,26 @@ def test_actual_cli_dictionary_update_preserves_manual_edit_and_versions(journey
     receipt = next(iter(state["receipts"].values()))
     assert receipt["status"] == "current" and receipt["baseline_ref"] == refreshed["version_uri"]
     assert j["client"].get(receipt["observed_ref"])["metadata"]["sha256"]
+
+
+def test_source_backed_entry_and_native_paths_with_spaces_use_the_thin_service(journey):
+    j = journey
+    entry = j["root"] / "installed entry with spaces"
+    entry.symlink_to(SCRIPTS.parent, target_is_directory=True)
+    source = j["root"] / "original input with spaces.md"
+    output = j["root"] / "native result with spaces.md"
+    original = j["source"].read_bytes()
+    source.write_bytes(original)
+    result = subprocess.run([sys.executable, str(entry / "scripts/fix_transcription.py"),
+        "--input", str(source), "--output", str(output), "--stage", "1", "--domain", "alpha", "--apply-domain", "--json"],
+        capture_output=True, timeout=60)
+    assert result.returncode == 0, result.stderr.decode()
+    assert json.loads(result.stdout)["applied"] == 1
+    state = json.loads(j["state"].read_text())
+    assert not state["pending"] and len(state["receipts"]) == 1
+    assert source.read_bytes() == original
+    assert output.read_text() == "zzcanonicalone。\n人工备注：原文。\n"
+    assert ("POST", "/v1/results") in j["http_requests"]
 
 
 def test_conflict_is_pending_with_complete_manual_and_derived_versions(journey):
@@ -162,17 +216,14 @@ def test_without_original_dispatch_baseline_native_success_is_retained_pending(j
 
 def test_registry_outage_recovers_at_existing_ordinary_workpoint_without_reprocessing(journey, monkeypatch):
     j = journey
-    site = j["guard"] / "sitecustomize.py"
-    site.write_text(site.read_text() + "\nimport os\nif os.environ.get('FIXTURE_FAIL_RESULT')=='1':\n from daudio.results import ResultRecorder\n def fail(*a,**k): raise OSError('synthetic registry result outage')\n ResultRecorder.record_result=fail\n")
-    monkeypatch.setenv("FIXTURE_FAIL_RESULT", "1")
-    result = j["ordinary"]()
+    with patch.object(j["client"].results, "record_result", side_effect=OSError("synthetic service result outage")):
+        result = j["ordinary"]()
     assert json.loads(result.stdout)["applied"] == 1
     output = j["output"].read_bytes()
     state = json.loads(j["state"].read_text())
     assert len(state["pending"]) == 1 and state["receipts"] == {}
     original_jobs = [item for item in j["client"].list(kind="job") if item["metadata"].get("provider") == "transcript.correct"]
     assert len(original_jobs) == 1
-    monkeypatch.delenv("FIXTURE_FAIL_RESULT")
     j["run"]("--list", "--domain", "alpha")
     recovered = json.loads(j["state"].read_text())
     assert recovered["pending"] == {} and len(recovered["receipts"]) == 1
@@ -384,7 +435,7 @@ def test_prepared_foreign_device_never_reads_or_advances_native_baseline(journey
     j = journey
     before = prepared_unprojected_update(j)
     import history_projection as history
-    client = j["client"]
+    client = history._resource_client()
     state = json.loads(j["state"].read_text())
     receipt = next(iter(state["receipts"].values()))
     prepared = history._project(client, receipt)
