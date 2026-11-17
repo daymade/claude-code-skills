@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **tunnel-doctor v1.18.1**: Read transfer limits and proof expiry from the executable owner and its result instead of maintaining copied parameter values in the SOP.
 - **claude-code-hooks** (`daymade-claude-code` v5.2.5): Verify changed shared-runtime fields and helper bindings through registered capture and projection consumers before producer activation.
+- **frontend-visual-qa v1.21.52**: Verify that a reader stays open when the ordinary list and reader use different identifiers for the same record.
 - **asr-transcribe-to-text** (`daymade-audio` v1.65.4): Align command help with registered refresh and offline generation.
 
 - **ghostty-use** (v1.15.0 → v1.15.1): Require temporary watcher deployment sources to be rebound to the maintained primary checkout and verified through a completed native round before retirement.

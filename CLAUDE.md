@@ -388,7 +388,7 @@ For audits of asset-ledger hierarchy, row selection or issue resolution, follow 
 For shared controls or help mounted outside the workspace's style scope, use its
 [scoped-style and portal checks](frontend-visual-qa/references/journey-and-page-contracts.md#scoped-styles-and-portal-content).
 For embedded-reader sizing, surrounding navigation, overlays, zoom, reading/return,
-focus or filtered-selection changes, use its
+focus, filtered selection or changes to how the list identifies the reader's record, use its
 [reader journey](frontend-visual-qa/references/journey-and-page-contracts.md#embedded-readers-and-semantic-zoom).
 For long-document outlines, active-section cues or source sidebars, follow its
 [reading-position recipe](frontend-visual-qa/references/journey-and-page-contracts.md#long-document-reading-positions).
