@@ -392,8 +392,9 @@ def _connect(
     readonly: bool = False,
     simple_root: Path | None = None,
     load_vectors: bool = False,
+    selected_runtime: SimpleRuntime | None = None,
 ) -> sqlite3.Connection:
-    runtime = find_simple_runtime(simple_root)
+    runtime = selected_runtime or find_simple_runtime(simple_root)
     if runtime is None:
         raise IndexError(
             "Chinese BM25 backend is not installed. Run: "
@@ -658,9 +659,11 @@ def _validate_schema(connection: sqlite3.Connection) -> None:
         )
 
 
-def _new_database(db_path: Path, simple_root: Path | None) -> sqlite3.Connection:
+def _new_database(
+    db_path: Path, simple_root: Path | None, *, selected_runtime: SimpleRuntime | None = None
+) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    connection = _connect(db_path, simple_root=simple_root)
+    connection = _connect(db_path, simple_root=simple_root, selected_runtime=selected_runtime)
     connection.executescript(SCHEMA)
     _validate_schema(connection)
     _meta_set(connection, "schema_version", str(SCHEMA_VERSION))
@@ -1350,6 +1353,52 @@ def _purge_session(connection: sqlite3.Connection, session_id: str) -> None:
     connection.execute("DELETE FROM sessions WHERE session_id=?", (session_id,))
 
 
+def _maintain_fts_rows(connection: sqlite3.Connection) -> None:
+    """Keep the external-content index in the same transaction as its records."""
+    # Connection-local triggers keep the on-disk schema compatible with older
+    # readers and writers. The delete trigger also handles session cascades.
+    connection.execute("""
+        CREATE TEMP TRIGGER records_fts_insert AFTER INSERT ON main.records BEGIN
+          INSERT INTO records_fts(rowid, fts_text) VALUES(new.id, new.fts_text);
+        END
+    """)
+    connection.execute("""
+        CREATE TEMP TRIGGER records_fts_delete AFTER DELETE ON main.records BEGIN
+          INSERT INTO records_fts(records_fts, rowid, fts_text)
+            VALUES('delete', old.id, old.fts_text);
+        END
+    """)
+
+
+def _fts_tokenizer_identity(runtime: SimpleRuntime | None) -> str:
+    if runtime is None:
+        raise IndexError("Cannot identify the selected FTS tokenizer")
+    files = [runtime.library, *sorted(runtime.dictionary.rglob("*.utf8"))]
+    digests = []
+    for path in files:
+        digest = hashlib.sha256()
+        with path.open("rb") as handle:
+            for block in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(block)
+        digests.append((str(path.relative_to(runtime.root)), digest.hexdigest()))
+    return json.dumps(digests)
+
+
+def _reconcile_stored_injections(
+    connection: sqlite3.Connection, *, existing: bool, previous_writer_qualified: bool
+) -> int:
+    """Sweep legacy records only for an unapplied provider prefix policy."""
+    pruned = 0
+    for provider, prefixes in (("codex", CODEX_INJECTED_PREFIXES), ("claude", CLAUDE_INJECTED_PREFIXES)):
+        key = f"injected_prefix_policy_{provider}"
+        policy = json.dumps(prefixes)
+        if not previous_writer_qualified or _meta_get(connection, key) != policy:
+            if existing:
+                pruned += _prune_injected_records(connection, provider, prefixes)
+            _meta_set(connection, key, policy)
+    return pruned
+
+
 def _insert_session(connection: sqlite3.Connection, ref: dict[str, Any]) -> int:
     session_id = ref["session_id"]
     project = ref.get("project") or Path(ref["path"]).parent.name
@@ -1660,6 +1709,8 @@ def update_index(
     simple_root: Path | None = None,
     retired_sources: Path | None = None,
 ) -> dict[str, Any]:
+    runtime = find_simple_runtime(simple_root)
+    tokenizer = _fts_tokenizer_identity(runtime)
     if rebuild or not db_path.exists():
         if retired_sources is not None:
             raise IndexError("Retirement requires an existing index; rebuild cannot preserve old records")
@@ -1683,8 +1734,8 @@ def update_index(
     )
     if target != db_path:
         _remove_database_artifacts(target)
-    connection = _new_database(target, simple_root) if target != db_path else _connect(
-        target, simple_root=simple_root
+    connection = _new_database(target, simple_root, selected_runtime=runtime) if target != db_path else _connect(
+        target, simple_root=simple_root, selected_runtime=runtime
     )
     migration_note: str | None = None
     retirement = None
@@ -1719,6 +1770,16 @@ def update_index(
     added = changed = unchanged = removed = records_added = records_pruned = 0
     started = time.time()
     try:
+        previous_write = _meta_get(connection, "last_indexed_at")
+        previous_writer_qualified = previous_write is not None and previous_write == _meta_get(
+            connection, "fts_maintained_at"
+        )
+        previous_tokenizer = _meta_get(connection, "fts_tokenizer_files")
+        # External-content deletes must use the same tokenizer that wrote the
+        # old terms. Legacy indexes lack an identity for the actual runtime.
+        retokenize = target == db_path and (not previous_writer_qualified or previous_tokenizer != tokenizer)
+        if not retokenize:
+            _maintain_fts_rows(connection)
         if retirement:
             if not connection.in_transaction:
                 connection.execute("BEGIN")
@@ -1762,16 +1823,13 @@ def update_index(
             _purge_session(connection, session_id)
             removed += 1
 
-        # Reconciliation is finished, so this sees exactly the records the
-        # index will keep. It has to run before the FTS rebuild: records_fts is
-        # external-content, and a deleted record stays lexically searchable
-        # until the index is rebuilt from the content table.
-        records_pruned = _prune_injected_records(
-            connection, "codex", CODEX_INJECTED_PREFIXES
-        ) + _prune_injected_records(connection, "claude", CLAUDE_INJECTED_PREFIXES)
-
-        if added or changed or removed or records_pruned or target != db_path:
+        records_pruned = _reconcile_stored_injections(
+            connection, existing=target == db_path, previous_writer_qualified=previous_writer_qualified
+        )
+        if retokenize:
             connection.execute("INSERT INTO records_fts(records_fts) VALUES('rebuild')")
+        if previous_tokenizer != tokenizer:
+            _meta_set(connection, "fts_tokenizer_files", tokenizer)
         if added or changed or removed:
             _meta_set(connection, "chunks_complete", "false")
             _meta_set(connection, "vectors_complete", "false")
@@ -1780,7 +1838,9 @@ def update_index(
         if retirement:
             _meta_set(connection, "source_retirement", retirement)
             _meta_set(connection, "active_scan_scope", _scope_identity(scope))
-        _meta_set(connection, "last_indexed_at", utc_now())
+        indexed_at = utc_now()
+        _meta_set(connection, "last_indexed_at", indexed_at)
+        _meta_set(connection, "fts_maintained_at", indexed_at)
         _meta_set(connection, "last_indexed_sessions", str(len(refs)))
         _meta_set(
             connection,
@@ -1788,6 +1848,8 @@ def update_index(
             str(max((ref.get("updated_at") or 0 for ref in refs), default=0)),
         )
         _meta_set(connection, "build_complete", "true")
+        if _fts_tokenizer_identity(runtime) != tokenizer:
+            raise IndexError("FTS tokenizer files changed during indexing; retry after the runtime is stable")
         connection.commit()
         _validate_schema(connection)
         if target != db_path:
