@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **asr-transcribe-to-text** (`daymade-audio` v1.63.2 → v1.63.3): Forward adopted-viewer titles, subtitles, speaker colors and material keywords to the existing data owner without replacing its UI or default configuration.
 - **audio-router** (`daymade-audio` v1.63.0 → v1.63.1): Keep the existing speech routes and Chinese/English acoustic diagnostic signals visible in the native Codex catalog window; align the prefix regression with actual host readback.
 - **asr-transcribe-to-text** (`daymade-audio` v1.62.0 → v1.63.0): Route explicitly adopted projects from the legacy audit command to their installed shared-viewer data entry. Preserve standalone output for unregistered projects and stop failed handoffs without overwriting the existing reader.
 - **macos-permissions** (`daymade-macos` v1.34.5 → v1.34.6): Signed-app replacement with an enabled but ineffective grant.

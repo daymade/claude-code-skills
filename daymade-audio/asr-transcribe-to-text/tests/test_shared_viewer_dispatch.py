@@ -49,7 +49,7 @@ class SharedViewerDispatchTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):audit.dispatch_registered_viewer(self.args)
             run.assert_not_called()
     def test_unsupported_legacy_presentation_options_are_not_silently_dropped(self):
-        for field,value in [('storage_key','old-browser-key'),('known_speaker',['A=red']),('material_final',['final']),('material_rough',['rough']),('subtitle','custom'),('title','Different')]:
+        for field,value in [('storage_key','old-browser-key')]:
             with self.subTest(field=field):
                 before=getattr(self.args,field,None);setattr(self.args,field,value)
                 with patch.object(audit.subprocess,'run') as run:
@@ -57,5 +57,21 @@ class SharedViewerDispatchTests(unittest.TestCase):
                     run.assert_not_called()
                 if before is None:delattr(self.args,field)
                 else:setattr(self.args,field,before)
+    def test_presentation_options_reach_the_registered_owner_and_defaults_do_not_replace_title(self):
+        self.args.title=audit.DEFAULT_TITLE;self.args.subtitle='Custom subtitle'
+        self.args.known_speaker=['Editor=#123456','Reviewer']
+        self.args.material_final=['final','approved'];self.args.material_rough=['rough']
+        with patch.object(audit.subprocess,'run') as run:
+            self.assertTrue(audit.dispatch_registered_viewer(self.args))
+            command=run.call_args.args[0]
+        self.assertNotIn('--title',command)
+        self.assertIn('--subtitle',command);self.assertIn('Custom subtitle',command)
+        self.assertEqual(command.count('--material-final'),2)
+        self.assertIn('Editor=#123456',command);self.assertIn('Reviewer='+audit.FALLBACK_PALETTE[1],command)
+        self.args.title='New title'
+        with patch.object(audit.subprocess,'run') as run:
+            audit.dispatch_registered_viewer(self.args)
+            command=run.call_args.args[0]
+            self.assertEqual(command[command.index('--title')+1],'New title')
 
 if __name__=='__main__':unittest.main()
