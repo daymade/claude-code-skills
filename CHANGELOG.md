@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Sparse worktree retirement** (`git-safety-net` v1.28.8 → v1.28.9): Accept proven absent, skipped filtered files in sparse checkouts while preserving refusal for materialized payloads, indirect paths and unproven omissions.
 - **macos-load-doctor / macos-watchdog** (`daymade-macos` v1.34.6 → v1.34.7): Explain process activity by business task and lifecycle evidence; preserve stateful shared workloads and verify the effective background job separately from its UI.
 - **claude-code-hooks** (`daymade-claude-code` v5.1.23 → v5.1.24): Audit hot-path cost by actual trigger frequency while preserving verdicts, authoritative rereads, input-bound check reuse and deployed-consumer verification.
 - **read-claude-code-history** (`daymade-claude-code` v5.1.22 → v5.1.23): Pure BM25 returns this same lexical order directly; oversampling only contributes candidates when there is a vector leg to fuse with it.

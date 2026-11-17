@@ -205,8 +205,25 @@ def clean(path: Path) -> None:
     attributes = git(path, "ls-files", "-z")
     if attributes:
         values = git(path, "check-attr", "--stdin", "-z", "filter", data=attributes).split(b"\0")
-        require(all(values[i] in (b"unspecified", b"unset")
-                    for i in range(2, len(values) - 1, 3)), "Tracked content filters need manual handling")
+        filtered = [values[i - 2] for i in range(2, len(values) - 1, 3)
+                    if values[i] not in (b"unspecified", b"unset")]
+        if filtered:
+            # A sparse omission has no physical payload to retire. Never use the
+            # flag alone: skipped files can still exist, including dangling links.
+            config = git(path, "config", "--null", "--list")
+            sparse = b"core.sparsecheckout\ntrue" in config.split(b"\0")
+            skipped = {row[2:] for row in git(path, "ls-files", "-t", "-z").split(b"\0")
+                       if row.startswith(b"S ")}
+            for raw in filtered:
+                relative = Path(os.fsdecode(raw))
+                require(sparse and raw in skipped and not relative.is_absolute()
+                        and ".." not in relative.parts, "Tracked content filters need manual handling")
+                for candidate in [relative, *relative.parents]:
+                    if candidate == Path("."):
+                        continue
+                    location = path / candidate
+                    require(not location.is_symlink(), "Indirect sparse filtered path needs manual handling")
+                require(not os.path.lexists(path / relative), "Materialized content filters need manual handling")
     # Each initialized child is checked separately after its attribute preflight;
     # recursive status here could execute a child's filter before that check.
     require(not git(path, "status", "--porcelain=v1", "--untracked-files=all",

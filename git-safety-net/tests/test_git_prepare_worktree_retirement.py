@@ -635,6 +635,67 @@ class WorktreeRetirementTests(unittest.TestCase):
         self.git("-C", str(self.target), "status", "--porcelain=v1", "--ignore-submodules=none")
         self.assertTrue(marker.exists())
 
+    def filtered_plain_target(self, sparse: bool = True) -> tuple[Path, Path]:
+        self.plain_target()
+        omitted = self.target / "omitted/中文 [fixture].bin"
+        omitted.parent.mkdir()
+        omitted.write_text("synthetic filtered payload\n")
+        (self.target / ".gitattributes").write_text("*.bin filter=fixture\n")
+        self.commit(self.target, "filtered sparse fixture")
+        if sparse:
+            self.git("-C", str(self.target), "sparse-checkout", "set", "--no-cone",
+                     "/.gitignore", "/.gitattributes", "/tracked.txt")
+        else:
+            self.git("-C", str(self.target), "update-index", "--skip-worktree", "--", str(omitted))
+            omitted.unlink()
+        marker = self.root / "filter executed"
+        program = self.root / "filter program"
+        program.write_text("#!/bin/sh\ntouch " + shlex.quote(str(marker)) + "\ncat\n")
+        program.chmod(0o700)
+        self.git("-C", str(self.target), "config", "filter.fixture.clean", shlex.quote(str(program)))
+        return omitted, marker
+
+    def test_sparse_filtered_omission_prepares_and_verifies_without_executing_filter(self) -> None:
+        omitted, marker = self.filtered_plain_target()
+        self.assertFalse(os.path.lexists(omitted))
+        state = self.prepare()
+        self.assertIn("root", state["completed"])
+        self.assertEqual(self.run_tool("verify-current").returncode, 0)
+        self.assertFalse(marker.exists())
+
+    def test_materialized_skip_worktree_file_is_refused_and_later_appearance_blocks_verify(self) -> None:
+        omitted, marker = self.filtered_plain_target()
+        self.prepare()
+        omitted.parent.mkdir(parents=True, exist_ok=True)
+        omitted.write_text("unique materialized filtered payload\n")
+        result = self.run_tool("verify-current")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("content filters", result.stderr)
+        self.assertFalse(marker.exists())
+        self.assertEqual(omitted.read_text(), "unique materialized filtered payload\n")
+
+    def test_sparse_dangling_filtered_link_and_indirect_parent_are_refused(self) -> None:
+        omitted, marker = self.filtered_plain_target()
+        omitted.parent.mkdir(parents=True, exist_ok=True)
+        omitted.symlink_to(self.root / "missing payload")
+        result = self.run_tool("prepare")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("manual handling", result.stderr)
+        omitted.unlink()
+        omitted.parent.rmdir()
+        omitted.parent.symlink_to(self.root / "missing parent")
+        result = self.run_tool("prepare")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("manual handling", result.stderr)
+        self.assertFalse(marker.exists())
+
+    def test_skip_worktree_without_sparse_checkout_is_not_an_omission_proof(self) -> None:
+        _, marker = self.filtered_plain_target(sparse=False)
+        result = self.run_tool("prepare")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("content filters", result.stderr)
+        self.assertFalse(marker.exists())
+
     def test_orphan_module_store_is_not_silently_skipped(self) -> None:
         admin = Path(self.git("-C", str(self.target), "rev-parse", "--absolute-git-dir").decode().strip())
         orphan = admin / "modules/orphan"

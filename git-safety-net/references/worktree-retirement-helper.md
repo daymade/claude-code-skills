@@ -55,6 +55,13 @@ disabled state is frozen, and per-worktree `config.worktree` bytes are preserved
 Changing either later blocks current verification; other extensions, includes and
 promisor settings still require manual handling.
 
+Sparse checkouts may omit tracked files with content filters: the helper accepts
+only paths that Git marks `skip-worktree`, with sparse checkout enabled, no
+physical file and no symlink along the omitted path. It does not fetch or smudge
+these files. A materialized filtered file, a dangling link or an unproven omission
+still requires manual preservation; `skip-worktree` alone is not permission to
+discard a payload. `verify-current` repeats the same checks before retirement.
+
 An `lfs` directory in a retiring Git/admin directory is supported only when `lstat`
 identifies a real, empty directory. Its presence and mode are frozen in metadata
 and preserved for recovery. Missing and empty remain distinct; later creation,
