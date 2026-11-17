@@ -64,11 +64,18 @@ class AudioRouterContractTest(unittest.TestCase):
             for line in header.split("description: >-", 1)[1].splitlines()
             if line.startswith("  ")
         )
+        # Check the native catalog window, not just the complete frontmatter.
+        # A live prompt probe is still required to establish host loading.
+        visible = description[:128]
         for signal in (
-            "StepFun ASR/语音识别", "StepFun TTS/配音", "transcript/妙记→会议纪要",
-            "merge/review minutes", "generic ASR and correction stay direct",
+            "StepFun", "ASR", "TTS", "配音", "transcript", "妙记", "纪要",
+            "merge", "review", "minutes", "daudio", "波形", "吞字", "尾衰",
+            "waveform", "cutpoint", "tail",
         ):
-            self.assertIn(signal, description[:160], signal)
+            self.assertIn(signal, visible, signal)
+        self.assertTrue(any(signal in visible for signal in (
+            "generic ASR and correction stay direct", "通用ASR/校字直达",
+        )), "generic transcription/correction boundary must remain visible")
         body = ROUTER.read_text(encoding="utf-8")
         self.assertIn("General audio/video transcription", body)
         self.assertIn("Correcting\nrecognition mistakes", body)
