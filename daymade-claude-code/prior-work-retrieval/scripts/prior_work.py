@@ -323,8 +323,7 @@ def _source_paths(
     # A simple final component gives a necessary (not sufficient) condition.
     # Avoid materializing ignored output files that cannot match any include;
     # ripgrep still decides directory/glob semantics for every retained name.
-    # Config can alter case/glob behavior, so keep the original path then.
-    if source["includes"] and not os.environ.get("RIPGREP_CONFIG_PATH"):
+    if source["includes"]:
         suffixes = []
         basenames = {".gitignore", ".ignore", ".rgignore"}
         for pattern in source["includes"]:
@@ -355,7 +354,7 @@ def _source_paths(
             target = root / path
             target.parent.mkdir(parents=True, exist_ok=True)
             target.touch()
-        command = ["rg", "--files", "--hidden", "--no-ignore", "--null"]
+        command = ["rg", "--no-config", "--no-follow", "--files", "--hidden", "--no-ignore", "--null"]
         for pattern in source["includes"]:
             command.extend(["--glob", pattern])
         for pattern in source["excludes"]:
@@ -556,6 +555,7 @@ def _filesystem_candidates(
     maximum = source["max_results"]
     command = [
         rg,
+        "--no-config",
         # Adapters already run in parallel; do not multiply their worker budget.
         "--threads",
         "1",
@@ -650,7 +650,7 @@ def _filesystem_candidates(
         entries_by_path.setdefault(candidate_path, []).append(entry)
     path_output = ""
     if path_search_terms:
-        files_command = [rg, "--threads", "1", "--no-follow", "--files", "--no-messages"]
+        files_command = [rg, "--no-config", "--threads", "1", "--no-follow", "--files", "--no-messages"]
         for pattern in source["includes"]:
             files_command.extend(["--glob", pattern])
         for pattern in source["excludes"]:

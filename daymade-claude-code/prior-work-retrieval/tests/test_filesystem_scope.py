@@ -120,6 +120,21 @@ class FilesystemScopeTests(unittest.TestCase):
                     self.retrieve(manifest, filesystem_scopes=[scope])
                 adapter.assert_not_called()
 
+    def test_ambient_config_cannot_add_an_unauthorized_search_root(self):
+        config = self.root / "rg.conf"
+        config.write_text(str(self.other) + "\n")
+        for carrier in ("docs", "code"):
+            with self.subTest(carrier=carrier), mock.patch.dict(
+                    os.environ, {"RIPGREP_CONFIG_PATH": str(config)}), mock.patch.object(
+                    prior_work.subprocess, "run", wraps=subprocess.run) as spawn:
+                run = self.retrieve(self.manifest(self.project, carrier=carrier),
+                                    filesystem_scopes=[str(self.project)])
+            self.assertEqual({row["path"] for row in run["candidates"]},
+                             {str(self.project / "contract.md")})
+            self.assertTrue(all("--no-config" in call.args[0]
+                                for call in spawn.call_args_list
+                                if Path(call.args[0][0]).name == "rg"))
+
     def test_explicit_multiple_projects_and_nested_sources_remain_searchable(self):
         manifest = self.manifest(self.project, self.other)
         alias = self.root / "project-alias"
