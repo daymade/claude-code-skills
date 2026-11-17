@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **ghostty-use** (v1.15.1 → v1.15.2): Persist deployment freshness in failed and timed-out watcher health records, and route observer upgrade/freshness acceptance to the owning SOP.
 - **asr-transcribe-to-text** (`daymade-audio` v1.65.4): Align command help with registered refresh and offline generation.
 
 - **ghostty-use** (v1.15.0 → v1.15.1): Require temporary watcher deployment sources to be rebound to the maintained primary checkout and verified through a completed native round before retirement.

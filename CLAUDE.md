@@ -524,7 +524,7 @@ For stopping or persistently disabling a job, follow its
 [stop semantics](daymade-macos/macos-watchdog/SKILL.md#stop-semantics-the-deprecated-trap).
 Before replacing an existing launchd job, enter its
 [authorized unload and replacement procedure](daymade-macos/macos-watchdog/references/event-driven-observers.md#wait-for-an-authorized-unload-before-replacement).
-Before choosing or changing any periodic observer's cadence, follow
+Before deploying or integrating a periodic observer, or choosing or changing its cadence, follow
 [macos-watchdog's observation contract](daymade-macos/macos-watchdog/references/probe-cost.md).
 Before choosing an observer's failure-notification threshold, follow
 [observation-failure timing](daymade-macos/macos-watchdog/references/alert-discipline.md#observation-failure-timing).
@@ -784,8 +784,9 @@ For blocked/delegated reopening, follow its
 [original-set route](ghostty-use/references/codex-account-switch.md#reopen-the-original-recorded-set-not-a-blank-session).
 Before selecting a recovery set or assessing completeness, follow the
 [recovery entry decision tree](ghostty-use/SKILL.md#entry-decision-tree).
-For observer freshness, follow
-[observation-health verification](ghostty-use/references/automatic-snapshots.md#verify-observation-health).
+For observer upgrades and deployment freshness, follow
+[upgrade an existing observer](ghostty-use/references/automatic-snapshots.md#upgrade-an-existing-observer), then
+[verify observation health](ghostty-use/references/automatic-snapshots.md#verify-observation-health).
 Before a restore or retry, follow its
 [current-set reconciliation](ghostty-use/references/restore_mechanics.md#reconcile-the-current-wanted-set).
 For recorded relative tab order and custom-title restoration, follow

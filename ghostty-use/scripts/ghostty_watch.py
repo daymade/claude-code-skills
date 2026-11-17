@@ -534,6 +534,7 @@ def cycle(state, observer=None, *, attempt=None):
         result = _cycle(state, observer or observe_resolved)
     except (ValueError, OSError, subprocess.SubprocessError) as error:
         attempt['duration_seconds'] = time.monotonic() - started
+        attempt['deploy'] = deploy_freshness(state)
         finish_attempt(state, attempt, error=error, timeout=isinstance(error, subprocess.TimeoutExpired)
                        or 'deadline expired' in str(error))
         raise
