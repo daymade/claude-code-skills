@@ -36,7 +36,7 @@ push, read the repository's publication policy and run the checked helper's
 read-only route preflight against the explicit repository and existing base:
 
 ```bash
-python3 <github-ops-dir>/scripts/checked_gh.py --expected-login EXPECTED_LOGIN \\
+python3 "<github-ops-dir>/scripts/checked_gh.py" --expected-login EXPECTED_LOGIN \
   --publication-preflight OWNER/REPO --base main
 ```
 
@@ -436,7 +436,7 @@ gates independently. Use `--admin` only with the helper's explicit target-bound
 acknowledgement, placed before `--`:
 
 ```bash
-python3 <github-ops-dir>/scripts/checked_gh.py --expected-login EXPECTED_LOGIN \
+python3 "<github-ops-dir>/scripts/checked_gh.py" --expected-login EXPECTED_LOGIN \
   --ack-merge-bypass "OWNER/REPO#NUMBER@FULL_REVIEWED_SHA" -- \
   pr merge NUMBER -R OWNER/REPO --squash --admin \
   --match-head-commit FULL_REVIEWED_SHA
