@@ -130,7 +130,8 @@ def check_ffmpeg_installed() -> None:
 def run_ffmpeg_command(
     args: List[str],
     timeout: int = FFMPEG_TIMEOUT,
-    description: str = "FFmpeg operation"
+    description: str = "FFmpeg operation",
+    return_stderr: bool = False
 ) -> str:
     """
     Run FFmpeg command with security measures.
@@ -139,9 +140,11 @@ def run_ffmpeg_command(
         args: Command arguments as list (prevents shell injection)
         timeout: Maximum execution time in seconds
         description: Human-readable description for error messages
+        return_stderr: Return stderr instead of stdout (ffmpeg writes filter
+            summaries such as PSNR/SSIM to stderr)
 
     Returns:
-        Command output (stdout)
+        Command output (stdout, or stderr when return_stderr is True)
 
     Raises:
         FFmpegError: If command fails
@@ -154,7 +157,7 @@ def run_ffmpeg_command(
             check=True,
             text=True
         )
-        return result.stdout
+        return result.stderr if return_stderr else result.stdout
     except subprocess.TimeoutExpired:
         raise FFmpegError(
             f"{description} timed out after {timeout} seconds. "
@@ -336,17 +339,19 @@ def calculate_quality_metrics(video1: Path, video2: Path) -> Dict:
         output = run_ffmpeg_command(
             args,
             timeout=FFMPEG_TIMEOUT,
-            description="Quality metrics calculation"
+            description="Quality metrics calculation",
+            return_stderr=True
         )
 
-        # Parse PSNR from stderr (ffmpeg outputs to stderr)
-        # Example: "PSNR mean:38.123456 min:35.123456 max:42.123456"
-        psnr_match = re.search(r'PSNR.*?mean:([\d.]+)', output)
+        # Parse PSNR from stderr (ffmpeg outputs the summary to stderr)
+        # Example: "PSNR y:35.15 u:38.35 v:38.41 average:35.99 min:35.56 max:36.50"
+        # Identical inputs report "average:inf".
+        psnr_match = re.search(r'PSNR .*?average:(inf|[\d.]+)', output)
         psnr = float(psnr_match.group(1)) if psnr_match else 0.0
 
         # Parse SSIM from stderr
-        # Example: "SSIM mean:0.956789 min:0.923456 max:0.987654"
-        ssim_match = re.search(r'SSIM.*?mean:([\d.]+)', output)
+        # Example: "SSIM Y:0.967213 (14.84) U:0.981823 (17.40) V:0.988379 (19.34) All:0.973176 (15.71)"
+        ssim_match = re.search(r'SSIM .*?All:([\d.]+)', output)
         ssim = float(ssim_match.group(1)) if ssim_match else 0.0
 
         return {
