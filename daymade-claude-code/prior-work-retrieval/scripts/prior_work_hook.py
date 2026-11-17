@@ -89,6 +89,10 @@ DISTAL_WORK_NOUN = re.compile(
 NON_USER_PROMPT = re.compile(
     r"\A\s*(?:"
     r"You are (?:a|an|the)\b"
+    r"|hook_prompt\s*[:=]"
+    r"|<hook_prompt\b"
+    r"|<codex_delegation\b"
+    r"|\[peer-coordination:"
     r"|#\s*Overview\s*$"
     # Harness-generated envelopes, not typed by anyone: <agent-message …>,
     # <task-notification …> (a background workflow finishing reaches the same
@@ -431,6 +435,25 @@ def _strip_current_candidate_review_reuse(text: str) -> str:
     )
 
 
+CURRENT_CODE_REFERENCE = re.compile(
+    r"(?:当前|本次|这个|这份|这段)(?:的)?\s*(?:已有|既有)(?:的)?\s*"
+    r"(?:代码|脚本|实现|配置|规则|流程|工具|系统)"
+)
+CURRENT_CACHE_REUSE = re.compile(
+    r"(?:复用|重用)\s*(?:当前|本次|现有)?(?:的)?\s*(?:缓存|哈希|摘要值)"
+    r"|\breceipt reuse(?=/retained detection\b)"
+    r"|\breuse existing passed checks where inputs unchanged\b"
+    r"|\breuse valid qualified retained proof(?= before Git archive/LFS\b)"
+    r"|\bpublication-pair predict archive reuse\b"
+    r"|\breuse\s+(?:verified\s+)?(?:digests?|cached\s+(?:rows|results?))\b",
+    re.IGNORECASE,
+)
+GENERATED_PREFIX = re.compile(
+    r"\A\s*<(hook_prompt|codex_delegation)\b[^>]*>[\s\S]*?</\1>\s*"
+    r"|\A\s*hook_prompt\s*[:=][^\n]*(?:\n|$)", re.IGNORECASE,
+)
+
+
 def _classify_prompt(
     prompt: str, receipt_valid: bool, *, current_execution: bool
 ) -> str:
@@ -440,7 +463,8 @@ def _classify_prompt(
     check_receipt. Hedge-phrased recall is then already covered, so it must
     not mint a fresh requirement and strand the completed one.
     """
-    text = prompt.strip()
+    # A closed machine envelope excludes its body, not a trailing user ask.
+    text = GENERATED_PREFIX.sub("", prompt, count=1).strip()
     if not text:
         return "none"
     if HOOK_GUIDANCE_MARKER in text:
@@ -456,6 +480,8 @@ def _classify_prompt(
             " ", NO_REUSE_TOKEN.sub(" ", NEGATED_PRIOR_SIGNAL.sub(" ", text))))
     )
     if current_execution:
+        scannable = CURRENT_CODE_REFERENCE.sub(" ", scannable)
+        scannable = CURRENT_CACHE_REUSE.sub(" ", scannable)
         scannable = CURRENT_EXECUTION_CONTINUITY.sub(" ", scannable)
         scannable = CURRENT_EXECUTION_DEADLINE.sub(" ", scannable)
         scannable = CURRENT_LEASE_RETURN.sub(" ", scannable)
@@ -1154,8 +1180,14 @@ def handle_user_prompt(event: dict[str, Any]) -> dict[str, Any] | None:
     session_id = event.get("session_id")
     if not isinstance(prompt, str) or not prompt.strip():
         return None
+    # Ordinary followups and machine envelopes cannot create a requirement.
+    # Avoid receipt/source validation work until the prompt actually needs it;
+    # an existing explicit-history requirement remains intact.
+    initial = classify_prompt(prompt)
+    if initial == "none":
+        return None
     if not isinstance(session_id, str) or not session_id:
-        if classify_prompt(prompt) == "required_prior_signal":
+        if initial == "required_prior_signal":
             return _inject(
                 "Prior-work retrieval applies, but this hook event has no session_id; "
                 "do not produce until the session identity and receipt can be recorded."
@@ -1165,7 +1197,7 @@ def handle_user_prompt(event: dict[str, Any]) -> dict[str, Any] | None:
         manifest = _manifest()
         current = prior_work.load_requirement(manifest, session_id)
     except prior_work.PriorWorkError as error:
-        if classify_prompt(prompt) == "required_prior_signal":
+        if initial == "required_prior_signal":
             return _inject(
                 f"Prior-work manifest is unavailable ({error}). Fix the explicit "
                 "manifest before substantial production; do not silently fall back."
