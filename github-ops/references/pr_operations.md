@@ -32,8 +32,30 @@ Once configuration is complete, rerun the original checks on the same payload;
 diagnose any remaining finding through the check owner's normal procedure.
 
 Prepare the local branch under the repository's Git safety rules. Before the first
-push, verify the remote's live visibility and read the repository's publication
-policy and applicable branch rules. A PR-required base uses an authorized feature
+push, read the repository's publication policy and run the checked helper's
+read-only route preflight against the explicit repository and existing base:
+
+```bash
+python3 <github-ops-dir>/scripts/checked_gh.py --expected-login EXPECTED_LOGIN \\
+  --publication-preflight OWNER/REPO --base main
+```
+
+The JSON binds the current CLI actor, live visibility, complete paginated active
+rules and the base's legacy protection to one credential. Both policy sources
+must be readable; missing keys, null required fields, errors (including 403/404),
+or an unclassified rule cannot establish a direct route. An explicitly null
+`branchProtectionRule` is absence only inside a successfully resolved base ref.
+The [active-rule endpoint](https://docs.github.com/en/rest/repos/rules#get-rules-for-a-branch)
+includes applicable repository and organization rules; legacy protection is read
+separately through [BranchProtectionRule](https://docs.github.com/en/graphql/reference/branches#branchprotectionrule).
+
+Require exit 0 and `status=ready`, then use `route=pull_request` for a feature
+branch/PR or `route=direct` only under the task's existing authorization and after
+all remaining repository checks. `direct` means no PR gate was found; it does not
+approve the commit, verify the Git SSH actor, or waive checks/reviews. Private
+visibility does not select the direct route. `blocked`/`unknown` exits 2 and
+requires read-only inspection; do not infer bypass privileges from an admin actor.
+Re-run after a target, actor or policy change. A PR-required base uses an authorized feature
 branch/PR; do not discover that rule by attempting a direct base push. A dry-run
 push does not exercise server-side protection. Unknown policy or a rejected push
 requires inspection and readback before any retry, not a bypass.
@@ -42,7 +64,6 @@ requires inspection and readback before any retry, not a bypass.
 git checkout -b feature/new-feature
 # Make, review, test, and commit the authorized changes.
 gh repo view OWNER/REPO --json nameWithOwner,visibility,isPrivate,stargazerCount,forkCount,url
-gh api repos/OWNER/REPO/rules/branches/main
 ```
 
 Publish only after the repository's checks pass, including any required release

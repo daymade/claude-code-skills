@@ -10,6 +10,7 @@ All cmd_* functions take parsed args and execute the requested operation.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -1609,6 +1610,12 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
                 # truthfully even on a path that ran no corrections, so a consumer
                 # never sees the field flip between runs of the same install.
                 "boundary_check_active": _boundary_check_available(),
+                **({"stage1_publication": {
+                    "schema_version": 1,
+                    "state": "already_promoted",
+                    "canonical_path": str(input_path.resolve()),
+                    "sha256": hashlib.sha256(input_path.read_bytes()).hexdigest(),
+                }} if not dry_run else {}),
             }
 
     # Initialize service
@@ -2104,7 +2111,6 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
     if args.stage == 1 and not dry_run and stage1_output_written is not None:
         from history_projection import capture_success
         from shared_evidence import current
-        import hashlib
         evidence = current()
         recipe = {"revision": hashlib.sha256(Path(__file__).with_name("commands.py").read_bytes()).hexdigest(),
             "domains": domains, "apply_all": apply_all,
