@@ -92,6 +92,7 @@ def portable_backend():
     with ExitStack() as stack:
         stack.enter_context(mock.patch.object(history_index, "SCHEMA", portable_schema))
         stack.enter_context(mock.patch.object(history_index, "_connect", plain_connect))
+        stack.enter_context(mock.patch.object(history_index, "_fts_tokenizer_identity", return_value="unicode61"))
         yield
 
 
@@ -750,6 +751,104 @@ class HistoryIndexTests(unittest.TestCase):
             row[0] for row in connection.execute("SELECT fts_text FROM records")
         }
         self.assertEqual(texts, {"old-0", "old-1"})
+        self.assertEqual(connection.execute(
+            "SELECT COUNT(*) FROM records_fts WHERE records_fts MATCH 'old'"
+        ).fetchone()[0], 2)
+        self.assertEqual(connection.execute(
+            "SELECT COUNT(*) FROM records_fts WHERE records_fts MATCH 'new'"
+        ).fetchone()[0], 0)
+        connection.close()
+
+    def test_incremental_fts_keeps_only_current_postings_without_rebuild(self) -> None:
+        fixtures = [
+            ("77777777-7777-4777-8777-777777777771", "keptword"),
+            ("77777777-7777-4777-8777-777777777772", "replacedword"),
+            ("77777777-7777-4777-8777-777777777773", "removedword"),
+            ("77777777-7777-4777-8777-777777777774", "addedword"),
+        ]
+        paths = [(project_dir(self.active, self.workspace) / f"{sid}.jsonl", sid, word)
+                 for sid, word in fixtures]
+        for path, sid, word in paths[:3]:
+            write_jsonl(path, [user_record(sid, self.workspace, word, "2026-08-01T00:00:00Z")])
+        with portable_backend():
+            history_index.update_index(self.db, self.scope(self.active_source), rebuild=True)
+            paths[2][0].unlink()
+            for path, sid, word in (paths[1], paths[3]):
+                text = "replacementword" if word == "replacedword" else word
+                write_jsonl(path, [user_record(sid, self.workspace, text, "2026-08-02T00:00:00Z")])
+            statements = []
+
+            def traced_connect(*args, **kwargs):
+                connection = plain_connect(*args, **kwargs)
+                connection.set_trace_callback(statements.append)
+                return connection
+
+            with mock.patch.object(history_index, "_connect", traced_connect):
+                changes = history_index.update_index(self.db, self.scope(self.active_source))
+                no_changes = history_index.update_index(self.db, self.scope(self.active_source))
+        self.assertEqual([changes[field] for field in ("added", "changed", "removed", "unchanged")],
+                         [1, 1, 1, 1])
+        self.assertEqual(no_changes["unchanged"], 3)
+        self.assertFalse(any("VALUES('rebuild')" in sql for sql in statements))
+        self.assertFalse(any("substr(records.fts_text" in sql for sql in statements))
+        with plain_connect(self.db) as connection:
+            for word, count in (("keptword", 1), ("replacementword", 1), ("addedword", 1),
+                                ("replacedword", 0), ("removedword", 0)):
+                self.assertEqual(connection.execute(
+                    "SELECT COUNT(*) FROM records_fts WHERE records_fts MATCH ?", (word,)
+                ).fetchone()[0], count, word)
+            connection.execute("INSERT INTO records_fts(records_fts, rank) VALUES('integrity-check', 1)")
+
+    def test_tokenizer_change_rebuilds_once_and_preserves_search(self) -> None:
+        sid = "77777777-7777-4777-8777-777777777775"
+        path = project_dir(self.active, self.workspace) / f"{sid}.jsonl"
+        write_jsonl(path, [user_record(sid, self.workspace, "keptword", "2026-08-01T00:00:00Z")])
+        statements = []
+
+        def traced_connect(*args, **kwargs):
+            connection = plain_connect(*args, **kwargs)
+            connection.set_trace_callback(statements.append)
+            return connection
+
+        with portable_backend():
+            history_index.update_index(self.db, self.scope(self.active_source), rebuild=True)
+            with (mock.patch.object(history_index, "_connect", traced_connect),
+                  mock.patch.object(history_index, "_fts_tokenizer_identity", return_value="different")):
+                for _ in range(2):
+                    history_index.update_index(self.db, self.scope(self.active_source))
+        self.assertEqual(sum("VALUES('rebuild')" in sql for sql in statements), 1)
+        connection = plain_connect(self.db, readonly=True)
+        self.assertEqual(connection.execute(
+            "SELECT COUNT(*) FROM records_fts WHERE records_fts MATCH 'keptword'"
+        ).fetchone()[0], 1)
+        connection.close()
+
+    def test_unqualified_write_reconciles_prefix_policy_again(self) -> None:
+        sid = "77777777-7777-4777-8777-777777777776"
+        path = project_dir(self.active, self.workspace) / f"{sid}.jsonl"
+        write_jsonl(path, [user_record(sid, self.workspace, "keptword", "2026-08-01T00:00:00Z")])
+        with portable_backend():
+            history_index.update_index(self.db, self.scope(self.active_source), rebuild=True)
+            connection = plain_connect(self.db)
+            # A writer unaware of the current policy and its receipt can import
+            # data while updating the normal completion timestamp.
+            connection.execute(
+                "INSERT INTO records(session_id,record_key,seq,role,fts_text,segment_sources_json,"
+                "copy_paths_json,source_labels_json) VALUES(?, 'legacy', 2, 'user', ?, '[]', '[]', '[]')",
+                (sid, "<task-notification> removelegacyword"),
+            )
+            connection.execute("INSERT INTO records_fts(records_fts) VALUES('rebuild')")
+            history_index._meta_set(connection, "last_indexed_at", "older-writer")
+            connection.commit()
+            connection.close()
+            receipt = history_index.update_index(self.db, self.scope(self.active_source))
+            unchanged = history_index.update_index(self.db, self.scope(self.active_source))
+        self.assertEqual(receipt["records_pruned"], 1)
+        self.assertEqual(unchanged["records_pruned"], 0)
+        connection = plain_connect(self.db, readonly=True)
+        self.assertEqual(connection.execute(
+            "SELECT COUNT(*) FROM records_fts WHERE records_fts MATCH 'removelegacyword'"
+        ).fetchone()[0], 0)
         connection.close()
 
     def test_same_size_same_mtime_content_change_is_not_fresh(self) -> None:
@@ -826,6 +925,24 @@ class HistoryIndexTests(unittest.TestCase):
             active.unlink()
             self.assertEqual(history_index.update_index(self.db, scope)["removed"], 1)
             self.assertEqual(snapshot(), ([], [], []))
+
+    def test_tokenizer_change_during_write_keeps_the_previous_index(self) -> None:
+        sid = "77777777-7777-4777-8777-777777777777"
+        path = project_dir(self.active, self.workspace) / f"{sid}.jsonl"
+        with portable_backend():
+            write_jsonl(path, [user_record(sid, self.workspace, "originalword", "2026-08-01T00:00:00Z")])
+            history_index.update_index(self.db, self.scope(self.active_source), rebuild=True)
+            write_jsonl(path, [user_record(sid, self.workspace, "incomingword", "2026-08-02T00:00:00Z")])
+            with (mock.patch.object(history_index, "_fts_tokenizer_identity",
+                                    side_effect=["unicode61", "changed"]),
+                  self.assertRaisesRegex(history_index.IndexError, "tokenizer files changed")):
+                history_index.update_index(self.db, self.scope(self.active_source))
+        connection = plain_connect(self.db, readonly=True)
+        self.assertEqual(connection.execute("SELECT fts_text FROM records").fetchone()[0], "originalword")
+        self.assertEqual(connection.execute(
+            "SELECT COUNT(*) FROM records_fts WHERE records_fts MATCH 'originalword'"
+        ).fetchone()[0], 1)
+        connection.close()
 
     def test_chunk_model_binding_precedes_and_survives_partial_chunks(self) -> None:
         session_id = "99999999-9999-4999-8999-999999999994"
@@ -1964,6 +2081,7 @@ class MultiProviderIndexTests(unittest.TestCase):
                 ),
             )
         legacy.execute("INSERT INTO records_fts(records_fts) VALUES('rebuild')")
+        legacy.execute("DELETE FROM meta WHERE key='injected_prefix_policy_codex'")
         legacy.commit()
         legacy.close()
 
@@ -2102,6 +2220,7 @@ class MultiProviderIndexTests(unittest.TestCase):
                 (session_id, f"legacy-{seq}", seq, text, text, json.dumps([str(path)])),
             )
         legacy.execute("INSERT INTO records_fts(records_fts) VALUES('rebuild')")
+        legacy.execute("DELETE FROM meta WHERE key='injected_prefix_policy_claude'")
         legacy.commit()
         legacy.close()
 
