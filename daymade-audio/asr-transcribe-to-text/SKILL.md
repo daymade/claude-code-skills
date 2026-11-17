@@ -956,10 +956,20 @@ declared audio paths.
 Before retiring an audit page with browser-local reviews, open it in the browser
 profile where the reviews were saved and export the report. If the page has
 already moved, use the viewer deployment's recovery procedure to restore an
-export surface at the original URL or file path. Use the target viewer's review
-import to verify the source version and bind notes to matching recording,
-speaker, text and time. Keep reviews with unresolved source identity available
-for later verification. A report from one browser profile covers that profile.
+export surface at the original URL or file path. In the shared viewer, choose
+**Migrate legacy review** (`迁移旧审核`) and supply the source HTML and its
+exported JSON report. This verifies the source version and binds notes to the
+matching recording, speaker, text and time. Keep recovered reviews with unresolved
+source identity available for later verification. A report from one browser
+profile covers that profile.
+
+Refresh an adopted project at its fixed viewer URL:
+
+```bash
+uv run ${CLAUDE_SKILL_DIR}/scripts/generate_audit_html.py /path/to/adopted-project
+```
+
+Generate an audit file for an unregistered project or a standalone installation:
 
 ```bash
 uv run ${CLAUDE_SKILL_DIR}/scripts/generate_audit_html.py \
@@ -992,19 +1002,19 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/generate_audit_html.py \
 | Option | Meaning |
 |--------|---------|
 | `project_dir` | Base project directory (required) |
-| `--output` | Where to write `index.html` |
+| `--output` | HTML output for offline generation, or a registered redirect for an adopted project. Omit to refresh an adopted project without a redirect. |
 | `--csv-dir` | Directory containing `*.csv` transcript files |
 | `--txt-dir` | Directory containing `*.txt` plain-text transcripts (optional) |
 | `--diarization-dir` | Directory containing `*.diarization.json` files |
 | `--audio-dir` | Directory containing playback audio files |
-| `--original-dir` | Directory containing original source media (optional) |
+| `--original-dir` | Directory containing original source media (optional). For adopted projects, it must match the registry if specified. |
 | `--manifest` | JSON manifest mapping file IDs to metadata (optional) |
 | `--title` / `--subtitle` | Page title and subtitle |
-| `--storage-key` | `localStorage` namespace for state persistence |
+| `--storage-key` | Review namespace for offline generation. Adopted projects use their registered dataset identity. |
 | `--known-speaker` | Repeatable; `"Name"` auto-assigns a color, `"Name=#hex"` sets one explicitly |
 | `--material-final` / `--material-rough` | Repeatable material classification labels used for filtering |
 
-The output is a single self-contained HTML file with no external dependencies. Open it in a browser to review, flag, and annotate turns; the export button produces a report of all flagged rows with reasons and notes.
+Open the fixed viewer URL for an adopted project, or open the generated HTML file for offline review. Use the review controls to flag and annotate turns, then export the report. Audio remains at its declared source paths.
 
 ## Troubleshooting
 
@@ -1071,7 +1081,7 @@ Substitute the resolved absolute path for `${CLAUDE_SKILL_DIR}` everywhere in th
 - `diarize_speakers.py` — Speaker diarization alone (pyannote 3.1 @ MPS) → per-segment JSON
 - `voiceprint_id.py` — CAM++ enroll/match: preserve speaker-name candidates without relabeling originals
 - `overlap_merge_transcribe.py` — Chunked transcription with overlap merge (remote API fallback)
-- `generate_audit_html.py` — Build a self-contained HTML audit/review page from speaker-transcribe CSV outputs
+- `generate_audit_html.py` — Refresh an adopted audit dataset or build an offline audit page from speaker-transcribe outputs
 
 **References:**
 - `execution_location_and_comparison.md` — Conditional local/remote choice, existing transcript/cache reuse, safe runtime identity and same-source comparison
