@@ -152,6 +152,51 @@ class HistoryIndexTests(unittest.TestCase):
         self.assertTrue(all(row["human_authorship"] == "not_established_by_role" for row in result["results"]))
         self.assertIn("not indexed", result["evidence_boundary"])
 
+    def test_bm25_and_auto_do_not_materialize_unused_lexical_candidates(self):
+        sid = "14141414-1414-4414-8414-141414141414"
+        write_jsonl(project_dir(self.active, self.workspace) / f"{sid}.jsonl", [
+            user_record(sid, self.workspace, "bounded marker " + "detail " * number,
+                        f"2026-08-01T00:00:{number:02d}Z")
+            for number in range(1, 41)
+        ])
+        observed = []
+        class Connection:
+            def __init__(inner, connection):inner.connection = connection
+            def __getattr__(inner, name):return getattr(inner.connection, name)
+            def execute(inner, sql, values=()):
+                cursor = inner.connection.execute(sql, values)
+                if "snippet(records_fts" not in sql:return cursor
+                class Cursor:
+                    def fetchall(current):
+                        rows = cursor.fetchall()
+                        observed.append(len(rows))
+                        return rows
+                return Cursor()
+        with portable_backend():
+            history_index.update_index(self.db, self.scope(self.active_source), rebuild=True)
+            connection = plain_connect(self.db, readonly=True)
+            expected = [row[0] for row in connection.execute(
+                "SELECT records.record_key FROM records_fts "
+                "JOIN records ON records.id=records_fts.rowid "
+                "JOIN sessions ON sessions.session_id=records.session_id "
+                "WHERE records_fts MATCH simple_query(?) AND records.noise=0 "
+                "AND records.agent_prompt=0 AND records.role=? "
+                "ORDER BY records_fts.rank LIMIT 3", ("marker", "user"))]
+            connection.close()
+            with mock.patch.object(history_index, "_connect", side_effect=lambda *args, **kwargs: Connection(plain_connect(*args, **kwargs))):
+                for mode in ("bm25", "auto"):
+                    result = history_index.recall(self.db, "marker", mode=mode, limit=3,
+                        project=None, exclude_sessions=[], include_agent_prompts=False,
+                        model_path=None, simple_root=None, role="user")
+                    self.assertEqual(result["mode"], "bm25")
+                    self.assertEqual([row["record_key"] for row in result["results"]], expected)
+                for limit, count in ((-1, 29), (0, 0)):
+                    result = history_index.recall(self.db, "marker", mode="bm25", limit=limit,
+                        project=None, exclude_sessions=[], include_agent_prompts=False,
+                        model_path=None, simple_root=None, role="user")
+                    self.assertEqual(len(result["results"]), count)
+        self.assertEqual(observed, [3, 3, 30, 0])
+
     def test_hybrid_vector_candidates_receive_and_obey_same_literal_role_filters(self):
         sid = "13131313-1313-4313-8313-131313131313"
         records = [
