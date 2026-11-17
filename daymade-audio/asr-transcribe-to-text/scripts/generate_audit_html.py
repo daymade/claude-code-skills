@@ -2702,18 +2702,20 @@ def write_shared_offline(converter, files):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Generate self-contained HTML audit page for ASR transcripts")
+    ap = argparse.ArgumentParser(description="Refresh an adopted ASR audit dataset or generate an offline audit page")
     ap.add_argument("project_dir", type=Path, help="Directory containing CSV/TXT/diarization outputs")
-    ap.add_argument("--output", type=Path, default=None, help="HTML output path (default: PROJECT_DIR/audit/index.html)")
+    ap.add_argument("--output", type=Path, default=None,
+                    help="Offline HTML path (default: PROJECT_DIR/audit/index.html) or a registered redirect for an adopted project")
     ap.add_argument("--csv-dir", type=Path, default=None, help="Directory containing CSV files (default: PROJECT_DIR)")
     ap.add_argument("--txt-dir", type=Path, default=None, help="Directory containing TXT files (default: PROJECT_DIR)")
     ap.add_argument("--diarization-dir", type=Path, default=None, help="Directory containing diarization JSON files (default: PROJECT_DIR)")
     ap.add_argument("--audio-dir", type=Path, default=None, help="Directory containing audio files (default: PROJECT_DIR)")
-    ap.add_argument("--original-dir", type=Path, default=None, help="Directory containing original media (optional)")
+    ap.add_argument("--original-dir", type=Path, default=None,
+                    help="Directory containing original media (must match the registry for an adopted project)")
     ap.add_argument("--manifest", type=Path, default=None, help="Optional JSON manifest with file metadata")
     ap.add_argument("--title", default=DEFAULT_TITLE, help="Page title")
     ap.add_argument("--subtitle", default=DEFAULT_SUBTITLE, help="Page subtitle")
-    ap.add_argument("--storage-key", default=None, help="localStorage key prefix")
+    ap.add_argument("--storage-key", default=None, help="Offline review storage namespace (unsupported for adopted projects)")
     ap.add_argument("--known-speaker", action="append", default=[], help='Known speaker color mapping, e.g. "张三=#0d6efd" or just "张三" (auto-color)')
     ap.add_argument("--material-final", action="append", default=[], help="Folder-name keywords treated as 成片")
     ap.add_argument("--material-rough", action="append", default=[], help="Folder-name keywords treated as 粗剪")

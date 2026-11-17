@@ -927,9 +927,7 @@ Retain the existing self-contained page for offline or batch browsing. Its
 browser-local aliases and issue flags are separate from Listening Desk's saved
 per-item decisions; do not treat an alias as an independently verified identity.
 
-After diarization you get a CSV per file (`file,start,end,duration,speaker,text`). The bundled audit HTML generator turns those CSVs into a single, reader-first review page with audio playback, per-turn flags/notes, speaker aliasing, and export.
-
-Generate it from a speaker-transcribe output directory:
+Pass the speaker-transcribe output directory to the audit command.
 
 The command chooses the audit output from `MESSAGE_VIEWER_CONFIG` (default:
 `~/.config/daymade/message-viewer/service.json`):
@@ -997,22 +995,9 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/generate_audit_html.py \
   --known-speaker "Speaker B"
 ```
 
-**Key CLI options:**
-
-| Option | Meaning |
-|--------|---------|
-| `project_dir` | Base project directory (required) |
-| `--output` | HTML output for offline generation, or a registered redirect for an adopted project. Omit to refresh an adopted project without a redirect. |
-| `--csv-dir` | Directory containing `*.csv` transcript files |
-| `--txt-dir` | Directory containing `*.txt` plain-text transcripts (optional) |
-| `--diarization-dir` | Directory containing `*.diarization.json` files |
-| `--audio-dir` | Directory containing playback audio files |
-| `--original-dir` | Directory containing original source media (optional). For adopted projects, it must match the registry if specified. |
-| `--manifest` | JSON manifest mapping file IDs to metadata (optional) |
-| `--title` / `--subtitle` | Page title and subtitle |
-| `--storage-key` | Review namespace for offline generation. Adopted projects use their registered dataset identity. |
-| `--known-speaker` | Repeatable; `"Name"` auto-assigns a color, `"Name=#hex"` sets one explicitly |
-| `--material-final` / `--material-rough` | Repeatable material classification labels used for filtering |
+Run `generate_audit_html.py --help` from the installed Skill for the current
+options. Repeat speaker and material overrides as needed. Use `"Name=#hex"` to
+set an explicit speaker color or `"Name"` to assign one automatically.
 
 Open the fixed viewer URL for an adopted project, or open the generated HTML file for offline review. Use the review controls to flag and annotate turns, then export the report. Audio remains at its declared source paths.
 
