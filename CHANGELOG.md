@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **prior-work-retrieval / read-claude-code-history** (`daymade-claude-code` v5.2.5): Document receipt reuse for current-task follow-ups and the routine incremental index refresh.
+
 - **frontend-visual-qa v1.21.52**: Verify that a reader stays open when the ordinary list and reader use different identifiers for the same record.
 - **asr-transcribe-to-text** (`daymade-audio` v1.65.4): Align command help with registered refresh and offline generation.
 
