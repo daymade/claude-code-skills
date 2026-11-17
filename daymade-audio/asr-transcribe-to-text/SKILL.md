@@ -939,8 +939,12 @@ or a failed handoff stop without replacing the existing reader. Unregistered
 projects retain the offline generator below. This optional handoff requires a
 separately installed shared-viewer owner: the registry's `service_script` points
 to its `viewer_service.py`, beside `asr_entry.py`.
-Legacy presentation overrides that the shared entry cannot apply stop with an
-error; configure them in the shared viewer rather than silently discarding them.
+Title, subtitle, known-speaker colors and material keywords are forwarded to the
+installed owner and retained in that source's registry. Default title/subtitle
+values do not replace its existing configuration. An older owner that rejects an
+option stops without regenerating the old UI. `--storage-key` remains unsupported
+for adopted projects: their dataset identity owns review storage; retain/export
+the old report before migrating its annotations.
 
 ```bash
 uv run ${CLAUDE_SKILL_DIR}/scripts/generate_audit_html.py \
