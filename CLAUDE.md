@@ -532,6 +532,11 @@ or behavior-replay dispatch and coverage claims, use
 [skill-creator's independent-review protocol](daymade-skill/skill-creator/references/independent-review-protocol.md).
 Keep decision criteria and verification details in those owners.
 
+### Acoustic diagnostics
+
+For waveform, speech-cut or tail-level diagnosis, enter
+[audio-router's acoustic workflow](daymade-audio/audio-router/references/acoustic-diagnostics.md).
+
 ### Transcript Correction
 
 For local audio listening, speaker decisions, word edits and recovery of saved
