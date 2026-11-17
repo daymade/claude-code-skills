@@ -15,12 +15,14 @@ Usage:
 
 import argparse
 import csv
+import hashlib
 import html
 import json
 import os
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from datetime import datetime
 
@@ -494,7 +496,7 @@ def rel_to_audit(path: Path | None) -> str | None:
         return None
 
 
-def gather_files() -> list[dict]:
+def gather_files(*, legacy_markup: bool = True) -> list[dict]:
     entries = []
     if CONFIG.manifest_path and CONFIG.manifest_path.exists():
         try:
@@ -571,8 +573,6 @@ def gather_files() -> list[dict]:
         if not diar_path.exists():
             diar_path = CONFIG.diarization_dir / f"{stem}.json"
 
-        reader_html = render_reader_html(stem, csv_rows)
-
         speakers = sorted({r["speaker"] for r in csv_rows})
         folder = str(Path(rel_path).parent) if "/" in rel_path else "(根目录)"
         material_type = classify_material(rel_path)
@@ -583,8 +583,9 @@ def gather_files() -> list[dict]:
             status = "processing"
 
         duration_seconds = info.get("duration_seconds") or 0
-        if not duration_seconds and csv_rows:
-            duration_seconds = max(r["end"] for r in csv_rows)
+        transcript_end = max((r["end"] for r in csv_rows), default=0)
+        if legacy_markup and not duration_seconds:
+            duration_seconds = transcript_end
 
         files.append({
             "stem": stem,
@@ -592,6 +593,7 @@ def gather_files() -> list[dict]:
             "filename": info.get("filename", stem),
             "folder": folder,
             "duration_seconds": duration_seconds,
+            "transcript_end_seconds": transcript_end,
             "duration_formatted": format_time(duration_seconds),
             "size_bytes": info.get("size_bytes", 0),
             "status": status,
@@ -606,10 +608,11 @@ def gather_files() -> list[dict]:
             "diarization_rel_path": rel_to_audit(diar_path),
             "rows": csv_rows,
             "txt_content": txt_content,
-            "reader_html": reader_html,
             "diarization": diarization,
             "speaker_names": diarization.get("speaker_names", {}),
         })
+        if legacy_markup:
+            files[-1]["reader_html"] = render_reader_html(stem, csv_rows)
 
     return files
 
@@ -2598,9 +2601,13 @@ window.addEventListener('keydown', e => {{
     return html_out
 
 
+def viewer_registry():
+    return Path(os.environ.get('MESSAGE_VIEWER_CONFIG', Path.home() / '.config/daymade/message-viewer/service.json'))
+
+
 def dispatch_registered_viewer(args):
     """Honor an explicitly adopted shared-reader project before standalone output."""
-    registry = Path(os.environ.get('MESSAGE_VIEWER_CONFIG', Path.home() / '.config/daymade/message-viewer/service.json'))
+    registry = viewer_registry()
     if not registry.exists():
         return False
     config = json.loads(registry.read_text(encoding='utf-8'))
@@ -2639,6 +2646,44 @@ def dispatch_registered_viewer(args):
         command.extend(['--known-speaker', mapping])
     subprocess.run(command, check=True)
     return True
+
+
+def shared_offline_converter():
+    registry = viewer_registry()
+    if not registry.exists():
+        return None
+    service = json.loads(registry.read_text(encoding="utf-8")).get("service_script")
+    if not service:
+        return None
+    converter = Path(service).with_name("convert-dataset.mjs")
+    if not converter.is_file():
+        raise RuntimeError("Shared viewer converter unavailable; check the configured service installation")
+    return converter
+
+
+def write_shared_offline(converter, files):
+    output = CONFIG.output_path
+    prefix = b"<!DOCTYPE html>\n<!-- ui-src-sha256: "
+    if output.exists():
+        with output.open("rb") as existing:
+            if existing.read(len(prefix)) != prefix:
+                raise RuntimeError(
+                    "Existing audit page retained for review export. Use --output with a new HTML path."
+                )
+    namespace = json.dumps([str(CONFIG.project_dir.resolve()), CONFIG.storage_key], ensure_ascii=False)
+    dataset_id = "asr-" + hashlib.sha256(namespace.encode()).hexdigest()[:24]
+    data = {"files": files, "title": CONFIG.title, "subtitle": CONFIG.subtitle,
+            "speaker_colors": CONFIG.known_speakers}
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".shared-audit-", dir=output.parent) as tmp:
+        temp = Path(tmp)
+        source = temp / "source.json"
+        source.write_text(json.dumps(data, ensure_ascii=False, allow_nan=False), encoding="utf-8")
+        page = temp / "index.html"
+        subprocess.run(["node", str(converter), "--input", str(source), "--output",
+                        str(temp / "data.json"), "--id", dataset_id, "--html-output", str(page)],
+                       check=True)
+        os.replace(page, output)
 
 
 def main():
@@ -2695,11 +2740,15 @@ def main():
         known_speakers=known_speakers,
     )
 
-    files = gather_files()
-    html_out = build_html(files)
-    CONFIG.output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(CONFIG.output_path, "w", encoding="utf-8") as f:
-        f.write(html_out)
+    converter = shared_offline_converter()
+    files = gather_files(legacy_markup=converter is None)
+    if converter is not None:
+        write_shared_offline(converter, files)
+    else:
+        html_out = build_html(files)
+        CONFIG.output_path.parent.mkdir(parents=True, exist_ok=True)
+        with CONFIG.output_path.open("w", encoding="utf-8") as f:
+            f.write(html_out)
     print(f"Generated: {CONFIG.output_path}")
     print(f"Files: {len(files)} (done={sum(1 for f in files if f['status'] == 'done')}, "
           f"processing={sum(1 for f in files if f['status'] == 'processing')}, "

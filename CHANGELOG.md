@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **asr-transcribe-to-text** (`daymade-audio` v1.65.1 → v1.65.2): Use the installed shared viewer to generate offline pages for unregistered ASR projects. Preserve an existing legacy page for review export and retain standalone generation on installations without a shared viewer.
+
 - **prior-work-retrieval** (`daymade-claude-code` v5.1.25 → v5.2.0): Require task-specific filesystem scope before launching search or Git freshness probes. Keep out-of-scope sources visible as coverage gaps; preserve scoped searches, indexed adapters and manual verification.
 - **macos-watchdog** (`daymade-macos` v1.34.7 → v1.34.8): Distinguish closed writers from complete captures, preserve interrupted batches and retry cleared recovery blockers without reusing startup proof for live children.
 - **debugging-network-issues** (v1.12.3 → v1.12.4): Accept collector recovery through fresh post-fault work, destination-verified custody and the deployed monitoring consumer while retaining historical gaps.
