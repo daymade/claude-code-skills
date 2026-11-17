@@ -189,6 +189,57 @@ probe; prose itself does not enforce it. Stop when the changed cases have decisi
 evidence, and retain an unavailable live case as unverified rather than expanding
 into a generic monitoring framework.
 
+### Installed consumer projection
+
+For an affected installed route, follow the selected source revision through its
+actual binding/helper, consuming interpreter, loaded service and ordinary entry.
+Read the binding before changing it: a source-backed Skill can dispatch to an
+older frozen producer, and a service can use a different environment from its
+client. Install missing dependencies only through the owning environment's setup.
+
+| Controlled state | Required outcome |
+|---|---|
+| New source, old frozen helper still selected | Report the consumer unchanged; source version/tests cannot close installation. |
+| Dependency installed in service environment, absent in the bound client interpreter | Keep that consumer pending; prepare the declared client environment rather than silently loading another runtime. |
+| Correct helper/interpreter, service still running the old provider | Preserve the request and pending state; coordinate an authorized idle version switch, then read the loaded provider back. |
+| New route active, human-edited native result already exists | The normal operation returns a usable result while retaining original input, old derived versions and applicable human edits. |
+
+Use synthetic owned files for destructive/recovery controls. Native originals and
+completed inference remain reusable; this recipe does not authorize another model
+call, service restart during active work or broad installation. Readback through
+the actual installed entry completes this check; a temporary candidate entry only
+proves its declared distribution form.
+
+### Optional dependencies and the repository test entry
+
+Read the repository's real runner and dependency-install steps before selecting
+tests. Execute its ordinary discovery/import path without optional packages, then
+run the affected assertions with those packages installed. Record a skip as a
+skip, not a passed feature test. Catch only the exact declared optional package;
+a missing transitive dependency must remain an error.
+
+The following synthetic module-level pattern is compatible with stdlib unittest
+discovery; replace `optional_vendor` with the actual declared optional dependency.
+
+<!-- optional-test-import-example -->
+```python
+from unittest import SkipTest
+
+try:
+    import optional_vendor
+except ModuleNotFoundError as error:
+    if error.name != "optional_vendor":
+        raise
+    raise SkipTest("Optional tests require optional_vendor") from error
+```
+
+Verify three controls through the real runner: the dependency present executes
+the assertion, exact optional absence is an explicit skip, and a transitive
+missing module fails. For multiple optional packages name each exact package;
+do not catch all import errors. [The executable recipe check](../tests/test_documented_optional_dependency_guard.py)
+tests this snippet with isolated synthetic packages; application-specific test
+bodies still need their own affected checks.
+
 ## Execution identity and permission fixtures
 
 Before a permission-sensitive check, state which identity the tested behavior
