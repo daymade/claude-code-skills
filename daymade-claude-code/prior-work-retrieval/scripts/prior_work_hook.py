@@ -1303,6 +1303,7 @@ def selftest() -> None:
                 "reuse known contract",
                 ["known existing"],
                 "selftest-session",
+                filesystem_scopes=[str(root)],
             )
             candidate = run["candidates"][0]
             prior_work.complete(

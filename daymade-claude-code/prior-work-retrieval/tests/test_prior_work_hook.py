@@ -1145,7 +1145,7 @@ class PriorWorkHookTests(unittest.TestCase):
             "reuse provider",
             ["provider contract"],
             "session-3",
-        )
+         filesystem_scopes=[str(self.source)])
         candidate = run["candidates"][0]
         prior_work.complete(
             manifest,
@@ -1184,7 +1184,7 @@ class PriorWorkHookTests(unittest.TestCase):
             "reuse provider",
             ["provider contract"],
             session_id,
-        )
+         filesystem_scopes=[str(self.source)])
         candidate = run["candidates"][0]
         prior_work.complete(
             manifest,
@@ -1246,7 +1246,7 @@ class PriorWorkHookTests(unittest.TestCase):
         hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的 provider contract"})
         manifest = hook._manifest()
         run = prior_work.retrieve(manifest, "Reuse the verified provider contract.",
-            ["provider contract"], "reuse provider", ["provider contract"], session_id)
+            ["provider contract"], "reuse provider", ["provider contract"], session_id, filesystem_scopes=[str(self.source)])
         prior_work.complete(manifest, run["run_id"], session_id,
             [run["candidates"][0]["candidate_id"] + "=reuse current contract"], [], [], [], None)
         stop = {"session_id": session_id, "stop_hook_active": False}
@@ -1457,7 +1457,7 @@ class PriorWorkHookTests(unittest.TestCase):
             "reuse provider",
             ["provider contract"],
             session_id,
-        )
+         filesystem_scopes=[str(self.source)])
         candidate = run["candidates"][0]
         prior_work.complete(
             manifest,

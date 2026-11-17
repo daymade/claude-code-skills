@@ -49,8 +49,13 @@ cannot override a newer explicit decision.
 
 ### 2. Validate the explicit source manifest
 
-The manifest is the only discovery scope. No directory exists merely because a
-convention says it should. Validate the selected manifest:
+Treat the manifest as a source inventory, not authorization to read every listed
+directory. Bind each filesystem search to a concrete project directory authorized
+for the current task with `retrieve --filesystem-scope <project-dir>`. Repeat only
+for explicitly relevant projects or bounded asset directories. Never derive these
+arguments by copying every manifest root. Workspace, home and cross-project
+collection roots are not substitutes for a project scope; use an existing index
+to locate the project first. Validate the selected manifest:
 
 Run the commands below from the actual installed Skill directory. When invoking
 them from a project directory, use the bundled scripts' absolute paths.
@@ -111,6 +116,7 @@ not pass generic verbs such as “做 / 优化 / 系统” alone.
 
 ```bash
 uv run --no-project python scripts/prior_work.py retrieve \
+  --filesystem-scope '<absolute-authorized-project-directory>' \
   --business-outcome 'the observable result the user actually needs' \
   --outcome-term 'accepted artifact, entity, event, or date' \
   --query 'the implementation or workflow currently being considered' \
@@ -139,7 +145,15 @@ When a normally optional live carrier is material to the request, promote it
 explicitly: `--require-source live-wechat`. The receipt cannot complete until
 that manual route is recorded.
 
-The command searches filesystem carriers with `rg`, calls explicitly declared
+Without a matching task scope, filesystem sources report `manual_required` with
+`filesystem_scope_required` or `filesystem_scope_mismatch` before any search or
+Git freshness probe starts. A child project does not authorize its parent source:
+use a source rooted inside that project or its existing index, and retain the
+coverage gap. Neither `required=true`, a timeout nor a missing receipt authorizes
+widening the scope. Record actual scoped/indexed work with `--manual-complete`;
+do not claim an unsearched collection was searched or rerun it to satisfy a gate.
+
+The command searches task-scoped filesystem carriers with `rg`, calls explicitly declared
 command adapters (for example the formal Claude-history finder), and surfaces
 manual routes such as live WeChat. Content search is always bounded by declared
 globs; full path enumeration runs only when an outcome/implementation term is
