@@ -931,20 +931,45 @@ After diarization you get a CSV per file (`file,start,end,duration,speaker,text`
 
 Generate it from a speaker-transcribe output directory:
 
-Projects explicitly adopted in a shared viewer registry refresh their separate
-data through its installed `asr_entry.py`; they do not regenerate a standalone
-UI. Select the registry with `MESSAGE_VIEWER_CONFIG` (default:
-`~/.config/daymade/message-viewer/service.json`). Missing migration prerequisites
-or a failed handoff stop without replacing the existing reader. Unregistered
-projects retain the offline generator below. This optional handoff requires a
-separately installed shared-viewer owner: the registry's `service_script` points
-to its `viewer_service.py`, beside `asr_entry.py`.
-Title, subtitle, known-speaker colors and material keywords are forwarded to the
-installed owner and retained in that source's registry. Default title/subtitle
-values do not replace its existing configuration. An older owner that rejects an
-option stops without regenerating the old UI. `--storage-key` remains unsupported
-for adopted projects: their dataset identity owns review storage; retain/export
-the old report before migrating its annotations.
+The command chooses the audit output from `MESSAGE_VIEWER_CONFIG` (default:
+`~/.config/daymade/message-viewer/service.json`):
+
+- **Adopted project.** Run with the project directory to refresh the registered
+  dataset through the installed `asr_entry.py`. Omit `--output` when the old HTML
+  path is retired. Use it only for a registered redirect. Title, subtitle,
+  known-speaker colors and material keywords reach the registry. Default
+  title/subtitle leave existing values intact. Review storage uses the registered
+  dataset identity, and `--storage-key` is unsupported for adopted projects.
+- **Unregistered project with a configured shared viewer.** Generate an offline
+  HTML page using the same viewer through the installed `convert-dataset.mjs`
+  and Node.js. If an old audit page occupies the target, use `--output` with a
+  new path and keep the old page available to export its reviews.
+- **No shared viewer configured.** Generate the standalone audit HTML below.
+
+The shared viewer registry's `service_script` points to the installed
+`viewer_service.py` beside its bridge and converter. An incomplete adoption,
+missing required helper, or rejected handoff stops with an error and preserves
+the existing reader. Open the resulting page from its intended location and
+seek to a known segment using the original audio. Offline HTML uses the
+declared audio paths.
+
+Before retiring an audit page with browser-local reviews, open it in the browser
+profile where the reviews were saved and export the report. If the page has
+already moved, use the viewer deployment's recovery procedure to restore an
+export surface at the original URL or file path. In the shared viewer, choose
+**Migrate legacy review** (`迁移旧审核`) and supply the source HTML and its
+exported JSON report. This verifies the source version and binds notes to the
+matching recording, speaker, text and time. Keep recovered reviews with unresolved
+source identity available for later verification. A report from one browser
+profile covers that profile.
+
+Refresh an adopted project at its fixed viewer URL:
+
+```bash
+uv run ${CLAUDE_SKILL_DIR}/scripts/generate_audit_html.py /path/to/adopted-project
+```
+
+Generate an audit file for an unregistered project or a standalone installation:
 
 ```bash
 uv run ${CLAUDE_SKILL_DIR}/scripts/generate_audit_html.py \
@@ -977,19 +1002,19 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/generate_audit_html.py \
 | Option | Meaning |
 |--------|---------|
 | `project_dir` | Base project directory (required) |
-| `--output` | Where to write `index.html` |
+| `--output` | HTML output for offline generation, or a registered redirect for an adopted project. Omit to refresh an adopted project without a redirect. |
 | `--csv-dir` | Directory containing `*.csv` transcript files |
 | `--txt-dir` | Directory containing `*.txt` plain-text transcripts (optional) |
 | `--diarization-dir` | Directory containing `*.diarization.json` files |
 | `--audio-dir` | Directory containing playback audio files |
-| `--original-dir` | Directory containing original source media (optional) |
+| `--original-dir` | Directory containing original source media (optional). For adopted projects, it must match the registry if specified. |
 | `--manifest` | JSON manifest mapping file IDs to metadata (optional) |
 | `--title` / `--subtitle` | Page title and subtitle |
-| `--storage-key` | `localStorage` namespace for state persistence |
+| `--storage-key` | Review namespace for offline generation. Adopted projects use their registered dataset identity. |
 | `--known-speaker` | Repeatable; `"Name"` auto-assigns a color, `"Name=#hex"` sets one explicitly |
 | `--material-final` / `--material-rough` | Repeatable material classification labels used for filtering |
 
-The output is a single self-contained HTML file with no external dependencies. Open it in a browser to review, flag, and annotate turns; the export button produces a report of all flagged rows with reasons and notes.
+Open the fixed viewer URL for an adopted project, or open the generated HTML file for offline review. Use the review controls to flag and annotate turns, then export the report. Audio remains at its declared source paths.
 
 ## Troubleshooting
 
@@ -1056,7 +1081,7 @@ Substitute the resolved absolute path for `${CLAUDE_SKILL_DIR}` everywhere in th
 - `diarize_speakers.py` — Speaker diarization alone (pyannote 3.1 @ MPS) → per-segment JSON
 - `voiceprint_id.py` — CAM++ enroll/match: preserve speaker-name candidates without relabeling originals
 - `overlap_merge_transcribe.py` — Chunked transcription with overlap merge (remote API fallback)
-- `generate_audit_html.py` — Build a self-contained HTML audit/review page from speaker-transcribe CSV outputs
+- `generate_audit_html.py` — Refresh an adopted audit dataset or build an offline audit page from speaker-transcribe outputs
 
 **References:**
 - `execution_location_and_comparison.md` — Conditional local/remote choice, existing transcript/cache reuse, safe runtime identity and same-source comparison

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa v1.21.51**: Verify nested message actions through the opened original and check deep links and search on real large lists.
+- **asr-transcribe-to-text** (`daymade-audio` v1.65.3): Document shared and standalone audit output and how to recover source-bound browser reviews before retiring a page.
+
 - **tunnel-doctor** (v1.17.19 → v1.18.0): Add read-only SSH transfer preflight with current LAN/Tailscale underlay, trusted identity, observed socket, bounded sample and exact-command evidence. Publish interception limits and unknown recovery.
 - **local-codex** (`daymade-codex` v2.4.15 → v2.4.16): Reuse verified release artifacts, preflight cross-machine package transfers and check the installer’s complete layout before adoption.
 - **github-ops v1.17.2**: Preserve concurrent changelog additions during integration, scope the follow-up review to the changed inputs, and keep local uncommitted entries during supported synchronization.
