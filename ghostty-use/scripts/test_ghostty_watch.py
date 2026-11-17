@@ -433,6 +433,20 @@ class SnapshotTest(unittest.TestCase):
         with mock.patch('ghostty_windows.capture_window_structure', return_value=stub):
             return watch.cycle(self.state, lambda deadline: observation(rows, unresolved))
 
+    def layout(self, rows, titles=None, order=None):
+        titles = titles or {}
+        order = order or rows
+        tabs = []
+        for index, row in enumerate(order, 1):
+            tabs.append({'tab_id': 'tab-' + row['sid'][:8], 'index': index,
+                         'selected': index == 1, 'title_override': titles.get(row['sid'], ''),
+                         'title': 'Automatic title', 'terminals': [{
+                             'tty': '/dev/' + row['tty'], 'pid': str(100 + index),
+                             'cwd': row['cwd'], 'title_override': '', 'title': 'Automatic title'}]})
+        return {'captured': True, 'capture_channel': 'ghostty-applescript-dictionary',
+                'windows': [{'id': 'window-1', 'name': 'Window', 'tabs': tabs}],
+                'coverage': {'tabs': len(tabs), 'terminals': len(tabs)}}
+
     def archive_count(self):
         return len(list((self.state / 'snapshots').glob('snapshot-*.json')))
 
@@ -694,6 +708,62 @@ class SnapshotTest(unittest.TestCase):
         self.assertEqual(doc['window_tab_mapping'], 'unknown')
         record = json.loads((self.latest.parent.parent / 'watcher' / 'last-cycle.json').read_text())
         self.assertIn('deploy', record)
+
+    def test_title_set_edit_and_clear_each_publish_once(self):
+        rows = [session(S1)]
+        first = self.layout(rows, {S1: 'Synthetic group'})
+        self.assertEqual(self.run_cycle(rows, capture=first)['state'], 'changed')
+        self.assertEqual(self.run_cycle(rows, capture=first)['state'], 'unchanged')
+        renamed = self.layout(rows, {S1: 'Renamed group'})
+        self.assertEqual(self.run_cycle(rows, capture=renamed)['state'], 'changed')
+        self.assertEqual(self.run_cycle(rows, capture=renamed)['state'], 'unchanged')
+        cleared = self.layout(rows)
+        self.assertEqual(self.run_cycle(rows, capture=cleared)['state'], 'changed')
+        self.assertEqual(self.run_cycle(rows, capture=cleared)['state'], 'unchanged')
+        self.assertEqual(self.archive_count(), 3)
+        self.assertEqual(json.loads(self.latest.read_text())['windows']['windows'][0]['tabs'][0]['title_override'], '')
+
+    def test_reorder_publishes_but_ephemeral_window_metadata_does_not(self):
+        rows = [session(S1), dict(session(S2), tty='ttys002')]
+        first = self.layout(rows)
+        self.run_cycle(rows, capture=first)
+        ephemeral = json.loads(json.dumps(first))
+        ephemeral['windows'][0]['id'] = 'replacement-window'
+        ephemeral['windows'][0]['tabs'][0]['tab_id'] = 'replacement-tab'
+        ephemeral['windows'][0]['tabs'][0]['selected'] = False
+        ephemeral['windows'][0]['tabs'][0]['title'] = 'Different automatic title'
+        ephemeral['windows'][0]['tabs'][0]['terminals'][0]['pid'] = '999'
+        self.assertEqual(self.run_cycle(rows, capture=ephemeral)['state'], 'unchanged')
+        reordered = self.layout(rows, order=[rows[1], rows[0]])
+        self.assertEqual(self.run_cycle(rows, capture=reordered)['state'], 'changed')
+        saved_tabs = json.loads(self.latest.read_text())['windows']['windows'][0]['tabs']
+        self.assertEqual([tab['terminals'][0]['session']['sid'] for tab in saved_tabs], [S2, S1])
+
+    def test_capture_failure_never_erases_layout_and_recovery_refreshes_provenance(self):
+        first_row = session(S1)
+        second_row = dict(session(S2), tty='ttys002')
+        known = self.layout([first_row], {S1: 'Synthetic group'})
+        self.run_cycle([first_row], capture=known)
+        before = self.latest.read_bytes()
+        self.assertEqual(self.run_cycle([first_row], capture={'captured': False})['state'], 'unchanged')
+        self.assertEqual(self.latest.read_bytes(), before)
+        self.assertEqual(self.run_cycle([first_row, second_row], capture={'captured': False, 'reason': 'synthetic unavailable'})['state'], 'changed')
+        inherited = json.loads(self.latest.read_text())
+        self.assertEqual(inherited['window_tab_mapping'], 'unknown')
+        self.assertTrue(inherited['windows']['carried_forward'])
+        self.assertEqual(inherited['windows']['windows'][0]['tabs'][0]['title_override'], 'Synthetic group')
+        self.assertEqual(self.run_cycle([first_row, second_row], capture=known)['state'], 'changed')
+        refreshed = json.loads(self.latest.read_text())
+        self.assertEqual(refreshed['window_tab_mapping'], 'known')
+        self.assertNotIn('carried_forward', refreshed['windows'])
+        self.assertEqual(self.run_cycle([first_row, second_row], capture=known)['state'], 'unchanged')
+        self.assertEqual(self.archive_count(), 3)
+
+    def test_successful_capture_backfills_layout_without_inventory_change(self):
+        rows = [session(S1)]
+        self.run_cycle(rows)
+        self.assertEqual(self.run_cycle(rows, capture=self.layout(rows))['state'], 'changed')
+        self.assertEqual(json.loads(self.latest.read_text())['window_tab_mapping'], 'known')
 
     def test_automatic_full_selection_manual_active_default_unchanged(self):
         self.run_cycle([session(S1), session(S2)])

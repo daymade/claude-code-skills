@@ -144,3 +144,204 @@ def join_windows_to_sessions(windows, sessions):
         "sessions_without_tab": sorted(tty for tty in set(tty_to_session) - tab_ttys),
     })
     return windows
+
+
+def canonical_layout(windows):
+    """Return the change-only layout projection, or None when capture is unknown.
+
+    Window/tab IDs, TTYs, PIDs, automatic titles and selection are deliberately
+    excluded. Only mapped session order, native indexes and tab-level custom
+    titles affect the automatic-backup change predicate.
+    """
+    if not isinstance(windows, dict) or not windows.get("captured"):
+        return None
+    rows = []
+    try:
+        for window_index, window in enumerate(windows["windows"], 1):
+            for tab in window["tabs"]:
+                sids = [(term.get("session") or {}).get("sid") for term in tab["terminals"]]
+                sids = [sid for sid in sids if isinstance(sid, str) and sid]
+                if not sids:
+                    continue
+                title = tab.get("title_override") or ""
+                if not isinstance(title, str):
+                    raise ValueError("tab title override must be text")
+                rows.append({"window": window_index, "tab": int(tab["index"]),
+                             "sessions": sids, "title_override": title})
+    except (KeyError, TypeError, AttributeError) as error:
+        raise ValueError("invalid captured window layout") from error
+    return rows
+
+
+def recorded_single_window_layout(windows):
+    """Return restorable order/titles for one tab per session, else None."""
+    if not isinstance(windows, dict) or not windows.get("captured"):
+        return None
+    try:
+        if len(windows["windows"]) != 1:
+            return None
+        order, titles = [], {}
+        for tab in sorted(windows["windows"][0]["tabs"], key=lambda row: row["index"]):
+            terminals = tab["terminals"]
+            sids = [(term.get("session") or {}).get("sid") for term in terminals]
+            sids = [sid for sid in sids if isinstance(sid, str) and sid]
+            if not sids:
+                continue
+            if len(terminals) != 1 or len(sids) != 1 or sids[0] in order:
+                return None
+            sid = sids[0]
+            order.append(sid)
+            title = tab.get("title_override") or ""
+            if not isinstance(title, str):
+                return None
+            if title:
+                titles[sid] = title
+        return {"order": order, "titles": titles}
+    except (KeyError, TypeError, AttributeError):
+        return None
+
+
+def _applescript_quote(value):
+    return '"' + value.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r') + '"'
+
+
+def _applescript_error(result, fallback):
+    lines = (result.stderr or result.stdout or "").strip().splitlines()
+    return lines[-1][:300] if lines else fallback
+
+
+def apply_tab_title_overrides(windows, titles, timeout=15):
+    """Write custom titles to current tabs selected by joined SID, never by index."""
+    assignments, seen, ambiguous = [], set(), set()
+    for window in windows.get("windows", []):
+        for tab in window.get("tabs", []):
+            sids = [(term.get("session") or {}).get("sid") for term in tab.get("terminals", [])]
+            sids = [sid for sid in sids if sid in titles]
+            if len(sids) > 1 or (sids and sids[0] in seen):
+                ambiguous.update(sids)
+                continue
+            if sids:
+                seen.add(sids[0])
+                assignments.append((tab["tab_id"], sids[0], titles[sids[0]]))
+    result = {"applied": 0, "missing": sorted(set(titles) - seen - ambiguous),
+              "ambiguous": sorted(ambiguous), "error": None}
+    if ambiguous:
+        result["error"] = "ambiguous current tab/session mapping"
+        return result
+    if not assignments:
+        return result
+    lines = ['tell application "Ghostty"', "  repeat with w in windows",
+             "    repeat with t in tabs of w", "      set tid to id of t"]
+    for tab_id, _, title in assignments:
+        lines.append(f"      if tid is {_applescript_quote(tab_id)} then set name override of t to {_applescript_quote(title)}")
+    lines += ["    end repeat", "  end repeat", "end tell"]
+    try:
+        completed = subprocess.run([OSASCRIPT, "-e", "\n".join(lines)],
+                                   capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.SubprocessError, UnicodeDecodeError) as error:
+        result["error"] = f"osascript failed: {error}"
+        return result
+    if completed.returncode:
+        result["error"] = _applescript_error(completed, "title override failed")
+        return result
+    result["applied"] = len(assignments)
+    return result
+
+
+def apply_recorded_tab_order(windows, order, timeout=15):
+    """Move selected existing tabs into recorded order without moving other tabs."""
+    result = {"applied": 0, "missing": [], "error": None}
+    try:
+        if len(windows.get("windows", [])) != 1:
+            result["error"] = "current order restore requires one window"
+            return result
+        tabs = sorted(windows["windows"][0]["tabs"], key=lambda row: row["index"])
+        if len(set(order)) != len(order):
+            result["error"] = "recorded order contains duplicate session IDs"
+            return result
+        selected = set(order)
+        by_sid, sid_rows = {}, []
+        for tab in tabs:
+            sids = [(term.get("session") or {}).get("sid") for term in tab.get("terminals", [])]
+            sids = [sid for sid in sids if isinstance(sid, str) and sid]
+            if len(sids) > 1:
+                result["error"] = "ambiguous current tab/session mapping"
+                return result
+            sid = sids[0] if sids else None
+            sid_rows.append(sid)
+            if sid in selected:
+                if sid in by_sid:
+                    result["error"] = "duplicate current tab/session mapping"
+                    return result
+                by_sid[sid] = tab
+        missing = sorted(selected - set(by_sid))
+        if missing:
+            result["missing"] = missing
+            result["error"] = "current order targets are missing"
+            return result
+        slots = [index for index, sid in enumerate(sid_rows) if sid in selected]
+        if len(slots) != len(order):
+            result["error"] = "current order mapping is not unambiguous"
+            return result
+        desired = list(tabs)
+        for slot, sid in zip(slots, order):
+            desired[slot] = by_sid[sid]
+        current, operations = list(tabs), []
+        for index, target in enumerate(desired):
+            if current[index]["tab_id"] == target["tab_id"]:
+                continue
+            source = next((j for j in range(index + 1, len(current))
+                           if current[j]["tab_id"] == target["tab_id"]), None)
+            if source is None:
+                result["error"] = "could not plan native tab movement"
+                return result
+            operations.append((target["tab_id"], index - source))
+            current.insert(index, current.pop(source))
+    except (KeyError, TypeError, AttributeError) as error:
+        result["error"] = f"invalid current window layout: {error}"
+        return result
+    if not operations:
+        return result
+    lines = ['tell application "Ghostty"']
+    for tab_id, delta in operations:
+        lines += ["  repeat with w in windows", "    repeat with t in tabs of w",
+                  f"      if id of t is {_applescript_quote(tab_id)} then",
+                  f"        set action_result to perform action {_applescript_quote('move_tab:' + str(delta))} on (focused terminal of t)",
+                  '        if action_result is false then error "move_tab rejected"',
+                  "      end if", "    end repeat", "  end repeat"]
+    lines.append("end tell")
+    try:
+        completed = subprocess.run([OSASCRIPT, "-e", "\n".join(lines)],
+                                   capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.SubprocessError, UnicodeDecodeError) as error:
+        result["error"] = f"osascript failed: {error}"
+        return result
+    if completed.returncode:
+        result["error"] = _applescript_error(completed, "native tab movement failed")
+        return result
+    result["applied"] = len(operations)
+    return result
+
+
+def select_tab(tab_id, timeout=15):
+    """Select an existing native tab ID without synthesizing keyboard input."""
+    script = ("tell application \"Ghostty\"\n"
+              "  repeat with w in windows\n"
+              "    repeat with t in tabs of w\n"
+              f"      if id of t is {_applescript_quote(tab_id)} then\n"
+              "        select tab t\n"
+              "        return true\n"
+              "      end if\n"
+              "    end repeat\n"
+              "  end repeat\n"
+              "end tell\n"
+              "return false")
+    try:
+        completed = subprocess.run([OSASCRIPT, "-e", script], capture_output=True,
+                                   text=True, timeout=timeout)
+    except (OSError, subprocess.SubprocessError, UnicodeDecodeError) as error:
+        return {"selected": False, "reason": f"osascript failed: {error}"}
+    if completed.returncode:
+        return {"selected": False, "reason": _applescript_error(completed, "select tab failed")}
+    return {"selected": completed.stdout.strip().lower() == "true",
+            "reason": None if completed.stdout.strip().lower() == "true" else "tab id not found"}

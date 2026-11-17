@@ -4,7 +4,10 @@ Run from this directory: python3 -m unittest test_ghostty_windows -v
 Fixtures are synthetic; real captured tab titles never enter the repository.
 """
 
+import copy
+import subprocess
 import unittest
+from unittest import mock
 
 import ghostty_windows as gw
 
@@ -15,6 +18,14 @@ SAMPLE = "\n".join([
     "TERM\ttab-a\tterm-1\t/dev/ttys001\t101\t/tmp/a\t\tAuto A",
     "TERM\ttab-b\tterm-2\t/dev/ttys002\t202\t/tmp/b\tovr-b\tcwd | repo",
 ]) + "\n"
+
+
+def joined_layout():
+    block = gw.join_windows_to_sessions(gw.parse_window_structure(SAMPLE), [
+        {'sid': 's1', 'tool': 'codex', 'tty': 'ttys001'},
+        {'sid': 's2', 'tool': 'claude', 'tty': 'ttys002'}])
+    block['captured'] = True
+    return block
 
 
 class ParseWindowStructureTests(unittest.TestCase):
@@ -58,6 +69,81 @@ class JoinWindowsToSessionsTests(unittest.TestCase):
             [{"sid": "s9", "tool": "claude", "tty": "ttys099"}])
         self.assertEqual(joined["coverage"]["sessions_without_tab"], ["ttys099"])
         self.assertEqual(joined["coverage"]["sessions_matched"], 0)
+
+
+class LayoutProjectionTests(unittest.TestCase):
+    def test_projection_ignores_ephemeral_metadata_but_detects_title_and_order(self):
+        block = joined_layout()
+        baseline = gw.canonical_layout(block)
+        changed = copy.deepcopy(block)
+        changed['windows'][0]['id'] = 'new-window-id'
+        changed['windows'][0]['tabs'][0]['tab_id'] = 'new-tab-id'
+        changed['windows'][0]['tabs'][0]['selected'] = False
+        changed['windows'][0]['tabs'][0]['title'] = 'different automatic title'
+        changed['windows'][0]['tabs'][0]['terminals'][0]['pid'] = '999'
+        self.assertEqual(gw.canonical_layout(changed), baseline)
+        changed['windows'][0]['tabs'][0]['title_override'] = 'Renamed'
+        self.assertNotEqual(gw.canonical_layout(changed), baseline)
+        reordered = copy.deepcopy(block)
+        reordered['windows'][0]['tabs'][0]['index'] = 2
+        reordered['windows'][0]['tabs'][1]['index'] = 1
+        self.assertNotEqual(gw.canonical_layout(reordered), baseline)
+
+    def test_restore_layout_accepts_only_unambiguous_single_window_tabs(self):
+        block = joined_layout()
+        self.assertEqual(gw.recorded_single_window_layout(block),
+                         {'order': ['s1', 's2'], 'titles': {'s1': 'Override A'}})
+        split = copy.deepcopy(block)
+        split['windows'][0]['tabs'][0]['terminals'].append(
+            copy.deepcopy(split['windows'][0]['tabs'][1]['terminals'][0]))
+        self.assertIsNone(gw.recorded_single_window_layout(split))
+        multiple = copy.deepcopy(block)
+        multiple['windows'].append(copy.deepcopy(multiple['windows'][0]))
+        self.assertIsNone(gw.recorded_single_window_layout(multiple))
+        malformed = copy.deepcopy(block)
+        malformed['windows'][0]['tabs'][0]['title_override'] = 42
+        self.assertIsNone(gw.recorded_single_window_layout(malformed))
+
+    def test_title_writer_targets_tab_override_by_joined_sid(self):
+        block = joined_layout()
+        with mock.patch.object(gw.subprocess, 'run',
+                               return_value=subprocess.CompletedProcess([], 0, stdout='', stderr='')) as run:
+            result = gw.apply_tab_title_overrides(block, {'s2': 'Custom "Group"'})
+        self.assertEqual(result, {'applied': 1, 'missing': [], 'ambiguous': [], 'error': None})
+        script = run.call_args.args[0][-1]
+        self.assertIn('if tid is "tab-b" then set name override of t to "Custom \\"Group\\""', script)
+        self.assertNotIn('name override of tm', script)
+
+    def test_title_writer_reports_missing_and_applescript_failure(self):
+        block = joined_layout()
+        missing = gw.apply_tab_title_overrides(block, {'absent': 'Synthetic'})
+        self.assertEqual(missing['missing'], ['absent'])
+        with mock.patch.object(gw.subprocess, 'run',
+                               return_value=subprocess.CompletedProcess([], 1, stdout='', stderr='synthetic denied')):
+            failed = gw.apply_tab_title_overrides(block, {'s1': 'Replacement'})
+        self.assertEqual(failed['applied'], 0)
+        self.assertIn('synthetic denied', failed['error'])
+
+    def test_order_writer_moves_existing_tab_by_joined_sid(self):
+        block = joined_layout()
+        with mock.patch.object(gw.subprocess, 'run',
+                               return_value=subprocess.CompletedProcess([], 0, stdout='', stderr='')) as run:
+            result = gw.apply_recorded_tab_order(block, ['s2', 's1'])
+        self.assertEqual(result, {'applied': 1, 'missing': [], 'error': None})
+        script = run.call_args.args[0][-1]
+        self.assertIn('if id of t is "tab-b" then', script)
+        self.assertIn('perform action "move_tab:-1" on (focused terminal of t)', script)
+        self.assertIn('if action_result is false then error "move_tab rejected"', script)
+
+    def test_order_writer_noop_and_missing_target_send_no_action(self):
+        block = joined_layout()
+        with mock.patch.object(gw.subprocess, 'run') as run:
+            self.assertEqual(gw.apply_recorded_tab_order(block, ['s1', 's2']),
+                             {'applied': 0, 'missing': [], 'error': None})
+            missing = gw.apply_recorded_tab_order(block, ['s1', 'absent'])
+        self.assertEqual(missing['missing'], ['absent'])
+        self.assertIn('missing', missing['error'])
+        run.assert_not_called()
 
 
 class CaptureDegradationTests(unittest.TestCase):

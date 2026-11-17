@@ -1,21 +1,25 @@
 # Restore mechanics: why paste-based reopen and how it stays honest
 
 Earlier CLI/System Events probes: Ghostty 1.3.1 on macOS, 2026-10-04.
+Current scripting-dictionary and live restore probes: Ghostty 1.4.0 on macOS,
+2026-11-18.
 
 ## Current native observation boundary
 
 | Observed path | Observation and scope |
 |---|---|
 | `ghostty +new-window` CLI action | `+new-window is not supported on this platform` (verified) |
-| AppleScript tab dictionary / System Events | earlier probes found no usable tab restore interface; this does not establish what other AX adapters expose |
+| AppleScript tab dictionary / System Events | Ghostty 1.4.0 exposes windows → tabs → terminal surfaces; each terminal exposes `tty`, and each tab exposes a writable `name override` plus `select tab`. Its `perform action` command accepts the native `move_tab:<relative-offset>` action on a terminal for existing-tab reordering. Join TTYs to manifest session IDs for exact title/order targeting. Keystroke paste still opens sessions; title writes, tab moves and selection need no synthesized keys. |
 | Kimi native AX observation | a later live probe exposed `AXTabGroup`, tab titles and selected `AXRadioButton` values; use these for observation, not as proof of a complete session-to-window map |
 | Kimi computer-use side-channel check of a snapshot | window titles carry `<task> | <project>`, matchable against each session's manifest cwd; tab titles carry no session id, so this proves recorded sessions are visibly real, never a per-ID map. Targetable-window listings can omit minimized/other-Space windows that the AX tree still names, and a window leaving the visible list says nothing about process liveness — re-run `check` after observing window changes instead of inferring loss (verified 2026-11-08: a window left the targetable list while every recorded session stayed present) |
 | macOS window-state restore (Cmd+T…) | reopens empty shells only, never the sessions |
 
-Keep the batch-helper boundary separate from platform capability. The current
-manifest does not record original grouping, and the helper does not reconstruct
-it. Grouping restoration through other APIs remains unverified. Re-observe the
-current app and adapter before claiming a capability is unavailable.
+Keep the batch-helper boundary separate from platform capability. A captured
+`windows` block records the observed window/tab/terminal tree. The helper restores
+relative order and custom tab titles only for an unambiguous single-window tree
+with one terminal per mapped session. Multi-window placement and split geometry
+remain unverified; re-observe the current app and adapter before claiming any
+other capability is unavailable.
 
 ## The working protocol
 
@@ -56,10 +60,46 @@ script checks process presence, not Kimi availability or readable history.
 5. A host denial of Ghostty UI automation is a boundary, not a transport fault.
    Prepare the manifest and a user-run command; after the user runs it, reconcile
    read-only. Do not use osascript as an alternative to a denied UI tool.
-6. The ordinary batch helper opens missing sessions as tabs in the active window;
-   it does not restore original grouping or splits. Tell the user this boundary
-   before a large restore. A separate switch workflow's explicit layout selection
-   remains governed by that workflow.
+6. The ordinary batch helper opens missing sessions as tabs in the active window.
+   Apply the recorded-layout procedure below when the manifest supports it;
+   otherwise retain session-list order and report that layout writes are skipped.
+   Multi-window placement and split geometry remain outside this helper. Tell the
+   user this boundary before a large restore. A separate switch workflow's
+   explicit layout selection remains governed by that workflow.
+
+## Restore recorded tab order and titles
+
+When `window_tab_mapping=known` and the recorded tree contains one window with
+one terminal per mapped session, the ordinary `restore` command also restores the
+recorded relative tab order and custom tab titles. Unknown, multi-window, split or
+ambiguous mappings keep the legacy process-restore path without layout writes.
+
+1. Derive pending-session order from `windows.windows[0].tabs[*].index`; never
+   treat the manifest `sessions` array as tab order. Sessions absent from the
+   recorded tree retain their original relative order after mapped sessions.
+   Existing selected tabs are moved by SID through native `move_tab` actions;
+   unrelated live tabs are never direct movement targets and are never closed
+   merely to reproduce an absolute index.
+2. Record the initiating native tab ID before the first paste. If capture cannot
+   identify exactly one initiating tab, stop before any paste. After process
+   reconciliation, capture the current tree and join terminal TTYs to current
+   session IDs. Apply saved custom titles to **tab-level** `name override`, not
+   the terminal property with the same name. A terminal-level override does not
+   reproduce the user's tab title.
+3. Read the tree back independently. Compare the selected sessions' relative
+   order, every custom title and the count of unrelated sessions preserved.
+   `layout check` reports these separately from process presence. A title write,
+   capture or order mismatch returns nonzero even when every process is present;
+   rerunning the same manifest skips live IDs and retries only the layout work.
+4. Return to the initiating tab only when a fresh selection capture still
+   identifies the last pending session. If the user or another actor selected a
+   different tab, leave that selection untouched; if selection cannot be captured,
+   report a layout failure. After a native `select tab`, read selection back
+   before releasing the keyboard/mouse handoff.
+
+Absolute positions can differ when additional live tabs exist; the contract is
+recorded relative order plus preservation of unrelated work. The helper does not
+infer readable conversation history from a matching title or process.
 
 ## Verify history readiness after process reconciliation
 

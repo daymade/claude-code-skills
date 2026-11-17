@@ -330,6 +330,20 @@ def entry(sid=S_CODEX, status="active"):
             "profile": "direct", "tty": "ttys001", "status": status}
 
 
+def layout_tree(sessions, titles=None, selected_sid=None):
+    titles = titles or {}
+    tabs = []
+    for index, row in enumerate(sessions, 1):
+        sid = row['sid']
+        tabs.append({'tab_id': 'tab-' + sid[:8], 'index': index,
+                     'selected': sid == selected_sid, 'title_override': titles.get(sid, ''),
+                     'title': 'Automatic title', 'terminals': [{
+                         'tty': '/dev/' + row['tty'],
+                         'session': {'sid': sid, 'tool': row['tool']}}]})
+    return {'captured': True, 'windows': [{'id': 'window-1', 'tabs': tabs}],
+            'coverage': {'tabs': len(tabs), 'terminals': len(tabs)}}
+
+
 class RecoveryWorkflowTest(unittest.TestCase):
     def test_cross_terminal_live_id_is_not_reopened_and_readiness_is_separate(self):
         sessions = [entry(S_CODEX)]
@@ -354,6 +368,13 @@ class RecoveryWorkflowTest(unittest.TestCase):
     def snapshot(self, sessions):
         path = Path(self.home) / "old.json"
         path.write_text(json.dumps({"captured_at": "2026-01-01", "sessions": sessions}))
+        return str(path)
+
+    def layout_snapshot(self, sessions, titles=None):
+        path = Path(self.home) / "layout.json"
+        path.write_text(json.dumps({'captured_at': '2026-01-01', 'sessions': sessions,
+                                    'window_tab_mapping': 'known',
+                                    'windows': layout_tree(sessions, titles)}))
         return str(path)
 
     def args(self, **kwargs):
@@ -403,6 +424,169 @@ class RecoveryWorkflowTest(unittest.TestCase):
         with mock.patch.object(gs, "list_sessions", return_value=[]), mock.patch.object(gs, "_paste_tab") as paste, mock.patch.object(gs, "reconcile") as check:
             self.assertEqual(gs.cmd_restore(self.args(snapshot=self.snapshot([entry()]), dry_run=True)), 0)
             paste.assert_not_called(); check.assert_not_called()
+
+    def test_initial_tab_capture_failure_stops_before_paste(self):
+        path = self.layout_snapshot([entry()], {S_CODEX: 'Synthetic group'})
+        with mock.patch.object(gs, 'list_sessions', return_value=[]), \
+                mock.patch('ghostty_windows.capture_window_structure',
+                           return_value={'captured': False, 'reason': 'synthetic denied'}), \
+                mock.patch.object(gs, '_paste_tab') as paste:
+            with self.assertRaisesRegex(gs.RecoveryError, 'no sessions were opened'):
+                gs.cmd_restore(self.args(snapshot=path))
+        paste.assert_not_called()
+
+    def test_pending_layout_restore_returns_to_initiating_tab(self):
+        target, other = entry(S_CODEX), dict(entry(S_HEALTHY), tty='ttys099')
+        path = self.layout_snapshot([target], {S_CODEX: 'Synthetic group'})
+        initiating = layout_tree([other], selected_sid=S_HEALTHY)
+        pending = layout_tree([other, target], selected_sid=S_CODEX)
+        returned = layout_tree([other, target], {S_CODEX: 'Synthetic group'}, selected_sid=S_HEALTHY)
+        with mock.patch.object(gs, 'list_sessions', side_effect=[[other], [other, target]]), \
+                mock.patch.object(gs, 'reconcile', return_value=[]), \
+                mock.patch.object(gs, '_paste_tab', return_value=True) as paste, \
+                mock.patch('ghostty_windows.capture_window_structure',
+                           side_effect=[initiating, pending, layout_tree([other, target], selected_sid=S_CODEX), returned]), \
+                mock.patch('ghostty_windows.apply_tab_title_overrides',
+                           return_value={'applied': 1, 'missing': [], 'ambiguous': [], 'error': None}), \
+                mock.patch('ghostty_windows.select_tab', return_value={'selected': True, 'reason': None}) as select, \
+                redirect_stdout(io.StringIO()):
+            self.assertEqual(gs.cmd_restore(self.args(snapshot=path)), 0)
+        paste.assert_called_once()
+        select.assert_called_once_with('tab-' + S_HEALTHY[:8])
+
+    def test_recorded_tab_order_overrides_session_array_order(self):
+        rows = [entry(S_CODEX), dict(entry(S_HEALTHY), tty='ttys002'),
+                dict(entry(S_DEAD), tty='ttys003')]
+        recorded = [rows[1], rows[2], rows[0]]
+        path = self.layout_snapshot(recorded, {S_HEALTHY: 'Synthetic group'})
+        doc = json.loads(Path(path).read_text())
+        ordered, plan = gs._restore_layout_plan(doc, rows)
+        self.assertEqual([row['sid'] for row in ordered], [S_HEALTHY, S_DEAD, S_CODEX])
+        self.assertEqual(plan['titles'], {S_HEALTHY: 'Synthetic group'})
+        output = io.StringIO()
+        with mock.patch.object(gs, 'list_sessions', return_value=[]), redirect_stdout(output):
+            self.assertEqual(gs.cmd_restore(self.args(snapshot=path, dry_run=True)), 0)
+        text = output.getvalue()
+        self.assertLess(text.index('WOULD SEND ' + S_HEALTHY), text.index('WOULD SEND ' + S_DEAD))
+        self.assertLess(text.index('WOULD SEND ' + S_DEAD), text.index('WOULD SEND ' + S_CODEX))
+        self.assertIn('1 custom titles', text)
+
+    def test_layout_failure_is_explicit_and_does_not_reopen_present_ids(self):
+        path = self.layout_snapshot([entry()], {S_CODEX: 'Synthetic group'})
+        failure = {'order_match': False, 'titles_matched': 0, 'titles_total': 1,
+                   'extra_sessions': 0, 'selection': 'not-requested', 'errors': ['synthetic write failure']}
+        with mock.patch.object(gs, 'list_sessions', return_value=[entry()]), \
+                mock.patch.object(gs, '_paste_tab') as paste, \
+                mock.patch.object(gs, '_restore_recorded_layout', return_value=failure), \
+                redirect_stdout(io.StringIO()):
+            self.assertEqual(gs.cmd_restore(self.args(snapshot=path)), 1)
+        paste.assert_not_called()
+
+    def test_reversed_live_tabs_converge_without_reopening(self):
+        first, second = entry(S_CODEX), dict(entry(S_HEALTHY), tty='ttys002')
+        recorded = [first, second]
+        reversed_live = [second, first]
+        path = self.layout_snapshot(recorded)
+        reversed_tree = layout_tree(reversed_live)
+        corrected_tree = layout_tree(recorded)
+        with mock.patch.object(gs, 'list_sessions', return_value=reversed_live), \
+                mock.patch.object(gs, 'reconcile', return_value=[]), \
+                mock.patch.object(gs, '_paste_tab') as paste, \
+                mock.patch('ghostty_windows.capture_window_structure',
+                           side_effect=[reversed_tree, corrected_tree,
+                                        layout_tree(recorded), layout_tree(recorded)]), \
+                mock.patch('ghostty_windows.subprocess.run',
+                           return_value=subprocess.CompletedProcess([], 0, stdout='', stderr='')) as run, \
+                redirect_stdout(io.StringIO()):
+            self.assertEqual(gs.cmd_restore(self.args(snapshot=path)), 0)
+            self.assertEqual(gs.cmd_restore(self.args(snapshot=path)), 0)
+        paste.assert_not_called()
+        run.assert_called_once()
+        self.assertIn('move_tab:-1', run.call_args.args[0][-1])
+
+    def test_layout_readback_preserves_extra_session_and_returns_selection(self):
+        first, initiating, last = (entry(S_CODEX), dict(entry(S_HEALTHY), tty='ttys002'),
+                                   dict(entry(S_DEAD), tty='ttys003'))
+        live = [first, initiating, last]
+        before = layout_tree(live, selected_sid=S_DEAD)
+        still_pending = layout_tree(live, selected_sid=S_DEAD)
+        after = layout_tree(live, {S_CODEX: 'Synthetic group'}, selected_sid=S_HEALTHY)
+        plan = {'order': [S_CODEX, S_DEAD], 'titles': {S_CODEX: 'Synthetic group'}}
+        with mock.patch('ghostty_windows.capture_window_structure', side_effect=[before, still_pending, after]), \
+                mock.patch('ghostty_windows.apply_tab_title_overrides',
+                           return_value={'applied': 1, 'missing': [], 'ambiguous': [], 'error': None}) as apply, \
+                mock.patch('ghostty_windows.select_tab', return_value={'selected': True, 'reason': None}) as select:
+            result = gs._restore_recorded_layout(plan, live, 'tab-' + S_HEALTHY[:8], S_DEAD)
+        self.assertTrue(result['order_match'])
+        self.assertEqual(result['titles_matched'], 1)
+        self.assertEqual(result['extra_sessions'], 1)
+        self.assertEqual(result['selection'], 'returned')
+        self.assertEqual(result['errors'], [])
+        apply.assert_called_once()
+        select.assert_called_once_with('tab-' + S_HEALTHY[:8])
+
+    def test_external_selection_is_not_replaced(self):
+        first, other, last = (entry(S_CODEX), dict(entry(S_HEALTHY), tty='ttys002'),
+                              dict(entry(S_DEAD), tty='ttys003'))
+        live = [first, other, last]
+        before = layout_tree(live, selected_sid=S_HEALTHY)
+        after = layout_tree(live, selected_sid=S_HEALTHY)
+        plan = {'order': [S_CODEX, S_DEAD], 'titles': {}}
+        with mock.patch('ghostty_windows.capture_window_structure', side_effect=[before, after]), \
+                mock.patch('ghostty_windows.select_tab') as select:
+            result = gs._restore_recorded_layout(plan, live, 'tab-' + S_CODEX[:8], S_DEAD)
+        self.assertEqual(result['selection'], 'left-unchanged-after-external-selection')
+        select.assert_not_called()
+
+    def test_selection_change_during_layout_is_not_replaced(self):
+        first, other, last = (entry(S_CODEX), dict(entry(S_HEALTHY), tty='ttys002'),
+                              dict(entry(S_DEAD), tty='ttys003'))
+        live = [first, other, last]
+        before = layout_tree(live, selected_sid=S_DEAD)
+        externally_changed = layout_tree(live, selected_sid=S_HEALTHY)
+        plan = {'order': [S_CODEX, S_DEAD], 'titles': {}}
+        with mock.patch('ghostty_windows.capture_window_structure',
+                        side_effect=[before, externally_changed, layout_tree(live, selected_sid=S_HEALTHY)]), \
+                mock.patch('ghostty_windows.select_tab') as select:
+            result = gs._restore_recorded_layout(plan, live, 'tab-' + S_CODEX[:8], S_DEAD)
+        self.assertEqual(result['selection'], 'left-unchanged-after-external-selection')
+        select.assert_not_called()
+
+    def test_selection_capture_failure_during_layout_is_an_error(self):
+        first, other, last = (entry(S_CODEX), dict(entry(S_HEALTHY), tty='ttys002'),
+                              dict(entry(S_DEAD), tty='ttys003'))
+        live = [first, other, last]
+        before = layout_tree(live, selected_sid=S_DEAD)
+        plan = {'order': [S_CODEX, S_DEAD], 'titles': {}}
+        with mock.patch('ghostty_windows.capture_window_structure',
+                        side_effect=[before, {'captured': False, 'reason': 'synthetic denied'},
+                                     layout_tree(live, selected_sid=S_DEAD)]), \
+                mock.patch('ghostty_windows.select_tab') as select:
+            result = gs._restore_recorded_layout(plan, live, 'tab-' + S_CODEX[:8], S_DEAD)
+        self.assertEqual(result['selection'], 'failed: current selection capture unavailable')
+        self.assertIn('failed: current selection capture unavailable', result['errors'])
+        select.assert_not_called()
+
+    def test_selection_failure_is_an_explicit_layout_error(self):
+        first, initiating, last = (entry(S_CODEX), dict(entry(S_HEALTHY), tty='ttys002'),
+                                   dict(entry(S_DEAD), tty='ttys003'))
+        live = [first, initiating, last]
+        plan = {'order': [S_CODEX, S_DEAD], 'titles': {}}
+        cases = [
+            ('native rejection', {'selected': False, 'reason': 'synthetic denied'}, S_DEAD),
+            ('readback mismatch', {'selected': True, 'reason': None}, S_CODEX),
+        ]
+        for name, selection, final_selected in cases:
+            with self.subTest(name=name):
+                before = layout_tree(live, selected_sid=S_DEAD)
+                still_pending = layout_tree(live, selected_sid=S_DEAD)
+                after = layout_tree(live, selected_sid=final_selected)
+                with mock.patch('ghostty_windows.capture_window_structure', side_effect=[before, still_pending, after]), \
+                        mock.patch('ghostty_windows.select_tab', return_value=selection):
+                    result = gs._restore_recorded_layout(
+                        plan, live, 'tab-' + S_HEALTHY[:8], S_DEAD)
+                self.assertTrue(result['selection'].startswith('failed:'))
+                self.assertTrue(result['errors'])
 
     def test_cli_invalid_inputs_exit_two_no_gui(self):
         for argv in ([], ["restore", "--only"], ["restore", "--snapshot", ""], ["reconstruct"],
