@@ -28,6 +28,81 @@ hook = load_module("prior_work_hook_under_test", SCRIPTS_DIR / "prior_work_hook.
 
 
 class PriorWorkHookTests(unittest.TestCase):
+    def test_current_code_followups_do_not_rearm_or_read_receipts(self):
+        prompts = [
+            "194个正则分支都保留了吗？当前已有代码为什么这么慢？",
+            "Gitleaks不必要扫描导致卡死，你直接优化当前实现。",
+            "你直接优化呀",
+            "这些 keywords 会复用缓存吗？",
+            "Independent safety review: reuse verified digests in the current implementation.",
+            "Check receipt reuse/retained detection on the current patch.",
+            "Reuse existing passed checks where inputs unchanged.",
+            "Reuse valid qualified retained proof before Git archive/LFS.",
+            "Optimize publication-pair predict archive reuse.",
+        ]
+        with mock.patch.object(hook, "_manifest", side_effect=AssertionError("unexpected manifest read")):
+            for prompt in prompts:
+                with self.subTest(prompt=prompt):
+                    for receipt_valid in (False, True):
+                        self.assertEqual(hook.classify_prompt(prompt, receipt_valid), "none")
+                    self.assertIsNone(hook.handle_user_prompt({
+                        "hook_event_name": "UserPromptSubmit", "session_id": "current-code",
+                        "prompt": prompt,
+                    }))
+
+    def test_machine_envelopes_cannot_create_or_clear_history_requirements(self):
+        sid = "machine-followups"
+        with mock.patch.object(hook, "_receipt_error", return_value="missing"):
+            hook.handle_user_prompt({"session_id": sid, "prompt": "请复用以前的解析器"})
+        manifest = hook._manifest()
+        before = prior_work.load_requirement(manifest, sid)
+        for prompt in [
+            "hook_prompt: 复用以前的代码",
+            "<hook_prompt>复用以前的代码</hook_prompt>",
+            "<codex_delegation>复用以前的代码</codex_delegation>",
+            '[peer-coordination: {"kind":"notice"}]\n复用以前的代码',
+            "<codex_delegation>不用查历史</codex_delegation>",
+            hook.HOOK_GUIDANCE_MARKER + ": required_prior_signal; reuse previous work",
+        ]:
+            with self.subTest(prompt=prompt):
+                with mock.patch.object(hook, "_manifest", side_effect=AssertionError("unexpected manifest read")):
+                    self.assertIsNone(hook.handle_user_prompt({"session_id": sid, "prompt": prompt}))
+                self.assertEqual(prior_work.load_requirement(manifest, sid), before)
+
+    def test_current_code_filter_preserves_explicit_history_requests(self):
+        for prompt in [
+            "查找我们之前做过的配置方案",
+            "请复用以前的解析器",
+            "当前已有代码很慢，请检索我们以前的方案。",
+            "这些 keywords 会复用缓存吗？另外找回我们之前的决定。",
+            "Find our previous work and reuse verified digests in the current implementation.",
+            "Reuse existing passed checks where inputs unchanged, and find our previous work.",
+            "Check receipt reuse/retained detection. 请检索我们之前的方案。",
+            "<hook_prompt>复用缓存</hook_prompt>\n请检索我们之前的方案。",
+            "<codex_delegation>复用以前的代码</codex_delegation>\n请找回我们之前的决定。",
+            "hook_prompt: 复用缓存\n请检索我们以前的代码。",
+        ]:
+            with self.subTest(prompt=prompt):
+                for valid in (False, True):
+                    self.assertEqual(hook.classify_prompt(prompt, valid), "required_prior_signal")
+        with mock.patch.object(hook, "_receipt_error", return_value="missing"):
+            sid = "explicit-history"
+            hook.handle_user_prompt({"session_id": sid, "prompt": "请复用以前的解析器"})
+            before = prior_work.load_requirement(hook._manifest(), sid)
+            hook.handle_user_prompt({"session_id": sid, "prompt": "你直接优化呀"})
+            self.assertEqual(prior_work.load_requirement(hook._manifest(), sid), before)
+            self.assertIsNotNone(hook.handle_stop({"session_id": sid}))
+            hook.handle_user_prompt({"session_id": sid, "prompt": "查找我们之前做过的配置方案"})
+            self.assertNotEqual(prior_work.load_requirement(hook._manifest(), sid)["requirement_id"],
+                                before["requirement_id"])
+
+    def test_empty_or_missing_prompt_has_no_state_or_io(self):
+        with mock.patch.object(hook, "_manifest", side_effect=AssertionError("unexpected manifest read")):
+            for event in ({}, {"prompt": ""}, {"prompt": "  "}, {"prompt": None},
+                          {"prompt": {}}, {"prompt": []}):
+                with self.subTest(event=event):
+                    self.assertIsNone(hook.handle_user_prompt(event))
+
     def history_command(self, script: str, arguments: str) -> str:
         reader = SKILL_DIR.parent / "read-codex-history" / "scripts" / script
         return f'python3 "{reader}" {arguments}'
