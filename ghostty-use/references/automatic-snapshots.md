@@ -82,6 +82,15 @@ A refreshed install writes `watcher/install-source.json`; `status` reports
 `stale` once the source moves on — treat a merged watcher change as delivered only
 when a completed native round reports `deploy: current`.
 
+Bind the deployment to the maintained primary checkout before retiring a
+temporary one. If a shared primary checkout temporarily blocks installation, a
+clean fallback worktree may own `install-source.json` only until that checkout
+becomes available. Rerun the same enabled-job upgrade command from the maintained
+primary checkout, read back `status.source_dir`, and require a completed native
+round with `deploy: current` before retiring the fallback. Freshness compares
+bytes with the recorded source; `current` alone does not prove that this source
+is the maintained checkout.
+
 The default suits recovery metadata for long-lived sessions: IDs, working
 directories and launch parameters. Chat-body persistence belongs to the conversation
 application. Request a shorter interval when new or replaced sessions need faster

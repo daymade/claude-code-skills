@@ -22,6 +22,14 @@ python3 "$SKILL_ROOT/scripts/git_prepare_worktree_retirement.py" verify-current 
   --out "<same-external-evidence-directory>"
 ```
 
+In an actively written shared repository, prefer a fixed task recovery ref over
+a moving branch such as `refs/heads/main` as `--base-ref`. Create it only for
+the exact authorized target after the content-containment check. The helper
+freezes that ref's object ID, and later movement of the selected ref makes
+`verify-current` fail closed. If a moving base changes, preserve the existing
+evidence and prepare a new checkpoint against a newly verified fixed ref; do not
+edit the old checkpoint.
+
 Read `state.json`'s `snapshot.root_carrier`: `retained-ref` means the selected ref reaches
 every root HEAD/reflog commit being retired and needs no root-history pack. A ref at HEAD
 is insufficient when the reflog holds a unique commit outside HEAD's ancestry; the helper
