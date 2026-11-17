@@ -90,10 +90,12 @@ question from the old action/result and current identities, rather than
 substituting a new remedy for the explanation requested.
 
 The hook strips supported machine envelopes before classifying the human
-request. Follow-ups limited to current code, verified digests, or cached
-results for the current task leave the existing requirement untouched.
+request. It recognizes specific phrasing for current-code follow-ups and
+reuse of verified digests or cached results for the current task. Recognized
+current-task follow-ups leave the existing requirement untouched.
 An explicit historical request still re-arms retrieval, including a human
-request after a machine envelope. Weak recall can reuse a valid receipt.
+request after a supported envelope has been stripped. Weak recall can reuse
+a valid receipt.
 If `check` reports an older prompt, complete the current requirement through
 this workflow. Preserve receipt identities and required sources. Scope
 reclassification applies only to a proven false-positive requirement.
