@@ -559,6 +559,7 @@ def _filesystem_candidates(
         # Adapters already run in parallel; do not multiply their worker budget.
         "--threads",
         "1",
+        "--no-follow",
         "--json",
         "--fixed-strings",
         "--ignore-case",
@@ -649,7 +650,7 @@ def _filesystem_candidates(
         entries_by_path.setdefault(candidate_path, []).append(entry)
     path_output = ""
     if path_search_terms:
-        files_command = [rg, "--threads", "1", "--files", "--no-messages"]
+        files_command = [rg, "--threads", "1", "--no-follow", "--files", "--no-messages"]
         for pattern in source["includes"]:
             files_command.extend(["--glob", pattern])
         for pattern in source["excludes"]:

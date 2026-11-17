@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -30,10 +31,10 @@ class FilesystemScopeTests(unittest.TestCase):
             (path / "contract.md").write_text("reusable contract\n")
         self.path = self.root / "manifest.json"
 
-    def manifest(self, *roots):
+    def manifest(self, *roots, carrier="docs"):
         self.path.write_text(json.dumps({
             "schema_version": 1, "state_dir": str(self.root / "state"),
-            "sources": [{"id": f"source-{i}", "carrier": "docs", "mode": "filesystem",
+            "sources": [{"id": f"source-{i}", "carrier": carrier, "mode": "filesystem",
                          "root": str(root), "includes": ["**/*.md"], "required": True}
                         for i, root in enumerate(roots)],
         }))
@@ -88,6 +89,27 @@ class FilesystemScopeTests(unittest.TestCase):
             run = self.retrieve(manifest, filesystem_scopes=[str(self.project)])
         adapter.assert_not_called()
         self.assertEqual(run["coverage"][0]["error"], "filesystem_scope_mismatch")
+
+    def test_inherited_follow_cannot_escape_through_descendant_symlinks(self):
+        (self.project / "outside").symlink_to(self.other, target_is_directory=True)
+        file_alias = self.project / "file-alias"
+        file_alias.mkdir()
+        (file_alias / "contract.md").symlink_to(self.other / "contract.md")
+        config = self.root / "rg.conf"
+        config.write_text("--follow\n")
+        # Docs exercise filename lookup; code exercises content lookup.
+        for carrier in ("docs", "code"):
+            with self.subTest(carrier=carrier), mock.patch.dict(
+                    os.environ, {"RIPGREP_CONFIG_PATH": str(config)}), mock.patch.object(
+                    prior_work.subprocess, "run", wraps=subprocess.run) as spawn:
+                run = self.retrieve(self.manifest(self.project, carrier=carrier),
+                                    filesystem_scopes=[str(self.project)])
+            self.assertEqual({row["path"] for row in run["candidates"]},
+                             {str(self.project / "contract.md")})
+            rg_calls = [c.args[0] for c in spawn.call_args_list
+                        if Path(c.args[0][0]).name == "rg"]
+            self.assertTrue(rg_calls)
+            self.assertTrue(all("--no-follow" in argv for argv in rg_calls))
 
     def test_missing_empty_home_and_root_scopes_fail_before_adapters(self):
         manifest = self.manifest(self.project)

@@ -70,6 +70,9 @@ inside a broad source root does not authorize that parent scan. With no matching
 scope, the source reports `manual_required` before launching an adapter, including
 Git freshness probes. This applies to optional and required sources alike; globs,
 `max_results` and timeouts do not bound the number of directories visited.
+Resolve source and scope aliases before comparing bounds, and do not follow
+descendant symlinks during either content or filename search. The executor forces
+`--no-follow` even when inherited ripgrep configuration enables `--follow`.
 
 Use scoped sources or an existing index when a shared manifest lists collection
 roots. Keep an unresolved required source visible, and record only the actual
