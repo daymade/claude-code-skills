@@ -75,6 +75,11 @@ Incremental reconciliation is one transaction: a mid-update failure cannot
 leave half the sessions updated under the previous complete marker. Session
 freshness fingerprints include content SHA-256, not only size and mtime.
 
+FTS postings update for added, changed or removed sessions. A write by an
+older indexer or a change to the tokenizer or dictionary regenerates postings
+once. Stored machine-injected records are swept when adopting a provider's
+prefix policy or after that policy or the writing version changes.
+
 Run an incremental prose/FTS refresh after new conversations:
 
 ```bash
