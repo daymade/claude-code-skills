@@ -20,6 +20,7 @@ import html
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -2663,15 +2664,18 @@ def shared_offline_converter():
 
 def write_shared_offline(converter, files):
     output = CONFIG.output_path
-    prefix = b"<!DOCTYPE html>\n<!-- ui-src-sha256: "
-    if output.exists():
+    namespace = json.dumps([str(CONFIG.project_dir.resolve()), CONFIG.storage_key], ensure_ascii=False)
+    dataset_id = "asr-" + hashlib.sha256(namespace.encode()).hexdigest()[:24]
+    prefix = f"<!-- shared-asr-dataset: {dataset_id} -->\n".encode()
+    try:
         with output.open("rb") as existing:
             if existing.read(len(prefix)) != prefix:
                 raise RuntimeError(
                     "Existing audit page retained for review export. Use --output with a new HTML path."
                 )
-    namespace = json.dumps([str(CONFIG.project_dir.resolve()), CONFIG.storage_key], ensure_ascii=False)
-    dataset_id = "asr-" + hashlib.sha256(namespace.encode()).hexdigest()[:24]
+            previous = os.fstat(existing.fileno())
+    except FileNotFoundError:
+        previous = None
     data = {"files": files, "title": CONFIG.title, "subtitle": CONFIG.subtitle,
             "speaker_colors": CONFIG.known_speakers}
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -2683,7 +2687,18 @@ def write_shared_offline(converter, files):
         subprocess.run(["node", str(converter), "--input", str(source), "--output",
                         str(temp / "data.json"), "--id", dataset_id, "--html-output", str(page)],
                        check=True)
-        os.replace(page, output)
+        bound_page = temp / "bound.html"
+        with bound_page.open("wb") as final, page.open("rb") as converted:
+            final.write(prefix)
+            shutil.copyfileobj(converted, final)
+        if previous is None:
+            os.link(bound_page, output)
+        else:
+            current = output.stat()
+            signature = lambda st: (st.st_dev, st.st_ino, st.st_ctime_ns, st.st_size)
+            if signature(previous) != signature(current):
+                raise RuntimeError("Audit output changed during generation; existing page retained")
+            os.replace(bound_page, output)
 
 
 def main():
