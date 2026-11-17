@@ -415,6 +415,8 @@ For already-authorized Keychain recovery, follow
 [authorized credential-owner recovery](daymade-macos/macos-permissions/references/keychain-dialog-recovery.md#recover-through-an-authorized-credential-owner).
 For application-specific recurring prompts, follow
 [the credential-backend boundary](daymade-macos/macos-permissions/references/keychain-dialog-recovery.md#distinguish-application-credential-storage-from-permission-repair).
+For an enabled permission switch that fails after replacing a signed app, enter
+[signed-app replacement diagnosis](daymade-macos/macos-permissions/references/tcc-mechanics.md#signed-app-replacement-with-an-enabled-but-ineffective-grant).
 Keep detailed diagnosis and cancellation procedures with those Skills.
 
 ### Background protected-data access
@@ -551,6 +553,8 @@ For explicit single-task speaker-inference requests, load
 Use [transcript-fixer](daymade-audio/transcript-fixer/SKILL.md) for transcript
 correction. Its Native workflow owns evidence selection, selective human escalation,
 and correction/finalization order;
+for Stage 1 JSON or an already-promoted input, use its
+[result contract](daymade-audio/transcript-fixer/SKILL.md#stage-1-result-contract);
 for frontmatter edits, reruns or reversals, enter
 [metadata provenance](daymade-audio/transcript-fixer/references/native_metadata_provenance.md).
 [Native review packets](daymade-audio/transcript-fixer/references/native_review_packets.md)
@@ -940,8 +944,8 @@ For staged-set inspection, deletions or entries outside this task, follow
 For inbound coordination during delivery or closeout, use
 [peer-message's receiving route](peer-message/SKILL.md#收到消息先分流).
 
-For branch publication or PR creation, read
-[the publication recipe](github-ops/references/pr_operations.md#basic-pr-creation)
+For first-push route selection, branch publication or PR creation, read
+[the publication preflight and recipe](github-ops/references/pr_operations.md#basic-pr-creation)
 before preparing the task checkout, including sparse and `--no-checkout` worktrees.
 
 For repository recovery or convergence under concurrent work, enter

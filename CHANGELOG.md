@@ -26,7 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **audio-router** (`daymade-audio` v1.61.0 → v1.62.0): Route waveform, edit-boundary and tail-level diagnosis to an explicitly available daudio runtime. Preserve source clocks and report acoustic risk separately from transcription, speaker identity and perceptual evaluation.
 - **tunnel-doctor** (v1.17.18 → v1.17.19): Diagnose container-injected proxies separately from daemon pull proxies; verify internal RPC/self-client paths from the failing consumer and retain private startup evidence without restarting shared Docker services.
 
+- **github-ops** (v1.17.0 → v1.17.1): Correct shell continuation and path quoting in the publication-preflight example; route repository instructions to that procedure.
 - **github-ops** (v1.16.6 → v1.17.0): Inspect the authenticated repository's live visibility, paginated active branch rules and legacy protection before selecting direct publication or a pull request. Keep unreadable or unclassified policy unknown and retain existing checks, approvals and bypass boundaries.
+- **transcript-fixer** (`daymade-audio` v1.64.1 → v1.64.2): Make the Stage 1 result contract the shared documentation entry for callers and CLI parameters, preserving the inactive-boundary and degraded-API distinctions.
 - **transcript-fixer** (`daymade-audio` v1.63.1 → v1.63.2): Bind auto-finalized Stage 1 results to a versioned canonical-path/SHA-256 receipt so callers distinguish an already-promoted result from a no-op without reapplying corrections.
 
 - **ghostty-use** (v1.14.1 → v1.14.2): Deployment freshness becomes mechanically observable: install stamps the recorded source, `status` reports `deploy: current/stale/source-unavailable/no-stamp`, and every cycle persists the same verdict into its health record, so a merged watcher change that was never refreshed is visible within one round instead of silently running old copies.
