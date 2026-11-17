@@ -212,6 +212,30 @@ error and restore the authorized version through its existing service owner.
 Report the interruption and verify recovery before continuing performance work.
 Peer agreement alone does not authorize interrupting another session's work.
 
+## Duplicate scheduled work
+
+When a scheduled job repeatedly conflicts, retries, or times out, trace who
+starts each round and who consumes its result. Use the loaded service
+configuration and the receiver's results to match input identity, destination,
+and observation times across routes. Two different schedulers, possibly on
+different machines, can repeat the same expensive work. A shared executable,
+similar inputs, or one conflict response is insufficient to establish that.
+Stop taking more resource samples when the next decision can be made from
+this evidence.
+
+For example, a hub polls a machine while its timer sends snapshots to the
+same source identity. The hub advances the shared sequence between pushes,
+and the sender re-collects on conflicts. After an authorized cutover, check
+that the redundant timer is inactive and that the receiver publishes a new
+snapshot from the retained route with the task coverage users depend on.
+Two jobs publishing separate candidates or destinations can both be necessary.
+
+Record desktop recovery separately. Verify the original typing, scrolling,
+or window-switching symptom in actual use when available. A fresh snapshot
+proves the collection still works. Resource measurements describe the host
+at their sample time. Leave desktop recovery unverified without an actual
+interaction observation.
+
 ## Writing the report
 
 Explain the work in terms the owner can act on. For a process question, use a
