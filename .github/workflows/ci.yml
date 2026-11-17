@@ -265,6 +265,9 @@ jobs:
           if ! command -v rg >/dev/null 2>&1; then
             packages+=(ripgrep)
           fi
+          if ! command -v ssh >/dev/null 2>&1; then
+            packages+=(openssh-client)
+          fi
           if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v ffprobe >/dev/null 2>&1; then
             packages+=(ffmpeg)
           fi
@@ -275,6 +278,7 @@ jobs:
             scripts/ci/apt_install_bounded.sh "${packages[@]}"
           fi
           rg --version
+          ssh -V
           ffmpeg -version
           ffprobe -version
           test -x /bin/zsh

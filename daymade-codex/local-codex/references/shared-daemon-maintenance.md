@@ -92,6 +92,22 @@ a product bug for upstream instead of adding a restart schedule.
 
 ### Assess the target package before requiring patches
 
+Before downloading or moving a large release package, check for an already verified
+official artifact near the producer and consumer. Cross-machine copies follow
+[tunnel-doctor's transfer preflight](https://github.com/daymade/claude-code-skills/blob/main/tunnel-doctor/references/transfer-path-preflight.md)
+before payload transfer; retain live progress and verify the complete archive's
+release identity, size and checksum at the consumer. A slow transfer does not by
+itself prove DERP or WAN use.
+
+Load the separate `tunnel-doctor` Skill to resolve its bundled helper. If it is
+absent, use the Skill installation workflow or the linked manual evidence path;
+do not assume another plugin's cache is a sibling of this suite.
+
+When reusing a staged package, check the selected installer's full completeness
+predicate, including launcher aliases as well as `bin/codex` and companion tools.
+A correct executable alone can still cause the installer to redownload an incomplete
+layout. Preserve the previous complete package and use the official adoption path.
+
 Record the invoking client's version/provenance separately from the running
 App Server's executable and package provenance. An official backend can serve
 a locally patched client; neither component's version or signature establishes
