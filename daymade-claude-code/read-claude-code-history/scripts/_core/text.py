@@ -134,6 +134,7 @@ def iter_jsonl(
     bounded: bool = False,
     line_keywords: Optional[list[str]] = None,
     strict: bool = False,
+    on_io_error: Optional[Callable[[], None]] = None,
 ) -> Iterator[dict[str, Any]]:
     """Yield each JSONL record as a dict.
 
@@ -162,7 +163,8 @@ def iter_jsonl(
     into exceptions. Completeness-sensitive callers use it so a partially read
     file can never be rendered as an authoritative zero-match result. The
     default stays tolerant for title/preview inventory paths where one damaged
-    record should not erase the rest of a session listing.
+    record should not erase the rest of a session listing. Cache consumers can
+    use ``on_io_error`` to avoid saving a partial scan after an I/O failure.
 
     Only pass ``line_keywords`` from a call site that has independently confirmed
     skipping unselected lines cannot corrupt some other accounting the
@@ -207,6 +209,8 @@ def iter_jsonl(
     except (OSError, UnicodeError):
         if strict:
             raise
+        if on_io_error is not None:
+            on_io_error()
         return
 
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from .parse import TimestampRange
 from .text import extract_text, first_meaningful_title
@@ -73,7 +73,9 @@ def peek_final_claude_session_id(
     return None
 
 
-def scan_claude_session(path: Path, max_title_chars: int = 120) -> ClaudeSessionSummary:
+def scan_claude_session(
+    path: Path, max_title_chars: int = 120, *, on_io_error: Optional[Callable[[], None]] = None
+) -> ClaudeSessionSummary:
     """Scan every valid record and return internal time bounds plus title metadata.
 
     File mtime is deliberately absent. Copying or migrating a transcript changes
@@ -106,6 +108,8 @@ def scan_claude_session(path: Path, max_title_chars: int = 120) -> ClaudeSession
                     if isinstance(record, dict):
                         yield line_number, record
         except (OSError, UnicodeError):
+            if on_io_error is not None:
+                on_io_error()
             return
 
     for line_number, record in numbered_records():

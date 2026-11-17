@@ -19,7 +19,7 @@ import os
 import re
 import sqlite3
 from pathlib import Path
-from typing import Any, Iterable, Optional
+from typing import Any, Callable, Iterable, Optional
 from urllib.parse import quote
 
 from .model import CodexDatabase, Conversation, ProviderResult
@@ -246,9 +246,9 @@ def collect_codex_from_database(
 
 
 def codex_meta_from_rollout(
-    path: Path, *, strict: bool = False
+    path: Path, *, strict: bool = False, on_io_error: Optional[Callable[[], None]] = None
 ) -> Optional[dict[str, Any]]:
-    for record in iter_jsonl(path, bounded=True, strict=strict):
+    for record in iter_jsonl(path, bounded=True, strict=strict, on_io_error=on_io_error):
         if record.get("type") == "session_meta" and isinstance(
             record.get("payload"), dict
         ):
@@ -265,10 +265,12 @@ def codex_session_id(meta: dict[str, Any], path: Path) -> Optional[str]:
     return match.group(0) if match else None
 
 
-def codex_rollout_time_range(path: Path) -> TimestampRange:
+def codex_rollout_time_range(
+    path: Path, *, on_io_error: Optional[Callable[[], None]] = None
+) -> TimestampRange:
     """Compute internal time bounds for one explicitly selected rollout."""
     timestamps = TimestampRange()
-    for record in iter_jsonl(path):
+    for record in iter_jsonl(path, on_io_error=on_io_error):
         timestamps.observe(record.get("timestamp"))
         if record.get("type") == "session_meta" and isinstance(
             record.get("payload"), dict
