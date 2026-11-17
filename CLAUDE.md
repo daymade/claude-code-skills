@@ -667,7 +667,8 @@ Wiki Base/Sheets capture uses
 
 For an explicit prior-work, reuse or history request, follow the
 [Prior Work operating contract](daymade-claude-code/prior-work-retrieval/SKILL.md).
-For follow-ups after a completed retrieval, use its
+For follow-ups after a completed retrieval or a request to reuse current
+execution results, use its
 [receipt reuse and rearm procedure](daymade-claude-code/prior-work-retrieval/SKILL.md#3-retrieve-across-declared-carriers).
 Requests to repeat a previously successful method or reuse/improve an older rendered artifact enter its
 [candidate verification](daymade-claude-code/prior-work-retrieval/SKILL.md#4-verify-candidates-at-authority).
@@ -699,6 +700,8 @@ For input appended after an operation's current-thread request, use [read-codex-
 
 For conversation-backup health checks or recent unfinished-request inventories, follow
 [`local-conversation-history`](daymade-claude-code/local-conversation-history/SKILL.md).
+For scheduled history refresh or index recovery, use
+[build and refresh](daymade-claude-code/read-claude-code-history/references/hybrid_history_recall.md#build-and-refresh).
 
 For the latest Codex conversation about a topic across continuations, enter
 [latest-topic discovery](daymade-claude-code/read-codex-history/SKILL.md#latest-topic-across-continuations).

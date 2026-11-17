@@ -7,8 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **tunnel-doctor v1.18.1**: Read transfer limits and proof expiry from the executable owner and its result instead of maintaining copied parameter values in the SOP.
-- **claude-code-hooks** (`daymade-claude-code` v5.2.5): Verify changed shared-runtime fields and helper bindings through registered capture and projection consumers before producer activation.
+- **prior-work-retrieval / read-claude-code-history** (`daymade-claude-code` v5.2.5): Document receipt reuse for current-task follow-ups and the routine incremental index refresh.
+
 - **frontend-visual-qa v1.21.52**: Verify that a reader stays open when the ordinary list and reader use different identifiers for the same record.
 - **asr-transcribe-to-text** (`daymade-audio` v1.65.4): Align command help with registered refresh and offline generation.
 
@@ -3547,6 +3547,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **git-safety-net v1.28.8 / auto-repo-setup v2.2.3 / peer-message v1.27.2 / daymade-macos v1.34.5**: Keep hook-dependency preparation, staged-set inspection and peer receipt rules in their canonical SOPs, resolve sparse setup across plugin boundaries, and remove derived payload-example summaries.
 
 - **skill-creator** (`daymade-skill` v1.81.0 → v1.81.1): Verify schema-2 evidence against its recorded integration base while recomputing the original review, receipt and distribution; retain current-main checks when creating a rebind and distinguish exact source review from current PR admission.
+
+- **tunnel-doctor v1.18.1**: Read transfer limits and proof expiry from the executable owner and its result instead of maintaining copied parameter values in the SOP.
+- **claude-code-hooks** (`daymade-claude-code` v5.2.6): Verify changed shared-runtime fields and helper bindings through registered capture and projection consumers before producer activation.
 
 ## [1.82.0] - 2026-07-07
 
