@@ -327,6 +327,10 @@ does not lock the repository or freeze another writer.
    repository's update/check policy before claiming readiness.
    Read back the landed commit and owned paths, then release the agreed window.
 
+When both branches add entries to the same changelog or project log, use the fetched base's entries and keep the candidate's distinct additions. Inspect the three-way diff for unrelated deletions or rewrites. Compare the final reviewed files and validation inputs against the previously reviewed candidate and follow the repository's exact-release binding rules. When the affected inputs are unchanged, reuse their evidence and review the integration delta. Apply the repository's normal checks for any changed inputs.
+
+After landing, sync the shared checkout through its supported workflow. If it stops on an uncommitted log entry, preserve that entry and reconcile it against the landed log before resuming the supported sync. Verify that the working copy retains the uncommitted entry and the tracking branch contains the PR. Keep the uncommitted entry outside the PR.
+
 Check repository capability before choosing automatic merge:
 
 ```bash
