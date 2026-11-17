@@ -249,7 +249,8 @@ as the route rather than a second copy of those procedures.
 For customer-approved report forms, follow
 [skill-creator's report-template contract](daymade-skill/skill-creator/references/authoring-and-reuse.md#show-the-result-not-just-the-work).
 
-For Codex login, credential recovery, quota-query ownership or quota-driven continuation, enter
+For Codex login, account switching, credential recovery or session recovery after login changes,
+quota-query ownership or quota-driven continuation, enter
 [local-codex authentication](daymade-codex/local-codex/SKILL.md#authentication-chatgpt-oauth).
 For existing unmanaged/legacy Ghostty Codex windows around a manual account switch, enter
 [ghostty-use's switch workflow](ghostty-use/SKILL.md#codex-account-switch). Minions
@@ -805,12 +806,6 @@ backend restart, enter
 For selected-site Cookie copying between local profiles of the same macOS Chrome,
 enter [cookie-copy](cookie-copy/SKILL.md). For its quota-query caller, follow
 [Tibo's Cookie Copy handoff](tibo-reset-codex/references/browser-session-migration.md).
-
-Before switching an existing Codex session, or recovering one after login changes, start at
-[Local Codex existing-owner recovery](daymade-codex/local-codex/references/oauth-guide.md#existing-native-owner-recovery).
-For a remote Codex sign-in prompt or choosing existing-login reuse versus new authorization, start at
-[Local Codex authentication recovery](daymade-codex/local-codex/references/oauth-guide.md#remote-account-switch-and-expired-login-recovery).
-Keep quota checks on the separate route below.
 
 For stopping a Tibo monitor or ending reset tracking, enter the
 [host lifecycle route](tibo-reset-codex/SKILL.md#停用监控先走宿主操作).
