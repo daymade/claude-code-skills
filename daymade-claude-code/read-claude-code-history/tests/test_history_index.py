@@ -1624,6 +1624,34 @@ class MultiProviderIndexTests(unittest.TestCase):
         self.assertEqual(saved["fingerprint"], "sha256:" + hashlib.sha256(canonical).hexdigest())
         self.assertEqual(saved["ended"], history_index.parse_timestamp(appended["timestamp"]))
 
+    def test_project_scope_retries_failed_discovery_and_keeps_excluded_metadata_out(self):
+        wanted_id = "019a0000-0000-7000-8000-000000000013"
+        outside_id = "019a0000-0000-7000-8000-000000000014"
+        directory = self.codex_home / "sessions"
+        wanted = directory / f"rollout-{wanted_id}.jsonl"
+        outside = directory / f"rollout-{outside_id}.jsonl"
+        codex_rollout(wanted, wanted_id, self.workspace, [("user", "wanted turn")])
+        codex_rollout(outside, outside_id, self.workspace.parent, [("user", "outside turn")])
+        original_open = Path.open
+
+        def fail_wanted(path, *args, **kwargs):
+            if path == wanted:
+                raise OSError("transient fixture read failure")
+            return original_open(path, *args, **kwargs)
+
+        scope = self.scope(self.codex_source, project_path=str(self.workspace.resolve()))
+        with portable_backend():
+            with mock.patch.object(Path, "open", fail_wanted):
+                failed = history_index.update_index(self.db, scope)
+            recovered = history_index.update_index(self.db, scope)
+        self.assertEqual(failed["sessions"], 0)
+        self.assertEqual(recovered["added"], 1)
+        with closing(plain_connect(self.db, readonly=True)) as connection:
+            table = history_index._SourceFileCache._table
+            paths = {Path(row[0]) for row in connection.execute(f"SELECT path FROM {table}")}
+            self.assertEqual(paths, {wanted})
+            self.assertEqual(connection.execute("SELECT session_id FROM sessions").fetchone()[0], wanted_id)
+
     def test_codex_rollouts_index_with_provider_and_skip_injected_preamble(self) -> None:
         session_id = "019a0000-0000-7000-8000-000000000001"
         codex_rollout(

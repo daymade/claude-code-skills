@@ -1062,6 +1062,10 @@ class _SourceFileCache:
             self._seen[key] = (encoded, json.dumps(value))
         return value
 
+    def forget(self, kind: str, path: Path) -> None:
+        """Keep discovery of an out-of-scope input out of the index database."""
+        self._seen.pop((kind, str(path.absolute())), None)
+
     def store(self, connection: sqlite3.Connection) -> None:
         """Reconcile cache rows with the inputs observed by this update."""
         if not connection.in_transaction:
@@ -1593,24 +1597,40 @@ def _cwd_matches_project(cwd: Any, project_path: str | None) -> bool:
 
 
 def _discover_file_fields(
-    cache: _SourceFileCache | None, kind: str, path: Path, load: Callable[[], Any]
+    cache: _SourceFileCache | None,
+    kind: str,
+    path: Path,
+    load: Callable[[Callable[[], None] | None], Any],
 ) -> Any:
     if cache is None:
-        return load()
-    return cache.read(kind, path, lambda _identity: (load(), True))
+        return load(None)
+
+    def observed(_identity: tuple[int, ...] | None) -> tuple[Any, bool]:
+        complete = True
+
+        def mark_incomplete() -> None:
+            nonlocal complete
+            complete = False
+
+        fields = load(mark_incomplete)
+        return fields, complete
+
+    return cache.read(kind, path, observed)
 
 
 def _claude_index_bounds(path: Path, cache: _SourceFileCache) -> ClaudeSessionBounds:
-    def load() -> tuple[str, float | None, float | None, int]:
-        summary = scan_claude_session(path)
+    def load(on_io_error: Callable[[], None] | None) -> tuple[str, float | None, float | None, int]:
+        summary = scan_claude_session(path, on_io_error=on_io_error)
         return (summary.session_id, summary.created_at, summary.updated_at, summary.timestamp_count)
 
     return ClaudeSessionBounds(*_discover_file_fields(cache, "claude-bounds", path, load))
 
 
-def _codex_index_meta(path: Path) -> dict[str, Any]:
-    meta = codex_meta_from_rollout(path) or {}
-    return {"id": meta.get("id"), "cwd": meta.get("cwd")}
+def _codex_index_meta(
+    path: Path, on_io_error: Callable[[], None] | None
+) -> dict[str, str]:
+    meta = codex_meta_from_rollout(path, on_io_error=on_io_error) or {}
+    return {field: value for field in ("id", "cwd") if isinstance(value := meta.get(field), str)}
 
 
 def _codex_session_refs(
@@ -1632,17 +1652,17 @@ def _codex_session_refs(
     for path in discover_codex_rollouts(source.home):
         try:
             meta = _discover_file_fields(
-                cache, "codex-meta", path, lambda: _codex_index_meta(path)
+                cache, "codex-meta", path, lambda on_io_error: _codex_index_meta(path, on_io_error)
             )
             session_id = codex_session_id(meta, path)
-            if not session_id:
-                continue
             cwd = meta.get("cwd")
-            if not _cwd_matches_project(cwd, project_path):
+            if not session_id or not _cwd_matches_project(cwd, project_path):
+                if cache is not None:
+                    cache.forget("codex-meta", path)
                 continue
 
-            def bounds() -> tuple[float | None, float | None]:
-                time_range = codex_rollout_time_range(path)
+            def bounds(on_io_error: Callable[[], None] | None) -> tuple[float | None, float | None]:
+                time_range = codex_rollout_time_range(path, on_io_error=on_io_error)
                 return time_range.earliest, time_range.latest
 
             earliest, latest = _discover_file_fields(cache, "codex-bounds", path, bounds)
@@ -1715,8 +1735,8 @@ def _kimi_session_refs(
             if not _cwd_matches_project(cwd, project_path):
                 continue
 
-            def bounds() -> tuple[float | None, float | None]:
-                time_range = kimi_wire_time_range(wire_path)
+            def bounds(on_io_error: Callable[[], None] | None) -> tuple[float | None, float | None]:
+                time_range = kimi_wire_time_range(wire_path, on_io_error=on_io_error)
                 return time_range.earliest, time_range.latest
 
             earliest, latest = _discover_file_fields(cache, "kimi-bounds", wire_path, bounds)
