@@ -532,7 +532,7 @@ class WorktreeRetirementTests(unittest.TestCase):
             self.assertNotEqual(verify(ref).returncode, 0, ref)
         source.write_bytes(payload)
         self.assertEqual(verify().returncode, 1)
-        (self.primary / ".git/info/attributes").write_text("archive.bin !filter\n")
+        (self.primary / ".git/info/attributes").write_text("archive.bin !filter -diff\n")
         self.git("-C", str(self.target), "update-index", "--assume-unchanged", "archive.bin")
         result = verify()
         self.assertEqual(result.returncode, 1)

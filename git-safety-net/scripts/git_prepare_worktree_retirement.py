@@ -723,7 +723,7 @@ def verify_lfs_retention(worktree: Path, base_ref: str) -> dict:
     # A workspace or info attribute can hide a physically materialized pointer.
     # Search the immutable tree as well as querying active filters on the index.
     pointer_paths = set()
-    for row in git(worktree, "grep", "-Ilz", "--no-textconv", "-e",
+    for row in git(worktree, "grep", "-alz", "--no-textconv", "-e",
                    r"^version https://git-lfs\.github\.com/spec/v1$", head, "--",
                    ok_codes=(0, 1)).split(b"\0"):
         if row:
@@ -747,7 +747,9 @@ def verify_lfs_retention(worktree: Path, base_ref: str) -> dict:
             pointer = git(worktree, "show", f"{head}:{relative.as_posix()}")
             if LFS_POINTER.fullmatch(pointer) is None:
                 continue
-        if not os.path.lexists(worktree / relative):
+        try:
+            (worktree / relative).lstat()
+        except FileNotFoundError:
             require(sparse and raw in skipped
                     and not any((worktree / part).is_symlink() for part in relative.parents),
                     "Missing or indirect filtered file is not a verified sparse omission")
