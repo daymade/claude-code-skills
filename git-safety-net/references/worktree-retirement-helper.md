@@ -79,9 +79,14 @@ manual handling. This exception does not support an LFS object store or bypass
 the tracked-content-filter gate.
 
 All ignored paths, entry types, modes, sizes, file hashes and symlink targets are
-frozen. Byte-identical entries at the same relative primary path use that retained
-carrier; other entries are copied with their relative paths. To exclude a known
-rebuildable directory, add an exact target-relative declaration, repeated on resume:
+frozen. A primary-path candidate with different type, mode or size cannot retain
+a regular file. Read and hash its contents only if these checks match. Reuse a
+byte-identical candidate and copy the source if it differs. A missing path,
+non-directory ancestor or symlink loop also leaves the source to be copied.
+An access error that pathlib reports is an error, not evidence of absence.
+The preparation recheck and standalone `verify-current` read source bytes again.
+To exclude a known rebuildable directory, add an exact target-relative
+declaration, repeated on resume:
 
 ```text
 --rebuildable 'node_modules=pnpm install --frozen-lockfile from tracked package.json and pnpm-lock.yaml'
