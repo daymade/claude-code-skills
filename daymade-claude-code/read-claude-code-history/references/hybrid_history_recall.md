@@ -79,14 +79,21 @@ python3 scripts/history_index.py index --rebuild
 The rebuild writes a separate building database, validates its schema and
 frontier, checkpoints it, and only then atomically replaces the active index.
 Incremental reconciliation is one transaction: a mid-update failure cannot
-leave half the sessions updated under the previous complete marker. The writer
-reuses discovery metadata and verified content digests only while the filesystem
-identity matches the cached proof. Changed or unproven files are read again.
+leave half the sessions updated under the previous complete marker. When
+diagnosing a slow refresh, measure the three stages separately:
 
-FTS postings update for added, changed or removed sessions. A write by an
-older indexer or a change to the tokenizer or dictionary regenerates postings
-once. Stored machine-injected records are swept when adopting a provider's
-prefix policy or after that policy or the writing version changes.
+- **Discovery** still enumerates scoped files and collects metadata. It reuses
+  file-derived discovery metadata while the cached filesystem identity matches.
+- **Fingerprinting** reuses a verified digest for the same file identity
+  (device, inode, size, mtime and ctime). New, changed or unproven files are
+  read and hashed. The writer parses bodies for sessions it must reconcile.
+- **FTS writes** update postings for added, changed or removed sessions. A write
+  by an older indexer or a change to the tokenizer or dictionary regenerates
+  postings once. Stored machine-injected records are swept when adopting a
+  provider's prefix policy or after that policy or the writing version changes.
+
+Initial cache population and an FTS migration can each be expensive. Measure
+steady-state refresh after both have completed.
 
 Scope a diagnostic build when needed:
 
@@ -354,11 +361,10 @@ uv run --with sqlite-vec python scripts/history_index.py status --json
 ```
 
 Add `--check-sources` to compare every current session-copy fingerprint with the
-indexed frontier. This is slower because it enumerates and content-hashes the
-source corpus. The requested source/project scope must exactly match the stored
-active scan scope (the full database scope when nothing is retired); a mismatch
-fails instead of calling healthy out-of-scope
-sessions stale:
+indexed frontier. This enumerates the source scope and hashes files without a
+matching cached proof. The requested source/project scope must exactly match
+the stored active scan scope (the full database scope when nothing is retired).
+A mismatch fails before any sessions are counted as stale:
 
 ```bash
 uv run --with sqlite-vec python scripts/history_index.py status --check-sources --json
@@ -479,6 +485,14 @@ Run the standard-library tests on every platform:
 ```bash
 python -m unittest discover -s tests -p 'test_*.py'
 ```
+
+For refresh performance, use the synthetic tests in `tests/test_history_index.py`
+with a disposable database and fabricated sessions. After the initial build,
+assert zero session-body opens for unchanged files on a warm refresh and after
+a single edit to a different file. Verify that added and replacement terms
+become searchable, superseded and deleted terms disappear, and unchanged terms
+remain searchable. Trace the routine refresh to confirm it issues no FTS rebuild.
+Use the fixture to verify this behavior and leave the live index untouched.
 
 On macOS arm64, additionally build a disposable project-scoped index and query
 it through real `libsimple`; then chunk/embed a small fixture and verify one

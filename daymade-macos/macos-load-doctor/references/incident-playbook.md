@@ -238,6 +238,22 @@ that the redundant timer is inactive and that the receiver publishes a new
 snapshot from the retained route with the task coverage users depend on.
 Two jobs publishing separate candidates or destinations can both be necessary.
 
+One necessary job can still repeat expensive work internally. First establish
+which inputs, outputs, and checks its consumer requires. Attribute the cost of
+full exports, Git LFS object hydration, content identity verification, and
+scanning separately. Before reusing work, prove that the materialized bytes and
+the applicable scan scope, rules, and scanner version still match. Reuse prior
+verified byte evidence when it still binds the current input identities and
+export settings. Re-export only when that identity cannot otherwise be proved.
+
+Compare a cold run, an unchanged rerun, and a run with one changed input. Use
+the same job and scope. Record per-stage time and which inputs were exported,
+hydrated, verified, or scanned. Compare reused and fresh scanner outcomes on
+small synthetic cases for clean input, a known finding, and a scanner error.
+Require the same verdicts and ensure that an error never admits reuse. Verify
+that the changed input gets checked and that the consumer still receives the
+required result. Keep the verdict comparison off the production tree.
+
 Record desktop recovery separately. Verify the original typing, scrolling,
 or window-switching symptom in actual use when available. A fresh snapshot
 proves the collection still works. Resource measurements describe the host
