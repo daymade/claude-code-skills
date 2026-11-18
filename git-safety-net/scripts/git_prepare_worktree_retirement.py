@@ -169,6 +169,26 @@ def entry(path: Path) -> dict:
     return item
 
 
+def matches_survivor(path: Path, expected: dict) -> bool:
+    try:
+        info = path.lstat()
+    except OSError:
+        # Keep the previous pathlib behavior for missing or indirect ancestors.
+        if not (path.exists() or path.is_symlink()):
+            return False
+        raise
+    require(stat.S_ISREG(info.st_mode) or stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode),
+            "Unsupported special file in inventory")
+    if stat.S_IMODE(info.st_mode) != expected["mode"]:
+        return False
+    kind = expected["type"]
+    if kind == "file":
+        return stat.S_ISREG(info.st_mode) and info.st_size == expected["bytes"] and entry(path) == expected
+    if kind == "directory":
+        return stat.S_ISDIR(info.st_mode)
+    return stat.S_ISLNK(info.st_mode) and os.readlink(path) == expected["target"]
+
+
 def inventory(root: Path, excluded: tuple[str, ...] = ()) -> dict:
     result = {}
     for base, dirs, files in os.walk(root, followlinks=False):
@@ -469,7 +489,7 @@ def scope_snapshot(target: Path, base_ref: str, recipes: dict, known_withdrawals
                 value.update(disposition="rebuildable", recipe=recipes[matches[0]])
             else:
                 counterpart = primary / top_relative
-                if (counterpart.exists() or counterpart.is_symlink()) and entry(counterpart) == item:
+                if matches_survivor(counterpart, item):
                     value.update(disposition="retained", survivor=str(counterpart))
                 else:
                     value.update(disposition="copy")

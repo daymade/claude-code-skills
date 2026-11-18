@@ -456,6 +456,7 @@ def finish_attempt(state, attempt, result=None, *, error=None, timeout=False):
     completed = datetime.now(timezone.utc).isoformat()
     record = dict(attempt, completed_at=completed)
     if error is not None:
+        record['deploy'] = deploy_freshness(state)
         record.update(state='timeout' if timeout else 'failure', error=str(error)[:2048],
                       counters=None)
     else:
