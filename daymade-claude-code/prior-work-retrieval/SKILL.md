@@ -89,15 +89,20 @@ inspect only a decision-bearing gap or changed state. Answer a recurrence
 question from the old action/result and current identities, rather than
 substituting a new remedy for the explanation requested.
 
-The hook currently re-arms on an explicit strong historical signal even when
-an earlier receipt was valid; weak recall can reuse a valid receipt. If `check`
-reports an older prompt, complete the current requirement through this workflow.
-Do not edit receipt identities, call scope reclassification for a genuine
-history request, or remove required sources to avoid that pass. A repeat query
-is not itself evidence of a hook bug: distinguish an exact replay, a clarified
-question using the same evidence, and a request for different historical work
-before proposing any trigger change. Trigger changes require the hook owner's
-real-history false-positive and recall calibration.
+The hook strips supported machine envelopes before classifying the human
+request. It recognizes specific phrasing for current-code follow-ups and
+reuse of verified digests or cached results for the current task. Recognized
+current-task follow-ups leave the existing requirement untouched.
+An explicit historical request still re-arms retrieval, including a human
+request after a supported envelope has been stripped. Weak recall can reuse
+a valid receipt.
+If `check` reports an older prompt, complete the current requirement through
+this workflow. Preserve receipt identities and required sources. Scope
+reclassification applies only to a proven false-positive requirement.
+Distinguish an exact replay, a clarification using the same evidence, and a
+request for different historical work before proposing a trigger change.
+Trigger changes require the hook owner's real-history false-positive and
+recall calibration.
 
 Write the user-world outcome separately from the proposed implementation. Then
 provide:

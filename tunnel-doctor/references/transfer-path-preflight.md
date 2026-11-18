@@ -1,7 +1,7 @@
 # Before a remote bulk copy
 
 Apply this before an SSH rsync/scp copy of a directory, a remote source of unknown
-size, or local regular files totaling more than 8 MiB. Read-only SSH queries, dry
+size, or local regular files above the executable owner's small-copy limit. Read-only SSH queries, dry
 runs, loopback copies and known small local uploads do not require a bulk preflight.
 
 Bind the exact command, working directory, SSH identity/options, current local
@@ -23,12 +23,14 @@ The helper requires SSH, Tailscale CLI for Tailscale targets, `lsof`, and local
 route/interface tools (macOS or Linux). It authenticates using existing trusted
 SSH keys, discovers remote interface addresses, tests relevant local-subnet
 candidates without accepting new host keys, observes a real SSH TCP socket, and
-reads a bounded 1 MiB payload. It retains converging Tailscale observations and
-requires the final two paths to agree. It neither changes routes nor restarts a
+reads a bounded payload. It requires converging Tailscale observations before
+accepting a path. It neither changes routes nor restarts a
 service. The sample is a path/throughput observation, not proof of line capacity
 or the cause of an earlier slow transfer.
 
-`ready` records evidence for 120 seconds, bound to the unchanged command and cwd.
+The [executable owner](../scripts/transfer_path.py) defines size limits, sample
+size and evidence lifetime. Use the returned `expires_in_seconds` to retry the
+unchanged command and cwd before the evidence expires.
 An available verified LAN candidate prevents a WAN/relay path from being accepted;
 select that candidate while preserving its existing host-key namespace, or let
 Tailscale converge to LAN direct, then preflight the resulting command. WAN direct,
