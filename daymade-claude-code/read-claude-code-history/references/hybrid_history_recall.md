@@ -62,8 +62,15 @@ semantic retrieval.
 
 ## Build and refresh
 
-Build the versioned finder database from Claude active homes plus every archive
-in `~/.claude/history-sources.json`:
+Use the incremental prose/FTS command for scheduled and routine refresh:
+
+```bash
+python3 scripts/history_index.py index
+```
+
+For an intentional replacement of the finder database from available originals,
+verify the [source registration](../SKILL.md#evidence-surface-and-completeness)
+and use the same source scope:
 
 ```bash
 python3 scripts/history_index.py index --rebuild
@@ -72,19 +79,14 @@ python3 scripts/history_index.py index --rebuild
 The rebuild writes a separate building database, validates its schema and
 frontier, checkpoints it, and only then atomically replaces the active index.
 Incremental reconciliation is one transaction: a mid-update failure cannot
-leave half the sessions updated under the previous complete marker. Session
-freshness fingerprints include content SHA-256, not only size and mtime.
+leave half the sessions updated under the previous complete marker. The writer
+reuses discovery metadata and verified content digests only while the filesystem
+identity matches the cached proof. Changed or unproven files are read again.
 
 FTS postings update for added, changed or removed sessions. A write by an
 older indexer or a change to the tokenizer or dictionary regenerates postings
 once. Stored machine-injected records are swept when adopting a provider's
 prefix policy or after that policy or the writing version changes.
-
-Run an incremental prose/FTS refresh after new conversations:
-
-```bash
-python3 scripts/history_index.py index
-```
 
 Scope a diagnostic build when needed:
 
@@ -280,17 +282,16 @@ an ETA derived from remaining tokens over that recent token rate, and
 stderr, so `embed --json` leaves stdout one parseable document — the launchd
 job captures both streams in the same log, so nothing is lost. `embed` returns
 `embedded`, `embedded_tokens`, `remaining`, `remaining_tokens`,
-`orphan_vectors_dropped`, `demoted_vectors_dropped` and `stop_reason`. The two
-drop counts are the receipt for the only destructive step in this stage, and
-they are the deferred half of the chunk stage's `vectors_dropped: null`: an
+`orphan_vectors_dropped`, `demoted_vectors_dropped` and `stop_reason`. The
+drop fields report cleanup deferred by the chunk stage's `vectors_dropped: null`. An
 orphan is a vector whose chunk no longer exists, a demoted one is a vector
 whose chunk is now `usable=0`. `index --json` keeps the same rule — its
-per-500-session build progress goes to stderr too, so a fresh build or
+build progress goes to stderr too, so a fresh build or
 `--rebuild` still prints one JSON document on stdout.
 
 **One writer at a time.** `index`, `chunk` and `embed` take an exclusive
 `flock` on `<db_path>.lock` for the length of the command, wait up to
-`WRITER_LOCK_WAIT_SECONDS` (900 s, announced on stderr) if another run holds
+`WRITER_LOCK_WAIT_SECONDS` (announced on stderr) if another run holds
 it, and only then fail with the lock's path. The wait exists because the
 nightly script treats any non-zero exit as a failed night: refusing instantly
 made a one-second overlap with a manual run cost that night's index, chunk
