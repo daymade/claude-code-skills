@@ -966,19 +966,15 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
    measured: it does not stop for an ignored file or warn about it, it deletes the file along with
    the directory. Bundle/archive/format-patch cannot reach this layer either. Freeze the complete
    ignored inventory before removal: expand ignored directories to leaf entries and record every
-   relative path and entry type, including items classified as disposable. Judge that inventory by
-   its total entry count and total byte size, not by naming only the paths that look sensitive or
-   important. Real case: a retirement pass that named 22 paths (a few credentials and plan files)
-   missed that the actual `!!` set was 8092 entries and roughly 200MB, including 13 build-output
-   directories that existed only in that worktree. For every regular leaf, record
+   relative path and entry type, including items classified as disposable. Compare the inventory
+   with the actual `!!` listing and expanded directories. For every regular leaf, record
    `git hash-object --no-filters -- <path>`; use the [batch example](#batch-regular-file-hashes-without-dropping-manifest-entries)
    for a large regular-file set. For every symlink, record its `readlink` output. Stop on
    an unsupported special-file type. An entry is disposable on one of two grounds only: the primary
    checkout has the same relative path with byte-identical content (the same `git hash-object`
    output), or a named tool rebuilds it from tracked inputs alone (dependency caches, bytecode,
-   virtualenvs, provider plugins). "Looks like build output" is not a ground — that is what those
-   13 directories looked like, and each held a per-build environment file that nothing outside the
-   worktree could regenerate. Copy everything else — different content, no matching path in the
+   virtualenvs, provider plugins). Check whether generated directories contain per-build files
+   that the named tool cannot reproduce. Copy everything else — different content, no matching path in the
    primary checkout, or otherwise user-authored or uncertain — outside the worktree first with `cp -p`,
    preserving its relative path under the backup; hash, never read or print, a path that may hold a
    credential. Run the same hash/readlink check on each source and backup copy and require equality.
@@ -1001,8 +997,11 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
    Retain the exact ref-to-SHA manifest even when no bundle is needed. For a supported linked
    worktree, select a fully qualified retained ref outside the retiring branch, then use the
    [helper reference](worktree-retirement-helper.md) for preparation, interrupted resume,
-   rebase-withdrawal declarations and dependency-cache handling. Its `root_carrier` result
-   determines whether that ref covers the threatened history or a scoped pack remains necessary.
+   rebase-withdrawal declarations and dependency-cache handling.
+
+   If `prepare` refuses a materialized LFS file, use the
+   [shared LFS proof](worktree-retirement-helper.md#materialized-files-in-the-shared-lfs-store)
+   for that payload and continue with the manual preservation checks in this step.
 
    If an existing verified ref covers the history, use it as `retained_ref` and omit creation.
    After a squash, main's replacement commit does not retain the original commit identities;
@@ -1051,8 +1050,8 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
    any added or missing path, type change, content change, or link-target change aborts removal.
    Also require every preserved source and backup copy to match that manifest, and recheck all
    module identities, refs, reflogs, object inventories and backups from steps 2/6. When preparation
-   used the helper, run its `verify-current --out <evidence-directory>` for these frozen-state
-   checks; it does not lock out writers. Finish the Git
+   produced a checkpoint, run its `verify-current --out <evidence-directory>`. When preservation
+   used the shared LFS proof, rerun it against the same target and retained ref. Finish the Git
    probes before running the platform's process-occupancy probe against the exact target and any
    module Git stores removal threatens. On macOS, `/usr/sbin/lsof +D <absolute-target>` is one
    available probe. Inspect its rows and diagnostics; any genuine process user or unknown result

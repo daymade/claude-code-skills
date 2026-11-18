@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- `git-safety-net` v1.29.1: Route materialized Git LFS files through manual preservation and repeat the payload proof before worktree removal.
 - `git-safety-net` v1.29.0: Verify that materialized Git LFS files have matching pointers and payloads retained before retiring a worktree.
 - **read-claude-code-history** (`daymade-claude-code` v5.2.9): Align indexed-history guidance with prefix pruning, incremental FTS maintenance, and source retirement.
 - **macos-load-doctor** (`daymade-macos` v1.34.13): Diagnose repeated stages within a necessary job and verify scanner verdicts and the consumer's result.

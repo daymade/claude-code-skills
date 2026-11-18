@@ -80,17 +80,18 @@ python3 "<skill-root>/scripts/git_prepare_worktree_retirement.py" verify-lfs-ret
   --worktree "<exact-linked-worktree>" --base-ref "<fully-qualified-retained-ref>"
 ```
 
-Use a direct durable ref in the Git common directory, such as a retained branch,
-remote-tracking branch or tag. Require `status=lfs_retained` and a positive
+Use a direct ref in the Git common directory that will remain after retirement
+and reaches the exact worktree HEAD. Require `status=lfs_retained` and a positive
 `examined` count. The proof checks committed LFS pointers even if current
 attributes hide them. For each materialized LFS path, the retained commit must
-have the same pointer. A full payload must
-match the pointer's size and SHA-256 both in the worktree and in the Git common
-directory's LFS store. Unsupported filters, indirect paths, missing objects
-or differing bytes stop the proof. Preserve unique payloads before proceeding.
-Use the result for the LFS portion of the manual
-[worktree retirement procedure](merge_verification.md#worktree-retirement--prove-the-checkout-is-disposable-before-removal).
-Recheck immediately before removal and complete the remaining retirement checks there.
+have the same pointer. When the physical file is the pointer itself, the result
+covers those pointer bytes. For an expanded payload, the worktree file and the
+object under the Git common directory's `lfs/objects` must both match the
+pointer's size and SHA-256. The proof reads local storage. For objects held only
+in a custom `lfs.storage` location, verify that retained copy separately. If no
+verified copy is available, preserve the payload before proceeding. Unsupported filters, inaccessible
+or indirect paths, missing shared objects and differing bytes stop this check.
+The result covers the LFS portion of manual retirement.
 For new sparse worktrees, materialize the required policy files and specific
 edit and verification paths to limit LFS expansion.
 
