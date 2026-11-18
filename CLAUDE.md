@@ -322,7 +322,7 @@ Skill's loop and reminder contract; keep current thresholds in the
 owning implementation.
 For an owner crash, historical replay timeout or recovery that remains pending,
 use the Skill's [recovery failure triage](daymade-claude-code/claude-code-hooks/references/recovery-failure-triage.md).
-For an existing hook's usefulness, duplicate execution or latency, follow the
+For an existing hook's usefulness, repeated work, verdict reuse or latency, follow the
 [effect and cost audit](daymade-claude-code/claude-code-hooks/references/effect-and-cost-audit.md).
 For shared selection, source refresh, deadlines, status or rollback changes, load
 the Skill's [lifecycle regression template](daymade-claude-code/claude-code-hooks/references/shared-engine-lifecycle.md).

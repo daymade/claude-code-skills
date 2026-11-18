@@ -117,7 +117,7 @@ The existing visibility, protection, conflict, and public-push gates still apply
    task's isolated change through the authorized repository workflow, preserving
    both sides. Unresolved semantic conflicts or product choices remain blockers;
    do not force a ref, bypass a lock, or merge unrelated shared local history.
-5. Publish the exact candidate through the normal repository workflow, then verify
+5. Follow [Push safety](#push-safety) and publish the exact candidate, then verify
    the hosted commit independently. Synchronize only known landed content through
    the declared safe route, preserving unrelated staged and unstaged work.
    Compare the task's exact paths in the published commit, current HEAD, index and
@@ -190,6 +190,13 @@ Then:
 - force push: require explicit approval for the exact ref and explain the impact.
 
 Do not describe a repository as private/public until the API output confirms it.
+
+For a slow or blocked push, read the installed guard's runbook and the prior
+result for the outgoing object IDs before invoking it again. Identify the first
+blocking stage and verify the current inputs and guard policy before reusing a
+decision. Act on completed findings. Rerun only the affected stage when its
+inputs changed or the evidence is insufficient. After resolving the blocker,
+use the normal push and verify the destination ref.
 
 ## Conflict handling
 

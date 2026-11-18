@@ -68,12 +68,24 @@ only to obtain diagnostics its completed receipt already provides.
 
 For an authorized optimization, freeze the same input and policy for old and new
 paths, compare complete normalized finding sets, and retain clean, dangerous and
-unavailable controls on cold and reused paths. Check the real dispatcher's argv,
-stdin, exit propagation and total deadline; a fast helper does not establish a
-bounded ordinary commit/push. Run scanner-heavy verification sequentially with
-isolated fixture state and resource namespaces; retain the owner's concurrency
-limits. Stop when the selected fallback or stage is explained and the affected
-decision and cost claims have deciding evidence.
+unavailable controls. For verdict reuse, run the actual host action twice on a
+small isolated fixture. Check the first run starts the required work and the
+repeat preserves its decision and diagnostics while the expensive stages are absent
+from stage logs or child-process evidence. Include completed allow and block
+decisions. Change a decision input and verify the affected stage runs again.
+Scanner or setup errors and interruptions before a completed decision supply no
+reusable verdict. A synthetic `git push` to a local bare repository exercises
+Git's hook environment, including `GIT_EXEC_PATH`. After a successful push,
+reseed the disposable destination to its original base before repeating. Verify
+that both runs reach the guard decision with the same nonempty outgoing ref
+records. Direct script invocation can miss the environment change that sends
+the real push through fallback.
+
+Check the real dispatcher's argv, stdin, exit propagation and total deadline.
+Run scanner-heavy verification sequentially with isolated fixture state and
+resource namespaces under the owner's concurrency limits. Stop when evidence
+resolves the affected decision and shows whether the repeat skipped the claimed
+work.
 
 ## Localize repeated startup and lookup work
 
