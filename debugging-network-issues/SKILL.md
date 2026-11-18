@@ -207,6 +207,8 @@ So the first move is to stop reading status and **measure a rate**.
 
 For device or wired/Wi-Fi comparisons, load [device throughput fieldwork](references/device-throughput-fieldwork.md) before probing or changing association; bind the control/data paths, comparison and recovery window there.
 
+When an ongoing copy and a fresh connection differ on the same LAN, use [live LAN copy recovery](references/device-throughput-fieldwork.md#recover-a-live-lan-copy-with-uneven-streams) to choose a bounded recovery and check the real copy afterward.
+
 **The decisive experiment: two independent channels, same direction, same time budget.**
 
 This is Principle 3's layered isolation applied to capacity instead of correctness. Pick two channels that reach the same host over the same network path but share **no application code**. Agreement supports a shared-path limit, but it does not exclude an application/workload factor common to both channels or independent application bottlenecks. For either channel to serve as a fast control, record whether its transport, route and workload match the slow channel; an unmatched control supports a conclusion only about the conditions it actually exercised.
