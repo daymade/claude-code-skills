@@ -167,6 +167,14 @@ ended the burn without touching the app.
 
 ## Measurement controls
 
+For a confirmed hot preservation or verification script, scope inspection to
+the path and operation attributed to its PID. Measure source reads, potential
+retained-copy reads and final verification separately. First test whether an
+expensive comparison runs after type, mode or size already rules out a match.
+A controlled replay can prove wasted work and show its cost on that input.
+Attribute the original process's CPU to that work only if a runtime trace or
+equivalent evidence from the original run supports it.
+
 Use these controls when snapshot counts or computed CPU rates could change the
 diagnosis. Stop measuring once the mechanism and the next authorized action are
 decided; these controls do not require a new monitor or a fleet-wide replay.
