@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- `git-safety-net` v1.28.12: Document the metadata prefilter and fresh content checks for worktree recovery.
+- `daymade-macos` v1.34.12: Distinguish controlled file-check replays from attribution of a live CPU incident.
+- `daymade-skill` v1.81.3: Add a writable-memory-map counterexample for reviewing metadata-keyed file digest reuse.
+
 - **ghostty-use** (v1.15.1 → v1.15.2): Persist deployment freshness in failed and timed-out watcher health records, and route observer upgrade/freshness acceptance to the owning SOP.
 - **Worktree retirement helper** (`git-safety-net` v1.28.11): Skip hashing a potential recovery copy when its type, permissions, or size already differs from the source.
 

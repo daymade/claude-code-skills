@@ -148,6 +148,17 @@ choice, or name the missing basis. Passing value tests proves implementation com
 that the chosen value suits the task. Add this question to the existing bounded
 pass; it does not create another review obligation.
 
+### File identity and cached content proofs
+
+When an optimization reuses a file digest based on metadata, ask the reviewer
+to mutate synthetic bytes twice through the same open writable memory map.
+Capture identity, size, mtime and ctime between writes. Where all key fields
+stay equal, compare the cached decision with a fresh content read. If the
+fixture cannot reproduce equal metadata on that filesystem, record the limit
+and test a stale-key collision with a controlled metadata fixture. Check that
+the final candidate accepts matching bytes, rejects unequal bytes of the same
+size, and preserves the documented filesystem error behavior.
+
 ## Behavior-replay fidelity
 
 A with-skill replay is evidence only for the task the consumer actually received.
