@@ -1098,7 +1098,7 @@ claiming the whole checkout is current.
 
 For divergent local `main`, recovery-material selection or branch/worktree retirement,
 follow [git-safety-net](git-safety-net/SKILL.md).
-For named linked-worktree retirement, follow the
+For named linked-worktree retirement, including a materialized Git LFS file, follow the
 [worktree retirement procedure](git-safety-net/references/merge_verification.md#worktree-retirement--prove-the-checkout-is-disposable-before-removal)
 for preparation, recovery and current-state verification.
 If local Skill release receipts reference the review checkout being retired, first use
