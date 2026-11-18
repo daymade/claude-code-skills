@@ -160,11 +160,12 @@ def preflight_check(user_id):
 def fetch_all_interests(user_id, type_name, status):
     """Fetch all items for a given type+status combination.
 
-    Paginates through the API, checking against the reported total
-    (not page size) to handle pages with fewer items due to delisted content.
+    Traverse offset windows through the reported total, including empty pages
+    left by delisted content. Raise on incomplete traversal before CSV writes.
     """
     api_path = f'/api/v2/user/{user_id}/interests'
     all_items = []
+    seen = set()
     start = 0
     total = None
     retries = 0
@@ -188,7 +189,7 @@ def fetch_all_interests(user_id, type_name, status):
             if retries > max_retries:
                 print(f'  Error: HTTP {status_code} after {max_retries} retries, stopping.')
                 print(f'  See references/troubleshooting.md for common errors.')
-                break
+                raise RuntimeError('Export incomplete: page request exhausted retries')
             delay = 5 * (2 ** (retries - 1))
             print(f'  HTTP {status_code}, retry {retries}/{max_retries}, waiting {delay}s...')
             time.sleep(delay)
@@ -196,25 +197,32 @@ def fetch_all_interests(user_id, type_name, status):
 
         retries = 0
 
+        if (not isinstance(data, dict)
+                or type(data.get('total')) is not int or data['total'] < 0
+                or not isinstance(data.get('interests'), list)):
+            raise RuntimeError('Export incomplete: invalid pagination response')
         if total is None:
-            total = data.get('total', 0)
+            total = data['total']
             if total == 0:
                 return []
             print(f'  Total: {total}')
+        elif data['total'] != total:
+            raise RuntimeError('Export incomplete: collection changed during pagination')
 
-        interests = data.get('interests', [])
-        if not interests:
-            break
-
-        all_items.extend(interests)
+        interests = data['interests']
+        for interest in interests:
+            subject_id = str(interest['subject']['id'])
+            if subject_id not in seen:
+                seen.add(subject_id)
+                all_items.append(interest)
         print(f'  Fetched {start}-{start + len(interests)} ({len(all_items)}/{total})')
 
-        if len(all_items) >= total:
-            break
-        start += len(interests)
+        start += ITEMS_PER_PAGE
+        if start >= total:
+            return all_items
         time.sleep(PAGE_DELAY)
 
-    return all_items
+    raise RuntimeError('Export incomplete: pagination safety limit reached')
 
 
 def extract_rating(interest):

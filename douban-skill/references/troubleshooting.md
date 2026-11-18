@@ -53,20 +53,25 @@ def compute_signature(url_path, timestamp):
 Some pages return fewer than the requested `count` (e.g., 48 instead of 50). This happens
 when items have been delisted from Douban's catalog but still count toward the total.
 
-**This was our biggest silent bug.** The first version of the export script used
-`len(page_items) < count_per_page` as the stop condition. Result: only 499 out of 639
-books were exported, with no error message. The fix:
+Traverse every requested offset window through the reported total. A short or
+empty page can contain delisted slots; it does not prove the collection ended.
+Advance by the requested page size, and deduplicate subject IDs within each
+type/status. The exported row count can be lower than the reported total.
 
 ```python
 # WRONG: stops early when a page has fewer items due to delisted content
 if len(interests) < count_per_page:
     break
 
-# CORRECT: check against the total count reported by the API
-if len(all_items) >= total:
-    break
-start += len(interests)  # advance by actual count, not page_size
+# CORRECT: traverse offset slots, not the number of returned records
+start += count_per_page
+if start >= total:
+    return all_items
 ```
+
+If retries or the pagination safety limit are exhausted, or the response total
+changes or its schema is invalid, abort the export before writing CSV files.
+Resolve the request failure or wait for collection changes to stop, then rerun.
 
 ### Rating Scale Confusion
 
