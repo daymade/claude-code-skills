@@ -604,8 +604,7 @@ authoring, enter the [Domain Context Guide](daymade-audio/transcript-fixer/refer
 For project-bound queue appends or domain-only metadata repair, enter
 [queue domain admission and repair](daymade-audio/transcript-fixer/references/queue_domain_repair.md).
 For remaining pending rows or a received occurrence-specific human verdict on an
-already reviewed file, enter [pending continuation](daymade-audio/transcript-fixer/references/pending-continuation.md)
-for queue resolution and its finalization, learning and propagation owners.
+already reviewed file, enter [pending continuation](daymade-audio/transcript-fixer/references/pending-continuation.md).
 For source-audio export, identity and timeline pairing, follow
 [the audio setup SOP](daymade-audio/transcript-fixer/references/review_queue_dashboard.md#source-audio-and-timeline-pairing)
 and its [audio helper](daymade-audio/transcript-fixer/scripts/fetch_minute_audio.py).
