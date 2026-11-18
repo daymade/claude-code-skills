@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -503,6 +504,44 @@ class WorktreeRetirementTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["status"], "verified")
         self.assertEqual(self.primary_state(), self.primary_before)
+
+    def test_materialized_lfs_proof_rejects_a_missing_or_corrupt_shared_payload(self) -> None:
+        self.plain_target()
+        payload = b"fixture materialized archive data"
+        oid = hashlib.sha256(payload).hexdigest()
+        pointer = (f"version https://git-lfs.github.com/spec/v1\n"
+                   f"oid sha256:{oid}\nsize {len(payload)}\n").encode()
+        (self.target / ".gitattributes").write_text("*.bin filter=lfs\n")
+        source = self.target / "archive.bin"
+        source.write_bytes(pointer)
+        self.git("-C", str(self.target), "add", "--", ".gitattributes", "archive.bin")
+        self.git("-C", str(self.target), "commit", "-qm", "retain LFS pointer")
+        self.git("-C", str(self.primary), "tag", "kept", "plain-task")
+        command = [str(SCRIPT), "verify-lfs-retention", "--worktree", str(self.target),
+                   "--base-ref", "refs/tags/kept"]
+
+        def verify():
+            return subprocess.run(command, env=self.env, capture_output=True, text=True)
+
+        result = verify()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["identical_pointers"], 1)
+        source.write_bytes(payload)
+        self.assertEqual(verify().returncode, 1)
+        shared = self.primary / f".git/lfs/objects/{oid[:2]}/{oid[2:4]}/{oid}"
+        shared.parent.mkdir(parents=True)
+        shared.write_bytes(payload)
+        result = verify()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        report = json.loads(result.stdout)
+        self.assertEqual((report["status"], report["examined"], report["shared_payloads"]),
+                         ("lfs_retained", 1, 1))
+        shared.write_bytes(b"x" * len(payload))
+        result = verify()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("LFS payload differs", result.stderr)
+        self.assertEqual(source.read_bytes(), payload)
+        self.assertNotIn("lfs_retained", result.stdout)
 
     def test_lfs_nonempty_indirect_and_special_entries_fail_without_output(self) -> None:
         outside = self.root / "outside empty lfs"
