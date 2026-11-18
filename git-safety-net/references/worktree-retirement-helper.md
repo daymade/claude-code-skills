@@ -70,6 +70,30 @@ these files. A materialized filtered file, a dangling link or an unproven omissi
 still requires manual preservation; `skip-worktree` alone is not permission to
 discard a payload. `verify-current` repeats the same checks before retirement.
 
+### Materialized files in the shared LFS store
+
+If the checkpoint requires manual handling of a materialized LFS file, run
+this read-only proof against the exact worktree and retained ref:
+
+```bash
+python3 "<skill-root>/scripts/git_prepare_worktree_retirement.py" verify-lfs-retention \
+  --worktree "<exact-linked-worktree>" --base-ref "<fully-qualified-retained-ref>"
+```
+
+Use a direct durable ref in the Git common directory, such as a retained branch,
+remote-tracking branch or tag. Require `status=lfs_retained` and a positive
+`examined` count. The proof checks committed LFS pointers even if current
+attributes hide them. For each materialized LFS path, the retained commit must
+have the same pointer. A full payload must
+match the pointer's size and SHA-256 both in the worktree and in the Git common
+directory's LFS store. Unsupported filters, indirect paths, missing objects
+or differing bytes stop the proof. Preserve unique payloads before proceeding.
+Use the result for the LFS portion of the manual
+[worktree retirement procedure](merge_verification.md#worktree-retirement--prove-the-checkout-is-disposable-before-removal).
+Recheck immediately before removal and complete the remaining retirement checks there.
+For new sparse worktrees, materialize the required policy files and specific
+edit and verification paths to limit LFS expansion.
+
 An `lfs` directory in a retiring Git/admin directory is supported only when `lstat`
 identifies a real, empty directory. Its presence and mode are frozen in metadata
 and preserved for recovery. Missing and empty remain distinct; later creation,
