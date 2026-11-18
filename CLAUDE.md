@@ -540,11 +540,15 @@ For idle Node/Vite previews, enter its
 For memory pressure or suspected child-process leaks, enter that Skill's
 [triage](daymade-macos/macos-load-doctor/SKILL.md#triage-read-do-in-order) and
 [memory evidence](daymade-macos/macos-load-doctor/SKILL.md#memory-evidence) before attributing the cause.
+For a confirmed hot preservation or verification script, use
+[measurement controls](daymade-macos/macos-load-doctor/references/incident-playbook.md#measurement-controls).
 The observation contract above owns delayed-sampling acceptance; keep its tests
 and the diagnostic stop conditions in those Skills.
 For changed operating defaults or thresholds in an already-required review,
 or behavior-replay dispatch and coverage claims, use
 [skill-creator's independent-review protocol](daymade-skill/skill-creator/references/independent-review-protocol.md).
+For metadata-keyed digest reuse in that review, use
+[file identity and cached content proofs](daymade-skill/skill-creator/references/independent-review-protocol.md#file-identity-and-cached-content-proofs).
 Keep decision criteria and verification details in those owners.
 
 ### Acoustic diagnostics
@@ -1093,9 +1097,9 @@ claiming the whole checkout is current.
 
 For divergent local `main`, recovery-material selection or branch/worktree retirement,
 follow [git-safety-net](git-safety-net/SKILL.md).
-For named linked-worktree retirement, including sparse filtered files, retained recovery refs
-after squash, interrupted preparation or dependency-cache declarations, follow its complete
-[worktree retirement procedure](git-safety-net/references/merge_verification.md#worktree-retirement--prove-the-checkout-is-disposable-before-removal).
+For named linked-worktree retirement, follow the
+[worktree retirement procedure](git-safety-net/references/merge_verification.md#worktree-retirement--prove-the-checkout-is-disposable-before-removal)
+for preparation, recovery and current-state verification.
 If local Skill release receipts reference the review checkout being retired, first use
 [review archive relocation](daymade-skill/skill-creator/references/release-readiness.md#retire-a-temporary-review-checkout),
 then resume the worktree retirement procedure.
