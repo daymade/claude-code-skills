@@ -1064,6 +1064,63 @@ class DeployFreshnessTest(unittest.TestCase):
             (self.state / 'watcher' / 'scripts' / name).write_bytes(b'same')
         self.assertEqual(watch.deploy_freshness(self.state)['deploy'], 'current')
 
+    def test_failed_and_timed_out_rounds_persist_current_deploy(self):
+        for name in ('ghostty_watch.py', 'ghostty_windows.py'):
+            (self.source / name).write_bytes(b'same')
+            (self.state / 'watcher' / 'scripts' / name).write_bytes(b'same')
+        records = []
+        for error, expected in ((ValueError('synthetic failure'), 'failure'),
+                                (subprocess.TimeoutExpired('synthetic ps', 15), 'timeout')):
+            with self.subTest(expected=expected):
+                attempt = watch.begin_attempt(self.state)
+                with mock.patch.object(watch, '_cycle', side_effect=error), \
+                        self.assertRaises(type(error)):
+                    watch.cycle(self.state, attempt=attempt)
+                record = json.loads((self.state / 'watcher' / 'last-cycle.json').read_text())
+                self.assertEqual(record['state'], expected)
+                self.assertEqual(record['deploy'], {
+                    'deploy': 'current', 'source_dir': str(self.source), 'differing': []})
+                records.append(record)
+        logged = [json.loads(line) for line in
+                  (self.state / 'watcher' / 'cycles.jsonl').read_text().splitlines()]
+        self.assertEqual(logged, records)
+
+    def test_supervisor_failures_persist_current_deploy(self):
+        for name in ('ghostty_watch.py', 'ghostty_windows.py'):
+            (self.source / name).write_bytes(b'same')
+            (self.state / 'watcher' / 'scripts' / name).write_bytes(b'same')
+        expected_deploy = {'deploy': 'current', 'source_dir': str(self.source), 'differing': []}
+        records = []
+
+        with self.subTest(expected='missing-runtime'):
+            with self.assertRaisesRegex(ValueError, 'owned watcher runtime missing'):
+                watch.supervise(self.state)
+            record = json.loads((self.state / 'watcher' / 'last-cycle.json').read_text())
+            self.assertEqual(record['state'], 'failure')
+            self.assertEqual(record['deploy'], expected_deploy)
+            records.append(record)
+
+        interpreter = watch.owned_interpreter(self.state)
+        interpreter.parent.mkdir(parents=True)
+        interpreter.write_text('synthetic runtime')
+        process = mock.Mock(pid=999, returncode=1)
+        process.communicate.side_effect = [
+            subprocess.TimeoutExpired('synthetic worker', 15), ('', '')]
+        with self.subTest(expected='supervisor-deadline'):
+            with mock.patch.object(watch.subprocess, 'Popen', return_value=process), \
+                    mock.patch.object(watch.os, 'killpg') as kill, \
+                    self.assertRaisesRegex(ValueError, 'supervisor deadline expired'):
+                watch.supervise(self.state)
+            self.assertEqual(kill.call_count, 1)
+            record = json.loads((self.state / 'watcher' / 'last-cycle.json').read_text())
+            self.assertEqual(record['state'], 'timeout')
+            self.assertEqual(record['deploy'], expected_deploy)
+            records.append(record)
+
+        logged = [json.loads(line) for line in
+                  (self.state / 'watcher' / 'cycles.jsonl').read_text().splitlines()]
+        self.assertEqual(logged, records)
+
     def test_stale_lists_differing_files(self):
         (self.source / 'ghostty_watch.py').write_bytes(b'new')
         (self.state / 'watcher' / 'scripts' / 'ghostty_watch.py').write_bytes(b'old')
