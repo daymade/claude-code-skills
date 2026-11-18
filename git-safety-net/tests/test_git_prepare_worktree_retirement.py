@@ -520,14 +520,23 @@ class WorktreeRetirementTests(unittest.TestCase):
         command = [str(SCRIPT), "verify-lfs-retention", "--worktree", str(self.target),
                    "--base-ref", "refs/tags/kept"]
 
-        def verify():
-            return subprocess.run(command, env=self.env, capture_output=True, text=True)
+        def verify(ref="refs/tags/kept"):
+            return subprocess.run([*command[:-1], ref], env=self.env, capture_output=True, text=True)
 
         result = verify()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["identical_pointers"], 1)
+        self.git("-C", str(self.target), "update-ref", "refs/worktree/kept", "HEAD")
+        self.git("-C", str(self.primary), "symbolic-ref", "refs/heads/kept-alias", "refs/heads/plain-task")
+        for ref in ("refs/worktree/kept", "refs/heads/plain-task~0", "refs/heads/kept-alias"):
+            self.assertNotEqual(verify(ref).returncode, 0, ref)
         source.write_bytes(payload)
         self.assertEqual(verify().returncode, 1)
+        (self.primary / ".git/info/attributes").write_text("archive.bin !filter\n")
+        self.git("-C", str(self.target), "update-index", "--assume-unchanged", "archive.bin")
+        result = verify()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Missing or nonregular LFS file", result.stderr)
         shared = self.primary / f".git/lfs/objects/{oid[:2]}/{oid[2:4]}/{oid}"
         shared.parent.mkdir(parents=True)
         shared.write_bytes(payload)

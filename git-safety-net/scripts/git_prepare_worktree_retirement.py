@@ -29,7 +29,8 @@ def require(condition: bool, message: str) -> None:
         raise Unsafe(message)
 
 
-def git(path: Path, *args: str, data: bytes | None = None) -> bytes:
+def git(path: Path, *args: str, data: bytes | None = None,
+        ok_codes: tuple[int, ...] = (0,)) -> bytes:
     env = dict(os.environ)
     for key in list(env):
         if key.startswith("GIT_"):
@@ -40,7 +41,7 @@ def git(path: Path, *args: str, data: bytes | None = None) -> bytes:
          "core.untrackedCache=false", "-C", str(path), *args],
         input=data, capture_output=True, env=env, check=False,
     )
-    if result.returncode:
+    if result.returncode not in ok_codes:
         raise RuntimeError(f"Git {args[0]} failed (exit {result.returncode})")
     return result.stdout
 
@@ -693,8 +694,20 @@ def verify_lfs_retention(worktree: Path, base_ref: str) -> dict:
     branch = text_git(worktree, "branch", "--show-current")
     require(base_ref.startswith("refs/") and base_ref != f"refs/heads/{branch}",
             "Select a retained ref outside the retiring branch")
+    git(worktree, "check-ref-format", base_ref)
+
+    def retained_commit() -> str:
+        rows = git(worktree, f"--git-dir={common}", "for-each-ref",
+                   "--format=%(refname)%00%(symref)%00%(objectname)", base_ref).splitlines()
+        for row in rows:
+            name, symbolic, oid = row.decode("utf-8", "surrogateescape").split("\0")
+            if name == base_ref:
+                require(not symbolic, "Select a direct retained ref in the Git common directory")
+                return text_git(worktree, "rev-parse", "--verify", oid + "^{commit}")
+        raise Unsafe("Select a direct retained ref in the Git common directory")
+
     head = text_git(worktree, "rev-parse", "HEAD^{commit}")
-    retained = text_git(worktree, "rev-parse", "--verify", base_ref + "^{commit}")
+    retained = retained_commit()
     git(worktree, "merge-base", "--is-ancestor", head, retained)
 
     def regular_file(root: Path, relative: Path) -> Path:
@@ -707,26 +720,42 @@ def verify_lfs_retention(worktree: Path, base_ref: str) -> dict:
 
     tracked = git(worktree, "ls-files", "-z")
     require(tracked, "Worktree index has no tracked files")
+    # A workspace or info attribute can hide a physically materialized pointer.
+    # Search the immutable tree as well as querying active filters on the index.
+    pointer_paths = set()
+    for row in git(worktree, "grep", "-Ilz", "--no-textconv", "-e",
+                   r"^version https://git-lfs\.github\.com/spec/v1$", head, "--",
+                   ok_codes=(0, 1)).split(b"\0"):
+        if row:
+            pointer_paths.add(row.split(b":", 1)[1])
+    paths = set(tracked.split(b"\0")) - {b""}
     flags = git(worktree, "ls-files", "-t", "-z").split(b"\0")
     skipped = {row[2:] for row in flags if row.startswith(b"S ")}
     config = git(worktree, "config", "--null", "--list").split(b"\0")
     sparse = b"core.sparsecheckout\ntrue" in config
-    attrs = git(worktree, "check-attr", "--stdin", "-z", "filter", data=tracked).split(b"\0")
+    attrs = git(worktree, "check-attr", "--stdin", "-z", "filter",
+                data=b"\0".join(sorted(paths | pointer_paths)) + b"\0").split(b"\0")
     checked = pointers = payloads = 0
     for i in range(0, len(attrs) - 1, 3):
         raw, _, driver = attrs[i:i + 3]
-        if driver in (b"unspecified", b"unset"):
+        if driver in (b"unspecified", b"unset") and raw not in pointer_paths:
             continue
         relative = Path(os.fsdecode(raw))
         require(not relative.is_absolute() and ".." not in relative.parts, "Invalid tracked path")
+        pointer = None
+        if driver in (b"unspecified", b"unset"):
+            pointer = git(worktree, "show", f"{head}:{relative.as_posix()}")
+            if LFS_POINTER.fullmatch(pointer) is None:
+                continue
         if not os.path.lexists(worktree / relative):
             require(sparse and raw in skipped
                     and not any((worktree / part).is_symlink() for part in relative.parents),
                     "Missing or indirect filtered file is not a verified sparse omission")
             continue
-        require(driver == b"lfs", "Materialized non-LFS filter needs manual handling")
+        require(pointer is not None or driver == b"lfs", "Materialized non-LFS filter needs manual handling")
         source = regular_file(worktree, relative)
-        pointer = git(worktree, "show", f"{head}:{relative.as_posix()}")
+        if pointer is None:
+            pointer = git(worktree, "show", f"{head}:{relative.as_posix()}")
         match = LFS_POINTER.fullmatch(pointer)
         require(match is not None and pointer == git(worktree, "show", f"{retained}:{relative.as_posix()}"),
                 "LFS pointer is missing, unsupported, or different at the retained ref")
@@ -743,7 +772,8 @@ def verify_lfs_retention(worktree: Path, base_ref: str) -> dict:
 
     require(checked > 0, "No materialized LFS files were examined")
     require(text_git(worktree, "rev-parse", "HEAD^{commit}") == head
-            and text_git(worktree, "rev-parse", "--verify", base_ref + "^{commit}") == retained,
+            and text_git(worktree, "branch", "--show-current") == branch
+            and retained_commit() == retained,
             "Worktree head or retained ref moved")
     return {"status": "lfs_retained", "worktree": str(worktree), "head": head,
             "base_ref": base_ref, "base_commit": retained, "examined": checked,

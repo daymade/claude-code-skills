@@ -80,8 +80,11 @@ python3 "<skill-root>/scripts/git_prepare_worktree_retirement.py" verify-lfs-ret
   --worktree "<exact-linked-worktree>" --base-ref "<fully-qualified-retained-ref>"
 ```
 
-Require `status=lfs_retained` and a positive `examined` count. For each materialized
-LFS path, the retained commit must have the same pointer. A full payload must
+Use a direct durable ref in the Git common directory, such as a retained branch,
+remote-tracking branch or tag. Require `status=lfs_retained` and a positive
+`examined` count. The proof checks committed LFS pointers even if current
+attributes hide them. For each materialized LFS path, the retained commit must
+have the same pointer. A full payload must
 match the pointer's size and SHA-256 both in the worktree and in the Git common
 directory's LFS store. Unsupported filters, indirect paths, missing objects
 or differing bytes stop the proof. Preserve unique payloads before proceeding.
