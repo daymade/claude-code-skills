@@ -53,5 +53,9 @@ it does not authorize generic name classification or a bypass after refusal.
    record through the ingest owner; old pushed bytes do not prove this correction
    was delivered.
 
+The verdict covers only the exact rows and occurrences identified above. Do not
+sweep other files or the historical backlog without a separate request; finish
+this file's required publication and readback, then stop.
+
 Report remaining pending rows and audio coverage separately. Zero pending rows
 closes this file's queue; it does not prove the whole audio was listened to.

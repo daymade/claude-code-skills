@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **transcript-fixer** (`daymade-audio` v1.65.4 → v1.65.5): Bound each human verdict to its exact file, queue row and occurrences; stop after required delivery instead of sweeping unrelated historical backlog.
 - `git-safety-net` v1.28.12: Document the metadata prefilter and fresh content checks for worktree recovery.
 - `daymade-macos` v1.34.12: Distinguish controlled file-check replays from attribution of a live CPU incident.
 - `daymade-skill` v1.81.3: Add a writable-memory-map counterexample for reviewing metadata-keyed file digest reuse.
