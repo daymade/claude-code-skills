@@ -1156,6 +1156,9 @@ Gate evidence freshness, target/options and observed underlay, not `100.*` addre
 or the word `direct`. Before activation, replay real missed-transfer calls and
 healthy probes/copies, then verify a native blocked call and an allowed retry after
 preflight. Parser tests and a source registration do not establish host enforcement.
+Shared runtime fields or external helper dependencies also require the
+[registered-consumer regression](references/shared-engine-lifecycle.md#registered-capture-and-projection-consumers)
+before producer activation.
 
 Before writing or registering another hook, inspect existing engines by mechanism
 and host event. Prefer an in-process rule module that shares input parsing and

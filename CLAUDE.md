@@ -312,6 +312,9 @@ when verifying an existing baseline; consult
 [source snapshot archives](daymade-skill/skill-creator/references/source-snapshot-archives.md)
 before archiving or restoring it.
 
+Before remote bulk SSH copies, enter
+[tunnel-doctor's transfer preflight](tunnel-doctor/references/transfer-path-preflight.md).
+
 For hook creation, consolidation, Skill-entry enforcement, registration or recovery, load
 [`daymade-claude-code:claude-code-hooks`](daymade-claude-code/claude-code-hooks/SKILL.md)
 and follow its Build order and installer-owned recovery contract. Follow that

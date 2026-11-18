@@ -67,6 +67,26 @@ disabling A loses P-new/B, or if a retry requires hand-editing state to appear
 successful. Compare the affected semantic projection and independently read back
 unrelated fields that this operation does not own.
 
+## Registered capture and projection consumers
+
+Before publishing a new runtime field or external helper binding, identify the
+registered consumers that enumerate, capture, transport or project that state.
+Use each consumer's own workflow; a successful producer ownership query does not
+establish compatibility with its readers.
+
+Exercise the changed field or helper binding through the real owner APIs in an
+isolated producer. Capture that settled active snapshot through the consumer's
+read-only entry and project it into an isolated target. Preserve selected rules, disabled rollback
+views, native group positions and unrelated configuration. An installed external
+Skill must match its pinned source; a transported shim must resolve its helper
+inside the declared payload, without borrowing an unbound host copy.
+
+Check healthy bindings and missing, empty, drifted or noncanonical dependencies.
+Unknown fields must remain explicit failures. Read back target ownership against
+that target's native configuration, then verify actual adoption through the
+consumer's existing deployment owner. Do not disable the new rule or remove a
+validation check merely to make capture succeed.
+
 ## Failure direction: shared deadline and owner exceptions
 
 Build the expected result from each rule **and event**, before injecting a fault.

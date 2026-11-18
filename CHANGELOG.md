@@ -3548,6 +3548,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **skill-creator** (`daymade-skill` v1.81.0 → v1.81.1): Verify schema-2 evidence against its recorded integration base while recomputing the original review, receipt and distribution; retain current-main checks when creating a rebind and distinguish exact source review from current PR admission.
 
+- **tunnel-doctor v1.18.1**: Read transfer limits and proof expiry from the executable owner and its result instead of maintaining copied parameter values in the SOP.
+- **claude-code-hooks** (`daymade-claude-code` v5.2.6): Verify changed shared-runtime fields and helper bindings through registered capture and projection consumers before producer activation.
+
 ## [1.82.0] - 2026-07-07
 
 ### Changed
