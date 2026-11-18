@@ -434,10 +434,8 @@ def resolve_codex_entry(
     `archived` is None when the catalog cannot say (no state db, or a bare UUID
     absent from it). An archived thread never consumes its queue again, so the
     send path refuses it by default; read paths (verify/replies) must keep
-    resolving archived threads -- their evidence lives there. When a name matches
-    one live and one archived thread, the live one wins: the archived row is a
-    dead predecessor, and reporting the pair as ambiguous blocked the working
-    target behind the corpse.
+    resolving archived threads -- their evidence lives there. Look up the
+    indexed ID first. For a name lookup, prefer live over archived matches.
     """
     needle = target.removeprefix("codex:")
     state_db = versioned_db(codex_home, "state")
@@ -445,10 +443,10 @@ def resolve_codex_entry(
         return {"id": needle, "archived": None, "name": None, "cwd": None}
     try:
         with sqlite_ro(state_db) as connection:
-            rows = connection.execute(
-                "SELECT id, name, cwd, archived FROM threads WHERE id = ? OR name = ?",
-                (needle, needle),
-            ).fetchall()
+            fields = "SELECT id, name, cwd, archived FROM threads"
+            rows = connection.execute(f"{fields} WHERE id = ?", (needle,)).fetchall()
+            if not rows:
+                rows = connection.execute(f"{fields} WHERE name = ?", (needle,)).fetchall()
     except sqlite3.Error as exc:
         raise PeerError(f"cannot resolve Codex target from {state_db}: {exc}") from exc
     candidates = [row for row in rows if not row["archived"]] or list(rows)
