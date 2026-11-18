@@ -72,8 +72,9 @@ discard a payload. `verify-current` repeats the same checks before retirement.
 
 ### Materialized files in the shared LFS store
 
-If the checkpoint requires manual handling of a materialized LFS file, run
-this read-only proof against the exact worktree and retained ref:
+If the checkpoint stops on a materialized LFS file tracked by the linked
+superproject, run this read-only proof against the exact worktree and retained
+ref. For files in initialized submodules, use the manual module procedure.
 
 ```bash
 python3 "<skill-root>/scripts/git_prepare_worktree_retirement.py" verify-lfs-retention \

@@ -999,7 +999,7 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
    [helper reference](worktree-retirement-helper.md) for preparation, interrupted resume,
    rebase-withdrawal declarations and dependency-cache handling.
 
-   If `prepare` refuses a materialized LFS file, use the
+   If `prepare` refuses a materialized LFS file tracked by the linked superproject, use the
    [shared LFS proof](worktree-retirement-helper.md#materialized-files-in-the-shared-lfs-store)
    for that payload and continue with the manual preservation checks in this step.
 
