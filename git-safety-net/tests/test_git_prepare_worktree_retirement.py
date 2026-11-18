@@ -316,6 +316,38 @@ class WorktreeRetirementTests(unittest.TestCase):
         self.assertEqual((self.out / "root/ignored/.env").read_text(), "SYNTHETIC=unique-fixture-config\n")
         self.assertEqual(self.primary_state(), before)
 
+    def test_different_size_survivor_is_not_hashed(self) -> None:
+        self.plain_target()
+        counterpart = self.primary.resolve() / ".env"
+        with counterpart.open("wb") as stream:
+            stream.truncate(512 * 1024 * 1024)
+        with mock.patch.dict(os.environ, self.env, clear=True), \
+                mock.patch.object(TOOL, "digest", wraps=TOOL.digest) as reads:
+            TOOL.prepare(self.target.resolve(), self.out.resolve(), "refs/heads/main", {}, False)
+            self.assertFalse(any(call.args[0] == counterpart for call in reads.call_args_list))
+        self.assertEqual((self.out / "root/ignored/.env").read_bytes(),
+                         (self.target / ".env").read_bytes())
+
+    def test_non_directory_survivor_ancestor_still_copies_ignored_payload(self) -> None:
+        self.plain_target()
+        (self.primary / "node_modules").write_text("different primary layout")
+        self.prepare()
+        relative = "node_modules/generated.js"
+        self.assertEqual((self.out / "root/ignored" / relative).read_bytes(),
+                         (self.target / relative).read_bytes())
+        self.assertEqual(self.run_tool("verify-current").returncode, 0)
+
+    def test_survivor_filter_preserves_loop_and_permission_handling(self) -> None:
+        self.plain_target()
+        loop = self.primary / "loop"
+        loop.symlink_to("loop")
+        expected = TOOL.entry(self.target / ".env")
+        self.assertFalse(TOOL.matches_survivor(loop / "nested", expected))
+        denied = PermissionError("fixture denied")
+        with mock.patch.object(Path, "lstat", side_effect=denied), mock.patch.object(Path, "exists", side_effect=denied):
+            with self.assertRaises(PermissionError):
+                TOOL.matches_survivor(loop / "nested", expected)
+
     def test_plain_worktree_cache_declaration_does_not_hide_late_changes(self) -> None:
         self.plain_target()
         self.prepare("--rebuildable", "node_modules=fixture writes generated.js from tracked.txt")
