@@ -473,7 +473,7 @@ class PeerMessageTests(unittest.TestCase):
         home.mkdir()
         connection = sqlite3.connect(home / "state_5.sqlite")
         connection.execute(
-            "CREATE TABLE threads (id TEXT, name TEXT, title TEXT, cwd TEXT, "
+            "CREATE TABLE threads (id TEXT PRIMARY KEY, name TEXT, title TEXT, cwd TEXT, "
             "recency_at_ms INTEGER, archived INTEGER, preview TEXT)"
         )
         connection.execute(
@@ -1756,6 +1756,66 @@ class PeerMessageTests(unittest.TestCase):
                 peer.resolve_codex("codex:codex-worker", home),
                 "22222222-2222-4222-8222-222222222222",
             )
+
+    def test_codex_exact_id_uses_indexed_lookup_without_name_query(self):
+        thread_id = "22222222-2222-4222-8222-222222222222"
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            home = self.make_codex_state(root)
+            self.insert_codex_thread(
+                home, root,
+                thread_id="33333333-3333-4333-8333-333333333333",
+                name=thread_id, archived=0,
+            )
+            statements = []
+            sqlite_ro = peer.sqlite_ro
+
+            @contextlib.contextmanager
+            def traced_connection(path):
+                with sqlite_ro(path) as connection:
+                    connection.set_trace_callback(statements.append)
+                    yield connection
+
+            with mock.patch.object(peer, "sqlite_ro", traced_connection):
+                self.assertEqual(peer.resolve_codex(f"codex:{thread_id}", home), thread_id)
+            self.assertEqual(len(statements), 1)
+            with sqlite_ro(home / "state_5.sqlite") as connection:
+                plan = connection.execute("EXPLAIN QUERY PLAN " + statements[0]).fetchall()
+            self.assertTrue(any("SEARCH threads USING INDEX" in row["detail"] for row in plan))
+
+    def test_codex_archived_id_is_never_redirected_to_live_name(self):
+        archived_id = "33333333-3333-4333-8333-333333333333"
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            home = self.make_codex_state(root)
+            self.insert_codex_thread(
+                home, root, thread_id=archived_id, name="retired", archived=1
+            )
+            self.insert_codex_thread(
+                home, root, thread_id="44444444-4444-4444-8444-444444444444",
+                name=archived_id, archived=0,
+            )
+            self.assertTrue(peer.resolve_codex_entry(f"codex:{archived_id}", home)["archived"])
+            with mock.patch.object(peer.subprocess, "run") as run:
+                with self.assertRaises(peer.PeerError) as caught:
+                    peer.send_codex(f"codex:{archived_id}", "hello", "claude:a", None, "mid", home)
+            self.assertEqual(caught.exception.exit_code, peer.EXIT_TARGET)
+            self.assertIn("archived", str(caught.exception))
+            run.assert_not_called()
+
+    def test_codex_name_fallback_still_rejects_two_live_matches(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            home = self.make_codex_state(root)
+            self.insert_codex_thread(
+                home, root,
+                thread_id="33333333-3333-4333-8333-333333333333",
+                name="codex-worker", archived=0,
+            )
+            with self.assertRaises(peer.PeerError) as caught:
+                peer.resolve_codex("codex:codex-worker", home)
+            self.assertEqual(caught.exception.exit_code, peer.EXIT_TARGET)
+            self.assertIn("ambiguous", str(caught.exception))
 
     def test_archived_thread_read_paths_still_resolve(self):
         # Reverse guard for the send refusal: verify/replies must keep working

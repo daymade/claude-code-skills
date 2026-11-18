@@ -16,7 +16,7 @@ description: Transport-neutral addressing, Claude UDS and Codex live/queued deli
 | `claude:<pid>` | Claude session 注册表中的进程 ID |
 | `claude:<exact-name>` | 唯一活 session 的精确名称；重名时报歧义，不猜 |
 | `claude:<session-id>` | Claude session UUID |
-| `codex:<thread-id>` | Codex thread UUID，最稳定 |
+| `codex:<thread-id>` | 优先精确匹配 Codex thread UUID；命中后直接使用该会话，含归档状态 |
 | `codex:<exact-name>` | Codex `threads.name` 的精确值；标题不是名字，不用标题猜目标 |
 
 旧命令里未带前缀的 target 继续解释为 Claude，避免恢复版破坏既有调用。
