@@ -1,11 +1,11 @@
 ---
 name: skill-governance
 description: >-
-  Governs the Claude Code/Codex Skill surface: reconciles source/install/catalog-visibility drift
-  without losing cold capability. Use when users ask how many Skills load, why the catalog is
-  truncated, want routers visible while other bundles stay cold, or need duplicate/superseded-Skill
-  or old-cache cleanup. Not for building a marketplace manifest (use marketplace-dev) or repo audits
-  (use marketplace-health-check).
+  Governs Claude Code/Codex/Antigravity Skill surfaces: reconciles source/install/catalog-visibility
+  drift and adaptive hot/cold evolution without losing cold capability. Use when users ask how many
+  Skills load, why catalogs truncate, want routers hot while bundles stay cold, or need
+  duplicate/old-cache cleanup. Not for marketplace manifests (marketplace-dev) or repo audits
+  (marketplace-health-check).
 ---
 
 # Skill Governance
@@ -47,7 +47,8 @@ Use current runtime truth, not remembered conventions:
 - owned source repos and their manifests for editable Skill behavior;
 - `claude plugin ... --json` for current Claude marketplace/install state;
 - the explicit source-sync activation manifest for managed Daymade links;
-- `~/.agents/skills` as Codex's current user Skill root;
+- `~/.agents/skills` as the shared user Skill root (Codex + Antigravity);
+- `~/.config/skill-governance/hot-set.json` as the adaptive hot/cold SSOT projected to Antigravity (`~/.gemini/config/skills.json`), Codex (`~/.codex/config.toml`), and Claude Code (`~/.claude/settings.json`);
 - exact-path `~/.codex/config.toml` policy for Codex discovery disables;
 - `codex debug prompt-input` for the actual fresh Codex catalog;
 - the installed vendor bundle for third-party cold resources.
@@ -64,6 +65,7 @@ completely before using that workflow.
 
 | Request | Read and use |
 |---|---|
+| Adaptive hot/cold Skill cache evolution & 3-host projection (Claude/Codex/Antigravity) | [`references/adaptive-hot-cold-evolution.md`](references/adaptive-hot-cold-evolution.md) + `scripts/evolve_skill_surface.py` |
 | Explicit delivery contract; verify source owner, registration and installed route | §16, then requested fresh-host gate in §14 |
 | What Codex really loads; count, truncation, duplicate identity, missing router | §3–4, then §11 |
 | Reconcile owned source links or `~/.agents/skills` activation | §2–5, then §11 |
