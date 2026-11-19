@@ -55,7 +55,9 @@ python3 <skill-governance>/scripts/evolve_skill_surface.py install-schedule --in
 - Router children (`router_children`) and retired Skills (`blocked_cold`) are
   never promoted into `dynamic_hot`.
 - Claude Code's explicit `"off"` overrides are never overwritten; `project_claude`
-  coordinates with `ai.daymade.claude-skill-source-sync` via `~/.claude/.daymade-skill-sync.lock`.
+  coordinates with `ai.daymade.claude-skill-source-sync` and `claude-plugins-sync.py`
+  using the exact shared lock protocol (`0o600` `~/.claude/.daymade-skill-sync.lock.guard`
+  `fcntl.flock` + `0o700` `~/.claude/.daymade-skill-sync.lock/` directory/PID marker).
 - Codex's nested paths (e.g. `ima-skill/knowledge-base/SKILL.md`), `.system/*`,
   and `gstack/*` entries are preserved; cold nested & `~/.codex/skills` duplicates
   are also disabled and validated with Python 3.11+ `tomllib`.

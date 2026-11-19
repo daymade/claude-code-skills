@@ -24,9 +24,11 @@ import plistlib
 import re
 import shutil
 import sqlite3
+import stat
 import subprocess
 import sys
 import tempfile
+import time
 
 try:
     import tomllib  # Python 3.11+
@@ -73,7 +75,6 @@ DEFAULT_EXPLICIT_ROUTERS = [
     "gstack-router",
     "lark-cli-router",
     "local-conversation-history",
-    "soochow-context-router",
     "uipath-router",
     "unifuncs-router",
     "wechat-automation",
@@ -139,6 +140,116 @@ def _unwrap_json_str(val) -> str:
         except ValueError:
             pass
     return s
+
+
+CLAUDE_SYNC_LOCK_TIMEOUT_SECONDS = 120
+
+
+def _claude_sync_process_alive(pid: int) -> bool | None:
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except (OSError, OverflowError):
+        return None
+
+
+def _claude_sync_lock_owner(lock_dir: Path):
+    """Return a stable directory/PID binding matching sync-local-skill-sources.py."""
+    try:
+        before = lock_dir.lstat()
+        marker = lock_dir / "pid"
+        proof = marker.lstat()
+        if (
+            not stat.S_ISDIR(before.st_mode)
+            or before.st_uid != os.getuid()
+            or {p.name for p in lock_dir.iterdir()} != {"pid"}
+            or not stat.S_ISREG(proof.st_mode)
+            or proof.st_nlink != 1
+            or proof.st_uid != os.getuid()
+        ):
+            return None
+        text = marker.read_text(encoding="utf-8").strip()
+        after = lock_dir.lstat()
+        if (
+            (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino)
+            or not text.isascii()
+            or not text.isdecimal()
+            or int(text) <= 0
+        ):
+            return None
+        return (before.st_dev, before.st_ino), int(text)
+    except (OSError, UnicodeError, ValueError):
+        return None
+
+
+@contextmanager
+def claude_sync_lock(lock_dir: Path, timeout_seconds: float = CLAUDE_SYNC_LOCK_TIMEOUT_SECONDS):
+    """Compatible lock protocol with sync-local-skill-sources.py / claude-plugins-sync.py.
+
+    Uses a private 0o600 regular guard file (<lock_dir>.guard) with kernel flock,
+    then creates the 0o700 directory marker (<lock_dir>/pid) and cleans it on exit.
+    Never creates a regular file at <lock_dir>.
+    """
+    lock_dir.parent.mkdir(parents=True, exist_ok=True)
+    guard = lock_dir.parent / (lock_dir.name + ".guard")
+    start = time.monotonic()
+    fd = os.open(guard, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    acquired = None
+    try:
+        proof = os.fstat(fd)
+        if (
+            not stat.S_ISREG(proof.st_mode)
+            or proof.st_nlink != 1
+            or proof.st_uid != os.getuid()
+            or proof.st_mode & 0o077
+        ):
+            raise RuntimeError(f"sync guard must be a private regular file: {guard}")
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() - start >= timeout_seconds:
+                    raise TimeoutError(f"timed out waiting for sync lock: {lock_dir}")
+                time.sleep(0.2)
+        visible = guard.lstat()
+        if (visible.st_dev, visible.st_ino) != (proof.st_dev, proof.st_ino):
+            raise RuntimeError(f"sync guard changed while waiting: {guard}")
+        while True:
+            try:
+                lock_dir.mkdir(mode=0o700)
+                (lock_dir / "pid").write_text(str(os.getpid()), encoding="utf-8")
+                acquired = _claude_sync_lock_owner(lock_dir)
+                if acquired is None:
+                    raise RuntimeError(f"sync lock identity unavailable: {lock_dir}")
+                break
+            except FileExistsError:
+                owner = _claude_sync_lock_owner(lock_dir)
+                if owner is not None and _claude_sync_process_alive(owner[1]) is False:
+                    if _claude_sync_lock_owner(lock_dir) == owner:
+                        shutil.rmtree(lock_dir)
+                        continue
+                if time.monotonic() - start >= timeout_seconds:
+                    raise TimeoutError(f"timed out waiting for sync lock: {lock_dir}")
+                time.sleep(0.2)
+        yield
+    finally:
+        try:
+            if acquired is not None:
+                if (
+                    _claude_sync_lock_owner(lock_dir) != acquired
+                    or {p.name for p in lock_dir.iterdir()} != {"pid"}
+                ):
+                    raise RuntimeError(f"sync lock changed; retained: {lock_dir}")
+                shutil.rmtree(lock_dir)
+        finally:
+            os.close(fd)
 
 
 @contextmanager
@@ -251,8 +362,11 @@ def extract_codex_disabled_agents_skills(codex_config: Path) -> set[str]:
     for m in re.finditer(r'path\s*=\s*"([^"]+)"\s*\nenabled\s*=\s*false', txt):
         p = m.group(1)
         if "/.agents/skills/" in p:
-            rel = p.split("/.agents/skills/", 1)[1]
-            disabled.add(rel.split("/", 1)[0])
+            rel = p.split("/.agents/skills/", 1)[1].strip("/")
+            parts = rel.split("/")
+            # Only classify single-level <skill>/SKILL.md entries (ignore nested a/b/SKILL.md)
+            if len(parts) == 2 and parts[1] == "SKILL.md":
+                disabled.add(parts[0])
     return disabled
 
 
@@ -819,7 +933,6 @@ def backup_files(paths: list[Path], backup_root: Path) -> Path:
                 "existed": False,
             })
     atomic_write_json(bdir / "manifest.json", manifest)
-    prune_old_backups(backup_root, MAX_BACKUPS_RETAINED)
     return bdir
 
 
@@ -836,33 +949,49 @@ def prune_old_backups(backup_root: Path, keep: int = MAX_BACKUPS_RETAINED) -> No
         shutil.rmtree(old, ignore_errors=True)
 
 
-def rollback_backup(backup_dir: Path) -> dict:
-    """Binary-safe, permission-preserving atomic rollback (P2-4 fix)."""
+def rollback_backup(
+    backup_dir: Path,
+    claude_settings: Path | None = None,
+    claude_sync_lock_path: Path | None = None,
+) -> dict:
+    """Binary-safe, permission-preserving atomic rollback (coordinates Claude sync lock when restoring settings.json)."""
     manifest = load_json_safe(backup_dir / "manifest.json")
     if not manifest or not isinstance(manifest.get("files"), list):
         raise ValueError(f"Invalid backup manifest in {backup_dir}")
+    resolved_claude = claude_settings.resolve() if claude_settings is not None else None
     restored = []
     for item in manifest["files"]:
         orig = Path(item["original"])
         bpath = item.get("backup")
-        if bpath:
-            src = Path(bpath)
-            if not src.is_file():
-                raise FileNotFoundError(f"Missing backup file: {src}")
-            target = orig.resolve() if orig.is_symlink() else orig
-            target.parent.mkdir(parents=True, exist_ok=True)
-            fd, tmp_name = tempfile.mkstemp(prefix=target.name + ".rb.", dir=target.parent)
-            os.close(fd)
-            try:
-                shutil.copy2(src, tmp_name)
-                os.replace(tmp_name, target)
-            finally:
-                if os.path.exists(tmp_name):
-                    os.unlink(tmp_name)
-            restored.append({"path": str(orig), "action": "restored"})
-        elif item.get("existed") is False and os.path.lexists(orig):
-            orig.unlink()
-            restored.append({"path": str(orig), "action": "removed_newly_created"})
+        needs_claude_lock = (
+            claude_sync_lock_path is not None
+            and resolved_claude is not None
+            and (orig == claude_settings or orig.resolve() == resolved_claude)
+        )
+        lock_ctx = (
+            claude_sync_lock(claude_sync_lock_path)
+            if needs_claude_lock and claude_sync_lock_path is not None
+            else contextmanager(lambda: (yield))()
+        )
+        with lock_ctx:
+            if bpath:
+                src = Path(bpath)
+                if not src.is_file():
+                    raise FileNotFoundError(f"Missing backup file: {src}")
+                target = orig.resolve() if orig.is_symlink() else orig
+                target.parent.mkdir(parents=True, exist_ok=True)
+                fd, tmp_name = tempfile.mkstemp(prefix=target.name + ".rb.", dir=target.parent)
+                os.close(fd)
+                try:
+                    shutil.copy2(src, tmp_name)
+                    os.replace(tmp_name, target)
+                finally:
+                    if os.path.exists(tmp_name):
+                        os.unlink(tmp_name)
+                restored.append({"path": str(orig), "action": "restored"})
+            elif item.get("existed") is False and os.path.lexists(orig):
+                orig.unlink()
+                restored.append({"path": str(orig), "action": "removed_newly_created"})
     return {"status": "rolled_back", "backup_dir": str(backup_dir), "files": restored}
 
 
@@ -1021,19 +1150,25 @@ def _detect_claude_plugin_bypassed_cold(
         install_path = Path(str(recs[-1].get("installPath", "")))
         if not install_path.is_dir():
             continue
-        # Check direct SKILL.md or 1-level child SKILL.md inside enabled plugin
+        plugin_base = pid.split("@")[0]
+        # Check direct SKILL.md (single-skill plugin at .../<plugin>/<version>/SKILL.md),
+        # 1-level child <skill>/SKILL.md, or nested skills/<skill>/SKILL.md
         candidates = []
         if (install_path / "SKILL.md").is_file():
-            candidates.append(install_path.name if install_path.name != pid.split("@")[0] else pid.split("@")[0])
+            candidates.append(plugin_base)
         try:
             for sub in sorted(os.listdir(install_path)):
-                if not sub.startswith(".") and (install_path / sub / "SKILL.md").is_file():
+                if sub.startswith("."):
+                    continue
+                sub_path = install_path / sub
+                if (sub_path / "SKILL.md").is_file():
                     candidates.append(sub)
+                elif sub == "skills" and sub_path.is_dir():
+                    for nested in sorted(os.listdir(sub_path)):
+                        if not nested.startswith(".") and (sub_path / nested / "SKILL.md").is_file():
+                            candidates.append(nested)
         except OSError:
             pass
-        plugin_base = pid.split("@")[0]
-        if not candidates and (install_path / "SKILL.md").is_file():
-            candidates.append(plugin_base)
         for sk in sorted(set(candidates)):
             if sk not in hot:
                 bypassed.append(f"{plugin_base}:{sk}")
@@ -1050,13 +1185,14 @@ def project_claude(
 ) -> dict:
     """Project hot/cold overrides into Claude settings.json cleanly.
 
-    Round-2 fixes:
-      - P0-4: Shares lock with ai.daymade.claude-skill-source-sync when present.
-      - P1-1: Also governs ~/.claude/skills-only personal skills by frontmatter name (e.g. QCC, aihot).
-      - P0-1: Explicitly reports plugin_bypassed_cold instead of pretending skillOverrides hid plugins.
-      - P1-8: Accurately counts hot_off & lists pinned_but_off (e.g. gstack-router).
+    Safety invariants:
+      - Coordinates with ai.daymade.claude-skill-source-sync / claude-plugins-sync.py via
+        claude_sync_lock() (0o600 .guard flock + 0o700 directory/PID marker).
+      - Also governs ~/.claude/skills-only personal skills by frontmatter name.
+      - Explicitly reports plugin_bypassed_cold instead of pretending skillOverrides hid plugins.
+      - Accurately counts hot_off & lists hot_but_off.
     """
-    lock_ctx = exclusive_lock(sync_lock_path) if sync_lock_path is not None else contextmanager(lambda: (yield))()
+    lock_ctx = claude_sync_lock(sync_lock_path) if sync_lock_path is not None else contextmanager(lambda: (yield))()
     with lock_ctx:
         data = load_json_safe(claude_settings)
         if data is None:
@@ -1219,6 +1355,8 @@ def resolve_python311_plus() -> str:
     candidates.extend([
         str(Path.home() / ".local" / "bin" / "python3"),
         "/opt/homebrew/bin/python3",
+        "/usr/local/bin/python3",
+        shutil.which("python3") or "",
         sys.executable,
         "/usr/bin/python3",
     ])
@@ -1572,6 +1710,7 @@ def main(argv: list[str] | None = None) -> int:
                 })
                 hot_doc["history"] = hist[-50:]
                 atomic_write_json(hot_set_path, hot_doc)
+                prune_old_backups(backups_root, MAX_BACKUPS_RETAINED)
                 status = "applied"
             else:
                 shutil.rmtree(bdir, ignore_errors=True)
@@ -1582,8 +1721,13 @@ def main(argv: list[str] | None = None) -> int:
             if args.report_out:
                 atomic_write_text(args.report_out, md)
         except Exception as exc:
-            rollback_backup(bdir)
-            print(json.dumps({"status": "error_rolled_back", "error": str(exc), "backup_dir": str(bdir)}), file=sys.stderr)
+            if bdir is not None and bdir.is_dir():
+                rollback_backup(
+                    bdir,
+                    claude_settings=args.claude_settings if "claude" in selected_hosts else None,
+                    claude_sync_lock_path=DEFAULT_CLAUDE_SYNC_LOCK if "claude" in selected_hosts else None,
+                )
+            print(json.dumps({"status": "error_rolled_back", "error": str(exc), "backup_dir": str(bdir) if bdir else None}), file=sys.stderr)
             return 1
 
     result = {

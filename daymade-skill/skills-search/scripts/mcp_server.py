@@ -301,6 +301,7 @@ def main(argv: list[str] | None = None) -> int:
             _write_message(_error_response(None, -32700, f"Parse error: {exc}"))
             continue
         if not isinstance(req, dict):
+            _write_message(_error_response(None, -32600, "Invalid Request: expected JSON object"))
             continue
         resp = handle_request(req, ctx)
         if resp is not None:

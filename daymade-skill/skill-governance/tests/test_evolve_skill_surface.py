@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import json
+import os
 from pathlib import Path
 import sqlite3
+import stat
 import sys
 import tempfile
 import unittest
@@ -219,6 +221,174 @@ class EvolveSkillSurfaceTests(unittest.TestCase):
         resolved = ev.resolve_default_ledger_script(SCRIPTS_DIR / "evolve_skill_surface.py")
         self.assertTrue(resolved.is_file())
         self.assertEqual(resolved.name, "skill_usage_ledger.py")
+
+    def test_project_claude_sync_lock_protocol_and_plugin_detection(self) -> None:
+        installed, _ = ev.discover_installed_skills(self.installed)
+        claude_skills = self.base / ".claude" / "skills"
+        make_skill(claude_skills, "personal-only-cold", name="PersonalCold")
+        sync_lock_dir = self.base / ".claude" / ".daymade-skill-sync.lock"
+        guard_file = self.base / ".claude" / ".daymade-skill-sync.lock.guard"
+
+        # Pre-seed a stale dead-PID lock directory to verify compatible stale recovery
+        sync_lock_dir.mkdir(parents=True, mode=0o700)
+        (sync_lock_dir / "pid").write_text("99999999", encoding="utf-8")
+
+        # Build mock installed_plugins.json covering single-skill hot, single-skill cold,
+        # multi-skill direct child, and nested skills/<name>/SKILL.md layouts
+        cache = self.base / ".claude" / "plugins" / "cache"
+        hot_single = cache / "mkt" / "hot-active" / "1.0.4"
+        hot_single.mkdir(parents=True)
+        (hot_single / "SKILL.md").write_text("---\nname: hot-active\n---\n", encoding="utf-8")
+
+        cold_single = cache / "mkt" / "cold-standalone" / "2.3.1"
+        cold_single.mkdir(parents=True)
+        (cold_single / "SKILL.md").write_text("---\nname: cold-standalone\n---\n", encoding="utf-8")
+
+        suite_dir = cache / "mkt" / "sample-suite" / "3.0.0"
+        make_skill(suite_dir, "suite-cold-child")
+        make_skill(suite_dir / "skills", "suite-nested-cold")
+        make_skill(suite_dir, "skills-search")  # hot child inside suite
+
+        installed_plugins = self.base / ".claude" / "plugins" / "installed_plugins.json"
+        installed_plugins.parent.mkdir(parents=True, exist_ok=True)
+        installed_plugins.write_text(json.dumps({
+            "plugins": {
+                "hot-active@mkt": [{"installPath": str(hot_single)}],
+                "cold-standalone@mkt": [{"installPath": str(cold_single)}],
+                "sample-suite@mkt": [{"installPath": str(suite_dir)}],
+            }
+        }), encoding="utf-8")
+
+        settings_doc = json.loads(self.claude_settings.read_text(encoding="utf-8"))
+        settings_doc["enabledPlugins"] = {
+            "hot-active@mkt": True,
+            "cold-standalone@mkt": True,
+            "sample-suite@mkt": True,
+        }
+        self.claude_settings.write_text(json.dumps(settings_doc, indent=2), encoding="utf-8")
+
+        hot_set = ["skills-search", "docs-router", "hot-active"]
+        res = ev.project_claude(
+            self.claude_settings,
+            installed,
+            hot_set,
+            claude_skills_root=claude_skills,
+            installed_plugins_path=installed_plugins,
+            sync_lock_path=sync_lock_dir,
+        )
+        self.assertTrue(res["changed"])
+        # Lock protocol compatibility: lock_dir removed on exit, private 0o600 .guard retained
+        self.assertFalse(sync_lock_dir.exists())
+        self.assertTrue(guard_file.is_file())
+        self.assertEqual(stat.S_IMODE(guard_file.stat().st_mode) & 0o077, 0)
+
+        out = json.loads(self.claude_settings.read_text(encoding="utf-8"))
+        ov = out["skillOverrides"]
+        self.assertEqual(ov["explicitly-off-skill"], "off")
+        self.assertNotIn("hot-active", ov)
+        self.assertEqual(ov["cold-quiet"], "user-invocable-only")
+        # ~/.claude/skills-only personal skill governed by both entry and frontmatter name
+        self.assertEqual(ov["personal-only-cold"], "user-invocable-only")
+        self.assertEqual(ov["PersonalCold"], "user-invocable-only")
+
+        # Single-skill semver cache dir must NOT leak version string "1.0.4" or "2.3.1"
+        bypassed = res["plugin_bypassed_cold_sample"]
+        self.assertNotIn("hot-active:1.0.4", bypassed)
+        self.assertNotIn("cold-standalone:2.3.1", bypassed)
+        self.assertIn("cold-standalone:cold-standalone", bypassed)
+        self.assertIn("sample-suite:suite-cold-child", bypassed)
+        self.assertIn("sample-suite:suite-nested-cold", bypassed)
+        self.assertNotIn("sample-suite:skills-search", bypassed)
+        self.assertEqual(res["plugin_bypassed_cold_count"], 3)
+
+        # Second projection is true no-op
+        res2 = ev.project_claude(
+            self.claude_settings,
+            installed,
+            hot_set,
+            claude_skills_root=claude_skills,
+            installed_plugins_path=installed_plugins,
+            sync_lock_path=sync_lock_dir,
+        )
+        self.assertFalse(res2["changed"])
+        self.assertFalse(sync_lock_dir.exists())
+
+    def test_backup_rollback_noop_retention_and_telemetry_prune(self) -> None:
+        backups_root = self.base / "backups"
+        # Pre-seed MAX_BACKUPS_RETAINED real backups
+        for idx in range(ev.MAX_BACKUPS_RETAINED):
+            d = backups_root / f"20260101T0000{idx:02d}000000Z"
+            d.mkdir(parents=True)
+            (d / "manifest.json").write_text('{"files":[]}', encoding="utf-8")
+
+        sync_lock_dir = self.base / ".claude" / ".daymade-skill-sync.lock"
+        orig_settings = self.claude_settings.read_text(encoding="utf-8")
+        new_file = self.base / "newly_created.json"
+
+        # backup_files must NOT prune older backups before apply decides applied vs noop
+        bdir = ev.backup_files([self.claude_settings, new_file], backups_root)
+        existing_dirs = [d for d in backups_root.iterdir() if d.is_dir()]
+        self.assertEqual(len(existing_dirs), ev.MAX_BACKUPS_RETAINED + 1)
+
+        # Mutate files, then roll back atomically while coordinating claude_sync_lock
+        self.claude_settings.write_text('{"corrupted": true}\n', encoding="utf-8")
+        new_file.write_text('{"temp": 1}\n', encoding="utf-8")
+        rb = ev.rollback_backup(bdir, claude_settings=self.claude_settings, claude_sync_lock_path=sync_lock_dir)
+        self.assertEqual(rb["status"], "rolled_back")
+        self.assertEqual(self.claude_settings.read_text(encoding="utf-8"), orig_settings)
+        self.assertFalse(new_file.exists())
+        self.assertFalse(sync_lock_dir.exists())
+
+        # prune_old_backups enforces retention bound when explicitly invoked
+        ev.prune_old_backups(backups_root, ev.MAX_BACKUPS_RETAINED)
+        self.assertEqual(len([d for d in backups_root.iterdir() if d.is_dir()]), ev.MAX_BACKUPS_RETAINED)
+
+        # prune_telemetry_file skips small files (< threshold) and prunes stale rows above threshold
+        telem = self.data / "telemetry.jsonl"
+        self.assertEqual(ev.prune_telemetry_file(telem, self.now, retain_days=180), 0)
+        old_iso = (self.now - timedelta(days=365)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        recent_iso = (self.now - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        telem.write_text(
+            json.dumps({"ts": old_iso, "event": "load", "skill": "old"}) + "\n"
+            + json.dumps({"ts": recent_iso, "event": "load", "skill": "new"}) + "\n",
+            encoding="utf-8",
+        )
+        orig_min = ev.PRUNE_TELEMETRY_MIN_BYTES
+        try:
+            ev.PRUNE_TELEMETRY_MIN_BYTES = 1
+            dropped = ev.prune_telemetry_file(telem, self.now, retain_days=180)
+        finally:
+            ev.PRUNE_TELEMETRY_MIN_BYTES = orig_min
+        self.assertEqual(dropped, 1)
+        remaining = [json.loads(line)["skill"] for line in telem.read_text(encoding="utf-8").splitlines() if line.strip()]
+        self.assertEqual(remaining, ["new"])
+
+    def test_aliases_nested_codex_extract_and_dynamic_router_pinning(self) -> None:
+        # Nested disable in config.toml must NOT classify parent as router_child
+        self.codex_cfg.write_text(
+            self.codex_cfg.read_text(encoding="utf-8")
+            + f'\n[[skills.config]]\npath = "{self.installed}/ima-skill/notes/SKILL.md"\nenabled = false\n',
+            encoding="utf-8",
+        )
+        disabled = ev.extract_codex_disabled_agents_skills(self.codex_cfg)
+        self.assertIn("doc-to-markdown", disabled)
+        self.assertNotIn("ima-skill", disabled)
+
+        # Dynamic *-router pinning works without private router names in defaults
+        make_skill(self.installed, "custom-domain-router")
+        installed, name_to_entry = ev.discover_installed_skills(self.installed)
+        ledger = ev.collect_ledger_signals(self.ledger, name_to_entry, self.now)
+        scored = ev.merge_and_score(installed, ledger, {}, {})
+        init_doc = ev.build_initial_hot_set(installed, scored, disabled, max_hot=5)
+        self.assertIn("custom-domain-router", init_doc["pinned"])
+        self.assertIn("doc-to-markdown", init_doc["router_children"])
+        self.assertNotIn("ima-skill", init_doc["router_children"])
+
+        # apply_learned_aliases is idempotent
+        r1 = ev.apply_learned_aliases(self.gov, [{"skill": "cold-rising", "term": "豆瓣导出", "count": 2}])
+        self.assertEqual(r1["added"], 1)
+        r2 = ev.apply_learned_aliases(self.gov, [{"skill": "cold-rising", "term": "豆瓣导出", "count": 2}])
+        self.assertEqual(r2["added"], 0)
 
 
 if __name__ == "__main__":

@@ -151,8 +151,8 @@ For Claude Desktop users who want native tool integration (no Bash needed), the 
 }
 ```
 
-The MCP server wraps the external `ccpm` CLI. It does not search this Skill's
-configured local repositories; local discovery remains with the bundled helper.
+The `skills-search-mcp` server wraps the external `ccpm` CLI. It does not search this Skill's
+configured local repositories; local discovery remains with `local-skills-search` / the bundled helper.
 
 ## Troubleshooting
 

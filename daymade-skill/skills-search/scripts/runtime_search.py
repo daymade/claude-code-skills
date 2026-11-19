@@ -46,7 +46,7 @@ CATEGORY_RULES: list[tuple[str, str, tuple[str, ...]]] = [
         "wechat-feishu-social",
         "微信、公众号、企微、飞书、小红书、抖音、B站、豆瓣、Twitter/X、收藏与消息同步",
         ("wechat", "wecom", "feishu", "lark", "douyin", "bilibili", "douban", "twitter", "xiaohongshu",
-         "fav", "yage", "lenny", "weread", "newsletter", "微信", "公众号", "飞书", "企微", "抖音", "豆瓣", "收藏"),
+         "fav", "lenny", "weread", "newsletter", "微信", "公众号", "飞书", "企微", "抖音", "豆瓣", "收藏"),
     ),
     (
         "media-video-audio",
@@ -408,6 +408,7 @@ def _compute_cache_sig(roots: list[tuple[str, Path]], sources_config: Path) -> s
         except OSError:
             h.update(f"{origin}:{r}:err|".encode())
             continue
+        h.update(f"{origin}:{r}|".encode())
         for entry in entries:
             if entry.startswith("."):
                 continue
@@ -688,7 +689,10 @@ def search_skills(
             elif len(tok) >= 2 and (tok in norm_name or tok in norm_entry):
                 score += 6
                 hit = True
-            if alias_blob and tok in alias_blob:
+            if alias_blob and (
+                (len(tok) >= 2 and tok in alias_blob)
+                or (len(tok) == 1 and re.search(rf"(?<![a-z0-9]){re.escape(tok)}(?![a-z0-9])", alias_blob))
+            ):
                 score += 7
                 hit = True
             if len(tok) >= 2 and tok in norm_desc:

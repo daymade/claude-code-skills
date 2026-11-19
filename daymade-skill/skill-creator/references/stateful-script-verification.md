@@ -315,8 +315,11 @@ the change done:
    starve real events.
 3. **Cross-daemon locking & transactional host projection**: use kernel `fcntl.flock` on a shared
    sidecar lock file across both readers/appenders and rewriters/pruners (never shell `mkdir` PID
-   locks with TOCTOU races); coordinate on the same lock file as existing host daemons touching the
-   same config (e.g. `~/.claude/.daymade-skill-sync.lock`); merge host configs non-destructively
+   locks with TOCTOU races); when coordinating with an existing host daemon touching the same
+   config, match its exact lock protocol (for example, `sync-local-skill-sources.py` uses a `0o600`
+   `~/.claude/.daymade-skill-sync.lock.guard` `flock` paired with a `0o700` directory/PID marker at
+   `~/.claude/.daymade-skill-sync.lock` — opening the directory path as a flat file breaks sibling
+   daemons); merge host configs non-destructively
    (preserving sibling keys and nested rules), validate syntax (JSON/TOML) before replace, auto-roll
    back atomically on mid-flight error, and keep unchanged `apply` runs a true no-op with bounded
    backup retention.
