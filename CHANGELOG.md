@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-watchdog** (`daymade-macos` v1.34.13 → v1.34.14): Document building explicit minimal `PATH` entries in LaunchAgent plists instead of snapshotting installer shell `PATH`, and add the 0-Token state-transition health monitor pattern with readback-gated alerting.
+- **lark-cli-router** (`lark-cli-router` v1.0.4 → v1.0.5): Document verifying response wrapper field names (`im +messages-mget` returns `data.messages`, not `data.items`) and inspecting Bitable `+field-list` / allowing brief eventual consistency before unified `+record-list` readback.
 - `terraform-skill` v1.5.17: Verify application relocation through the destination host, shared gateway and authenticated user journey. Reuse a verified running image for placement-only moves.
 - `git-safety-net` v1.29.1: Route materialized Git LFS files through manual preservation and repeat the payload proof before worktree removal.
 - `peer-message` v1.27.5: Use the indexed Codex thread ID lookup before display-name matching and keep exact addresses bound to archived threads for reads.
