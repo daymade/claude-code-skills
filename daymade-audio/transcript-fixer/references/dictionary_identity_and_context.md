@@ -125,6 +125,18 @@ ordinary wording on the [written-wording route](review_queue_dashboard.md#writte
 when supported, or pending when not. Do not turn a one-off adjudication into a bare
 dictionary replacement or use `--apply-all` to silence a disagreement.
 
+### Dictionary direction vs review-queue direction conflict
+
+The same word pair can sit active in the dictionary while pending review rows ask for the
+opposite direction (real case: `富锦→复锦` active since 2026-07-30, while 2026-11-11 rows
+pend `复锦→富锦`). The queue direction usually reflects later evidence the dictionary never
+absorbed — the rule was never retired when the verdict reversed. When `--lookup` shows this
+conflict, do not let Stage 1's automatic application silently settle the question: keep the
+occurrence in its current written form and pending, and adjudicate the dictionary rule
+itself (retire or flip with fresh evidence) before the next sweep — the mechanical state
+disagrees with itself, and the next sweep would re-apply the stale direction to every new
+transcript.
+
 ### Stage 1 variant matching
 
 `--apply-domain` trusts rules from the explicitly selected domains for ordinary
