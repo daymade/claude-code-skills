@@ -303,9 +303,11 @@ Read these limits into every conclusion:
   session that edits or audits X's SKILL.md with plain shell reads looks the
   same. Several SKILL.md files read by one command are recorded as `bulk_read`
   and excluded.
-- Not covered: Skills invoked inside Claude subagents, Kimi CLI, and Codex
-  Skills followed from memory without a read. Zero recorded use means "not seen
-  in the covered stores", not "never used".
+- Not covered: Skills invoked inside Claude subagents, Kimi CLI, Antigravity
+  (collected separately by `skill-governance/scripts/evolve_skill_surface.py`
+  from installed-skill reads and runtime telemetry), and Codex Skills followed
+  from memory without a read. Zero recorded use means "not seen in the covered
+  stores", not "never used".
 
 ## Read-result contract
 
