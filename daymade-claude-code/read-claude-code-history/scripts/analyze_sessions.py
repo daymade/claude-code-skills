@@ -1880,7 +1880,7 @@ class SessionAnalyzer:
         }
 
         try:
-            with open(session_file, "r") as f:
+            with open(session_file, "r", encoding="utf-8") as f:
                 for line in f:
                     stats["total_lines"] += 1
 
