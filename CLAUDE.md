@@ -535,6 +535,8 @@ When a local job emitted a notification but its banner or card is not visible, f
 [local notification diagnosis](daymade-macos/macos-watchdog/references/alert-discipline.md#local-notifications-are-not-visible).
 For named macOS load/runaway alerts, follow
 [macos-load-doctor's intervention and diagnosis-completion contract](daymade-macos/macos-load-doctor/SKILL.md#5-act-within-the-boundary).
+For process inventories or Activity Monitor questions, follow its
+[business-task reporting procedure](daymade-macos/macos-load-doctor/references/incident-playbook.md#writing-the-report).
 For idle Node/Vite previews, enter its
 [watcher and exact-instance procedure](daymade-macos/macos-load-doctor/references/dev-server-watchers.md).
 For memory pressure or suspected child-process leaks, enter that Skill's
