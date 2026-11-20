@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-watchdog** (`daymade-macos` v1.34.16 → v1.34.17): Document checking `launchctl print-disabled gui/$(id -u)` alongside loaded state before batch-reloading or upgrading LaunchAgents so intentionally disabled legacy/superseded jobs are preserved instead of re-enabled.
 - **claude-code-hooks** (`daymade-claude-code` v5.2.18 → v5.2.19): Document in Pitfall #6 when to materialize standalone hook copies from immutable `origin/main` (with SHA-256 parity and `--selftest`) instead of symlinking into a shared multi-branch source checkout that switches branches.
 - **github-ops** (`github-ops` v1.17.4 → v1.17.5): Document separate GitHub REST (`core`) vs GraphQL rate-limit buckets in `api_reference.md` and cross-link the proactive GraphQL check-run query and no-`--delete-branch` merge path in `pr_operations.md`.
 - **github-ops** (`github-ops` v1.17.3 → v1.17.4): Document isolating authorized `--admin` merge commands from compound local cleanup scripts, handling asynchronous `mergeStateStatus` (`UNKNOWN` → `BLOCKED`) under `REVIEW_REQUIRED` rulesets, and using Git protocol readback and exact-tip deletion when `--delete-branch` hits a REST `403` rate limit after merge.
