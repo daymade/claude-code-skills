@@ -1048,6 +1048,115 @@ class CalibrateQuotaTests(unittest.TestCase):
         # 6. CLI rejects non-finite --plan-usd
         self.assertEqual(cq.main(["--provider", "custom", "--used-pct", "10", "--spend-usd", "5", "--plan-usd", "nan"]), 2)
 
+    def test_v121_html_edge_cases_nonfinite_dual_lockout_and_uncalibrated(self) -> None:
+        import render_report_html as rrh  # noqa: E402
+
+        # 1. Empty buckets + zero-spend forensics must not emit dead reservoir buttons or empty Section 2
+        empty_html = rrh.render_html_report(
+            {
+                "provider": "custom",
+                "observed_at_local": "2026-11-21T07:00:00+08:00",
+                "buckets": [],
+                "window_forensics": {"window_total_usd": 0.0},
+                "top_sessions": [],
+                "business_summary": {"headline": "empty", "subline": "none", "live_routing": []},
+            }
+        )
+        self.assertIn("当前快照未返回可用配额池数据", empty_html)
+        self.assertNotIn("id=\"reservoirHost\"", empty_html)
+        self.assertNotIn("钱花哪去了", empty_html)
+
+        # 2. Non-finite floats (NaN/inf) and malformed time_to_reset_seconds must not crash or leak nan%
+        nan_html = rrh.render_html_report(
+            {
+                "provider": "custom",
+                "observed_at_local": "2026-11-21T07:00:00+08:00",
+                "buckets": [
+                    {
+                        "group_name": "Weird Pool",
+                        "group_key": "custom",
+                        "bucket_id": "custom-1",
+                        "window": "unknown",
+                        "remaining_fraction": float("nan"),
+                        "used_pct": float("nan"),
+                        "lockout_state": "OPEN",
+                        "spend_base_usd": float("nan"),
+                        "implied_pool_base_usd": float("inf"),
+                        "implied_pool_upper_usd": float("nan"),
+                        "remaining_usd_base": float("nan"),
+                        "time_to_reset": "manual",
+                        "time_to_reset_seconds": "bad",
+                        "reset_time_local": "manual",
+                        "confidence": "UNKNOWN_WINDOW",
+                        "warnings": [],
+                    }
+                ],
+                "business_summary": {"headline": "ok", "subline": "ok", "live_routing": []},
+            }
+        )
+        self.assertNotIn("nan%", nan_html.lower())
+        self.assertIn("静态快照", nan_html)
+        m_nan = re.search(r"const DATA = (\{.*?\});", nan_html)
+        self.assertIsNotNone(m_nan)
+        assert m_nan is not None
+        nan_payload = json.loads(m_nan.group(1))
+        self.assertEqual(nan_payload["maxCap"], 0.0)
+        self.assertIsNone(nan_payload["pools"][0]["capUsd"])
+        self.assertEqual(nan_payload["pools"][0]["usedPct"], 0.0)
+        self.assertEqual(nan_payload["pools"][0]["remPct"], 0.0)
+
+        # 3. Dual-lockout on same group_key (weekly + 5h locked) binds chronometer & loupe to weekly (>100h ghost)
+        dual_html = rrh.render_html_report(
+            {
+                "provider": "antigravity",
+                "observed_at_local": "2026-11-21T07:00:00+08:00",
+                "buckets": [
+                    {
+                        "group_name": "Claude and GPT models",
+                        "group_key": "3p",
+                        "bucket_id": "3p-weekly",
+                        "window": "weekly",
+                        "remaining_fraction": 0.0,
+                        "used_pct": 100.0,
+                        "lockout_state": "LOCKED",
+                        "implied_pool_base_usd": 50.0,
+                        "time_to_reset": "5d 0h",
+                        "time_to_reset_seconds": 432000,
+                        "reset_time_local": "2026-11-26T07:00:00+08:00",
+                        "confidence": "LOCKOUT_CAP",
+                        "warnings": [],
+                    },
+                    {
+                        "group_name": "Claude and GPT models",
+                        "group_key": "3p",
+                        "bucket_id": "3p-5h",
+                        "window": "5h",
+                        "remaining_fraction": 0.0,
+                        "used_pct": 100.0,
+                        "lockout_state": "LOCKED",
+                        "implied_pool_base_usd": 20.0,
+                        "time_to_reset": "2h 0m",
+                        "time_to_reset_seconds": 7200,
+                        "reset_time_local": "2026-11-21T09:00:00+08:00",
+                        "confidence": "LOCKOUT_CAP",
+                        "warnings": [],
+                    },
+                ],
+                "business_summary": {"headline": "dual locked", "subline": "wait weekly", "live_routing": []},
+            }
+        )
+        self.assertIn("Claude and GPT models (weekly) · 距解锁", dual_html)
+        self.assertIn("120:00:00", dual_html)
+        self.assertIn(">888:88:88<", dual_html)
+        m_dual = re.search(r"const DATA = (\{.*?\});", dual_html)
+        assert m_dual is not None
+        dual_payload = json.loads(m_dual.group(1))
+        self.assertEqual(dual_payload["defaultLoupeIdx"], 0)  # binding weekly pool, not 5h
+
+        # 4. Uncalibrated non-UNTOUCHED / uncalibrated LOCKED JS branches never mislabel as 满额未用
+        self.assertIn("尚无有效美元上限 (待校准)", nan_html)
+        self.assertIn("已锁死 (未校准美元上限)", nan_html)
+
 
 if __name__ == "__main__":
     unittest.main()

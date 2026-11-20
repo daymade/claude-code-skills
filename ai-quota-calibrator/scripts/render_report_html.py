@@ -12,13 +12,56 @@ Combines live business-first decision clarity with tactile non-flat precision-in
 
 from __future__ import annotations
 
+import datetime as dt
 import html
 import json
+import math
 from typing import Any
 
 
 def _esc(val: Any) -> str:
     return html.escape(str(val if val is not None else ""), quote=True)
+
+
+def _finite_float(val: Any, default: float = 0.0) -> float:
+    if isinstance(val, bool) or val is None:
+        return default
+    try:
+        f = float(val)
+    except (TypeError, ValueError):
+        return default
+    return f if math.isfinite(f) else default
+
+
+def _opt_finite_float(val: Any) -> float | None:
+    if isinstance(val, bool) or val is None:
+        return None
+    try:
+        f = float(val)
+    except (TypeError, ValueError):
+        return None
+    return f if math.isfinite(f) else None
+
+
+def _safe_int(val: Any, default: int = 0) -> int:
+    if isinstance(val, bool) or val is None:
+        return default
+    try:
+        f = float(val)
+    except (TypeError, ValueError):
+        return default
+    return int(f) if math.isfinite(f) else default
+
+
+def _valid_iso_timestamp(val: Any) -> str:
+    s = str(val or "").strip()
+    if len(s) < 19:
+        return ""
+    try:
+        dt.datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except ValueError:
+        return ""
+    return s
 
 
 def _safe_json_for_script(obj: Any) -> str:
@@ -33,11 +76,12 @@ def _safe_json_for_script(obj: Any) -> str:
 
 
 def _fmt_usd(val: float | None, digits: int = 2) -> str:
-    if val is None:
+    f = _opt_finite_float(val)
+    if f is None:
         return "待校准"
     if digits == 0:
-        return f"${round(val):,}"
-    return f"${val:,.{digits}f}"
+        return f"${round(f):,}"
+    return f"${f:,.{digits}f}"
 
 
 def _pool_badge(b: dict[str, Any]) -> tuple[str, str]:
@@ -50,46 +94,57 @@ def _pool_badge(b: dict[str, Any]) -> tuple[str, str]:
         return "刚刷新 · 待校准", "badge-warn"
     if b.get("confidence") == "UNTOUCHED":
         return "满额未用", "badge-safe"
-    rem = float(b.get("remaining_fraction") or 0.0) * 100.0
+    rem = max(0.0, min(100.0, _finite_float(b.get("remaining_fraction"), 0.0) * 100.0))
     if rem < 20.0:
         return "余量紧张", "badge-warn"
     return "可用", "badge-safe"
 
 
 def _pick_chronometer_bucket(buckets: list[dict[str, Any]]) -> dict[str, Any] | None:
-    """Pick the most actionable countdown target: binding locked bucket first, else shortest active 5h reset."""
-    locked = [
-        b for b in buckets
-        if b.get("lockout_state") in ("LOCKED", "SOFT_LOCKOUT")
-        and isinstance(b.get("time_to_reset_seconds"), int)
-    ]
-    if locked:
-        # Prefer 5h lockout for immediate unlock countdown unless only weekly is locked
-        locked_5h = [b for b in locked if b.get("window") == "5h"]
-        return locked_5h[0] if locked_5h else locked[0]
+    """Pick the most actionable countdown target: binding locked bucket first, else shortest active 5h reset.
+
+    When both weekly and 5h are locked for the same group_key, weekly is the binding lockout
+    (matching build_business_summary), so 5h never falsely promises an early unlock.
+    """
+    locked_by_group: dict[str, list[dict[str, Any]]] = {}
+    for b in buckets:
+        if b.get("lockout_state") in ("LOCKED", "SOFT_LOCKOUT"):
+            gk = str(b.get("group_key") or b.get("bucket_id") or "")
+            locked_by_group.setdefault(gk, []).append(b)
+    if locked_by_group:
+        binding_locked: list[dict[str, Any]] = []
+        for grp_buckets in locked_by_group.values():
+            weekly_locked = [b for b in grp_buckets if b.get("window") == "weekly"]
+            binding_locked.append(weekly_locked[0] if weekly_locked else grp_buckets[0])
+        with_ttr = [b for b in binding_locked if _opt_finite_float(b.get("time_to_reset_seconds")) is not None]
+        if with_ttr:
+            return min(with_ttr, key=lambda b: _safe_int(b.get("time_to_reset_seconds"), 10**9))
+        return binding_locked[0]
+
     with_reset = [
         b for b in buckets
-        if b.get("reset_time_local") not in (None, "", "manual", "unknown")
-        and isinstance(b.get("time_to_reset_seconds"), int)
+        if _valid_iso_timestamp(b.get("reset_time_local"))
+        and _opt_finite_float(b.get("time_to_reset_seconds")) is not None
     ]
     if not with_reset:
         return buckets[0] if buckets else None
     five_h = [b for b in with_reset if b.get("window") == "5h"]
     pool = five_h if five_h else with_reset
-    return min(pool, key=lambda b: int(b.get("time_to_reset_seconds") or 10**9))
+    return min(pool, key=lambda b: _safe_int(b.get("time_to_reset_seconds"), 10**9))
 
 
 def _pick_default_loupe_index(buckets: list[dict[str, Any]]) -> int:
-    """Default optical loupe target: locked bucket first, else smallest calibrated non-empty pool (e.g. Opus)."""
-    for idx, b in enumerate(buckets):
-        if b.get("lockout_state") in ("LOCKED", "SOFT_LOCKOUT"):
-            return idx
+    """Default optical loupe target: binding locked bucket first, else smallest calibrated non-empty pool."""
+    binding = _pick_chronometer_bucket(buckets)
+    if binding is not None and binding.get("lockout_state") in ("LOCKED", "SOFT_LOCKOUT"):
+        for idx, b in enumerate(buckets):
+            if b is binding:
+                return idx
     calibrated = [
-        (idx, float(b["implied_pool_base_usd"]))
+        (idx, cap)
         for idx, b in enumerate(buckets)
-        if b.get("implied_pool_base_usd") is not None
-        and float(b["implied_pool_base_usd"]) > 0.0
-        and not b.get("boundary_hour_overcount")
+        for cap in [_opt_finite_float(b.get("implied_pool_base_usd"))]
+        if cap is not None and cap > 0.0 and not b.get("boundary_hour_overcount")
     ]
     if calibrated:
         return min(calibrated, key=lambda item: item[1])[0]
@@ -121,15 +176,18 @@ def render_html_report(result: dict[str, Any]) -> str:
     chrono_payload: dict[str, Any] = {}
     if chrono_b is not None:
         c_locked = chrono_b.get("lockout_state") in ("LOCKED", "SOFT_LOCKOUT")
-        c_used = float(chrono_b.get("used_pct") or 0.0)
-        c_rem_pct = max(0.0, float(chrono_b.get("remaining_fraction") or 0.0) * 100.0)
-        c_reset_iso = str(chrono_b.get("reset_time_local") or "")
-        c_reset_short = c_reset_iso[11:19] if len(c_reset_iso) >= 19 else (c_reset_iso or "—")
-        c_ttr_sec = int(chrono_b.get("time_to_reset_seconds") or 0)
+        c_used = max(0.0, min(100.0, _finite_float(chrono_b.get("used_pct"), 0.0)))
+        c_rem_pct = max(0.0, min(100.0, _finite_float(chrono_b.get("remaining_fraction"), 0.0) * 100.0))
+        c_reset_raw = str(chrono_b.get("reset_time_local") or "")
+        c_reset_iso = _valid_iso_timestamp(c_reset_raw)
+        c_reset_short = c_reset_iso[11:19] if c_reset_iso else (c_reset_raw or "—")
+        c_ttr_sec = max(0, _safe_int(chrono_b.get("time_to_reset_seconds"), 0))
         c_ttr = str(chrono_b.get("time_to_reset") or "—")
-        h0, rem0 = divmod(max(0, c_ttr_sec), 3600)
+        h0, rem0 = divmod(c_ttr_sec, 3600)
         m0, s0 = divmod(rem0, 60)
         init_digits = f"{h0:02d}:{m0:02d}:{s0:02d}" if c_ttr_sec > 0 else "00:00:00"
+        ghost_digits = "888:88:88" if h0 >= 100 else "88:88:88"
+        is_live_chrono = bool(c_reset_iso)
         c_label = f"{chrono_b.get('group_name')} ({chrono_b.get('window')}) · {'距解锁' if c_locked else '距下次刷新'}"
         c_rem_tag = f"余 {c_rem_pct:.2f}%"
         c_tone = "chrono-alert" if c_locked else "chrono-safe"
@@ -161,12 +219,12 @@ def render_html_report(result: dict[str, Any]) -> str:
                 <span class="mono txt-safe"><strong>已用 {c_used:.1f}%</strong> · 余 {c_rem_pct:.1f}%</span>
               </div>
               <div class="mv-track mv-track-safe">
-                <div class="mv-fill-safe" style="width:{min(100.0, c_used):.2f}%"></div>
+                <div class="mv-fill-safe" style="width:{c_used:.2f}%"></div>
               </div>
             </div>"""
 
         chrono_payload = {
-            "resetIso": c_reset_iso if len(c_reset_iso) >= 19 else "",
+            "resetIso": c_reset_iso,
             "ttrSec": c_ttr_sec,
             "ttrLabel": c_ttr,
             "isLocked": c_locked,
@@ -174,11 +232,11 @@ def render_html_report(result: dict[str, Any]) -> str:
         chrono_html = f"""<div class="chrono-well {c_tone}">
           <div class="chrono-top">
             <span class="chrono-lbl">{_esc(c_label)}</span>
-            <span class="live-pill" id="liveBadge"><span class="led-dot {led_cls}"></span><span id="liveModeTxt">LIVE 实时</span></span>
+            <span class="live-pill" id="liveBadge"><span class="led-dot {led_cls}"></span><span id="liveModeTxt">{'LIVE 实时' if is_live_chrono else '静态快照'}</span></span>
           </div>
           <div class="chrono-face">
             <div class="chrono-digits-wrap">
-              <div class="chrono-ghost" aria-hidden="true">88:88:88</div>
+              <div class="chrono-ghost" id="quartzGhost" aria-hidden="true">{ghost_digits}</div>
               <div class="chrono-digits" id="quartzClock">{_esc(init_digits)}</div>
             </div>
             <div class="chrono-target">
@@ -205,7 +263,7 @@ def render_html_report(result: dict[str, Any]) -> str:
         ))
     elif buckets:
         b0 = buckets[0]
-        b0_rem = float(b0.get("remaining_fraction") or 0.0) * 100.0
+        b0_rem = max(0.0, min(100.0, _finite_float(b0.get("remaining_fraction"), 0.0) * 100.0))
         kpi_cards.append((
             "主配额池状态",
             f"余 {b0_rem:.1f}%",
@@ -234,16 +292,17 @@ def render_html_report(result: dict[str, Any]) -> str:
 
     roi = summary.get("plan_roi")
     if roi:
+        roi_mult = _opt_finite_float(roi.get("roi_multiple"))
         roi_val = (
-            f"{roi['roi_multiple']:.1f}× 回本"
-            if roi.get("roi_multiple") is not None
-            else _fmt_usd(roi.get("weekly_spend_usd"), 2)
+            f"{roi_mult:.1f}× 回本"
+            if roi_mult is not None
+            else _fmt_usd(_opt_finite_float(roi.get("weekly_spend_usd")), 2)
         )
         kpi_cards.append((
             "本周实耗等效 API 与回本",
             roi_val,
             _esc(roi.get("detail", "")),
-            "kpi-safe" if (roi.get("roi_multiple") or 0) >= 1.0 else "kpi-neutral",
+            "kpi-safe" if (roi_mult or 0.0) >= 1.0 else "kpi-neutral",
         ))
 
     kpi_html = "".join(
@@ -257,11 +316,10 @@ def render_html_report(result: dict[str, Any]) -> str:
 
     # Prepare live reservoir payload (strict Lie Factor = 1.00, pure SVG + vanilla JS, zero D3!)
     valid_caps = [
-        float(b["implied_pool_base_usd"])
+        cap
         for b in buckets
-        if b.get("implied_pool_base_usd") is not None
-        and float(b["implied_pool_base_usd"]) > 0.0
-        and not b.get("boundary_hour_overcount")
+        for cap in [_opt_finite_float(b.get("implied_pool_base_usd"))]
+        if cap is not None and cap > 0.0 and not b.get("boundary_hour_overcount")
     ]
     max_cap = max(valid_caps) if valid_caps else 0.0
     min_cap = min(valid_caps) if valid_caps else 0.0
@@ -270,15 +328,19 @@ def render_html_report(result: dict[str, Any]) -> str:
     reservoir_pools: list[dict[str, Any]] = []
     for idx, b in enumerate(buckets):
         badge_txt, badge_cls = _pool_badge(b)
-        cap_raw = b.get("implied_pool_base_usd")
-        cap_val = float(cap_raw) if (cap_raw is not None and float(cap_raw) > 0.0 and not b.get("boundary_hour_overcount")) else None
-        cap_up_raw = b.get("implied_pool_upper_usd")
-        cap_upper = float(cap_up_raw) if (cap_up_raw is not None and cap_val is not None) else cap_val
-        used_pct = max(0.0, min(100.0, float(b.get("used_pct") or 0.0)))
-        rem_pct = max(0.0, min(100.0, float(b.get("remaining_fraction") or 0.0) * 100.0))
+        cap_raw = _opt_finite_float(b.get("implied_pool_base_usd"))
+        cap_val = cap_raw if (cap_raw is not None and cap_raw > 0.0 and not b.get("boundary_hour_overcount")) else None
+        cap_up_raw = _opt_finite_float(b.get("implied_pool_upper_usd"))
+        cap_upper = cap_up_raw if (cap_up_raw is not None and cap_up_raw > 0.0 and cap_val is not None) else cap_val
+        spend_raw = _opt_finite_float(b.get("spend_base_usd"))
+        rem_usd_raw = _opt_finite_float(b.get("remaining_usd_base"))
+        used_pct = max(0.0, min(100.0, _finite_float(b.get("used_pct"), 0.0)))
+        rem_pct = max(0.0, min(100.0, _finite_float(b.get("remaining_fraction"), 0.0) * 100.0))
         locked = b.get("lockout_state") in ("LOCKED", "SOFT_LOCKOUT")
         reset_raw = str(b.get("reset_time_local") or "")
-        reset_short = reset_raw[11:19] if len(reset_raw) >= 19 else (reset_raw or "—")
+        reset_iso = _valid_iso_timestamp(reset_raw)
+        reset_short = reset_iso[11:19] if reset_iso else (reset_raw or "—")
+        rem_msgs_raw = _opt_finite_float(b.get("estimated_remaining_msgs"))
         reservoir_pools.append({
             "idx": idx,
             "id": str(b.get("bucket_id") or f"pool-{idx}"),
@@ -290,8 +352,8 @@ def render_html_report(result: dict[str, Any]) -> str:
             "badgeCls": badge_cls,
             "capUsd": round(cap_val, 2) if cap_val is not None else None,
             "capUpperUsd": round(cap_upper, 2) if cap_upper is not None else None,
-            "spendUsd": round(float(b.get("spend_base_usd") or 0.0), 2) if b.get("spend_base_usd") is not None else None,
-            "remUsd": round(float(b["remaining_usd_base"]), 2) if b.get("remaining_usd_base") is not None else None,
+            "spendUsd": round(spend_raw, 2) if spend_raw is not None else None,
+            "remUsd": round(rem_usd_raw, 2) if rem_usd_raw is not None else None,
             "usedPct": round(used_pct, 2),
             "remPct": round(rem_pct, 2),
             "locked": locked,
@@ -300,7 +362,7 @@ def render_html_report(result: dict[str, Any]) -> str:
             "untouched": b.get("confidence") == "UNTOUCHED",
             "ttr": str(b.get("time_to_reset") or "—"),
             "resetShort": reset_short,
-            "remMsgs": b.get("estimated_remaining_msgs"),
+            "remMsgs": int(rem_msgs_raw) if rem_msgs_raw is not None and rem_msgs_raw >= 0 else None,
             "ratioVsMin": round(cap_val / min_cap, 1) if (cap_val is not None and min_cap > 0.0) else None,
             "pctOfMax": round((cap_val / max_cap) * 100.0, 3) if (cap_val is not None and max_cap > 0.0) else None,
         })
@@ -318,10 +380,10 @@ def render_html_report(result: dict[str, Any]) -> str:
     if forensics or top_sessions:
         breakdown_html = ""
         savings_html = ""
-        if forensics and float(forensics.get("window_total_usd") or 0.0) > 0.0:
-            tot_w = float(forensics["window_total_usd"])
-            sub_usd = float((forensics.get("concurrent_subagents") or {}).get("cost_usd") or 0.0)
-            ttl_waste = float((forensics.get("ttl_cold_misses") or {}).get("avoidable_waste_usd") or 0.0)
+        if forensics and _finite_float(forensics.get("window_total_usd"), 0.0) > 0.0:
+            tot_w = _finite_float(forensics.get("window_total_usd"), 0.0)
+            sub_usd = max(0.0, _finite_float((forensics.get("concurrent_subagents") or {}).get("cost_usd"), 0.0))
+            ttl_waste = max(0.0, _finite_float((forensics.get("ttl_cold_misses") or {}).get("avoidable_waste_usd"), 0.0))
             sub_usd_disp = min(tot_w, sub_usd)
             ttl_waste_disp = min(max(0.0, tot_w - sub_usd_disp), ttl_waste)
             norm_usd = max(0.0, tot_w - sub_usd_disp - ttl_waste_disp)
@@ -329,19 +391,20 @@ def render_html_report(result: dict[str, Any]) -> str:
             p_ttl = (ttl_waste_disp / tot_w) * 100.0
             p_sub = (sub_usd_disp / tot_w) * 100.0
 
-            zero_save = float(forensics.get("zero_compression_savings_usd") or 0.0)
-            zero_pct = float(forensics.get("zero_compression_savings_pct") or 0.0)
-            sub_cnt = int((forensics.get("concurrent_subagents") or {}).get("count") or 0)
-            ttl_cnt = int((forensics.get("ttl_cold_misses") or {}).get("count") or 0)
+            zero_save = max(0.0, _finite_float(forensics.get("zero_compression_savings_usd"), 0.0))
+            zero_pct = max(0.0, min(100.0, _finite_float(forensics.get("zero_compression_savings_pct"), 0.0)))
+            sub_cnt = max(0, _safe_int((forensics.get("concurrent_subagents") or {}).get("count"), 0))
+            ttl_cnt = max(0, _safe_int((forensics.get("ttl_cold_misses") or {}).get("count"), 0))
             prim = forensics.get("primary_session") or {}
-            avg_k = prim.get("avg_context_k")
-            avg_k_txt = f"{avg_k}k" if avg_k is not None else "—"
+            avg_k = _opt_finite_float(prim.get("avg_context_k"))
+            avg_k_txt = f"{avg_k:.1f}k" if avg_k is not None else "—"
+            peak_k = _finite_float(prim.get("peak_context_k"), 0.0)
 
             breakdown_html = f"""<div class="well forensics-well">
               <div class="fb-head">
                 <div>
                   <strong>当前窗口真实开销拆解（{_esc(forensics.get('group_key', ''))} 池 · 实测 ${_esc(f'{tot_w:.2f}')}）</strong>
-                  <span class="muted">主会话 <code>{_esc(prim.get('short_id', '—'))}</code> 峰值上下文 <strong>{_esc(prim.get('peak_context_k', 0))}k</strong> / 均上下文 {_esc(avg_k_txt)}</span>
+                  <span class="muted">主会话 <code>{_esc(prim.get('short_id', '—'))}</code> 峰值上下文 <strong>{_esc(f'{peak_k:.1f}')}k</strong> / 均上下文 {_esc(avg_k_txt)}</span>
                 </div>
                 <div class="fb-save">不压缩主会话即可无损省 <strong>${zero_save:.2f}（{zero_pct:.1f}%）</strong></div>
               </div>
@@ -359,7 +422,10 @@ def render_html_report(result: dict[str, Any]) -> str:
 
             ttl_events = (forensics.get("ttl_cold_misses") or {}).get("events") or []
             ttl_detail = (
-                "；".join(f"{e['time']} ({e['input_k']:.0f}k 冷重传, 多花 ${e['waste_usd']:.2f})" for e in ttl_events[:3])
+                "；".join(
+                    f"{e.get('time', '—')} ({_finite_float(e.get('input_k'), 0.0):.0f}k 冷重传, 多花 ${_finite_float(e.get('waste_usd'), 0.0):.2f})"
+                    for e in ttl_events[:3]
+                )
                 if ttl_events else "本窗未检出 >50k 冷重传"
             )
             savings_html = f"""<div class="savings-grid">
@@ -389,7 +455,8 @@ def render_html_report(result: dict[str, Any]) -> str:
             if psid:
                 role_map[psid] = ("主会话", "badge-opus")
             for sub in (forensics.get("concurrent_subagents") or {}).get("sessions") or []:
-                role_map[sub["session_id"]] = ("并发子代理", "badge-warn")
+                if sub.get("session_id"):
+                    role_map[sub["session_id"]] = ("并发子代理", "badge-warn")
 
         sess_rows = []
         for s in top_sessions:
@@ -398,17 +465,17 @@ def render_html_report(result: dict[str, Any]) -> str:
             if s.get("context_snowball"):
                 role_txt = f"{role_txt} · 长上下文雪球"
                 role_cls = "badge-alert"
-            avg_ctx = s.get("avg_context_k")
+            avg_ctx = _opt_finite_float(s.get("avg_context_k"))
             avg_ctx_str = f"{avg_ctx:.1f}k" if avg_ctx is not None else "—"
             sess_rows.append(f"""<tr>
               <td><code>{_esc(sid[:8])}</code></td>
               <td>{_esc(s.get('model'))}</td>
               <td><span class="badge {role_cls}">{_esc(role_txt)}</span></td>
               <td class="num">{avg_ctx_str}</td>
-              <td class="num">{float(s.get('cache_read_pct') or 0):.1f}%</td>
-              <td class="num">{int(s.get('message_count') or 0)}</td>
-              <td class="num"><strong>${float(s.get('cost_usd') or 0):.2f}</strong></td>
-              <td class="num">{float(s.get('share_of_group_spend_pct') or 0):.1f}%</td>
+              <td class="num">{_finite_float(s.get('cache_read_pct'), 0.0):.1f}%</td>
+              <td class="num">{_safe_int(s.get('message_count'), 0)}</td>
+              <td class="num"><strong>${_finite_float(s.get('cost_usd'), 0.0):.2f}</strong></td>
+              <td class="num">{_finite_float(s.get('share_of_group_spend_pct'), 0.0):.1f}%</td>
             </tr>""")
 
         sess_table_html = (
@@ -427,16 +494,17 @@ def render_html_report(result: dict[str, Any]) -> str:
             if sess_rows else ""
         )
 
-        forensics_section_html = f"""<section class="plate">
-          <div class="sec-head">
-            <h2>{sec_num}. 钱花哪去了？实时窗口归因与零压缩省钱账单</h2>
-            <span class="muted">基于本地实时日志自动拆解 · 零硬编码 · 绝不建议 &lt;250k 反常识压缩</span>
-          </div>
-          {breakdown_html}
-          {savings_html}
-          {sess_table_html}
-        </section>"""
-        sec_num += 1
+        if breakdown_html or savings_html or sess_table_html:
+            forensics_section_html = f"""<section class="plate">
+              <div class="sec-head">
+                <h2>{sec_num}. 钱花哪去了？实时窗口归因与零压缩省钱账单</h2>
+                <span class="muted">基于本地实时日志自动拆解 · 零硬编码 · 绝不建议 &lt;250k 反常识压缩</span>
+              </div>
+              {breakdown_html}
+              {savings_html}
+              {sess_table_html}
+            </section>"""
+            sec_num += 1
 
     # Section 3 (or 2): Live Routing + Calibrated Recessed Codex Standby Gauges
     routing_rows = []
@@ -453,7 +521,7 @@ def render_html_report(result: dict[str, Any]) -> str:
     if codex_accounts:
         cx_slots = []
         for c in codex_accounts:
-            used_p = max(0.0, min(100.0, float(c.get("used_pct") or 0.0)))
+            used_p = max(0.0, min(100.0, _finite_float(c.get("used_pct"), 0.0)))
             rem_p = max(0.0, 100.0 - used_p)
             is_lock = used_p >= 99.9
             st_badge = (
@@ -462,7 +530,8 @@ def render_html_report(result: dict[str, Any]) -> str:
                 f'<span class="badge badge-safe">✓ 已用 {used_p:.0f}% · 余 {rem_p:.0f}%</span>'
             )
             act = '<span class="badge badge-opus" style="margin-right:5px;">激活</span>' if c.get("is_active") else ""
-            bal = f" · 余额 ${float(c['credit_usd']):.2f}" if (c.get("credit_usd") or 0) > 0 else ""
+            credit_val = _finite_float(c.get("credit_usd"), 0.0)
+            bal = f" · 余额 ${credit_val:.2f}" if credit_val > 0.0 else ""
             empty_lbl = '<span class="cx-empty-lbl">0% 已用 · 100% 空载可用</span>' if used_p < 1.0 else ""
             cx_slots.append(f"""<div class="codex-slot">
               <div class="cx-top">
@@ -523,6 +592,29 @@ def render_html_report(result: dict[str, Any]) -> str:
         + "".join(f"<li>{_esc(w)}</li>" for w in all_warnings)
         + "</ul></div>"
         if all_warnings else ""
+    )
+
+    reservoir_well_html = (
+        """<div class="well">
+      <div class="res-head">
+        <div class="legend-strip">
+          <span><strong id="resTitle">1:N 真实物理尺度储液槽</strong>（点击任意液管切换下方光学放大镜）</span>
+          <span><i class="sw sw-gemini"></i>Gemini 通道</span>
+          <span><i class="sw sw-opus"></i>Claude/GPT 常规</span>
+          <span><i class="sw sw-alert"></i>锁死 / &lt;1% 软锁</span>
+        </div>
+        <div class="key-group" role="group" aria-label="储液槽比例尺切换">
+          <button type="button" class="keycap active" data-scale="true" aria-pressed="true">真实美元尺度</button>
+          <button type="button" class="keycap" data-scale="norm" aria-pressed="false">单池 100% 归一化</button>
+        </div>
+      </div>
+      <div class="plot-bed" style="padding:10px 10px 8px;">
+        <div id="reservoirHost"></div>
+      </div>
+      <div class="loupe-caption" id="loupeCaption"></div>
+    </div>"""
+        if buckets
+        else '<div class="well"><span class="muted">当前快照未返回可用配额池数据。</span></div>'
     )
 
     return f"""<!doctype html>
@@ -901,24 +993,7 @@ def render_html_report(result: dict[str, Any]) -> str:
       {chrono_html}
     </div>
 
-    <div class="well">
-      <div class="res-head">
-        <div class="legend-strip">
-          <span><strong id="resTitle">1:N 真实物理尺度储液槽</strong>（点击任意液管切换下方光学放大镜）</span>
-          <span><i class="sw sw-gemini"></i>Gemini 通道</span>
-          <span><i class="sw sw-opus"></i>Claude/GPT 常规</span>
-          <span><i class="sw sw-alert"></i>锁死 / &lt;1% 软锁</span>
-        </div>
-        <div class="key-group" role="group" aria-label="储液槽比例尺切换">
-          <button type="button" class="keycap active" data-scale="true" aria-pressed="true">真实美元尺度</button>
-          <button type="button" class="keycap" data-scale="norm" aria-pressed="false">单池 100% 归一化</button>
-        </div>
-      </div>
-      <div class="plot-bed" style="padding:10px 10px 8px;">
-        <div id="reservoirHost"></div>
-      </div>
-      <div class="loupe-caption" id="loupeCaption"></div>
-    </div>
+    {reservoir_well_html}
   </section>
 
   {forensics_section_html}
@@ -980,11 +1055,18 @@ def render_html_report(result: dict[str, Any]) -> str:
   (function initChronometer() {{
     const c = DATA.chrono;
     const digitsEl = document.getElementById("quartzClock");
+    const ghostEl = document.getElementById("quartzGhost");
     const modeEl = document.getElementById("liveModeTxt");
     const tagEl = document.getElementById("chronoTag");
-    if (!c || !digitsEl || !c.resetIso) return;
+    if (!c || !digitsEl || !c.resetIso) {{
+      if (modeEl) modeEl.textContent = "静态快照";
+      return;
+    }}
     const resetMs = Date.parse(c.resetIso);
-    if (Number.isNaN(resetMs)) return;
+    if (Number.isNaN(resetMs)) {{
+      if (modeEl) modeEl.textContent = "静态快照";
+      return;
+    }}
 
     function pad2(n) {{ return String(Math.max(0, Math.floor(n))).padStart(2, "0"); }}
     function tick() {{
@@ -994,9 +1076,11 @@ def render_html_report(result: dict[str, Any]) -> str:
         const m = Math.floor((remSec % 3600) / 60);
         const s = remSec % 60;
         digitsEl.textContent = pad2(h) + ":" + pad2(m) + ":" + pad2(s);
+        if (ghostEl) ghostEl.textContent = h >= 100 ? "888:88:88" : "88:88:88";
         if (modeEl) modeEl.textContent = "LIVE 实时";
       }} else if (remSec <= 0) {{
         digitsEl.textContent = "00:00:00";
+        if (ghostEl) ghostEl.textContent = "88:88:88";
         if (modeEl) modeEl.textContent = "已到重置点";
         if (tagEl) tagEl.textContent = "重跑刷新";
       }}
@@ -1185,10 +1269,14 @@ def render_html_report(result: dict[str, Any]) -> str:
           callout = scaleMode === "norm"
             ? `已用 ${{p.usedPct.toFixed(1)}}% · ${{p.spendUsd !== null ? fmtUsd(p.spendUsd, 2) : "—"}} / ${{capTxt}}`
             : `${{capTxt}}${{multTxt}} · 已用 ${{p.usedPct.toFixed(1)}}%`;
+        }} else if (p.overcount) {{
+          callout = `已用 ${{p.usedPct.toFixed(1)}}% · 跨整点刷新暂不外推美元上限`;
+        }} else if (p.untouched) {{
+          callout = `已用 ${{p.usedPct.toFixed(1)}}% · 满额未用 (尚无花费可反推上限)`;
+        }} else if (p.locked) {{
+          callout = `已用 ${{p.usedPct.toFixed(1)}}% · 已锁死 (未校准美元上限)`;
         }} else {{
-          callout = p.overcount
-            ? `已用 ${{p.usedPct.toFixed(1)}}% · 跨整点刷新暂不外推美元上限`
-            : `已用 ${{p.usedPct.toFixed(1)}}% · 满额未用 (待校准)`;
+          callout = `已用 ${{p.usedPct.toFixed(1)}}% · 尚无有效美元上限 (待校准)`;
         }}
 
         const placeInside = scaleMode === "norm" || tW > trackW - 230;
@@ -1208,18 +1296,31 @@ def render_html_report(result: dict[str, Any]) -> str:
         const cEl = elSvg("text", {{ x: txtX, y: y + 14.5, fill: txtFill, "font-family": "var(--mono)", "font-size": "10.5", "font-weight": "700" }}, g);
         cEl.textContent = callout;
       }} else {{
-        // Honest uncalibrated / mid-hour reset / untouched slot (zero fabricated USD bar!)
-        const fillPaint = p.overcount ? "url(#patWarn)" : "#EDF2F7";
-        const strokeCol = p.overcount ? "#D97706" : "#9BA6B4";
+        // Honest uncalibrated / mid-hour reset / untouched / uncalibrated-locked slot (zero fabricated USD bar!)
+        const fillPaint = p.overcount ? "url(#patWarn)" : (p.locked ? "#FDECE9" : "#EDF2F7");
+        const strokeCol = p.overcount ? "#D97706" : (p.locked ? "#C8321B" : (p.untouched ? "#156D50" : "#8D99A8"));
         elSvg("rect", {{ x: L, y: y, width: trackW, height: barH, rx: 2.5, fill: fillPaint, stroke: strokeCol, "stroke-dasharray": "4,3" }}, g);
         const pctW = (p.usedPct / 100) * trackW;
         if (pctW > 0) {{
-          elSvg("rect", {{ x: L, y: y, width: pctW.toFixed(2), height: barH, rx: 2, fill: p.overcount ? "rgba(217,119,6,0.22)" : "rgba(21,109,80,0.18)" }}, g);
+          const subFill = p.locked
+            ? "url(#patLock)"
+            : (p.overcount ? "rgba(217,119,6,0.22)" : (p.untouched ? "rgba(21,109,80,0.18)" : "rgba(75,85,99,0.20)"));
+          elSvg("rect", {{ x: L, y: y, width: pctW.toFixed(2), height: barH, rx: 2, fill: subFill }}, g);
         }}
-        const note = elSvg("text", {{ x: L + 10, y: y + 14.5, fill: p.overcount ? "#B45309" : "#156D50", "font-family": "var(--mono)", "font-size": "10.5", "font-weight": "700" }}, g);
-        note.textContent = p.overcount
-          ? `刚刷新已用 ${{p.usedPct.toFixed(1)}}% · 跨整点刷新暂不外推美元上限`
-          : `满额未用 (0.0%) · 尚无花费可反推上限`;
+        let noteTxt = `已用 ${{p.usedPct.toFixed(1)}}% · 尚无有效美元上限 (待校准)`;
+        let noteFill = "#4B5563";
+        if (p.overcount) {{
+          noteTxt = `刚刷新已用 ${{p.usedPct.toFixed(1)}}% · 跨整点刷新暂不外推美元上限`;
+          noteFill = "#B45309";
+        }} else if (p.untouched) {{
+          noteTxt = `满额未用 (0.0%) · 尚无花费可反推上限`;
+          noteFill = "#156D50";
+        }} else if (p.locked) {{
+          noteTxt = `已用 ${{p.usedPct.toFixed(1)}}% · 已锁死 (未校准美元上限)`;
+          noteFill = pctW >= 240 ? "#FFFFFF" : "#C8321B";
+        }}
+        const note = elSvg("text", {{ x: L + 10, y: y + 14.5, fill: noteFill, "font-family": "var(--mono)", "font-size": "10.5", "font-weight": "700" }}, g);
+        note.textContent = noteTxt;
       }}
 
       // Right-hand remaining readout
