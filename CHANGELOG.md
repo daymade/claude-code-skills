@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **read-claude-code-history** (`daymade-claude-code` v5.2.12 → v5.2.13): Fix `read_antigravity_session.py --query` pre-filter SQLite `LIMIT` starvation by streaming FTS5/metadata cursors with SQL-side `exclude_current`/subagent filtering and bounded post-fill termination so `--project` queries are not dropped behind higher-ranked hits in other workspaces.
 - **peer-message** (`peer-message` v1.27.5 → v1.27.6): Clarify `--from` fallback (`local-script` for non-Claude/Codex hosts sending one-way `--kind notice`) in CLI help, error guidance and protocol docs; cover untracked (`??`) residual byte checks against `origin/main` and warn that Claude `status=waiting` can indicate an active writer paused on tool approval.
 - **git-safety-net** (`git-safety-net` v1.29.1 → v1.29.2): Document bidirectional ancestor-prefix scheduler matching for nested LaunchAgent worktrees and staged Mode E triage separating pure/prunable/ephemeral landed branches from persistent or dirty worktrees.
 - **read-claude-code-history & local-conversation-history** (`daymade-claude-code` v5.2.11 → v5.2.12): Add read-only Antigravity (`agy`) history reader (`scripts/read_antigravity_session.py`, zero-dep Python 3.9+) using native `conversation_summaries.db` + `conversations_fts` with selective `transcript_full.jsonl` hydration, parallel tool-call/result pairing, and subagent/checkpoint briefings, and route Antigravity history through `local-conversation-history`.

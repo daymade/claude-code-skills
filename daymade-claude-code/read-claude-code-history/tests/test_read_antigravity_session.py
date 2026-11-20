@@ -845,6 +845,166 @@ class TestReadAntigravitySession(unittest.TestCase):
         step0 = json.loads(out2)["steps"][0]
         self.assertEqual(step0["error"]["code"], "RATE_LIMIT")
 
+    def test_query_project_filter_not_starved_by_other_workspace_or_subagent_hits(self) -> None:
+        # Insert 70 higher-ranked FTS hits + 35 newer metadata LIKE hits in ws_beta
+        # (exceeding old SQLite LIMIT 50 / LIMIT 25 caps) plus 1 target in ws_alpha.
+        ws_beta = (self.base / "work" / "beta").resolve()
+        conn = sqlite3.connect(str(self.store / "conversation_summaries.db"))
+        for i in range(70):
+            cid = f"conv-beta-noise-{i:03d}"
+            ts = f"2026-11-20T12:{i // 60:02d}:{i % 60:02d}Z"
+            conn.execute(
+                "INSERT INTO conversation_summaries VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    cid,
+                    f"共同前缀 noise {i}",
+                    "commonterm repeated commonterm commonterm",
+                    2,
+                    ts,
+                    json.dumps([ws_beta.as_uri()]),
+                    "IDLE",
+                    "CLI",
+                    "proj-b",
+                    "agy",
+                    "",
+                    0,
+                    "",
+                    "",
+                    0,
+                    0,
+                    ts,
+                    1,
+                    str(self.store),
+                    b"",
+                    "",
+                ),
+            )
+            conn.execute(
+                "INSERT INTO conversations_fts VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    cid,
+                    0,
+                    0,
+                    1,
+                    ts,
+                    2,
+                    ts,
+                    0,
+                    "[]",
+                    "[]",
+                    f"共同前缀 noise {i}",
+                    str(ws_beta),
+                    "proj-b",
+                    "commonterm commonterm commonterm",
+                    "commonterm commonterm",
+                ),
+            )
+        # Older, lower-term-frequency target in ws_alpha
+        conn.execute(
+            "INSERT INTO conversation_summaries VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                "conv-alpha-target",
+                "共同前缀 alpha target",
+                "older summary preview",
+                2,
+                "2026-11-01T00:00:00Z",
+                json.dumps([self.ws_alpha.as_uri()]),
+                "IDLE",
+                "CLI",
+                "proj-a",
+                "agy",
+                "",
+                0,
+                "",
+                "",
+                0,
+                0,
+                "2026-11-01T00:00:00Z",
+                1,
+                str(self.store),
+                b"",
+                "",
+            ),
+        )
+        conn.execute(
+            "INSERT INTO conversations_fts VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                "conv-alpha-target",
+                0,
+                0,
+                1,
+                "2026-11-01T00:00:00Z",
+                2,
+                "2026-11-01T00:00:00Z",
+                0,
+                "[]",
+                "[]",
+                "alpha target",
+                str(self.ws_alpha),
+                "proj-a",
+                "one mention of commonterm surrounded by lots of other unrelated padding words here",
+                "padding words",
+            ),
+        )
+        conn.commit()
+        conn.close()
+
+        # FTS path with --project ws_alpha must NOT be starved by 70 higher-ranked ws_beta hits
+        rc_fts, out_fts, _ = self._run_cli(
+            [
+                "--app-data-dir",
+                str(self.store),
+                "--query",
+                "commonterm",
+                "--project",
+                str(self.ws_alpha),
+                "--limit",
+                "5",
+                "--format",
+                "json",
+            ]
+        )
+        self.assertEqual(rc_fts, 0)
+        fts_hits = json.loads(out_fts)["hits"]
+        self.assertEqual([h["conversation_id"] for h in fts_hits], ["conv-alpha-target"])
+        self.assertEqual(fts_hits[0]["match_source"], "conversations_fts")
+
+        # Metadata LIKE path (CJK substring) must NOT be starved by 70 newer ws_beta rows
+        rc_like, out_like, _ = self._run_cli(
+            [
+                "--app-data-dir",
+                str(self.store),
+                "--query",
+                "共同前缀",
+                "--project",
+                str(self.ws_alpha),
+                "--limit",
+                "5",
+                "--format",
+                "json",
+            ]
+        )
+        self.assertEqual(rc_like, 0)
+        like_hits = json.loads(out_like)["hits"]
+        self.assertEqual([h["conversation_id"] for h in like_hits], ["conv-alpha-target"])
+        self.assertEqual(like_hits[0]["match_source"], "summary_metadata_like")
+
+        # Global query without --project still respects --limit strictly
+        rc_lim, out_lim, _ = self._run_cli(
+            [
+                "--app-data-dir",
+                str(self.store),
+                "--query",
+                "commonterm",
+                "--limit",
+                "3",
+                "--format",
+                "json",
+            ]
+        )
+        self.assertEqual(rc_lim, 0)
+        self.assertEqual(len(json.loads(out_lim)["hits"]), 3)
+
     def test_max_output_bytes_markdown_notice_and_valid_json_truncation(self) -> None:
         rc, out, _ = self._run_cli(
             [
