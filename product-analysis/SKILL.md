@@ -154,7 +154,7 @@ Each Codex invocation gets the same dimensional prompt but from a different mode
 codex -m o4-mini \
   -c model_reasoning_effort="high" \
   --full-auto \
-  "Analyze the frontend navigation structure of this project. Count all interactive elements visible to a new user on first screen. Identify duplicate entry points where the same feature is accessible from 2+ places. Give specific file paths and counts."
+  "Analyze the frontend navigation structure of this project. Estimate the total first-screen interactive elements and label the result as a source estimate, not a rendered-verified count. Identify duplicate entry points where the same feature is accessible from 2+ places. Give specific file paths and estimates, and identify which values require rendered verification."
 ```
 
 Run 2-3 Codex commands in parallel (background Bash), one per major dimension.

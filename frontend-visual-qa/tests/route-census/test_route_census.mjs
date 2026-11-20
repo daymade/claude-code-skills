@@ -105,6 +105,8 @@ test("hard-deadline wrapper rejects stalled work and preserves successful result
 test("path-style hash detection accepts path routes and hashbangs but not element anchors", () => {
   assert.equal(isPathStyleHash("#/app"), true);
   assert.equal(isPathStyleHash("#!/app"), true);
+  assert.equal(isPathStyleHash("#!dashboard"), true);
+  assert.equal(isPathStyleHash("#!"), true);
   assert.equal(isPathStyleHash("#section"), false);
   assert.equal(isPathStyleHash("#"), false);
   assert.equal(isPathStyleHash(""), false);
@@ -271,7 +273,8 @@ test("sitemap census writes JSONL and summary for healthy and error routes", asy
         + `<url><loc>http://127.0.0.1:${port}/errors</loc></url>`
         + `<url><loc>http://127.0.0.1:${port}/blank</loc></url>`
         + `<url><loc>http://127.0.0.1:${port}/contents</loc></url>`
-        + `<url><loc>http://127.0.0.1:${port}/hashbang#!/app</loc></url></urlset>`);
+        + `<url><loc>http://127.0.0.1:${port}/hashbang#!/app</loc></url>`
+        + `<url><loc>http://127.0.0.1:${port}/redirect</loc></url></urlset>`);
       return;
     }
     if (request.url === "/blank") {
@@ -287,6 +290,11 @@ test("sitemap census writes JSONL and summary for healthy and error routes", asy
     if (request.url === "/hashbang") {
       response.writeHead(200, { "Content-Type": "text/html" });
       response.end("<!doctype html><title>Hashbang</title><main><h1>Hashbang route</h1><a href='#!/app'>Open app</a></main>");
+      return;
+    }
+    if (request.url === "/redirect") {
+      response.writeHead(302, { Location: `http://localhost:${server.address().port}/internal` });
+      response.end();
       return;
     }
     if (request.url === "/favicon.ico") {
@@ -323,7 +331,7 @@ test("sitemap census writes JSONL and summary for healthy and error routes", asy
     assert.equal(result.code, 1, result.stdout + result.stderr);
     const recordsText = await readFile(join(out, "records.jsonl"), "utf8");
     const records = recordsText.trim().split("\n").map((line) => JSON.parse(line));
-    assert.equal(records.length, 6);
+    assert.equal(records.length, 7);
     assert.equal(records[0].status, "healthy");
     assert.equal(records[1].httpStatus, 404);
     assert.ok(records[1].issues.some((issue) => issue.type === "non-200"));
@@ -339,23 +347,24 @@ test("sitemap census writes JSONL and summary for healthy and error routes", asy
       assert.doesNotMatch(JSON.stringify(records[3].issues), new RegExp(`"type":"${type}"`));
     }
     assert.doesNotMatch(JSON.stringify(records[4].issues), /broken-hash-anchor/);
-    assert.equal(records[5].routeKind, "localized-404-probe");
-    assert.equal(records[5].expectedStatus, 404);
-    assert.equal(records[5].expectedStatusMatched, true);
-    assert.equal(records[5].status, "healthy", JSON.stringify(records[5].issues));
-    assert.doesNotMatch(JSON.stringify(records[5].issues), /non-200/);
+    assert.ok(records[5].issues.some((issue) => issue.type === "navigation-policy"), JSON.stringify(records[5].issues));
+    assert.equal(records[6].routeKind, "localized-404-probe");
+    assert.equal(records[6].expectedStatus, 404);
+    assert.equal(records[6].expectedStatusMatched, true);
+    assert.equal(records[6].status, "healthy", JSON.stringify(records[6].issues));
+    assert.doesNotMatch(JSON.stringify(records[6].issues), /non-200/);
     assert.doesNotMatch(recordsText, /\/healthy|\/errors|\/blank/);
 
     const summary = JSON.parse(await readFile(join(out, "summary.json"), "utf8"));
     assert.equal(summary.status, "findings");
     assert.equal(summary.exitCode, 1);
-    assert.equal(summary.input.discoveredRoutes, 5);
-    assert.equal(summary.input.examinedCanonicalRoutes, 5);
+    assert.equal(summary.input.discoveredRoutes, 6);
+    assert.equal(summary.input.examinedCanonicalRoutes, 6);
     assert.equal(summary.input.probeRoutes, 1);
     assert.equal(summary.input.discovery.truncated, false);
-    assert.equal(summary.totals.records, 6);
+    assert.equal(summary.totals.records, 7);
     assert.equal(summary.totals.healthy, 4);
-    assert.equal(summary.totals.withErrors, 2);
+    assert.equal(summary.totals.withErrors, 3);
     assert.ok(summary.issuesByType["non-200"]);
   } finally {
     server.close();

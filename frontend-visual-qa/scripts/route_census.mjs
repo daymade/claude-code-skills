@@ -26,6 +26,7 @@
  * screenshots used for an appearance claim must still be opened and inspected.
  */
 import { createHash } from "node:crypto";
+import dns from "node:dns/promises";
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import { isIP } from "node:net";
@@ -42,8 +43,9 @@ export const MAX_PROBES = 100;
 export const MAX_VIEWPORTS = 20;
 export const NAVIGATION_TIMEOUT_MS = 30_000;
 export const DEFAULT_ROUTE_DEADLINE_MS = 45_000;
-export const PATH_STYLE_HASH_PREFIXES = ["#/", "#!/"];
+export const PATH_STYLE_HASH_PREFIXES = ["#!", "#/"];
 const SETTLE_MS = 500;
+const DNS_POLICY_CACHE = new Map();
 const DEFAULT_VIEWPORTS = [
   { name: "desktop", width: 1440, height: 900, deviceScaleFactor: 1, isMobile: false, hasTouch: false },
   { name: "mobile", width: 390, height: 844, deviceScaleFactor: 1, isMobile: true, hasTouch: true },
@@ -376,6 +378,32 @@ function assertTargetAllowed(url, allowedTargets, label) {
   }
 }
 
+async function assertTargetAllowedAsync(url, allowedTargets, label) {
+  assertTargetAllowed(url, allowedTargets, label);
+  const hostname = url.hostname.replace(/^\[|\]$/g, "").split("%")[0].toLowerCase();
+  if (!hostname) return;
+  const documentationHost = hostname === "example.com"
+    || hostname === "example.org"
+    || hostname === "example.net"
+    || hostname.endsWith(".test")
+    || hostname.endsWith(".invalid");
+  if (isIP(hostname) || documentationHost || allowedTargets.has(hostname) || DNS_POLICY_CACHE.has(hostname)) return;
+  try {
+    const addresses = await dns.lookup(hostname, { all: true });
+    const restricted = addresses.some((entry) => isRestrictedHostname(entry.address));
+    DNS_POLICY_CACHE.set(hostname, restricted);
+    if (restricted) {
+      throw new CensusInputError(
+        `${label} resolves to a restricted address. Add --allow-target ${hostname} only when that exact target is intended.`,
+      );
+    }
+  } catch (error) {
+    if (error instanceof CensusInputError) throw error;
+    // DNS failure stays unknown; the literal hostname policy still applies.
+    DNS_POLICY_CACHE.set(hostname, false);
+  }
+}
+
 function assertFileWithinRoot(source, rootDirectory, label) {
   if (!/^file:/i.test(source)) throw new CensusInputError(`${label} must use a file URL under the local sitemap root.`);
   let filePath;
@@ -437,23 +465,32 @@ function assertNoEmbeddedCredentials(url, label) {
 
 async function readSitemap(source, policy = {}) {
   if (/^https?:\/\//i.test(source)) {
+    let current = source;
     let response;
-    try {
-      response = await fetch(source, {
-        redirect: "follow",
-        signal: AbortSignal.timeout(NAVIGATION_TIMEOUT_MS),
-        headers: { Accept: "application/xml,text/xml;q=0.9,*/*;q=0.8" },
-      });
-    } catch (error) {
-      throw new CensusInputError(`Could not fetch sitemap: ${redactText(error?.message || String(error))}`);
+    for (let hop = 0; hop <= 5; hop += 1) {
+      const currentUrl = new URL(current);
+      await assertTargetAllowedAsync(currentUrl, policy.allowedTargets || new Set(), "Sitemap reference");
+      if (policy.rootOrigin && currentUrl.origin !== policy.rootOrigin && !(policy.allowedOrigins || new Set()).has(currentUrl.origin)) {
+        throw new CensusInputError(`Sitemap redirect origin ${currentUrl.origin} does not match ${policy.rootOrigin}.`);
+      }
+      try {
+        response = await fetch(current, {
+          redirect: "manual",
+          signal: AbortSignal.timeout(NAVIGATION_TIMEOUT_MS),
+          headers: { Accept: "application/xml,text/xml;q=0.9,*/*;q=0.8" },
+        });
+      } catch (error) {
+        throw new CensusInputError(`Could not fetch sitemap: ${redactText(error?.message || String(error))}`);
+      }
+      if (response.status >= 300 && response.status < 400 && response.headers.get("location")) {
+        await response.body?.cancel().catch(() => {});
+        current = new URL(response.headers.get("location"), current).href;
+        continue;
+      }
+      break;
     }
-    try {
-      assertTargetAllowed(new URL(response.url), policy.allowedTargets || new Set(), "Redirected sitemap");
-    } catch (error) {
-      await response.body?.cancel().catch(() => {});
-      throw error;
-    }
-    if (!response.ok) throw new CensusInputError(`Sitemap returned HTTP ${response.status}.`);
+    if (!response) throw new CensusInputError("Sitemap redirect chain did not produce a response.");
+    if (!response.ok) throw new CensusInputError(`Sitemap returned HTTP ${response.status}.`)
     const declaredLength = Number.parseInt(response.headers.get("content-length") || "", 10);
     if (Number.isFinite(declaredLength) && declaredLength > MAX_SITEMAP_BYTES) {
       throw new CensusInputError("Sitemap exceeds the 10 MiB input limit.");
@@ -553,9 +590,10 @@ export async function discoverRoutes(sitemapSource, read = readSitemap, options 
     throw new CensusInputError("maxRoutes must be a positive integer.");
   }
 
-  assertTargetAllowed(rootUrl, allowedTargets, "Root sitemap");
+  await assertTargetAllowedAsync(rootUrl, allowedTargets, "Root sitemap");
   const policy = {
     rootProtocol: rootUrl.protocol,
+    rootOrigin: rootUrl.protocol === "http:" || rootUrl.protocol === "https:" ? rootUrl.origin : null,
     rootDirectory: rootUrl.protocol === "file:" ? path.dirname(fileURLToPath(rootUrl)) : null,
     allowedTargets,
     allowedOrigins,
@@ -621,7 +659,7 @@ export async function discoverRoutes(sitemapSource, read = readSitemap, options 
         throw new CensusInputError("Canonical routes must use HTTP or HTTPS.");
       }
       assertNoEmbeddedCredentials(routeUrl, "canonical route");
-      assertTargetAllowed(routeUrl, allowedTargets, "Canonical route");
+      await assertTargetAllowedAsync(routeUrl, allowedTargets, "Canonical route");
       if (canonicalOrigin === null) canonicalOrigin = routeUrl.origin;
       if (routeUrl.origin !== canonicalOrigin && !allowedOrigins.has(routeUrl.origin)) {
         throw new CensusInputError(
@@ -780,7 +818,7 @@ export async function withDeadline(operation, deadline, label) {
   });
 }
 
-async function auditRouteViewport(browser, descriptor, routeIndex, viewport, routeTimeoutMs) {
+async function auditRouteViewport(browser, descriptor, routeIndex, viewport, routeTimeoutMs, policy = {}) {
   const route = descriptor.route;
   const deadline = Date.now() + routeTimeoutMs;
   let context = null;
@@ -791,6 +829,7 @@ async function auditRouteViewport(browser, descriptor, routeIndex, viewport, rou
   let response = null;
   let navigationError = null;
   let deadlineError = null;
+  let policyError = null;
   let finalUrl = route;
   let census = { metrics: {}, issues: [] };
 
@@ -802,6 +841,26 @@ async function auditRouteViewport(browser, descriptor, routeIndex, viewport, rou
       hasTouch: viewport.hasTouch,
     }), deadline, "Browser context creation");
     page = await context.newPage();
+    const cdp = await context.newCDPSession(page);
+    await cdp.send("Fetch.enable", {
+      patterns: [{ urlPattern: "*", requestStage: "Request", resourceType: "Document" }],
+    });
+    cdp.on("Fetch.requestPaused", async (event) => {
+      try {
+        const target = new URL(event.request.url);
+        await assertTargetAllowedAsync(target, policy.allowedTargets || new Set(), "Navigation target");
+        if (policy.canonicalOrigin && target.origin !== policy.canonicalOrigin && !(policy.allowedOrigins || new Set()).has(target.origin)) {
+          throw new CensusInputError(`Navigation origin ${target.origin} does not match ${policy.canonicalOrigin}.`);
+        }
+        await cdp.send("Fetch.continueRequest", { requestId: event.requestId });
+      } catch (error) {
+        policyError = error;
+        await cdp.send("Fetch.failRequest", {
+          requestId: event.requestId,
+          errorReason: "AccessDenied",
+        }).catch(() => {});
+      }
+    });
     page.on("console", (message) => {
       if (message.type() === "error") {
         consoleErrors.push({ text: message.text(), url: message.location()?.url || "" });
@@ -842,6 +901,14 @@ async function auditRouteViewport(browser, descriptor, routeIndex, viewport, rou
       severity: "error",
       detail: `The route exceeded the ${routeTimeoutMs}ms hard deadline covering navigation, readiness and evaluation.`,
       deadlineMs: routeTimeoutMs,
+    });
+  }
+  if (policyError) {
+    issues.push({
+      type: "navigation-policy",
+      severity: "error",
+      detail: "A main-frame navigation violated the target or origin policy.",
+      errorEvidence: textEvidence(policyError?.message || String(policyError)),
     });
   }
   if (navigationError) {
@@ -1137,7 +1204,7 @@ async function main() {
         throw new CensusInputError("--probe must use HTTP or HTTPS.");
       }
       assertNoEmbeddedCredentials(probeUrl, "probe route");
-      assertTargetAllowed(probeUrl, allowedTargets, "Probe route");
+      await assertTargetAllowedAsync(probeUrl, allowedTargets, "Probe route");
       if (probeUrl.origin !== discovered.discovery.canonicalOrigin && !allowedOrigins.has(probeUrl.origin)) {
         throw new CensusInputError(
           `Probe origin ${probeUrl.origin} does not match ${discovered.discovery.canonicalOrigin}. Add --allow-origin ${probeUrl.origin} only when intended.`,
@@ -1166,6 +1233,11 @@ async function main() {
           routeIndex,
           viewport,
           options.routeTimeoutMs,
+          {
+            allowedTargets,
+            allowedOrigins,
+            canonicalOrigin: discovered.discovery.canonicalOrigin,
+          },
         );
         records.push(record);
         const issueSummary = record.issues.length

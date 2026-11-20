@@ -55,17 +55,17 @@ export function isWrappedControlElement({
 
   if (semanticContainerTags.has(tag) || semanticContainerRoles.has(normalizedRole)) return false;
   if (nativeControlTags.has(tag)) return true;
-  if ((tag === "A" || tag === "AREA") && href) return true;
   if (interactiveRoles.has(normalizedRole)) return true;
   if (String(contentEditable).toLowerCase() === "true") return true;
   if (!explicitMenuItem && semanticParts.some((part) => semanticContainerClassParts.has(part))) return false;
 
-  const focusable = (parsedTabIndex ?? -1) >= 0;
+  const hasHref = (tag === "A" || tag === "AREA") && Boolean(href);
+  const focusable = hasHref || (parsedTabIndex ?? -1) >= 0;
   if (!focusable) return false;
-  return normalizedTokens.some((token) => (
-    token === "menu-item"
-    || token === "menuitem"
-    || token === "segmented-control"
-    || controlClassParts.has(token)
-  )) || semanticParts.some((part) => controlClassParts.has(part));
+  return explicitMenuItem
+    || normalizedTokens.some((token) => (
+      token === "segmented-control"
+      || controlClassParts.has(token)
+    ))
+    || semanticParts.some((part) => controlClassParts.has(part));
 }

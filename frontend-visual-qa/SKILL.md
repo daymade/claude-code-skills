@@ -442,9 +442,14 @@ URL boundaries fail closed: an HTTP(S) root never follows `file:` children; a
 local file root follows only `file:` children inside its own directory; canonical
 routes and probes are same-origin by default. Use `--allow-origin <origin>` only
 for an intentional cross-origin route set. Loopback, private and link-local
-targets require an exact `--allow-target <host>` entry. Each route/viewport has a
-45-second hard deadline covering navigation, readiness and evaluation; override
-it only with `--route-timeout-ms <1000-300000>`.
+targets require an exact `--allow-target <host>` entry. Sitemap redirects are
+validated hop by hop before the next fetch, and browser main-frame redirects are
+intercepted and checked before continuation. Hostnames are also resolved and
+rejected when they map into restricted address space; documentation-only hosts
+(`example.*`, `.test`, `.invalid`) are exempt for fixtures. This reduces DNS-based
+bypasses but cannot eliminate DNS rebinding between validation and connection.
+Each route/viewport has a 45-second hard deadline covering navigation, readiness
+and evaluation; override it only with `--route-timeout-ms <1000-300000>`.
 
 Use `--probe <url> --probe-expected-status <status>` for a deliberate probe such
 as an unknown localized-404 route. Probe records carry
@@ -458,7 +463,7 @@ fatal page/navigation/deadline failures, horizontal overflow, console errors,
 broken and pending viewport-visible images, missing alt text, broken same-page
 hash targets, duplicate IDs, missing/duplicate visible H1, missing visible main
 landmark, and empty rendered text. Path-style hash routes such as `#/app` and
-hashbangs such as `#!/app` are not treated as element anchors. Pending images
+hashbangs such as `#!dashboard` or `#!` are not treated as element anchors. Pending images
 are warnings; the other listed conditions are confirmed errors. Exit 0 means no
 confirmed structural error, 1 means at least one, and 2 means invalid input or
 runtime/setup failure. Records retain sitemap order through `routeIndex` and

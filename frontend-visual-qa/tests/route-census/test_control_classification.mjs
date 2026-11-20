@@ -14,6 +14,7 @@ test("wrapped-control classification accepts observable controls", () => {
   assert.equal(isWrappedControlElement({ tagName: "BUTTON" }), true);
   assert.equal(isWrappedControlElement({ tagName: "DIV", className: "menu-item", tabindex: "0" }), true);
   assert.equal(isWrappedControlElement({ tagName: "A", href: "/next", className: "link" }), true);
+  assert.equal(isWrappedControlElement({ tagName: "A", href: "/next", className: "" }), false);
   assert.equal(isWrappedControlElement({ tagName: "DIV", role: "button" }), true);
   assert.equal(isWrappedControlElement({ tagName: "DIV", className: "button", tabindex: "0" }), true);
   assert.equal(isWrappedControlElement({ tagName: "BUTTON", className: "nav" }), true);
