@@ -45,11 +45,15 @@ def _plan_units(target: str) -> tuple[list[list[str]], list[str], int]:
     loader = unittest.TestLoader()
     suite = loader.discover(start_dir=abs_target)
     load_errors: list[str] = []
+    module_skips: int = 0
     by_class: dict[tuple[str, str], list[tuple[type[unittest.TestCase], str]]] = defaultdict(list)
 
     for case in _iter_cases(suite):
         cls = type(case)
         if cls.__module__ == "unittest.loader":
+            if cls.__name__ == "ModuleSkipped":
+                module_skips += 1
+                continue
             buf = io.StringIO()
             unittest.TextTestRunner(stream=buf, verbosity=2).run(case)
             load_errors.append(buf.getvalue().strip() or f"Failed to load {case.id()}")
@@ -67,7 +71,7 @@ def _plan_units(target: str) -> tuple[list[list[str]], list[str], int]:
                 units.append([tid])
         else:
             units.append(ids)
-    return units, load_errors, total
+    return units, load_errors, total, module_skips
 
 
 def _run_unit(abs_target: str, test_ids: list[str]) -> dict:
@@ -77,13 +81,15 @@ def _run_unit(abs_target: str, test_ids: list[str]) -> dict:
     suite = unittest.TestSuite()
     for tid in test_ids:
         suite.addTests(loader.loadTestsFromName(tid))
+    loaded = suite.countTestCases()
     stream = io.StringIO()
     runner = unittest.TextTestRunner(stream=stream, verbosity=2)
     result = runner.run(suite)
     return {
         "ids": test_ids,
+        "loaded": loaded,
         "ran": result.testsRun,
-        "ok": result.wasSuccessful(),
+        "ok": result.wasSuccessful() and loaded == len(test_ids),
         "skipped": len(result.skipped),
         "failures": len(result.failures),
         "errors": len(result.errors),
@@ -106,7 +112,7 @@ def main(argv: list[str] | None = None) -> int:
 
     abs_target = str(Path(args.target).resolve())
     start = time.monotonic()
-    units, load_errors, total = _plan_units(abs_target)
+    units, load_errors, total, module_skips = _plan_units(abs_target)
     if load_errors:
         for err in load_errors:
             print(err, file=sys.stderr)
@@ -119,14 +125,16 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if res.wasSuccessful() else 1
 
     workers = min(args.jobs, len(units))
+    loaded_total = 0
     ran = 0
-    skipped = 0
+    skipped = module_skips
     failed_outputs: list[str] = []
 
     with ProcessPoolExecutor(max_workers=workers) as pool:
         futures = [pool.submit(_run_unit, abs_target, unit) for unit in units]
         for fut in as_completed(futures):
             rec = fut.result()
+            loaded_total += rec["loaded"]
             ran += rec["ran"]
             skipped += rec["skipped"]
             if not rec["ok"]:
@@ -138,9 +146,9 @@ def main(argv: list[str] | None = None) -> int:
         if not out.endswith("\n"):
             sys.stderr.write("\n")
 
-    if ran != total:
+    if loaded_total != total:
         print(
-            f"FAIL: executed {ran} of {total} discovered tests in {args.target}",
+            f"FAIL: loaded {loaded_total} of {total} discovered tests in {args.target}",
             file=sys.stderr,
         )
         return 1

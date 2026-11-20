@@ -83,6 +83,33 @@ class ParallelUnittestRunnerTests(unittest.TestCase):
             self.assertNotEqual(proc.returncode, 0)
             self.assertIn("ModuleNotFoundError", proc.stderr)
 
+    def test_module_skipped_and_class_skipped_pass(self):
+        with tempfile.TemporaryDirectory(prefix="par-ut-skip-") as tmp:
+            root = Path(tmp)
+            (root / "test_mod_skip.py").write_text(
+                "import unittest\nraise unittest.SkipTest('optional dependency missing')\n",
+                encoding="utf-8",
+            )
+            (root / "test_cls_skip.py").write_text(
+                "import unittest\n"
+                "@unittest.skip('darwin only')\n"
+                "class SkippedClass(unittest.TestCase):\n"
+                "    def test_a(self): self.fail('should skip')\n"
+                "    def test_b(self): self.fail('should skip')\n"
+                "class ActiveClass(unittest.TestCase):\n"
+                "    def test_1(self): self.assertTrue(True)\n"
+                "    def test_2(self): self.assertTrue(True)\n"
+                "    def test_3(self): self.assertTrue(True)\n"
+                "    def test_4(self): self.assertTrue(True)\n"
+                "    def test_5(self): self.assertTrue(True)\n"
+                "    def test_6(self): self.assertTrue(True)\n",
+                encoding="utf-8",
+            )
+            proc = self._run(root, "--jobs", "2")
+            self.assertEqual(proc.returncode, 0, proc.stderr + proc.stdout)
+            self.assertIn("Ran 8 tests", proc.stdout)
+            self.assertIn("skipped=3", proc.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
