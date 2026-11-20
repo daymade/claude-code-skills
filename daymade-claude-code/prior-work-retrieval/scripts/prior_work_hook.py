@@ -912,6 +912,8 @@ def substantial_tool_use(event: dict[str, Any]) -> tuple[bool, str]:
         return new_file or added_lines >= 5, (
             f"apply_patch:new={new_file}:added_lines={added_lines}"
         )
+    if _tool_name(event) == "Agent" and tool_input.get("subagent_type") == "Explore":
+        return False, "Agent:read_only_explore"
     if base in {"Agent", "Task", "spawn_agent"}:
         prompt = tool_input.get("prompt") or tool_input.get("message")
         size = len(prompt) if isinstance(prompt, str) else 0

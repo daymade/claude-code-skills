@@ -680,6 +680,50 @@ class PriorWorkHookTests(unittest.TestCase):
         }
         self.assertTrue(hook.substantial_tool_use(named_scratch)[0])
 
+    def test_only_host_read_only_explore_agent_skips_production_receipt(self) -> None:
+        prompt = "Read-only exploration of the existing hook registration and tests. " * 8
+        explore = {
+            "hook_event_name": "PreToolUse",
+            "session_id": "session-explore-read-only",
+            "tool_name": "Agent",
+            "tool_input": {"subagent_type": "Explore", "prompt": prompt},
+        }
+        self.assertEqual(
+            hook.substantial_tool_use(explore),
+            (False, "Agent:read_only_explore"),
+        )
+        prior_work.mark_requirement(
+            hook._manifest(),
+            "session-explore-read-only",
+            prompt="请复用以前的解析器",
+            trigger="required_prior_signal",
+            required=True,
+        )
+        self.assertIsNone(hook.handle_pre_tool(explore))
+        for tool_name, subagent_type in (
+            ("Agent", "general-purpose"),
+            ("Agent", None),
+            ("Task", "Explore"),
+            ("functions.Agent", "Explore"),
+            ("mcp__example__Agent", "Explore"),
+            ("other.Agent", "Explore"),
+        ):
+            with self.subTest(tool_name=tool_name, subagent_type=subagent_type):
+                event = {
+                    "hook_event_name": "PreToolUse",
+                    "session_id": "session-explore-read-only",
+                    "tool_name": tool_name,
+                    "tool_input": {"prompt": prompt},
+                }
+                if subagent_type is not None:
+                    event["tool_input"]["subagent_type"] = subagent_type
+                self.assertTrue(hook.substantial_tool_use(event)[0])
+                denied = hook.handle_pre_tool(event)
+                self.assertEqual(
+                    denied["hookSpecificOutput"]["permissionDecision"],
+                    "deny",
+                )
+
     def test_tool_input_and_names_normalize_across_hosts(self) -> None:
         raw_patch = {
             "tool_name": "functions.apply_patch",
