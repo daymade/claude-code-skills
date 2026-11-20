@@ -455,7 +455,14 @@ branch protection; a missing response or a legacy API 404 proves neither. Reconc
 the check evidence or obtain the ordinary effective approval rather than changing
 API. Auto-merge and cancellation remain explicit `gh`
 operations; do not combine auto-merge with bypass or infer scheduling authority
-from an ordinary merge request.
+from an ordinary merge request. Keep an authorized `--admin` merge as a single,
+isolated command rather than chaining it with local cleanup (`git branch -D`,
+`git worktree remove`, or multi-step scripts), because compound scripts carrying
+`--admin` can trip host pre-tool safety gates. Note also that under a
+`REVIEW_REQUIRED` ruleset where the actor is a bypass actor, GitHub computes
+`mergeStateStatus` asynchronously right after a push (`UNKNOWN` → `BLOCKED`);
+an ordinary merge that slips through while `UNKNOWN` does not mean the ruleset
+changed, and once `BLOCKED` is computed `gh pr merge` requires `--admin`.
 
 When reporting protection compliance after a merge, inspect the rule suite for
 the exact landed SHA, in addition to checking merged state and landed content:
@@ -649,8 +656,11 @@ interface lacks leases, use the native Git sequence above. Plain legacy
 
 - **A merged PR can still leave its head branch behind.** When a local branch is checked out
   in a linked worktree, `gh pr merge --delete-branch` can report a local deletion failure after
-  the merge succeeded; the hosted branch can also remain. Read the PR state and remote ref
-  independently before retrying anything. Retire a surviving hosted branch through the
+  the merge succeeded; the hosted branch can also remain (for example when the
+  GraphQL merge succeeds but the follow-up REST branch deletion hits an `HTTP 403`
+  rate limit). Read the PR state and remote ref independently before retrying
+  anything (using Git `fetch` / `ls-remote` when REST is rate-limited). Retire a
+  surviving hosted branch through the
   [exact-tip workflow above](#4-retire-remote-branches-only-against-an-exact-saved-tip),
   preserving its current tip first. A failed query remains unknown; local worktree retirement
   stays with `git-safety-net`.
