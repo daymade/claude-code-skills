@@ -16,6 +16,15 @@ with management permission is not necessarily the original owner. Preserve the
 member ID/type, permission scope and role unless changing them is authorized;
 do not replace an update with delete-and-add or ownership transfer.
 
+Do not use `drive +member-add` to change an already-present collaborator's role
+(for example, upgrading `view` to `edit`): it can return `ok: true` with the
+requested `perm` while leaving the collaborator's actual permission unchanged.
+To update an existing collaborator's permission, use the router's documented
+`lark-cli api PUT /open-apis/drive/v1/permissions/{token}/members/{member_id}`
+escape hatch (passing the resource `type` in `--params` and `member_type`,
+`perm`, and `type` in `--data`), then confirm the effective role with
+`+member-list` readback.
+
 ## Retain per-target evidence
 
 Key each action by page, member and permission scope. Retain its observed before
@@ -41,6 +50,7 @@ old plan and need reconciliation against current authorization.
 | Resource permission denial or explicit refusal | Stop that target/profile route. Do not treat it as a transient error or switch identities, transport or API form to bypass it. |
 | Managed launcher's source-binding rejection | Stop dispatch; locate the install/executor owner and reconcile the reviewed source through its normal release procedure. Do not edit trust records, call a vendor binary directly or change transport to bypass the rejection. |
 | Changed page, space, member or permission scope; invalid response/schema | Stop the affected actions and rebuild their plan from verified current state and supported interface. Keep unrelated completed evidence. |
+| `drive +member-add` returns `ok: true` but `+member-list` readback still shows the prior role | The collaborator already existed and `+member-add` did not update their role. Switch to `lark-cli api PUT /open-apis/drive/v1/permissions/{token}/members/{member_id}` with explicit `--params` and `--data`, then verify via `+member-list` readback. |
 
 If a needed condition remains unavailable, report the precise incomplete targets
 and recovery condition. Follow the router's per-item reconciliation and the
