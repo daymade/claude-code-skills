@@ -47,6 +47,7 @@ This is a **production-hardened fork** of [Anthropic's official skill-creator](h
 | Ground knowledge skills in evidence | General advice | Authority ladder from real calls and machine-readable specs through production code, plus executable-example smoke checks and evidence-boundary rules |
 | Have both installed at once | Coin flip — the two descriptions are near-identical | Detects the clash on trigger and offers a one-command, reversible SessionStart routing hook (only ever installed when both coexist); the official plugin stays usable by explicit request |
 | Your own skill collides with an installed plugin | Not covered | `generate_supersede_kit.py` stamps the same conditional routing kit into your skill, plus a measured precedence decision guide (rename → description tiebreaker → hook → disable) |
+| [CrakSEO/skills](https://github.com/CrakSEO/skills) | Connect Claude/Cursor/Codex to CrakSEO remote MCP servers for keyword research, SERP, backlinks, rank tracking, site audit, local SEO, AI visibility, Search Console and URL indexing | Claude Code, Cursor, Codex | MIT |
 
 > Full methodology: [skill-creator/references/skill-development-methodology.md](./daymade-skill/skill-creator/references/skill-development-methodology.md)
 
