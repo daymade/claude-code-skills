@@ -323,6 +323,18 @@ state or an explicitly chosen reflow; a blank gap or text crossing into the next
 column is not a healthy empty state. A successful image request in other rows
 does not verify the missing-media branch.
 
+### Optional Visual Assets Must Collapse
+
+When a thumbnail, avatar, cover, icon, or other visual asset is optional, the
+no-asset branch must collapse the reserved visual slot rather than preserve a
+blank hole. Inspect a real populated row, a row without the asset, and a failed
+asset at the same viewport and with long adjacent text. The text must reflow into
+the freed width or into an intentional compact slot; it must not cross columns,
+leave a misleading empty frame, or expose a broken-image control. If the product
+instead reserves space for alignment, that choice needs a visible intentional
+empty state and must still keep labels, actions, and row height stable. A loaded
+asset elsewhere in the list does not verify this branch.
+
 For a hardware catalog or topology that prefers real photographs, exercise the
 existing media checks with these cases:
 

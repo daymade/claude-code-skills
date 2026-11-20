@@ -334,6 +334,8 @@ claude plugin install windows-remote-desktop-connection-doctor@daymade-skills
 
 # Product analysis and optimization
 claude plugin install product-analysis@daymade-skills
+# Required companion for product-analysis ux/full rendered audits
+claude plugin install frontend-visual-qa@daymade-skills
 
 # Scrapling CLI extraction and troubleshooting
 claude plugin install scrapling-skill@daymade-skills
@@ -1660,13 +1662,17 @@ Audit UX, API, architecture and selected competitor implementations using parall
 **Key features:**
 - Auto-detects tool context (project stack + optional `codex` availability)
 - Select the applicable [audit scope](product-analysis/SKILL.md#scope-modes)
+- `ux` and `full` scopes require the separately installed `frontend-visual-qa` companion and a rendered evidence stream before synthesis
+- Keeps source estimates separate from rendered-verified first-screen control counts and launch-to-first-value steps
+- Records source, interaction/action, and target-mutation authority independently
 - Evidence verification and priority selection through the [synthesis method](product-analysis/references/synthesis_methodology.md)
 - Built-in comparison hooks with `competitors-analysis`
 
 **Example usage:**
 ```bash
-# Install the skill
+# Install the skill and its required ux/full rendered-audit companion
 claude plugin install product-analysis@daymade-skills
+claude plugin install frontend-visual-qa@daymade-skills
 
 # Then ask Claude for analysis
 "Run product-analysis in full mode for launch audit"
@@ -1681,7 +1687,7 @@ claude plugin install product-analysis@daymade-skills
 
 📚 **Documentation**: See [product-analysis/SKILL.md](./product-analysis/SKILL.md) and [product-analysis/references/analysis_dimensions.md](./product-analysis/references/analysis_dimensions.md) for dimension definitions and workflow guidance.
 
-**Requirements**: Optional `codex` CLI (for multi-model parallel mode). Skill runs with Claude only if `codex` is not installed.
+**Requirements**: Optional `codex` CLI (for multi-model parallel mode). Skill runs with Claude only if `codex` is not installed. `ux` and `full` also require `frontend-visual-qa@daymade-skills`; when that companion is absent, the rendered gate is explicitly blocked rather than replaced by source inspection.
 
 ---
 
@@ -2815,6 +2821,8 @@ Audit the UI users can actually see, with explicit evidence levels and no source
 - A–D evidence ladder that prevents headless, renderer-only, or handler-only checks from masquerading as real GUI proof
 - State/viewport-first workflow, including authenticated-but-role-less branches and exact projection/deck canvases, plus inspected screenshots and DOM geometry
 - Hardened Playwright-powered sweep for navigation status, effective mobile viewport, overflow, clipping, custom-control focusability, images, and section evidence
+- Sitemap-derived whole-site route census for repeatable structural errors, explicitly separated from visual acceptance
+- Required journey coverage for optional-asset collapse, cross-entry return context, and localized 404 behavior
 - Conditional references for core visual checks, complex journeys/page contracts, and data visualization—including units/source/time/freshness, dense collisions, runtime-label truth, and real file-dialog boundaries
 - Public behavior and trigger evals with self-contained fixtures
 
