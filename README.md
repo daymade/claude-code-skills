@@ -3766,6 +3766,24 @@ Specialist retrieval and video Skills are optional; no bundled runtime dependenc
 
 ---
 
+### **ai-quota-calibrator** - Calibrate Black-Box AI Subscription Quotas
+
+> **Install**: `claude plugin install ai-quota-calibrator@daymade-skills`
+
+Estimate the true API-dollar capacity, weekly-to-5h multiplier, and remaining runway of percentage-based AI subscriptions (Antigravity Gemini/Claude pools, Codex, custom percentage caps) by reconciling local `tokscale` spend against live provider quota fractions.
+
+**When to use:** Answer how much API value a 5-hour or weekly subscription pool equals, diagnose why a third-party model pool drains faster than first-party models, or calibrate burn rate with two-read stability checks and cache-write sensitivity bounds.
+
+```text
+Use ai-quota-calibrator to calibrate my current Antigravity Gemini and Claude quota pools with tokscale.
+```
+
+**Requirements**: `tokscale` CLI (`antigravity-cli` / `codex` / other local clients), `agy` CLI for Antigravity, and Python 3.9+ standard library (zero pip dependencies).
+
+📚 **Documentation**: [ai-quota-calibrator](./ai-quota-calibrator/SKILL.md).
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
