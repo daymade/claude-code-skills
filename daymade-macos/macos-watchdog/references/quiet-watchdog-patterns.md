@@ -11,6 +11,7 @@ Design patterns for the four contract clauses in SKILL.md, each with the sanitiz
 - Pattern 6: Batch loops throttle by default
 - Pattern 7: A green success log is not a health signal
 - Pattern 8: A stale failure signal is history, not current state
+- Pattern 9: Terminal phase is sticky across heartbeats
 
 ## Pattern 1: Premise-state self-check
 
@@ -77,3 +78,13 @@ sr_open() {  # name yours after the target
 **Pattern.** `launchctl`'s LastExitStatus is the *most recent* exit, not the current one. An err.log whose last line predates the current instance's start is the previous incarnation's tail — typically `ThrottleInterval` retry noise — not a live failure. Judge health by *relative* freshness: err.log mtime frozen in the past while `ps -o etime` keeps growing = healthy; only err.log lines newer than the current instance's start warrant diagnosis. Before calling a port/listener a conflict, verify the holder's identity: compare the remote listener's process start with the local client's start — if they align to the second, the "squatter" is the job's own live session. When logs cross machines, convert timezones first (m6-0 logs at -0700, 15 h behind).
 
 **War story.** 2026-10-21, during a 100%-full disk emergency, two relays showed `last-exit 255` plus old err.log tracebacks and were one `kickstart` away from being "repaired". Recheck showed the 18084 listener was the relay's own current session (remote sshd-session started 01:12:21, local relay 01:12:20, second-aligned); the err.log's last line was written 60 s before the current instance started, then silent for 19 h 46 m. m6-0 was isomorphic (failure log frozen at the MacBook offline window; current instance stable 20 h+). Disposition: report, do not act — a kickstart would have cut two forwards that had been stable for 19-21 hours and manufactured a real second incident inside the emergency. Pattern 7 covers success-side silence (green log ≠ health); this pattern is its mirror: a stale *failure* signal is not a current fault.
+
+## Pattern 9: Terminal phase is sticky across heartbeats
+
+**Pattern.** A periodic worker must not publish a transient healthy phase at the start of a cycle. Set `observing`/`healthy` only after the whole cycle completes successfully. Heartbeats may refresh `observed_unix`, but they must not clear the previous terminal error or phase. Consumers likewise require a new completed successful cycle before writing `recovered`; a fresh timestamp alone is not recovery.
+
+**Why.** A producer that resets phase before preflight/copy/scan work creates a synthetic healthy window. If its heartbeat publishes that window, a downstream sampler can alternate incident/recovered even though the underlying fault never changed. This is sampling aliasing, not self-recovery.
+
+**War story.** An archive worker reset `phase=observing` at cycle start, then failed minutes later on a capacity guard. Its 5-second heartbeat published the transient phase. The inspector sampled at roughly the same cadence as the 30-second cycle and produced hundreds of archive incident/recovered transitions over four days, including a one-hour burst. The disk stayed just above its protection line throughout; no recovery had occurred.
+
+**Acceptance.** Replay a bad cycle followed by one or more heartbeats and assert the published phase/error stay degraded. Then replay a complete good cycle and assert it is the first state allowed to clear the incident. Cover a slow cycle whose heartbeat lands between start and terminal failure.
