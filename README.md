@@ -3772,7 +3772,7 @@ Specialist retrieval and video Skills are optional; no bundled runtime dependenc
 
 Estimate the true API-dollar capacity, weekly-to-5h multiplier, and remaining runway of percentage-based AI subscriptions (Antigravity Gemini/Claude pools, Codex, custom percentage caps) by reconciling local `tokscale` spend against live provider quota fractions.
 
-**When to use:** Answer how much API value a 5-hour or weekly subscription pool equals, diagnose why a third-party model pool drains faster than first-party models, or calibrate burn rate with two-read stability checks and cache-write sensitivity bounds.
+**When to use:** Answer how much API value a 5-hour or weekly subscription pool equals, diagnose why a pool hit rate limit (including `< 1%` soft lockout, `CONTEXT_SNOWBALL` top burning sessions, reset countdown, and alternate open pools), or calibrate burn rate with directional stability checks and cache-write sensitivity bounds.
 
 ```text
 Use ai-quota-calibrator to calibrate my current Antigravity Gemini and Claude quota pools with tokscale.

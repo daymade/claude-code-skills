@@ -3736,7 +3736,7 @@ Daymade Skill Evolver 组装已有 Skills，为指定现有 Skill 完成一轮�
 
 将本地 `tokscale` 真实消耗与平台实时配额比例（Antigravity Gemini/Claude 池、Codex 及其他百分比订阅）按窗口起点精确对齐，反推 5 小时池与周池的等效 API 美元规模、周÷5h 倍率与当前火力下的剩余续航。
 
-**适用场景**：查询黑盒订阅 5 小时/周额度大概相当于多少 API 美元、排查第三方模型池掉额度快的原因、用双次稳态采样与 Cache Write 敏感度区间校准真实消耗。
+**适用场景**：查询黑盒订阅 5 小时/周额度大概相当于多少 API 美元、排查池子为什么触发限流（含 `< 1%` 预扣软锁死、Top 烧钱与长上下文滚雪球会话归因、重置倒计时与同订阅可切换替代池），并用方向感知稳态采样与 Cache Write 敏感度区间校准真实消耗。
 
 ```text
 用 ai-quota-calibrator 结合 tokscale 校准我当前的 Antigravity Gemini 和 Claude 配额池。
