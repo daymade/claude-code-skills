@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **github-ops** (`github-ops` v1.17.4 → v1.17.5): Document separate GitHub REST (`core`) vs GraphQL rate-limit buckets in `api_reference.md` and cross-link the proactive GraphQL check-run query and no-`--delete-branch` merge path in `pr_operations.md`.
 - **github-ops** (`github-ops` v1.17.3 → v1.17.4): Document isolating authorized `--admin` merge commands from compound local cleanup scripts, handling asynchronous `mergeStateStatus` (`UNKNOWN` → `BLOCKED`) under `REVIEW_REQUIRED` rulesets, and using Git protocol readback and exact-tip deletion when `--delete-branch` hits a REST `403` rate limit after merge.
 - **prior-work-retrieval** (`daymade-claude-code` v5.2.17 → v5.2.18): Exempt only host-read-only `Explore` agents from the production receipt gate while keeping general-purpose, missing-type, `Task`, and arbitrary interpreter execution gated.
 - **continue-codex-work** (`daymade-claude-code` v5.2.16 → v5.2.17): Document taking over a Codex session from an isolated or remote staged `CODEX_HOME` (passing `CODEX_HOME=<staged-codex-home>` to `find_codex_session.py --format json` and `read_codex_session.py --session <session-id> --full`, requiring `status: "unique"` and `identity_verified: true`) and inspecting remote/fresh checkouts directly rather than assuming source-machine uncommitted state exists.
