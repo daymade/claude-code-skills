@@ -421,6 +421,18 @@ It rejects raw REST `PUT .../pulls/NUMBER/merge` and GraphQL `mergePullRequest`
 writes; normal API reads and unrelated mutations remain supported. A rejected
 merge is not permission to change API, retarget the PR or create a refresh commit.
 
+When the base branch enforces `strict: true` required status checks and `mergeStateStatus` is
+`BEHIND`, GitHub can reject even an authorized `--admin` merge with a missing required-check
+error. Instead of pushing a manual refresh commit or disturbing a shared local worktree, update
+the PR branch server-side (via `checked_gh.py` for the mutation), wait for required checks on
+the new head, and re-read `HEAD_SHA` before merging:
+
+```bash
+gh pr update-branch NUMBER -R OWNER/REPO
+gh pr checks NUMBER -R OWNER/REPO --watch --interval 15
+HEAD_SHA=$(gh pr view NUMBER -R OWNER/REPO --json headRefOid --jq .headRefOid)
+```
+
 Use the helper's fixed rejection code and safe next step. The
 [checked-invocation implementation](../scripts/checked_gh.py) owns the reason
 catalogue, refusal conditions and output redaction; do not maintain a second
