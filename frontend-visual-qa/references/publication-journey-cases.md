@@ -97,11 +97,14 @@ label alone.
 
 Keep transport and rendering separate. A direct request to a missing server
 route should return a real 404 response; an SPA fallback may return HTTP 200 and
-render the localized not-found view. Record which case occurred. A deliberate
-unknown-route probe is therefore expected to appear as `non-200` in
-`route_census.mjs`; that census row is a probe observation, not by itself a
-product defect. The defect is an unlocalized, unusable, or wrongly routed
-not-found experience, or a valid canonical route returning an error.
+render the localized not-found view. Record which case occurred. Run the direct
+probe explicitly with `route_census.mjs --probe <unknown-url>
+--probe-expected-status 404` (or `200` for the SPA fallback). Its record carries
+`routeKind: "localized-404-probe"` and `expectedStatus`; a matching status is a
+probe observation, not by itself a product defect or confirmed census error. The
+defect is an unlocalized, unusable, or wrongly routed not-found experience, or a
+canonical route (whose record has `routeKind: "canonical"` and expects 200)
+returning an error.
 
 ## Observed case: working controls left the deks and summaries unchecked
 

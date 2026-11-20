@@ -44,11 +44,16 @@ test("wrapped-control ignores same-baseline icon/text and non-control semantic c
 body{margin:0;font:16px/1.3 Arial,sans-serif}main{padding:20px}
 .control{display:inline-block;padding:8px 12px;font:16px/24px Arial,sans-serif;white-space:nowrap}
 .arrow{margin-right:6px;font-size:12px;vertical-align:text-top}
-.topic-nav{width:120px;margin-top:12px}#wrapped{width:52px;white-space:normal;margin-top:12px}
+.topic-nav{width:120px;margin-top:12px}.wrap{display:inline-block;width:52px;white-space:normal;margin-top:12px}
 </style></head><body><main><h1>Line grouping calibration</h1>
 <button id="same-baseline" class="control"><span class="arrow">→</span><span>Continue</span></button>
 <div id="semantic" class="topic-nav">Related navigation context</div>
-<button id="wrapped">Continue now</button></main></body></html>`);
+<nav id="semantic-nav" class="nav wrap">Navigation context</nav>
+<div id="nav-container" class="nav wrap">Navigation container</div>
+<div id="menu-item" class="menu-item wrap" tabindex="0">Menu action now</div>
+<a id="wrapped-anchor" class="link wrap" href="/next">Continue now</a>
+<div id="role-button" class="wrap" role="button" tabindex="0">Role action now</div>
+<button id="wrapped" class="wrap">Continue now</button></main></body></html>`);
   try {
     const result = await runScript([
       "--file", artifact,
@@ -59,7 +64,12 @@ body{margin:0;font:16px/1.3 Arial,sans-serif}main{padding:20px}
     assert.equal(result.code, 1, result.stdout + result.stderr);
     const report = JSON.parse(await readFile(join(out, "frontend-visual-qa-report.json"), "utf8"));
     const wrapped = report.issues.filter((issue) => issue.type === "wrapped-control");
-    assert.deepEqual(wrapped.map((issue) => issue.selector), ["button#wrapped"]);
+    assert.deepEqual(wrapped.map((issue) => issue.selector), [
+      "div#menu-item",
+      "a#wrapped-anchor",
+      "div#role-button",
+      "button#wrapped",
+    ]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -432,19 +432,38 @@ project's existing Playwright dependency:
 
 Use `--sitemap <url-or-file>` instead of `--url` when the sitemap is not at the
 site-root `sitemap.xml`. Sitemap indexes are followed recursively; canonical
-routes retain sitemap order, are de-duplicated, and `--limit` selects the first
-N before auditing. With no `--viewport`, the census uses 1440x900 and 390x844.
-It writes `records.jsonl` plus `summary.json` and checks non-200 responses,
-fatal page/navigation failures, horizontal overflow, console errors, broken and
-pending viewport-visible images, missing alt text, broken same-page hash
-targets, duplicate IDs, missing/duplicate visible H1, missing visible main
-landmark, and empty rendered text. Path-style hash routes such as `#/app` are
-not treated as element anchors. Pending images are warnings; the other listed
-conditions are confirmed errors. Exit 0 means no confirmed structural error,
-1 means at least one, and 2 means invalid input or runtime/setup failure.
-Records retain sitemap order through `routeIndex` and persist only redacted,
-hashed route evidence; keep any exact-route mapping local and out of shared
-evidence.
+routes retain sitemap order, are de-duplicated, and `--limit` both selects the
+first N and stops discovery with `discovery.truncated: true`. Discovery is also
+capped at 100 sitemap documents and 10,000 routes. A run accepts at most 20
+viewport entries and 100 explicit probes. With no `--viewport`, the census uses
+1440x900 and 390x844.
+
+URL boundaries fail closed: an HTTP(S) root never follows `file:` children; a
+local file root follows only `file:` children inside its own directory; canonical
+routes and probes are same-origin by default. Use `--allow-origin <origin>` only
+for an intentional cross-origin route set. Loopback, private and link-local
+targets require an exact `--allow-target <host>` entry. Each route/viewport has a
+45-second hard deadline covering navigation, readiness and evaluation; override
+it only with `--route-timeout-ms <1000-300000>`.
+
+Use `--probe <url> --probe-expected-status <status>` for a deliberate probe such
+as an unknown localized-404 route. Probe records carry
+`routeKind: "localized-404-probe"` and `expectedStatus`; a matching 404 is an
+observation, not a confirmed census error. Canonical records carry
+`routeKind: "canonical"` and expect HTTP 200 unless the route set is explicitly
+modeled another way.
+
+It writes `records.jsonl` plus `summary.json` and checks unexpected statuses,
+fatal page/navigation/deadline failures, horizontal overflow, console errors,
+broken and pending viewport-visible images, missing alt text, broken same-page
+hash targets, duplicate IDs, missing/duplicate visible H1, missing visible main
+landmark, and empty rendered text. Path-style hash routes such as `#/app` and
+hashbangs such as `#!/app` are not treated as element anchors. Pending images
+are warnings; the other listed conditions are confirmed errors. Exit 0 means no
+confirmed structural error, 1 means at least one, and 2 means invalid input or
+runtime/setup failure. Records retain sitemap order through `routeIndex` and
+persist only redacted, hashed route evidence; keep any exact-route mapping local
+and out of shared evidence.
 
 The census is Level C triage and **does not clear visual acceptance**. It does
 not inspect composition, typography, crop, focus appearance, or the user journey,

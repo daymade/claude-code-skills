@@ -325,6 +325,8 @@ claude plugin install windows-remote-desktop-connection-doctor@daymade-skills
 
 # 产品审计与优化
 claude plugin install product-analysis@daymade-skills
+# product-analysis 的 ux/full 渲染审计所需的伴随插件
+claude plugin install frontend-visual-qa@daymade-skills
 
 # Scrapling CLI 抽取与故障排查
 claude plugin install scrapling-skill@daymade-skills
@@ -1706,15 +1708,18 @@ claude plugin install windows-remote-desktop-connection-doctor@daymade-skills
 **主要功能：**
 - 自动识别项目类型和 `codex` 可用性
 - 按任务选择[审计范围](product-analysis/SKILL.md#scope-modes)
-- `ux` 与 `full` 范围在综合前必须取得 `frontend-visual-qa` 的真实渲染证据流
+- `ux` 与 `full` 范围在综合前必须安装独立的 `frontend-visual-qa` 伴随插件并取得真实渲染证据流
+- 将源码估计与渲染实测的首屏控件数、启动到首次价值的步数分开记录
+- 源码授权、交互/动作授权与目标变更授权三权分立
 - Claude 与可选 Codex 代理并行探索
 - 按[综合判断方法](product-analysis/references/synthesis_methodology.md)核对证据和选择优先级
 - 输出可落地的优化方案（行动项 + 依据）
 
 **示例用法：**
 ```bash
-# 安装技能
+# 安装技能及 ux/full 渲染审计所需的伴随插件
 claude plugin install product-analysis@daymade-skills
+claude plugin install frontend-visual-qa@daymade-skills
 
 # 然后请求审计
 "用 full 模式做一轮产品上线前审计"
@@ -1729,7 +1734,7 @@ claude plugin install product-analysis@daymade-skills
 
 📚 **文档**：参见 [product-analysis/SKILL.md](./product-analysis/SKILL.md) 与 [product-analysis/references/analysis_dimensions.md](./product-analysis/references/analysis_dimensions.md) 了解审计维度与工作流。
 
-**要求**：可选 `codex` CLI（用于多模型并行模式）。未安装时自动降级为纯 Claude 分析。
+**要求**：可选 `codex` CLI（用于多模型并行模式）。未安装时自动降级为纯 Claude 分析。`ux` 与 `full` 还需要 `frontend-visual-qa@daymade-skills`；缺少该伴随插件时，渲染门禁明确标记为 blocked，不得用源码检查替代。
 
 ---
 

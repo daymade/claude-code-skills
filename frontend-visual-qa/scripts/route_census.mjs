@@ -11,11 +11,15 @@
  *   node route_census.mjs --url <site-url>
  *   node route_census.mjs --sitemap <sitemap-url-or-file>
  *     [--viewport <WIDTH>x<HEIGHT>]... [--limit <positive-int>] [--out <new-empty-dir>]
+ *     [--allow-origin <http(s)-origin>]... [--allow-target <host>]...
+ *     [--probe <url>]... [--probe-expected-status <100-599>]
+ *     [--route-timeout-ms <1000-300000>]
  *
  * --url resolves sitemap.xml relative to the supplied site path. --sitemap
  * accepts an explicit HTTP(S) URL, file URL, or local XML path. Sitemap indexes
- * are followed recursively. Routes retain sitemap order and are de-duplicated by
- * absolute URL before --limit is applied.
+ * are followed recursively without crossing the root's file/HTTP boundary.
+ * Routes retain sitemap order and are de-duplicated by absolute URL before
+ * --limit is applied. Discovery stops at --limit and is marked truncated.
  *
  * Exit: 0 clean or warning-only · 1 confirmed route errors · 2 invalid input or
  * runtime/setup failure. This is a Level C census, not visual acceptance; any
@@ -24,14 +28,21 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import { createRequire } from "node:module";
+import { isIP } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-const MAX_SITEMAP_BYTES = 10 * 1024 * 1024;
-const MAX_SITEMAP_DEPTH = 5;
-const NAVIGATION_TIMEOUT_MS = 30_000;
+export const MAX_SITEMAP_BYTES = 10 * 1024 * 1024;
+export const MAX_SITEMAP_DEPTH = 5;
+export const MAX_SITEMAP_DOCUMENTS = 100;
+export const MAX_DISCOVERED_ROUTES = 10_000;
+export const MAX_PROBES = 100;
+export const MAX_VIEWPORTS = 20;
+export const NAVIGATION_TIMEOUT_MS = 30_000;
+export const DEFAULT_ROUTE_DEADLINE_MS = 45_000;
+export const PATH_STYLE_HASH_PREFIXES = ["#/", "#!/"];
 const SETTLE_MS = 500;
 const DEFAULT_VIEWPORTS = [
   { name: "desktop", width: 1440, height: 900, deviceScaleFactor: 1, isMobile: false, hasTouch: false },
@@ -42,10 +53,15 @@ const usage = [
   "Usage: route_census.mjs (--url <site-url> | --sitemap <sitemap-url-or-file>)",
   "  [--viewport <WIDTH>x<HEIGHT>]... (default: 1440x900 and 390x844)",
   "  [--limit <positive-int>] [--out <new-empty-directory>]",
+  "  [--allow-origin <http(s)-origin>]... [--allow-target <host>]...",
+  "  [--probe <url>]... [--probe-expected-status <100-599>]",
+  "  [--route-timeout-ms <1000-300000>]",
   "",
   "--url resolves sitemap.xml relative to the supplied site path.",
   "--sitemap accepts an explicit HTTP(S) URL, file URL, or local XML path.",
-  "Sitemap indexes are followed recursively; canonical routes must be HTTP(S).",
+  "Sitemap indexes stay within the root scheme; local file roots are directory-confined.",
+  "Discovery is capped at 100 documents/10,000 routes; at most 20 viewports and 100 probes are accepted.",
+  "Canonical routes are same-origin by default; private/loopback/link-local targets require --allow-target.",
   "Output: <out>/records.jsonl and <out>/summary.json",
   "Exit: 0 clean/warnings · 1 confirmed errors · 2 input/runtime failure.",
 ].join("\n");
@@ -168,6 +184,11 @@ function parseArgs(argv) {
     out: null,
     limit: null,
     viewports: [],
+    allowOrigins: [],
+    allowTargets: [],
+    probes: [],
+    probeExpectedStatus: 404,
+    routeTimeoutMs: DEFAULT_ROUTE_DEADLINE_MS,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -175,7 +196,8 @@ function parseArgs(argv) {
     if (arg === "--help" || arg === "-h") {
       return { help: true };
     }
-    if (!["--url", "--sitemap", "--out", "--limit", "--viewport"].includes(arg)) {
+    const arrayFlags = new Set(["--viewport", "--allow-origin", "--allow-target", "--probe"]);
+    if (!arrayFlags.has(arg) && !["--url", "--sitemap", "--out", "--limit", "--probe-expected-status", "--route-timeout-ms"].includes(arg)) {
       if (arg.startsWith("-")) throw new CensusInputError(`Unknown option: ${arg}`);
       throw new CensusInputError(`Unexpected positional argument: ${arg}`);
     }
@@ -184,13 +206,40 @@ function parseArgs(argv) {
     index += 1;
     if (arg === "--viewport") options.viewports.push(parseViewport(value));
     else if (arg === "--limit") options.limit = parsePositiveInteger(value, "--limit");
+    else if (arg === "--allow-origin") options.allowOrigins.push(normalizeAllowedOrigin(value));
+    else if (arg === "--allow-target") options.allowTargets.push(normalizeAllowedTarget(value));
+    else if (arg === "--probe") options.probes.push(value);
+    else if (arg === "--probe-expected-status") options.probeExpectedStatus = parseHttpStatus(value, "--probe-expected-status");
+    else if (arg === "--route-timeout-ms") options.routeTimeoutMs = parseBoundedInteger(value, "--route-timeout-ms", 1_000, 300_000);
     else options[arg.slice(2)] = value;
   }
 
   if (Boolean(options.url) === Boolean(options.sitemap)) {
     throw new CensusInputError("Provide exactly one of --url or --sitemap.");
   }
+  if (options.probes.length > MAX_PROBES) {
+    throw new CensusInputError(`At most ${MAX_PROBES} --probe routes are supported.`);
+  }
+  if (options.viewports.length > MAX_VIEWPORTS) {
+    throw new CensusInputError(`At most ${MAX_VIEWPORTS} --viewport entries are supported.`);
+  }
   return options;
+}
+
+function parseBoundedInteger(value, flagName, minimum, maximum) {
+  const parsed = parsePositiveInteger(value, flagName);
+  if (parsed < minimum || parsed > maximum) {
+    throw new CensusInputError(`Invalid ${flagName} value: ${value}. Expected ${minimum}-${maximum}.`);
+  }
+  return parsed;
+}
+
+function parseHttpStatus(value, flagName) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isInteger(parsed) || parsed < 100 || parsed > 599 || String(parsed) !== String(value).trim()) {
+    throw new CensusInputError(`Invalid ${flagName} value: ${value}. Expected an integer from 100 to 599.`);
+  }
+  return parsed;
 }
 
 function parsePositiveInteger(value, flagName) {
@@ -242,21 +291,142 @@ function normalizeSiteSitemap(value) {
   return new URL("sitemap.xml", parsed).href;
 }
 
-function resolveSitemapReference(value, baseSource) {
+function normalizeAllowedOrigin(value) {
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new CensusInputError("--allow-origin must be an absolute HTTP(S) origin, for example https://example.com.");
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new CensusInputError("--allow-origin must use HTTP or HTTPS.");
+  }
+  if (parsed.username || parsed.password || (parsed.pathname && parsed.pathname !== "/") || parsed.search || parsed.hash) {
+    throw new CensusInputError("--allow-origin must contain only a scheme and host (an origin), without credentials, path, query or fragment.");
+  }
+  return parsed.origin;
+}
+
+function normalizeAllowedTarget(value) {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) throw new CensusInputError("--allow-target must not be empty.");
+  try {
+    const parsed = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`);
+    if (!["http:", "https:"].includes(parsed.protocol) || !parsed.hostname) {
+      throw new Error("unsupported target");
+    }
+    return parsed.hostname.replace(/^\[|\]$/g, "").split("%")[0].toLowerCase();
+  } catch {
+    throw new CensusInputError(`Invalid --allow-target value: ${value}. Expected a hostname or IP address.`);
+  }
+}
+
+function ipv4ToInteger(hostname) {
+  const parts = hostname.split(".").map((part) => Number.parseInt(part, 10));
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return null;
+  return ((parts[0] << 24) >>> 0) + (parts[1] << 16) + (parts[2] << 8) + parts[3];
+}
+
+function inIpv4Range(hostname, base, prefixLength) {
+  const address = ipv4ToInteger(hostname);
+  if (address === null || prefixLength <= 0) return address !== null && prefixLength === 0;
+  const mask = prefixLength === 32 ? 0xffffffff : ((0xffffffff << (32 - prefixLength)) >>> 0);
+  return (address & mask) === (base & mask);
+}
+
+function isRestrictedHostname(hostname) {
+  const host = String(hostname || "").replace(/^\[|\]$/g, "").toLowerCase().replace(/\.$/, "").split("%")[0];
+  if (!host) return false;
+  if (host === "localhost" || host.endsWith(".localhost")) return true;
+  if (isIP(host) === 4) {
+    return [
+      [0x00000000, 8],       // current network / unspecified
+      [0x0a000000, 8],       // private
+      [0x64400000, 10],      // carrier-grade NAT
+      [0x7f000000, 8],       // loopback
+      [0xa9fe0000, 16],      // link-local
+      [0xac100000, 12],      // private
+      [0xc0000000, 24],      // IETF protocol assignments
+      [0xc0000200, 24],      // documentation
+      [0xc6120000, 15],      // benchmarking
+      [0xc6336400, 24],      // documentation
+      [0xcb007100, 24],      // documentation
+      [0xe0000000, 4],       // multicast
+      [0xf0000000, 4],       // reserved
+    ].some(([base, prefix]) => inIpv4Range(host, base, prefix));
+  }
+  if (isIP(host) === 6) {
+    return host === "::"
+      || host === "::1"
+      || host.startsWith("::ffff:")
+      || /^f[cd][0-9a-f]{2}:/.test(host)
+      || /^fe[89ab][0-9a-f]:/.test(host)
+      || /^ff[0-9a-f]{2}:/.test(host);
+  }
+  return false;
+}
+
+function assertTargetAllowed(url, allowedTargets, label) {
+  if (!/^https?:$/i.test(url.protocol)) return;
+  const hostname = url.hostname.replace(/^\[|\]$/g, "").split("%")[0].toLowerCase();
+  if (isRestrictedHostname(hostname) && !allowedTargets.has(hostname)) {
+    throw new CensusInputError(
+      `${label} targets restricted host ${hostname}. Add --allow-target ${hostname} only when that exact target is intended.`,
+    );
+  }
+}
+
+function assertFileWithinRoot(source, rootDirectory, label) {
+  if (!/^file:/i.test(source)) throw new CensusInputError(`${label} must use a file URL under the local sitemap root.`);
+  let filePath;
+  try {
+    filePath = fileURLToPath(source);
+  } catch {
+    throw new CensusInputError(`${label} is not a valid local file URL.`);
+  }
+  const rootPath = fs.existsSync(rootDirectory)
+    ? fs.realpathSync(rootDirectory)
+    : path.resolve(rootDirectory);
+  const candidatePath = fs.existsSync(filePath) ? fs.realpathSync(filePath) : path.resolve(filePath);
+  let relative = path.relative(rootPath, candidatePath);
+  if (process.platform === "win32") relative = relative.toLowerCase();
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new CensusInputError(`${label} resolves outside the local sitemap root directory.`);
+  }
+}
+
+function resolveSitemapReference(value, baseSource, policy = {}) {
   const trimmed = String(value || "").trim();
   if (!trimmed) throw new CensusInputError("Sitemap contains an empty <loc>.");
-  if (/^https?:\/\//i.test(trimmed)) {
-    const resolved = new URL(trimmed, /^https?:\/\//i.test(baseSource || "") ? baseSource : undefined);
-    assertNoEmbeddedCredentials(resolved, "sitemap");
-    return resolved.href;
+
+  let resolved;
+  try {
+    resolved = new URL(trimmed, baseSource || undefined);
+  } catch {
+    if (baseSource) throw new CensusInputError("Sitemap contains an invalid child reference.");
+    return pathToFileURL(path.resolve(trimmed)).href;
   }
-  if (/^file:\/\//i.test(trimmed)) return new URL(trimmed).href;
-  if (baseSource) {
-    if (/^https?:\/\//i.test(baseSource)) return new URL(trimmed, baseSource).href;
-    if (/^file:\/\//i.test(baseSource)) return new URL(trimmed, baseSource).href;
-    return pathToFileURL(path.resolve(path.dirname(fileURLToPath(baseSource)), trimmed)).href;
+  if (!["http:", "https:", "file:"].includes(resolved.protocol)) {
+    throw new CensusInputError("Sitemap references must use HTTP(S) or file URLs.");
   }
-  return pathToFileURL(path.resolve(trimmed)).href;
+  assertNoEmbeddedCredentials(resolved, "sitemap");
+
+  const rootProtocol = policy.rootProtocol || (baseSource ? new URL(baseSource).protocol : null);
+  if (rootProtocol === "http:" || rootProtocol === "https:") {
+    if (resolved.protocol === "file:") {
+      throw new CensusInputError("An HTTP(S) root sitemap must not follow file: child references.");
+    }
+  } else if (rootProtocol === "file:") {
+    if (resolved.protocol !== "file:") {
+      throw new CensusInputError("A local file sitemap root may only follow file: child references.");
+    }
+    assertFileWithinRoot(resolved.href, policy.rootDirectory, "Local sitemap child");
+  }
+
+  if (resolved.protocol === "http:" || resolved.protocol === "https:") {
+    assertTargetAllowed(resolved, policy.allowedTargets || new Set(), "Sitemap reference");
+  }
+  return resolved.href;
 }
 
 function assertNoEmbeddedCredentials(url, label) {
@@ -265,7 +435,7 @@ function assertNoEmbeddedCredentials(url, label) {
   }
 }
 
-async function readSitemap(source) {
+async function readSitemap(source, policy = {}) {
   if (/^https?:\/\//i.test(source)) {
     let response;
     try {
@@ -276,6 +446,12 @@ async function readSitemap(source) {
       });
     } catch (error) {
       throw new CensusInputError(`Could not fetch sitemap: ${redactText(error?.message || String(error))}`);
+    }
+    try {
+      assertTargetAllowed(new URL(response.url), policy.allowedTargets || new Set(), "Redirected sitemap");
+    } catch (error) {
+      await response.body?.cancel().catch(() => {});
+      throw error;
     }
     if (!response.ok) throw new CensusInputError(`Sitemap returned HTTP ${response.status}.`);
     const declaredLength = Number.parseInt(response.headers.get("content-length") || "", 10);
@@ -345,44 +521,143 @@ function parseSitemapXml(xml) {
   return { kind: isIndex ? "index" : "urlset", locations };
 }
 
-export async function collectRoutes(sitemapSource, read = readSitemap) {
+export function isPathStyleHash(hash) {
+  const value = String(hash || "");
+  return PATH_STYLE_HASH_PREFIXES.some((prefix) => value.startsWith(prefix));
+}
+
+export function selectRoutes(routes, limit = null) {
+  const ordered = Array.isArray(routes) ? routes : [];
+  if (limit === null || limit === undefined) return ordered.slice();
+  const parsed = Number.parseInt(limit, 10);
+  if (!Number.isInteger(parsed) || parsed <= 0 || String(parsed) !== String(limit).trim()) {
+    throw new CensusInputError(`Invalid route limit: ${limit}. Expected a positive integer.`);
+  }
+  return ordered.slice(0, parsed);
+}
+
+export async function discoverRoutes(sitemapSource, read = readSitemap, options = {}) {
+  const rootUrl = new URL(sitemapSource);
+  const allowedTargets = new Set(options.allowedTargets || []);
+  const allowedOrigins = new Set(options.allowedOrigins || []);
+  const routeLimit = options.routeLimit ?? options.limit ?? null;
+  const maxSitemapDocuments = options.maxSitemapDocuments ?? MAX_SITEMAP_DOCUMENTS;
+  const maxRoutes = options.maxRoutes ?? MAX_DISCOVERED_ROUTES;
+  if (!Number.isInteger(routeLimit) || routeLimit <= 0) {
+    if (routeLimit !== null) throw new CensusInputError("routeLimit must be a positive integer or null.");
+  }
+  if (!Number.isInteger(maxSitemapDocuments) || maxSitemapDocuments <= 0) {
+    throw new CensusInputError("maxSitemapDocuments must be a positive integer.");
+  }
+  if (!Number.isInteger(maxRoutes) || maxRoutes <= 0) {
+    throw new CensusInputError("maxRoutes must be a positive integer.");
+  }
+
+  assertTargetAllowed(rootUrl, allowedTargets, "Root sitemap");
+  const policy = {
+    rootProtocol: rootUrl.protocol,
+    rootDirectory: rootUrl.protocol === "file:" ? path.dirname(fileURLToPath(rootUrl)) : null,
+    allowedTargets,
+    allowedOrigins,
+  };
   const routes = [];
   const seenRoutes = new Set();
   const seenSitemaps = new Set();
+  let canonicalOrigin = rootUrl.protocol === "http:" || rootUrl.protocol === "https:"
+    ? rootUrl.origin
+    : null;
+  let sitemapDocumentsRead = 0;
+  let truncated = false;
+  let truncationReason = null;
+  const stop = (reason) => {
+    truncated = true;
+    truncationReason = reason;
+  };
+  const isStopped = () => truncated;
 
   async function visit(source, depth) {
+    if (isStopped()) return;
     if (depth > MAX_SITEMAP_DEPTH) throw new CensusInputError("Sitemap index nesting exceeds the supported depth.");
     if (seenSitemaps.has(source)) return;
+    if (sitemapDocumentsRead >= maxSitemapDocuments) {
+      stop("sitemap-document-cap");
+      return;
+    }
+    if (policy.rootProtocol === "file:") assertFileWithinRoot(source, policy.rootDirectory, "Sitemap document");
     seenSitemaps.add(source);
-    const parsed = parseSitemapXml(await read(source));
+    sitemapDocumentsRead += 1;
+    const parsed = parseSitemapXml(await read(source, policy));
     if (parsed.kind === "index") {
       for (const location of parsed.locations) {
-        await visit(resolveSitemapReference(location, source), depth + 1);
+        if (isStopped()) return;
+        const child = resolveSitemapReference(location, source, policy);
+        if (seenSitemaps.has(child)) continue;
+        if (sitemapDocumentsRead >= maxSitemapDocuments) {
+          stop("sitemap-document-cap");
+          return;
+        }
+        await visit(child, depth + 1);
       }
       return;
     }
+
     for (const location of parsed.locations) {
+      if (isStopped()) return;
+      if (routeLimit !== null && routes.length >= routeLimit) {
+        stop("requested-limit");
+        return;
+      }
+      if (routes.length >= maxRoutes) {
+        stop("route-cap");
+        return;
+      }
       let routeUrl;
-      let route;
       try {
         routeUrl = new URL(location, source);
-        route = routeUrl.href;
       } catch {
         throw new CensusInputError("Sitemap contains an invalid route URL.");
       }
       if (routeUrl.protocol !== "http:" && routeUrl.protocol !== "https:") {
         throw new CensusInputError("Canonical routes must use HTTP or HTTPS.");
       }
-      assertNoEmbeddedCredentials(route, "canonical route");
+      assertNoEmbeddedCredentials(routeUrl, "canonical route");
+      assertTargetAllowed(routeUrl, allowedTargets, "Canonical route");
+      if (canonicalOrigin === null) canonicalOrigin = routeUrl.origin;
+      if (routeUrl.origin !== canonicalOrigin && !allowedOrigins.has(routeUrl.origin)) {
+        throw new CensusInputError(
+          `Canonical route origin ${routeUrl.origin} does not match ${canonicalOrigin}. Add --allow-origin ${routeUrl.origin} only when cross-origin routes are intended.`,
+        );
+      }
+      const route = routeUrl.href;
       if (seenRoutes.has(route)) continue;
       seenRoutes.add(route);
       routes.push(route);
+      if (routeLimit !== null && routes.length >= routeLimit) {
+        stop("requested-limit");
+        return;
+      }
     }
   }
 
   await visit(sitemapSource, 0);
   if (!routes.length) throw new CensusInputError("Sitemap produced no canonical HTTP(S) routes.");
-  return routes;
+  return {
+    routes,
+    discovery: {
+      truncated,
+      reason: truncationReason,
+      sitemapDocumentsRead,
+      maxSitemapDocuments,
+      maxRoutes,
+      requestedLimit: routeLimit,
+      canonicalOrigin,
+    },
+  };
+}
+
+export async function collectRoutes(sitemapSource, read = readSitemap, options = {}) {
+  const result = await discoverRoutes(sitemapSource, read, options);
+  return result.routes;
 }
 
 function sha256(value) {
@@ -485,46 +760,88 @@ async function waitForCensusReadiness(page) {
   if (SETTLE_MS > 0) await page.waitForTimeout(SETTLE_MS);
 }
 
-async function auditRouteViewport(browser, route, routeIndex, viewport) {
-  const context = await browser.newContext({
-    viewport: { width: viewport.width, height: viewport.height },
-    deviceScaleFactor: viewport.deviceScaleFactor,
-    isMobile: viewport.isMobile,
-    hasTouch: viewport.hasTouch,
+export async function withDeadline(operation, deadline, label) {
+  const remaining = deadline - Date.now();
+  if (remaining <= 0) {
+    const error = new Error(`${label} exceeded its hard deadline.`);
+    error.name = "CensusDeadlineError";
+    throw error;
+  }
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      const error = new Error(`${label} exceeded its hard deadline.`);
+      error.name = "CensusDeadlineError";
+      reject(error);
+    }, remaining);
+    Promise.resolve().then(() => (typeof operation === "function" ? operation() : operation)).then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (error) => { clearTimeout(timer); reject(error); },
+    );
   });
-  const page = await context.newPage();
+}
+
+async function auditRouteViewport(browser, descriptor, routeIndex, viewport, routeTimeoutMs) {
+  const route = descriptor.route;
+  const deadline = Date.now() + routeTimeoutMs;
+  let context = null;
+  let page = null;
   const consoleErrors = [];
   const pageErrors = [];
   let crashed = false;
-  page.on("console", (message) => {
-    if (message.type() === "error") consoleErrors.push(message.text());
-  });
-  page.on("pageerror", (error) => pageErrors.push(error?.message || String(error)));
-  page.on("crash", () => { crashed = true; });
-
   let response = null;
   let navigationError = null;
+  let deadlineError = null;
   let finalUrl = route;
   let census = { metrics: {}, issues: [] };
+
   try {
-    response = await page.goto(route, { waitUntil: "domcontentloaded", timeout: NAVIGATION_TIMEOUT_MS });
-    await waitForCensusReadiness(page);
-    census = await page.evaluate(censusPage);
-    finalUrl = page.url();
+    context = await withDeadline(browser.newContext({
+      viewport: { width: viewport.width, height: viewport.height },
+      deviceScaleFactor: viewport.deviceScaleFactor,
+      isMobile: viewport.isMobile,
+      hasTouch: viewport.hasTouch,
+    }), deadline, "Browser context creation");
+    page = await context.newPage();
+    page.on("console", (message) => {
+      if (message.type() === "error") {
+        consoleErrors.push({ text: message.text(), url: message.location()?.url || "" });
+      }
+    });
+    page.on("pageerror", (error) => pageErrors.push(error?.message || String(error)));
+    page.on("crash", () => { crashed = true; });
+
+    await withDeadline((async () => {
+      response = await page.goto(route, { waitUntil: "domcontentloaded", timeout: NAVIGATION_TIMEOUT_MS });
+      await waitForCensusReadiness(page);
+      census = await page.evaluate(censusPage, { pathStyleHashPrefixes: PATH_STYLE_HASH_PREFIXES });
+      finalUrl = page.url();
+    })(), deadline, `Route ${routeIndex + 1} at ${viewport.name}`);
   } catch (error) {
-    navigationError = error;
-    try { finalUrl = page.url(); } catch { /* retain the requested route */ }
+    if (error?.name === "CensusDeadlineError") deadlineError = error;
+    else navigationError = error;
+    try { if (page) finalUrl = page.url(); } catch { /* retain the requested route */ }
   } finally {
-    await context.close().catch(() => {});
+    await context?.close().catch(() => {});
   }
 
   const issues = [...census.issues];
-  if (response && response.status() !== 200) {
+  const observedStatus = response?.status() ?? null;
+  const expectedStatusMatched = observedStatus === descriptor.expectedStatus;
+  if (response && !expectedStatusMatched) {
     issues.push({
       type: "non-200",
       severity: "error",
-      detail: `Navigation returned HTTP ${response.status()}.`,
-      httpStatus: response.status(),
+      detail: `Navigation returned HTTP ${observedStatus}; expected ${descriptor.expectedStatus}.`,
+      httpStatus: observedStatus,
+      expectedStatus: descriptor.expectedStatus,
+    });
+  }
+  if (deadlineError) {
+    issues.push({
+      type: "route-deadline",
+      severity: "error",
+      detail: `The route exceeded the ${routeTimeoutMs}ms hard deadline covering navigation, readiness and evaluation.`,
+      deadlineMs: routeTimeoutMs,
     });
   }
   if (navigationError) {
@@ -547,13 +864,19 @@ async function auditRouteViewport(browser, route, routeIndex, viewport) {
       evidence: pageErrors.slice(0, 20).map((value) => textEvidence(value)),
     });
   }
-  if (consoleErrors.length) {
+  const expectedProbe = descriptor.routeKind === "localized-404-probe" && expectedStatusMatched;
+  const relevantConsoleErrors = consoleErrors.filter((entry) => {
+    if (!expectedProbe || entry.url !== route) return true;
+    return !/Failed to load resource/i.test(entry.text)
+      || !new RegExp(`\\b${descriptor.expectedStatus}\\b`).test(entry.text);
+  });
+  if (relevantConsoleErrors.length) {
     issues.push({
       type: "console-error",
       severity: "error",
-      count: consoleErrors.length,
+      count: relevantConsoleErrors.length,
       detail: "The page emitted console errors while rendering.",
-      evidence: consoleErrors.slice(0, 20).map((value) => textEvidence(value)),
+      evidence: relevantConsoleErrors.slice(0, 20).map((entry) => textEvidence(entry.text)),
     });
   }
 
@@ -561,6 +884,9 @@ async function auditRouteViewport(browser, route, routeIndex, viewport) {
   const hasWarnings = issues.some((issue) => issue.severity === "warning");
   return {
     routeIndex: routeIndex + 1,
+    routeKind: descriptor.routeKind,
+    expectedStatus: descriptor.expectedStatus,
+    expectedStatusMatched: response ? expectedStatusMatched : null,
     routeEvidence: routeEvidence(route),
     finalUrlEvidence: routeEvidence(finalUrl),
     redirected: finalUrl !== route,
@@ -570,14 +896,15 @@ async function auditRouteViewport(browser, route, routeIndex, viewport) {
       height: viewport.height,
       isMobile: viewport.isMobile,
     },
-    httpStatus: response?.status() ?? null,
+    httpStatus: observedStatus,
+    deadlineMs: routeTimeoutMs,
     status: hasErrors ? "findings" : hasWarnings ? "warning" : "healthy",
     metrics: census.metrics,
     issues,
   };
 }
 
-function censusPage() {
+function censusPage({ pathStyleHashPrefixes }) {
   const issues = [];
   const metrics = {};
   const add = (type, severity, detail, extra = {}) => {
@@ -589,15 +916,48 @@ function censusPage() {
   };
 
   function isVisible(element) {
+    const style = getComputedStyle(element);
+    if (style.display === "none"
+      || style.visibility === "hidden"
+      || Number.parseFloat(style.opacity || "1") <= 0) {
+      return false;
+    }
+    if (style.display === "contents") return hasVisibleContents(element, new Set());
     const rect = element.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return false;
     if (typeof element.checkVisibility === "function") {
       return element.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
     }
-    const style = getComputedStyle(element);
-    return style.display !== "none"
-      && style.visibility !== "hidden"
-      && Number.parseFloat(style.opacity || "1") > 0;
+    return true;
+  }
+
+  function hasVisibleContents(root, seen) {
+    if (!root || seen.has(root)) return false;
+    seen.add(root);
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        if (!node.nodeValue?.trim()) continue;
+        const parentStyle = getComputedStyle(node.parentElement);
+        if (parentStyle.display === "none"
+          || parentStyle.visibility === "hidden"
+          || Number.parseFloat(parentStyle.opacity || "1") <= 0) continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        const hasTextBox = [...range.getClientRects()].some((rect) => rect.width > 0 && rect.height > 0);
+        range.detach?.();
+        if (hasTextBox) return true;
+        continue;
+      }
+      const style = getComputedStyle(node);
+      if (style.display === "none"
+        || style.visibility === "hidden"
+        || Number.parseFloat(style.opacity || "1") <= 0) continue;
+      const rect = node.getBoundingClientRect();
+      if (style.display !== "contents" && rect.width > 0 && rect.height > 0) return true;
+      if (hasVisibleContents(node, seen)) return true;
+    }
+    return false;
   }
 
   function inViewport(rect) {
@@ -614,7 +974,7 @@ function censusPage() {
   }
 
   function isPathHash(hash) {
-    return hash.startsWith("#/") || hash.startsWith("#!/");
+    return pathStyleHashPrefixes.some((prefix) => hash.startsWith(prefix));
   }
 
   function hashTargetExists(hash) {
@@ -750,11 +1110,46 @@ async function main() {
     prepareOutputDirectory(outDir);
     outputPrepared = true;
 
+    const allowedTargets = new Set(options.allowTargets);
+    const allowedOrigins = new Set(options.allowOrigins);
     const sitemapSource = options.sitemap
-      ? resolveSitemapReference(options.sitemap, null)
+      ? resolveSitemapReference(options.sitemap, null, { allowedTargets })
       : normalizeSiteSitemap(options.url);
-    const allRoutes = await collectRoutes(sitemapSource);
-    const routes = options.limit ? allRoutes.slice(0, options.limit) : allRoutes;
+    const discovered = await discoverRoutes(sitemapSource, readSitemap, {
+      routeLimit: options.limit,
+      allowedTargets,
+      allowedOrigins,
+    });
+    const canonicalRoutes = selectRoutes(discovered.routes, options.limit);
+    const descriptors = canonicalRoutes.map((route) => ({
+      route,
+      routeKind: "canonical",
+      expectedStatus: 200,
+    }));
+    for (const probe of options.probes) {
+      let probeUrl;
+      try {
+        probeUrl = new URL(probe);
+      } catch {
+        throw new CensusInputError(`Invalid --probe URL: ${probe}`);
+      }
+      if (probeUrl.protocol !== "http:" && probeUrl.protocol !== "https:") {
+        throw new CensusInputError("--probe must use HTTP or HTTPS.");
+      }
+      assertNoEmbeddedCredentials(probeUrl, "probe route");
+      assertTargetAllowed(probeUrl, allowedTargets, "Probe route");
+      if (probeUrl.origin !== discovered.discovery.canonicalOrigin && !allowedOrigins.has(probeUrl.origin)) {
+        throw new CensusInputError(
+          `Probe origin ${probeUrl.origin} does not match ${discovered.discovery.canonicalOrigin}. Add --allow-origin ${probeUrl.origin} only when intended.`,
+        );
+      }
+      descriptors.push({
+        route: probeUrl.href,
+        routeKind: "localized-404-probe",
+        expectedStatus: options.probeExpectedStatus,
+      });
+    }
+
     const viewports = options.viewports.length ? options.viewports : DEFAULT_VIEWPORTS;
     const { chromium } = loadPlaywright();
     const executablePath = findChrome();
@@ -763,14 +1158,20 @@ async function main() {
       headless: true,
     });
 
-    for (let routeIndex = 0; routeIndex < routes.length; routeIndex += 1) {
+    for (let routeIndex = 0; routeIndex < descriptors.length; routeIndex += 1) {
       for (const viewport of viewports) {
-        const record = await auditRouteViewport(browser, routes[routeIndex], routeIndex, viewport);
+        const record = await auditRouteViewport(
+          browser,
+          descriptors[routeIndex],
+          routeIndex,
+          viewport,
+          options.routeTimeoutMs,
+        );
         records.push(record);
         const issueSummary = record.issues.length
           ? record.issues.map((issue) => `${issue.severity}:${issue.type}`).join(",")
           : "healthy";
-        console.log(`route ${routeIndex + 1}/${routes.length} ${viewport.name}: ${issueSummary}`);
+        console.log(`route ${routeIndex + 1}/${descriptors.length} ${record.routeKind} ${viewport.name}: ${issueSummary}`);
       }
     }
 
@@ -780,10 +1181,16 @@ async function main() {
       input: {
         mode: options.url ? "url" : "sitemap",
         sitemapEvidence: routeEvidence(sitemapSource),
-        discoveredRoutes: allRoutes.length,
-        examinedRoutes: routes.length,
-        limited: Boolean(options.limit && allRoutes.length > options.limit),
+        discoveredRoutes: discovered.routes.length,
+        examinedCanonicalRoutes: canonicalRoutes.length,
+        probeRoutes: options.probes.length,
+        probeExpectedStatus: options.probes.length ? options.probeExpectedStatus : null,
+        limited: discovered.discovery.truncated,
         limit: options.limit,
+        discovery: discovered.discovery,
+        routeTimeoutMs: options.routeTimeoutMs,
+        allowedOrigins: [...allowedOrigins],
+        allowedTargets: [...allowedTargets],
       },
       viewports,
       output: {
