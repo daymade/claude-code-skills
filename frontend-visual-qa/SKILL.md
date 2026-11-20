@@ -444,10 +444,12 @@ routes and probes are same-origin by default. Use `--allow-origin <origin>` only
 for an intentional cross-origin route set. Loopback, private and link-local
 targets require an exact `--allow-target <host>` entry. Sitemap redirects are
 validated hop by hop before the next fetch, and browser main-frame redirects are
-intercepted and checked before continuation. Hostnames are also resolved and
-rejected when they map into restricted address space; documentation-only hosts
-(`example.*`, `.test`, `.invalid`) are exempt for fixtures. This reduces DNS-based
-bypasses but cannot eliminate DNS rebinding between validation and connection.
+intercepted and checked before continuation. The browser policy applies only to
+main-frame navigations; cross-origin iframes and subresources are not blocked by
+the route-origin rule. Hostnames are also resolved and rejected when they map
+into restricted address space; documentation-only hosts (`example.*`, `.test`,
+`.invalid`) are exempt for fixtures. This reduces DNS-based bypasses but cannot
+eliminate DNS rebinding between validation and connection.
 Each route/viewport has a 45-second hard deadline covering navigation, readiness
 and evaluation; override it only with `--route-timeout-ms <1000-300000>`.
 

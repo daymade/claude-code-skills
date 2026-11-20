@@ -52,20 +52,19 @@ export function isWrappedControlElement({
   const normalizedRole = String(role || "").toLowerCase();
   const normalizedTokens = classTokens.map((token) => token.toLowerCase());
   const explicitMenuItem = normalizedTokens.includes("menu-item") || normalizedTokens.includes("menuitem");
+  const hasHref = (tag === "A" || tag === "AREA") && Boolean(href);
+  const hasControlClass = normalizedTokens.some((token) => (
+    token === "segmented-control" || controlClassParts.has(token)
+  )) || semanticParts.some((part) => controlClassParts.has(part));
 
+  if (hasHref && hasControlClass) return true;
   if (semanticContainerTags.has(tag) || semanticContainerRoles.has(normalizedRole)) return false;
   if (nativeControlTags.has(tag)) return true;
   if (interactiveRoles.has(normalizedRole)) return true;
   if (String(contentEditable).toLowerCase() === "true") return true;
   if (!explicitMenuItem && semanticParts.some((part) => semanticContainerClassParts.has(part))) return false;
 
-  const hasHref = (tag === "A" || tag === "AREA") && Boolean(href);
   const focusable = hasHref || (parsedTabIndex ?? -1) >= 0;
   if (!focusable) return false;
-  return explicitMenuItem
-    || normalizedTokens.some((token) => (
-      token === "segmented-control"
-      || controlClassParts.has(token)
-    ))
-    || semanticParts.some((part) => controlClassParts.has(part));
+  return explicitMenuItem || hasControlClass;
 }

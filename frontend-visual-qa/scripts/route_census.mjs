@@ -842,10 +842,16 @@ async function auditRouteViewport(browser, descriptor, routeIndex, viewport, rou
     }), deadline, "Browser context creation");
     page = await context.newPage();
     const cdp = await context.newCDPSession(page);
+    const { frameTree } = await cdp.send("Page.getFrameTree");
+    const mainFrameId = frameTree.frame.id;
     await cdp.send("Fetch.enable", {
       patterns: [{ urlPattern: "*", requestStage: "Request", resourceType: "Document" }],
     });
     cdp.on("Fetch.requestPaused", async (event) => {
+      if (event.frameId !== mainFrameId) {
+        await cdp.send("Fetch.continueRequest", { requestId: event.requestId });
+        return;
+      }
       try {
         const target = new URL(event.request.url);
         await assertTargetAllowedAsync(target, policy.allowedTargets || new Set(), "Navigation target");
