@@ -387,7 +387,13 @@ async function assertTargetAllowedAsync(url, allowedTargets, label) {
     || hostname === "example.net"
     || hostname.endsWith(".test")
     || hostname.endsWith(".invalid");
-  if (isIP(hostname) || documentationHost || allowedTargets.has(hostname) || DNS_POLICY_CACHE.has(hostname)) return;
+  const cachedRestricted = DNS_POLICY_CACHE.get(hostname);
+  if (cachedRestricted === true) {
+    throw new CensusInputError(
+      `${label} resolves to a restricted address. Add --allow-target ${hostname} only when that exact target is intended.`,
+    );
+  }
+  if (isIP(hostname) || documentationHost || allowedTargets.has(hostname) || cachedRestricted === false) return;
   try {
     const addresses = await dns.lookup(hostname, { all: true });
     const restricted = addresses.some((entry) => isRestrictedHostname(entry.address));
