@@ -18,6 +18,24 @@ BOOKKEEPING = {"CHANGELOG.md", "README.md", "README.zh-CN.md", "CLAUDE.md", "AGE
                ".claude-plugin/marketplace.json"}
 EXTRAS = {"html_reader": ("daymade-docs/",), "feishu_reader": ("feishu-doc-scraper/",),
           "report": ("report-with-html/", "tests/report-with-html/", "data-visualization-discipline/")}
+TOOL_SUITES = {
+    "need_ripgrep": ("daymade-claude-code/prior-work-retrieval/tests",),
+    "need_zsh": (
+        "daymade-claude-code/claude-switch-models-setup/tests",
+        "daymade-claude-code/prior-work-retrieval/tests",
+        "daymade-codex/local-codex/scripts",
+        "ghostty-use/scripts",
+    ),
+    "need_ffmpeg": (
+        "daymade-audio/",
+        "youtube-downloader/",
+        "bilibili-source/",
+    ),
+}
+APT_SELF_TEST_PATHS = frozenset({
+    "scripts/ci/apt_install_bounded.sh",
+    ".github/workflows/ci.yml",
+})
 
 
 def registry(root: Path) -> list[tuple[str, str, tuple[str, ...]]]:
@@ -59,8 +77,25 @@ def select(paths: list[str] | None, root: Path = ROOT) -> dict:
     full = full_reason is not None
     selected = [row for row in rows if full or "*" in row[2] or any(path.startswith(prefix) for path in (paths or []) for prefix in row[2])]
     extras = {name: full or any(path.startswith(prefix) for path in (paths or []) for prefix in prefixes) for name, prefixes in EXTRAS.items()}
+    selected_targets = {target for _, target, _ in selected}
+    need_ripgrep = full or any(target in TOOL_SUITES["need_ripgrep"] for target in selected_targets)
+    need_zsh = full or any(target in TOOL_SUITES["need_zsh"] for target in selected_targets)
+    need_ffmpeg = full or any(target.startswith(TOOL_SUITES["need_ffmpeg"]) for target in selected_targets)
+    need_apt_self_test = (
+        full
+        or need_ripgrep
+        or need_zsh
+        or need_ffmpeg
+        or any(path in APT_SELF_TEST_PATHS for path in (paths or []))
+    )
+    tools = {
+        "need_ripgrep": need_ripgrep,
+        "need_zsh": need_zsh,
+        "need_ffmpeg": need_ffmpeg,
+        "need_apt_self_test": need_apt_self_test,
+    }
     return {"full": full, "reason": full_reason or "registered ownership and dependency prefixes", "changed_files": paths,
-            "suites": [[runner, target] for runner, target, _ in selected], **extras}
+            "suites": [[runner, target] for runner, target, _ in selected], **extras, **tools}
 
 
 def changed_paths(base: str | None, head: str | None, *, pull_request: bool = False, root: Path = ROOT) -> list[str] | None:
@@ -111,7 +146,7 @@ def main() -> None:
         args.output.write_text("".join(f"{runner} {target}\n" for runner, target in result["suites"]))
     if os.environ.get("GITHUB_OUTPUT"):
         with open(os.environ["GITHUB_OUTPUT"], "a") as output:
-            for name in EXTRAS:
+            for name in (*EXTRAS, "need_ripgrep", "need_zsh", "need_ffmpeg", "need_apt_self_test"):
                 output.write(f"{name}={str(result[name]).lower()}\n")
 
 
