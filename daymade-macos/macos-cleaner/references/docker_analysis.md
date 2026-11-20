@@ -85,7 +85,11 @@ behave differently. Do not infer support or absence from an empty filtered resul
    `type=regular`. Inspect the same selector set with `buildx du` before mutation.
    Do not replace equality with a pattern, substitute an ID-generating shell
    expression, omit the builder, or fall back to broad prune when the view is
-   empty or unsupported. Resolve placeholders before checking the plan.
+   empty or unsupported. Resolve placeholders before checking the plan. If
+   `buildx du --verbose` shows child cache records referencing a candidate as
+   `Parent`, pruning that parent ID alone silently reports `Total: 0B`; evict
+   authorized child records before their parent (or stop and report the parent
+   dependency rather than retrying the same ID).
 4. Apply existing authorization to these exact objects and their rebuild cost;
    request only genuinely missing approval. The plan checker recognizes a narrow
    literal-ID form as object-scoped; that classification does not verify the live
