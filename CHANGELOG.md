@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **read-claude-code-history** (`daymade-claude-code` v5.2.7): Explain incremental discovery, fingerprinting and FTS maintenance, with disposable refresh checks.
 - **auto-repo-setup** (`auto-repo-setup` v2.2.4): Reuse completed push findings and resume at the blocked stage.
 - **claude-code-hooks** (`daymade-claude-code` v5.2.8): Verify scan reuse through the real hook launcher and observe which stages are skipped.
+- **transcript-fixer** (`daymade-audio` v1.65.5 → v1.65.6): Adjudicate a dictionary direction that contradicts pending review rows before the next sweep; keep the occurrence pending rather than letting Stage 1's automatic application settle a reversed verdict.
 - **transcript-fixer** (`daymade-audio` v1.65.4 → v1.65.5): Bound each human verdict to its exact file, queue row and occurrences; stop after required delivery instead of sweeping unrelated historical backlog.
 - `git-safety-net` v1.28.12: Document the metadata prefilter and fresh content checks for worktree recovery.
 - `daymade-macos` v1.34.12: Distinguish controlled file-check replays from attribution of a live CPU incident.
