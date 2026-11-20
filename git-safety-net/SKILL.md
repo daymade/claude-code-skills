@@ -390,6 +390,8 @@ The load-bearing few:
   (§ Parallel / multi-branch work; § Push work-in-progress branches early.)
 - **Failed fast-forward or partially synchronized checkout:** follow
   [Guarded checkout recovery](references/prevention_practices.md#guarded-checkout-recovery).
+  Without a verified guarded synchronizer, wait for the WIP owner; do not substitute an ad hoc
+  patch/hold fast-forward.
 - **Worktrees are explicitly authorized, named exceptions — not the standing default.** They
   isolate working files, `HEAD`, and index but still share refs, stashes, object storage, config,
   and hooks, and do not copy ignored dependencies. When approved, a linked worktree is safer than

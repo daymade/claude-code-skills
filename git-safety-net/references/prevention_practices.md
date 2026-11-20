@@ -831,6 +831,15 @@ The executor uses the repository's existing synchronization and ownership contra
    index/working-tree synchronization. Claim task-scoped closure only when the required
    layers match the intended result, with any retained valid WIP explicitly attributed.
 
+#### No verified guarded synchronizer available
+
+Do not manually fast-forward a dirty canonical checkout with an ad hoc patch/hold transaction.
+Ignored files, staged/index state and incoming tracked paths can collide in ways that exit code 0
+does not report, so a byte comparison after the merge can detect loss without being able to undo
+it. Wait for the WIP owner, or use a verified guarded synchronizer that preserves staged,
+unstaged, untracked and ignored content and reconciles HEAD, index and working tree as one
+transaction. A stash-free manual recipe is not a sanctioned substitute.
+
 ## Set a wider reflog safety window once
 
 The reflog is your recovery window; widen it once, globally, so a busy repo doesn't age work out:
