@@ -214,7 +214,7 @@ These skills are bundle-only under `daymade-codex`.
 claude plugin install daymade-claude-code@daymade-skills
 ```
 
-This suite bundles the skills that extend Claude Code itself — cross-project prior-work retrieval across code, docs, Skills, meetings, WeChat archives, and conversation history; fast local conversation discovery across Claude Code and Codex; session recovery; CLAUDE.md tuning; troubleshooting; statusline configuration; export repair; marketplace development and suite consolidation; terminal screenshot rendering; usage analysis; and multi-provider model switching:
+This suite bundles the skills that extend Claude Code itself — cross-project prior-work retrieval across code, docs, Skills, meetings, WeChat archives, and conversation history; fast local conversation discovery across Claude Code and Codex; session recovery; CLAUDE.md tuning; troubleshooting; permission-prompt and Agent Team teammate triage; statusline configuration; export repair; marketplace development and suite consolidation; terminal screenshot rendering; usage analysis; and multi-provider model switching:
 
 ```text
 /daymade-claude-code:claude-code-ops-router
@@ -228,6 +228,7 @@ This suite bundles the skills that extend Claude Code itself — cross-project p
 /daymade-claude-code:statusline-generator
 /daymade-claude-code:fixing-claude-export-conversations
 /daymade-claude-code:marketplace-dev
+/daymade-claude-code:claude-code-permission-triage
 /daymade-claude-code:terminal-screenshot
 /daymade-claude-code:claude-usage-analyst
 /daymade-claude-code:claude-switch-models-setup
@@ -470,7 +471,15 @@ Extracts Mermaid diagrams from markdown and generates high-quality PNG images.
 
 > **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:claude-code-ops-router`)
 
-Routes plugin and Skill repair, marketplace work, statusline, model profiles and source sync, 1M context-window repair, usage and quota timers, memory migration, and exported `.txt` repair to one bundled specialist. The selected Skill's full instructions are read at use time; its original slash command remains available for manual use.
+Routes plugin and Skill repair, marketplace work, permission-prompt and Agent Team teammate triage, MCP startup context, statusline, model profiles and source sync, 1M context-window repair, usage and quota timers, memory migration, and exported `.txt` repair to one bundled specialist. The selected Skill's full instructions are read at use time; its original slash command remains available for manual use.
+
+---
+
+### **claude-code-permission-triage** - Claude Code Permission Triage
+
+> **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:claude-code-permission-triage`)
+
+Diagnose unexpected, missing, delayed, parked, or misdelivered permission prompts for subagents, background workers, and Agent Team teammates. Separates card type, delivery state, worker type, and effective mode timeline; matches known upstream issues; and produces a sanitized bug report. Does not edit permission rules, author or change hooks, handle MCP OAuth, or read history.
 
 ---
 
