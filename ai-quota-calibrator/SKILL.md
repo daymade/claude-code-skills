@@ -1,18 +1,22 @@
 ---
 name: ai-quota-calibrator
 description: >-
-  Calibrates black-box AI subscription quotas into equivalent API dollars and
-  runway by reconciling local tokscale spend against live provider fractions
-  (Antigravity Gemini/Claude pools, Codex, custom caps). Use when asked how big
-  a 5h/weekly quota really is, why a pool drains fast, or 额度相当于多少钱/反推配额.
-  Not for ccusage-only audits (claude-usage-analyst) or Codex reset news (tibo-reset-codex).
+  Calibrates black-box AI subscription quotas into API dollars, runway, and top
+  burning sessions by reconciling tokscale spend against live provider fractions
+  (Antigravity, Codex, custom caps). Use when asked how big a 5h/weekly quota is,
+  why a pool hit rate limit, or 额度相当于多少钱/反推配额/谁烧光了额度. Not for
+  ccusage audits (claude-usage-analyst) or Codex reset news (tibo-reset-codex).
 ---
 
 # AI Quota Calibrator
 
-Estimate the true API-dollar capacity, weekly-to-5h multiplier, and remaining
-runway of percentage-based AI subscriptions by reconciling local `tokscale`
-spend against live provider quota fractions.
+Execute this Skill directly on the user's behalf—never ask the user to manually
+copy-paste CLI commands when the agent can run the bundled calibrator itself.
+
+Estimate the true API-dollar capacity, weekly-to-5h multiplier, remaining
+runway, reset countdown, alternate available pools, and top burning sessions of
+percentage-based AI subscriptions by reconciling local `tokscale` spend against
+live provider quota fractions.
 
 ## Prerequisites & Readiness Check
 
@@ -23,25 +27,21 @@ instead of guessing quota sizes or fabricating token prices.
 command -v tokscale && tokscale --version
 ```
 
-- If `tokscale` is missing, instruct the user to install it (for example via
-  `bun install -g tokscale` or `npm install -g tokscale`) and stop.
-- For **Antigravity** (`--provider antigravity`), also verify `agy`:
-  ```bash
-  command -v agy
-  ```
+- If `tokscale` is missing, report the missing prerequisite (`bun install -g
+  tokscale` or `npm install -g tokscale`) and stop.
+- For **Antigravity** (`--provider antigravity`), also verify `command -v agy`.
   Antigravity quota comes from `agy -p /usage --output-format json`; local CLI
-  token spend is read from `tokscale` client `antigravity-cli`.
+  spend is read from `tokscale` client `antigravity-cli`.
 - For **Codex** (`--provider codex`), quota comes from `tokscale usage --json`
   and local spend from `tokscale` client `codex`.
-- For **any other percentage-based subscription** (`--provider custom`), use
-  the provider's reported `used_percent` (or `remaining_fraction`) together with
-  either a `--client <tokscale-client> --since YYYY-MM-DD` lookup or an explicit
-  `--spend-usd <amount>`.
+- For **any other percentage-based subscription** (`--provider custom`), pass
+  the provider's reported `--used-pct` (or `--remaining-fraction`) with either
+  `--client <tokscale-client> --since YYYY-MM-DD` or `--spend-usd <amount>`.
 
 ## Core Calibration Workflow
 
-Locate this Skill's directory (`<skill-dir>`) from the loaded `SKILL.md` path and
-run the bundled zero-dependency Python 3.9+ calibrator.
+Resolve `<skill-dir>` from this loaded `SKILL.md` path and execute the bundled
+zero-dependency Python 3.9+ calibrator directly.
 
 ### 1. Antigravity (Gemini Models & Claude/GPT 3P Pools)
 
@@ -49,15 +49,20 @@ run the bundled zero-dependency Python 3.9+ calibrator.
 python3 "<skill-dir>/scripts/calibrate_quota.py" --provider antigravity
 ```
 
-Pass `--json` for machine-readable output, `--samples 2 --settle-seconds 5`
-(default) to detect transient in-flight reservations, or `--samples 1` when
-latency matters and no other Antigravity sessions are active.
+- Defaults: `--samples 2 --settle-seconds 5`, `--timeout 60`, and automatic
+  top-5 session attribution whenever any bucket is `>= 80%` used or locked.
+- Pass `--top-sessions N` to always include top `N` sessions (or `0` to skip),
+  `--json` for structured output, or `--samples 1` only when no concurrent
+  Antigravity sessions are active.
 
 ### 2. Codex (via `tokscale usage` + `tokscale hourly`)
 
 ```bash
 python3 "<skill-dir>/scripts/calibrate_quota.py" --provider codex
 ```
+
+Pass `--top-sessions 5` to include top Codex sessions, or `--account-email` to
+target a specific Codex account.
 
 ### 3. Custom / Manual Provider
 
@@ -78,60 +83,57 @@ python3 "<skill-dir>/scripts/calibrate_quota.py" --provider custom \
 ## Calibration Discipline (Mandatory Gates)
 
 Read [references/methodology.md](references/methodology.md) when interpreting
-edge cases, mixed-model hours, multi-account bias, or adding a new provider.
+lockout caps, soft lockouts, mixed-model hours, multi-account bias, or adding a
+new provider.
 
 1. **Never extrapolate from a single tiny cold probe (`< 2%` consumed).**
-   A single low-output turn has an unrepresentative cache ratio and can sit
-   inside backend reservation jitter, misestimating pool capacity by 4–5×.
-   Grade buckets `< 2%` consumed as `LOW` confidence and wait for real
-   multi-turn usage (`>= 5%` preferred, `>= 10%` for `HIGH` confidence).
-2. **Guard against in-flight reservation and replica jitter (Antigravity).**
-   Antigravity temporarily deducts a flat `0.01` (1%) while a request settles
-   and can serve slightly lagged values across backend replicas. The script
-   reads `agy -p /usage --output-format json` twice and compares `remaining_fraction`
-   and the `used_5h / used_weekly` ratio; if readings diverge, report the
-   instability warning and re-run once active sessions pause.
-3. **Align spend to exact window boundaries in local time.**
-   Convert UTC `reset_time` into the local timezone used by `tokscale hourly`
-   to derive `window_start = reset_time - window_duration` (`7d` for weekly,
-   `5h` for 5-hour). Subtract pre-window hours on the start date and prorate
-   the boundary hour; surface any mixed-model boundary uncertainty as a
-   bounded range instead of fabricating an exact split.
-4. **Report both base spend and cache-write upper bound.**
-   When local logs omit separate `cacheWrite` counters (`cacheWrite == 0`, as in
-   current `antigravity-cli` records), compute:
-   - **Base**: `tokscale` reported cost (standard input + cache read +
-     output/reasoning).
-   - **Cache-write upper bound**: price new `input` tokens at the 5-minute
-     cache-write rate (e.g., `1.25×` base input for Anthropic Claude models)
-     to bracket cache-creation billing.
-   Note that `tokscale` maps Antigravity Claude output tokens into `reasoning`
-   (`output == 0`), which is already priced at the output rate—do not
-   double-count or assume output was dropped.
-5. **Respect saturation and attribution limits.**
-   - If `used_percent >= 99.9%` (`SATURATED`), local spend over the full window
-     cannot separate pre-lockout burn from other activity unless the lockout
-     time is known—mark confidence `LOW` and explain the cap.
-   - Multi-machine or web/IDE usage on the **same** account makes local spend
-     smaller than true spend (**underestimates** pool size).
-   - Multiple accounts sharing **one** local `tokscale` client directory (e.g.,
-     multi-account Codex) make local spend larger than single-account spend
-     (**overestimates** single-account pool size).
+   Single low-output turns sit inside reservation jitter and have skewed cache
+   ratios, misestimating pool capacity by 4–5×. Grade `< 2%` buckets `LOW` and
+   rely on real multi-turn usage (`>= 5%` preferred, `>= 10%` for `HIGH`).
+2. **Distinguish rebound jitter from monotonic concurrent burn (Antigravity).**
+   The script compares both signed `remaining_fraction` delta (`v2 - v1`) and
+   the `used_5h / used_weekly` ratio across two reads:
+   - **Upward rebound (`v2 > v1`)**: true `RESERVATION_REFUND_OR_REPLICA_LAG`
+     — warn and downgrade confidence.
+   - **Small monotonic burn (`v2 < v1`, `<= 5%` relative on `>= 20%` used)**:
+     normal concurrent session activity (`CONCURRENT_BURN` info note), keeping
+     `HIGH` confidence instead of false-alarm downgrades.
+3. **Recognize `< 1%` soft lockout, clamped multipliers, and `LOCKOUT_CAP`.**
+   - Antigravity enforces a `1%` (`0.01`) pre-reservation floor, so buckets
+     with `0.1% < remaining < 1%` are already in `SOFT_LOCKOUT`.
+   - When `5h` hits `LOCKED` or `SOFT_LOCKOUT`, `5h` is clamped near `0%` while
+     `weekly` keeps deducting—treat the observed `u5 / uw` ratio as a lower
+     bound (`>= Xx`), not an exact multiplier.
+   - When a `5h` bucket hits lockout from a fresh simultaneous `5h+weekly`
+     start while `weekly` remains open, local spend directly measures that 5h
+     hard cap (`LOCKOUT_CAP`), distinct from unknown-timestamp `SATURATED`
+     (`LOW`).
+4. **Align spend to exact window boundaries & bracket cache writes.**
+   Convert UTC `reset_time` into local time, subtract pure pre-window hours,
+   surface mixed-hour boundaries transparently as `[min, upper]` in both JSON
+   and Markdown, and report both base `tokscale` spend and 5-minute cache-write
+   upper bounds when `cacheWrite == 0`.
+5. **Surface attribution limits and actionable recovery.**
+   - Always check `top_sessions` when a pool is `>= 80%` or locked to identify
+     `CONTEXT_SNOWBALL` long-context sessions.
+   - Multi-machine/web/IDE usage on the **same** account **underestimates**
+     pool size; multiple accounts sharing **one** local client directory
+     **overestimates** single-account capacity.
+   - Surface all script warnings (including `tokscale` unpriced/stale-pricing
+     stderr notices and `UNKNOWN_WINDOW` labels).
 
 ## Output Format
 
-Present the reconciled result concisely in this structure:
+Deliver a concise, direct diagnostic report (do not dump raw commands for the
+user to run):
 
-1. **Headline summary**: Implied API-dollar size of each active pool (base ~
-   cache-write upper), exact `Weekly ÷ 5h` multiplier when both windows are
-   active, and any stark asymmetry between model pools (e.g., first-party vs.
-   third-party).
-2. **Calibration table**: Pool | Window (`start → reset`, local TZ) | Window
-   Spend (`base ~ upper`) | Quota Used (`%`) | Implied Pool Size (`$ API eq.`)
-   | Confidence.
-3. **Runway & practical allocation**: Translate the calibrated rate into
-   turns/hours remaining at the user's observed workload intensity and suggest
-   which tasks fit each pool.
-4. **Warnings & limits**: Surface every script warning (instability, low
-   signal, mixed-hour boundary, saturation, multi-account/multi-machine bias,
-   or `tokscale` unpriced/stale-pricing notices).
+1. **Headline status & pool capacity**: Implied API-dollar size of each pool
+   (base ~ CW upper), `Weekly ÷ 5h` multiplier (noting clamp lower bound if
+   applicable), and any locked/soft-locked pools with exact reset countdown.
+2. **Calibration & runway table**: Pool | Window | Resets In | Local Spend |
+   Quota Used (with `LOCKED`/`SOFT_LOCKOUT` badge) | Implied Pool | Remaining
+   Runway (`~$` / `~msgs` / `ETA`) | Confidence.
+3. **Lockout attribution & switch action** (when any pool is locked or `>= 80%`):
+   Top burning sessions (highlighting any `CONTEXT_SNOWBALL` outlier) and
+   immediately available alternate pools in the same subscription.
+4. **Caveats**: Script warnings, concurrent notes, and attribution bias limits.
