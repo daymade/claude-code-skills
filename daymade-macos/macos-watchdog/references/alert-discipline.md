@@ -49,6 +49,19 @@ Rate pattern for repeated identical failures (from the published dynamic rate-li
 - **Lower severity**: initial 15-min delay, backoff capped at 2 h.
 - **Entering cool-down**: exactly one notification saying "standing down for X, will retry then, silence until then" — this single message is what makes the silence trustworthy rather than indistinguishable from a dead watchdog.
 
+## Queue throughput and issue cardinality
+
+A notifier has a measurable drain rate. Before enabling per-issue notifications, compare the number of distinct active issues with `backlog_horizon / send_interval`. In a hypothetical 42-issue burst with a 6-second send interval and a 180-second horizon, only 30 messages can leave the queue; 12 remain. With continued arrivals, the oldest still-pending item will exceed the threshold even when every send succeeds.
+
+When active issue cardinality exceeds drain capacity:
+
+- aggregate issues that share one operator action or root cause into one message;
+- keep per-issue detail in the durable state/event log, not the chat channel;
+- treat a notification-backlog signal as a ticket about the notification system, not another page that re-enters the same unthrottled queue;
+- suppress or coalesce the backlog alert itself until the queue is below the measured capacity.
+
+**War story.** A capture inspector exposed more distinct active issues than the notifier could drain inside its backlog horizon. The queue therefore declared backlog even while sends were succeeding, and that alert became another queued message that amplified the condition it described.
+
 ## Message content
 
 - State is read live when composing the message, never frozen at watchdog-authoring time (see `quiet-watchdog-patterns.md` Pattern 1 — a fixed "still broken" template kept lying for 2h after the system healed).

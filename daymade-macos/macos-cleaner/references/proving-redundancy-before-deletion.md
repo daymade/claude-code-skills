@@ -62,6 +62,32 @@ members before retiring the source. Preserve unique signed artifacts and the
 only surviving copy until the owning storage contract is met; rebuilding or
 re-signing does not recover the original bytes.
 
+### 1b. Explicitly disposable staging copy with machine receipts
+
+When the candidate is a staging/working tree, the canonical copy is on another
+mounted volume, and the user explicitly authorizes deleting the staging tree
+rather than relocating an original entry, a bounded route is available:
+
+1. Produce one complete no-follow inventory on both sides: relative path, type,
+   size and symlink target. Report missing/extra entries and byte totals.
+2. Read the copy executor or sync receipts. Establish the direction of transfer,
+   completion, failure count and pending count. Folder names and sizes do not
+   establish which copy is canonical.
+3. Compare control files, inventories and small manifests by content. Preserve
+   every source-only control artifact before deletion.
+4. Check live holders and scheduled writers immediately before retirement.
+5. Delete only the exact authorized staging path. Do not repurpose the general
+   relocation helper when no original entry is being preserved.
+6. Read back `df` on the reclaimed volume and exercise the downstream consumer
+   that was blocked by the capacity loss. Free space alone does not prove the
+   business path recovered.
+
+This route does not prove byte-for-byte equality. If the user declines a
+full-content hash, do not perform one as safety theater; state that acceptance is
+based on complete metadata inventories, machine receipts, control-file checks
+and the user's explicit disposition. Any unexplained payload difference keeps
+the source.
+
 ### 2. Origin — was the candidate *created from* the canonical copy?
 
 Use the bounded original-record route in rung 4 to find the creation command or
