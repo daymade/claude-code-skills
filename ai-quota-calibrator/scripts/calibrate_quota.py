@@ -13,6 +13,7 @@ import argparse
 import datetime as dt
 import json
 import math
+import re
 import shutil
 import subprocess
 import sys
@@ -23,6 +24,8 @@ from typing import Any
 WINDOW_DURATIONS = {
     "5h": dt.timedelta(hours=5),
     "five_hour": dt.timedelta(hours=5),
+    "24h": dt.timedelta(hours=24),
+    "daily": dt.timedelta(days=1),
     "weekly": dt.timedelta(days=7),
     "7d": dt.timedelta(days=7),
     "30d": dt.timedelta(days=30),
@@ -45,6 +48,10 @@ FALLBACK_INPUT_RATE_PER_M = {
 }
 
 STABILITY_TOLERANCE = 0.002  # 0.2 percentage points
+RATIO_SHIFT_TOLERANCE = 0.15
+DEFAULT_CMD_TIMEOUT = 60.0
+
+_FRAC_SECONDS_RE = re.compile(r"(\d{2}:\d{2}:\d{2})\.(\d+)")
 
 
 class CalibrationError(RuntimeError):
@@ -56,9 +63,16 @@ def local_tz() -> dt.tzinfo:
 
 
 def parse_iso_datetime(value: str, tz: dt.tzinfo) -> dt.datetime:
+    """Parse ISO-8601 / RFC3339 timestamps (including 1-9 fractional digits on Py 3.9+)."""
     text = value.strip()
     if text.endswith("Z"):
         text = text[:-1] + "+00:00"
+    # Python 3.9/3.10 fromisoformat only accepts 0, 3, or 6 fractional digits.
+    text = _FRAC_SECONDS_RE.sub(
+        lambda m: f"{m.group(1)}.{m.group(2)[:6].ljust(6, '0')}",
+        text,
+        count=1,
+    )
     parsed = dt.datetime.fromisoformat(text)
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=tz)
@@ -77,17 +91,52 @@ def parse_local_hour(value: str, tz: dt.tzinfo) -> dt.datetime:
     return parse_iso_datetime(text, tz)
 
 
-def run_json_cmd(argv: list[str], binary_hint: str) -> Any:
+def extract_stderr_notices(stderr: str) -> list[str]:
+    """Capture actionable tokscale/provider stderr notices emitted on exit 0."""
+    notices: list[str] = []
+    for raw_line in stderr.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        low = line.lower()
+        if any(
+            k in low
+            for k in (
+                "unpriced",
+                "stale pricing",
+                "partial",
+                "warning:",
+                "incomplete",
+                "tokscale:",
+            )
+        ):
+            if line not in notices:
+                notices.append(line)
+    return notices
+
+
+def run_json_cmd(
+    argv: list[str],
+    binary_hint: str,
+    timeout: float = DEFAULT_CMD_TIMEOUT,
+) -> tuple[Any, list[str]]:
     if shutil.which(argv[0]) is None:
         raise CalibrationError(
             f"Required CLI '{argv[0]}' not found in PATH. {binary_hint}"
         )
-    proc = subprocess.run(
-        argv,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        proc = subprocess.run(
+            argv,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise CalibrationError(
+            f"Command timed out after {timeout:.0f}s: {' '.join(argv)}"
+        ) from exc
+
     if proc.returncode != 0:
         detail = (proc.stderr or proc.stdout).strip()[:400]
         raise CalibrationError(
@@ -96,20 +145,53 @@ def run_json_cmd(argv: list[str], binary_hint: str) -> Any:
     raw = proc.stdout.strip()
     if not raw:
         raise CalibrationError(f"Command returned empty output: {' '.join(argv)}")
+    notices = extract_stderr_notices(proc.stderr or "")
     try:
-        return json.loads(raw)
+        return json.loads(raw), notices
     except json.JSONDecodeError as exc:
-        # Some CLIs print warnings before JSON; attempt to parse from first { or [
         for ch in ("{", "["):
             idx = raw.find(ch)
             if idx != -1:
                 try:
-                    return json.loads(raw[idx:])
+                    return json.loads(raw[idx:]), notices
                 except json.JSONDecodeError:
                     pass
         raise CalibrationError(
             f"Failed to parse JSON from {' '.join(argv)}: {exc}"
         ) from exc
+
+
+def inspect_tokscale_completeness(
+    models_payload: dict[str, Any] | list[dict[str, Any]],
+) -> list[str]:
+    """Flag unpriced models or undated token balances in tokscale model JSON."""
+    warnings: list[str] = []
+    entries = (
+        models_payload.get("entries", [])
+        if isinstance(models_payload, dict)
+        else models_payload
+    )
+    unpriced_models: list[str] = []
+    for e in entries:
+        cost = float(e.get("cost") or 0.0)
+        tokens = sum(
+            int(e.get(k) or 0)
+            for k in ("input", "output", "reasoning", "cacheRead", "cacheWrite")
+        )
+        if tokens > 0 and cost <= 0.0:
+            unpriced_models.append(str(e.get("model") or "unknown"))
+    if unpriced_models:
+        warnings.append(
+            "UNPRICED_MODELS: tokscale reported $0 cost for non-zero tokens on "
+            f"{', '.join(sorted(set(unpriced_models)))}; implied pool size may be underestimated."
+        )
+    if isinstance(models_payload, dict):
+        undated = models_payload.get("undatedTokens") or {}
+        if isinstance(undated, dict) and any(int(v or 0) > 0 for v in undated.values()):
+            warnings.append(
+                "UNDATED_TOKENS: tokscale reported undatedTokens outside date-filtered windows."
+            )
+    return warnings
 
 
 def classify_antigravity_model(model: str) -> str:
@@ -149,7 +231,6 @@ def estimate_cache_write_uplift_usd(entries: list[dict[str, Any]]) -> float:
                 input_rate = rate
                 break
         if input_rate is None:
-            # Conservative fallback: attribute up to 25% of total entry cost
             extra += float(e.get("cost") or 0.0) * uplift
         else:
             extra += (inp / 1_000_000.0) * input_rate * uplift
@@ -159,7 +240,7 @@ def estimate_cache_write_uplift_usd(entries: list[dict[str, Any]]) -> float:
 def assess_antigravity_stability(
     samples: list[dict[str, Any]],
 ) -> tuple[dict[str, Any], list[str], dict[str, float]]:
-    """Compare 1..N usage snapshots to detect 0.01 reservation/replica jitter."""
+    """Compare 1..N usage snapshots for remaining_fraction shifts and 5h/weekly ratio skew."""
     if not samples:
         raise CalibrationError("No Antigravity /usage samples available.")
     if len(samples) == 1:
@@ -170,17 +251,23 @@ def assess_antigravity_stability(
     warnings: list[str] = []
     shift_by_bucket: dict[str, float] = {}
 
-    def extract_map(payload: dict[str, Any]) -> dict[str, float]:
-        out: dict[str, float] = {}
+    def extract_buckets(payload: dict[str, Any]) -> tuple[dict[str, float], dict[str, dict[str, float]]]:
+        by_id: dict[str, float] = {}
+        by_group_win: dict[str, dict[str, float]] = {}
         groups = payload.get("command", {}).get("data", {}).get("groups", [])
         for g in groups:
+            gname = str(g.get("name", ""))
             for b in g.get("buckets", []):
                 bid = str(b.get("id") or b.get("name"))
-                out[bid] = float(b.get("remaining_fraction", 1.0))
-        return out
+                rem = float(b.get("remaining_fraction", 1.0))
+                win = str(b.get("window") or "").lower()
+                gk = classify_antigravity_group_name(gname, bid)
+                by_id[bid] = rem
+                by_group_win.setdefault(gk, {})[win] = max(0.0, 1.0 - rem)
+        return by_id, by_group_win
 
-    m1 = extract_map(first)
-    m2 = extract_map(last)
+    m1, gw1 = extract_buckets(first)
+    m2, gw2 = extract_buckets(last)
     for bid, v2 in m2.items():
         v1 = m1.get(bid, v2)
         diff = abs(v2 - v1)
@@ -191,6 +278,20 @@ def assess_antigravity_stability(
                 f"({v1 * 100:.2f}% -> {v2 * 100:.2f}%), indicating active in-flight "
                 f"requests, 1% pre-reservation, or replica sync lag."
             )
+
+    for gk, w2 in gw2.items():
+        w1 = gw1.get(gk, {})
+        u5_1, uw_1 = w1.get("5h", 0.0), w1.get("weekly", 0.0)
+        u5_2, uw_2 = w2.get("5h", 0.0), w2.get("weekly", 0.0)
+        if u5_1 > 0.005 and uw_1 > 0.005 and u5_2 > 0.005 and uw_2 > 0.005:
+            r1 = u5_1 / uw_1
+            r2 = u5_2 / uw_2
+            if abs(r2 - r1) > RATIO_SHIFT_TOLERANCE:
+                warnings.append(
+                    f"Group '{gk}' used_5h/used_weekly ratio shifted between consecutive reads "
+                    f"({r1:.2f}x -> {r2:.2f}x), consistent with a flat 1% in-flight reservation "
+                    f"affecting both buckets asymmetrically."
+                )
 
     return last, warnings, shift_by_bucket
 
@@ -212,26 +313,17 @@ def compute_group_window_spend(
         window_start.minute * 60 + window_start.second
     ) / 3600.0
 
-    # Group models from `tokscale models --since <start_date>`
     group_models = [
         e for e in models_since_entries if model_classifier(str(e.get("model", ""))) == group_key
     ]
-    other_models = [
-        e for e in models_since_entries if model_classifier(str(e.get("model", ""))) != group_key
-    ]
     base_since_cost = sum(float(e.get("cost") or 0.0) for e in group_models)
-    other_since_cost = sum(float(e.get("cost") or 0.0) for e in other_models)
     total_msgs = sum(int(e.get("messageCount") or 0) for e in group_models)
     cache_write_extra = estimate_cache_write_uplift_usd(group_models)
 
-    # Inspect hourly rows on/after start_date
     pre_pure_sub = 0.0
     pre_mixed_cost = 0.0
     any_group_strictly_before = False
     any_group_pre_window = False
-    other_group_pre_window = False
-    in_window_pure_cost = 0.0
-    in_window_mixed_cost = 0.0
 
     for row in hourly_entries:
         h_dt = parse_local_hour(str(row.get("hour", "")), tz)
@@ -251,26 +343,13 @@ def compute_group_window_spend(
                     pre_pure_sub += cost
                 else:
                     pre_mixed_cost += cost
-            if has_other:
-                other_group_pre_window = True
         elif h_dt == start_hour_floor:
-            if has_group:
-                if boundary_elapsed_frac > 0:
-                    any_group_pre_window = True
+            if has_group and boundary_elapsed_frac > 0:
+                any_group_pre_window = True
                 if not has_other:
                     pre_pure_sub += cost * boundary_elapsed_frac
-                    in_window_pure_cost += cost * (1.0 - boundary_elapsed_frac)
                 else:
                     pre_mixed_cost += cost * boundary_elapsed_frac
-                    in_window_mixed_cost += cost * (1.0 - boundary_elapsed_frac)
-            if has_other and boundary_elapsed_frac > 0:
-                other_group_pre_window = True
-        else:
-            if has_group:
-                if not has_other:
-                    in_window_pure_cost += cost
-                else:
-                    in_window_mixed_cost += cost
 
     # Case 0: Fresh simultaneous 5h+weekly start with zero prior hours on start_date
     # proves no spend from this group occurred before window_start inside start_hour_floor.
@@ -291,14 +370,8 @@ def compute_group_window_spend(
         spend_min = spend_base
         spend_max = spend_base
         method = "models_since_minus_pure_pre_hours"
-    # Case 3: Algebraic separation if the OTHER group never appeared before window_start
-    elif not other_group_pre_window and other_since_cost >= 0.0:
-        spend_base = max(0.0, in_window_pure_cost + in_window_mixed_cost - other_since_cost)
-        spend_min = spend_base
-        spend_max = spend_base
-        method = "algebraic_mixed_hour_subtraction"
+    # Case 3: Unresolvable mixed pre-window hours -> transparent [min, max] bounds
     else:
-        # Unresolvable mixed pre-window hours: preserve honest [min, max] bounds
         spend_max = max(0.0, base_since_cost - pre_pure_sub)
         spend_min = max(0.0, base_since_cost - pre_pure_sub - pre_mixed_cost)
         spend_base = (spend_min + spend_max) / 2.0
@@ -309,15 +382,15 @@ def compute_group_window_spend(
             f"bounded in [${spend_min:.2f}, ${spend_max:.2f}]."
         )
 
-    # Scale cache-write uplift proportionally to in-window share of base_since_cost
-    ratio = (spend_base / base_since_cost) if base_since_cost > 0 else 0.0
-    spend_upper = spend_max + cache_write_extra * min(1.0, max(0.0, ratio))
+    ratio_upper = (spend_max / base_since_cost) if base_since_cost > 0 else 0.0
+    cw_uplift_scaled = cache_write_extra * min(1.0, max(0.0, ratio_upper))
+    spend_upper = spend_max + cw_uplift_scaled
 
     return {
         "spend_base_usd": round(spend_base, 6),
         "spend_min_usd": round(spend_min, 6),
         "spend_upper_usd": round(spend_upper, 6),
-        "cache_write_extra_usd": round(cache_write_extra * min(1.0, max(0.0, ratio)), 6),
+        "cache_write_extra_usd": round(cw_uplift_scaled, 6),
         "message_count": total_msgs,
         "alignment_method": method,
         "warnings": warnings,
@@ -358,7 +431,7 @@ def grade_confidence(
         )
         return "LOW", reasons
     if mixed_ambiguity:
-        reasons.append("MIXED_HOUR_AMBIGUITY: pre-window boundary mixed model groups.")
+        # Detailed MIXED_HOUR_AMBIGUITY range warning is already emitted by compute_group_window_spend.
         return "LOW", reasons
     if minor_drift:
         reasons.append(
@@ -385,9 +458,11 @@ def calibrate_antigravity(
     samples_count: int,
     settle_seconds: float,
     fixture: dict[str, Any] | None = None,
+    timeout: float = DEFAULT_CMD_TIMEOUT,
 ) -> dict[str, Any]:
     tz = local_tz()
     now = dt.datetime.now(tz)
+    top_warnings: list[str] = []
 
     if fixture is not None:
         raw_samples = fixture.get("usage_samples") or [fixture["usage"]]
@@ -397,20 +472,24 @@ def calibrate_antigravity(
         for idx in range(max(1, samples_count)):
             if idx > 0 and settle_seconds > 0:
                 time.sleep(settle_seconds)
-            raw_samples.append(
-                run_json_cmd(
-                    ["agy", "-p", "/usage", "--output-format", "json"],
-                    "Install Antigravity CLI (`agy`) and authenticate first.",
-                )
+            payload, notices = run_json_cmd(
+                ["agy", "-p", "/usage", "--output-format", "json"],
+                "Install Antigravity CLI (`agy`) and authenticate first.",
+                timeout=timeout,
             )
+            raw_samples.append(payload)
+            for n in notices:
+                if n not in top_warnings:
+                    top_warnings.append(n)
 
     chosen_usage, stability_warnings, shift_map = assess_antigravity_stability(raw_samples)
+    top_warnings.extend(stability_warnings)
+
     cmd_data = chosen_usage.get("command", {}).get("data", {})
     groups = cmd_data.get("groups", [])
     if not groups:
         raise CalibrationError("Antigravity /usage JSON contained no quota groups.")
 
-    # Discover all bucket window starts so we fetch tokscale once per distinct start date
     bucket_specs: list[dict[str, Any]] = []
     earliest_date: str | None = None
     distinct_dates: set[str] = set()
@@ -421,12 +500,13 @@ def calibrate_antigravity(
             window = str(b.get("window") or "").lower()
             dur = WINDOW_DURATIONS.get(window)
             reset_raw = str(b.get("reset_time") or "")
-            reset_local = parse_iso_datetime(reset_raw, tz) if reset_raw else now
-            win_start = (reset_local - dur) if dur else reset_local
-            start_date = win_start.strftime("%Y-%m-%d")
-            distinct_dates.add(start_date)
-            if earliest_date is None or start_date < earliest_date:
-                earliest_date = start_date
+            reset_local = parse_iso_datetime(reset_raw, tz) if reset_raw else None
+            win_start = (reset_local - dur) if (dur is not None and reset_local is not None) else None
+            start_date = win_start.strftime("%Y-%m-%d") if win_start is not None else None
+            if start_date is not None:
+                distinct_dates.add(start_date)
+                if earliest_date is None or start_date < earliest_date:
+                    earliest_date = start_date
             bucket_specs.append(
                 {
                     "group_name": gname,
@@ -436,20 +516,27 @@ def calibrate_antigravity(
                     "window": window,
                     "remaining_fraction": float(b.get("remaining_fraction", 1.0)),
                     "reset_time_utc": reset_raw,
-                    "reset_time_local": reset_local.isoformat(timespec="seconds"),
+                    "reset_time_local": (
+                        reset_local.isoformat(timespec="seconds") if reset_local else "unknown"
+                    ),
                     "window_start_local": win_start,
                     "start_date": start_date,
                 }
             )
 
-    # Identify groups whose 5h and weekly windows started at the exact same timestamp
-    # (proves zero prior activity for that group before window_start).
     fresh_start_groups: set[str] = set()
     by_group_starts: dict[str, dict[str, dt.datetime]] = {}
     for spec in bucket_specs:
-        by_group_starts.setdefault(spec["group_key"], {})[spec["window"]] = spec["window_start_local"]
+        if spec["window_start_local"] is not None:
+            by_group_starts.setdefault(spec["group_key"], {})[spec["window"]] = spec[
+                "window_start_local"
+            ]
     for gk, smap in by_group_starts.items():
-        if "5h" in smap and "weekly" in smap and abs((smap["5h"] - smap["weekly"]).total_seconds()) <= 5:
+        if (
+            "5h" in smap
+            and "weekly" in smap
+            and abs((smap["5h"] - smap["weekly"]).total_seconds()) <= 5
+        ):
             fresh_start_groups.add(gk)
 
     if fixture is not None:
@@ -457,10 +544,14 @@ def calibrate_antigravity(
             d: fixture.get("models", {}).get("entries", []) for d in distinct_dates
         }
         hourly_entries: list[dict[str, Any]] = fixture.get("hourly", {}).get("entries", [])
+        for entries in models_by_date.values():
+            for w in inspect_tokscale_completeness(entries):
+                if w not in top_warnings:
+                    top_warnings.append(w)
     else:
         models_by_date = {}
         for d in sorted(distinct_dates):
-            m_json = run_json_cmd(
+            m_json, notices = run_json_cmd(
                 [
                     "tokscale",
                     "models",
@@ -472,22 +563,33 @@ def calibrate_antigravity(
                     "--no-spinner",
                 ],
                 "Install tokscale (`bun install -g tokscale` or `npm install -g tokscale`).",
+                timeout=timeout,
             )
             models_by_date[d] = m_json.get("entries", [])
-        h_json = run_json_cmd(
-            [
-                "tokscale",
-                "hourly",
-                "-c",
-                "antigravity-cli",
-                "--since",
-                earliest_date or now.strftime("%Y-%m-%d"),
-                "--json",
-                "--no-spinner",
-            ],
-            "Install tokscale (`bun install -g tokscale` or `npm install -g tokscale`).",
-        )
-        hourly_entries = h_json.get("entries", [])
+            for w in notices + inspect_tokscale_completeness(m_json):
+                if w not in top_warnings:
+                    top_warnings.append(w)
+        if earliest_date is not None:
+            h_json, notices = run_json_cmd(
+                [
+                    "tokscale",
+                    "hourly",
+                    "-c",
+                    "antigravity-cli",
+                    "--since",
+                    earliest_date,
+                    "--json",
+                    "--no-spinner",
+                ],
+                "Install tokscale (`bun install -g tokscale` or `npm install -g tokscale`).",
+                timeout=timeout,
+            )
+            hourly_entries = h_json.get("entries", [])
+            for n in notices:
+                if n not in top_warnings:
+                    top_warnings.append(n)
+        else:
+            hourly_entries = []
 
     calibrated_buckets: list[dict[str, Any]] = []
     group_windows: dict[str, dict[str, float]] = {}
@@ -495,6 +597,36 @@ def calibrate_antigravity(
     for spec in bucket_specs:
         rem = spec["remaining_fraction"]
         used = max(0.0, 1.0 - rem)
+        group_windows.setdefault(spec["group_key"], {})[spec["window"]] = used
+
+        if spec["window_start_local"] is None or spec["start_date"] is None:
+            calibrated_buckets.append(
+                {
+                    "group_name": spec["group_name"],
+                    "group_key": spec["group_key"],
+                    "bucket_id": spec["bucket_id"],
+                    "window": spec["window"],
+                    "window_start_local": "unknown",
+                    "reset_time_local": spec["reset_time_local"],
+                    "remaining_fraction": rem,
+                    "used_pct": round(used * 100.0, 4),
+                    "spend_base_usd": None,
+                    "spend_min_usd": None,
+                    "spend_upper_usd": None,
+                    "message_count_since_date": 0,
+                    "alignment_method": "unknown_window_duration",
+                    "implied_pool_base_usd": None,
+                    "implied_pool_min_usd": None,
+                    "implied_pool_upper_usd": None,
+                    "confidence": "UNKNOWN_WINDOW",
+                    "warnings": [
+                        f"UNKNOWN_WINDOW_DURATION: unrecognized window '{spec['window']}' "
+                        f"or missing reset_time; cannot align spend without guessing."
+                    ],
+                }
+            )
+            continue
+
         spend_info = compute_group_window_spend(
             group_key=spec["group_key"],
             window_start=spec["window_start_local"],
@@ -516,8 +648,6 @@ def calibrate_antigravity(
         implied_min = (spend_info["spend_min_usd"] / used) if used > 0 else None
         implied_upper = (spend_info["spend_upper_usd"] / used) if used > 0 else None
 
-        group_windows.setdefault(spec["group_key"], {})[spec["window"]] = used
-
         calibrated_buckets.append(
             {
                 "group_name": spec["group_name"],
@@ -529,6 +659,7 @@ def calibrate_antigravity(
                 "remaining_fraction": rem,
                 "used_pct": round(used * 100.0, 4),
                 "spend_base_usd": round(spend_info["spend_base_usd"], 4),
+                "spend_min_usd": round(spend_info["spend_min_usd"], 4),
                 "spend_upper_usd": round(spend_info["spend_upper_usd"], 4),
                 "message_count_since_date": spend_info["message_count"],
                 "alignment_method": spend_info["alignment_method"],
@@ -545,10 +676,15 @@ def calibrate_antigravity(
         u5 = wmap.get("5h", 0.0)
         uw = wmap.get("weekly", 0.0)
         if u5 > 0 and uw > 0:
-            # Note: exact only when both windows started together; otherwise ratio of implied pools
-            b5 = next((b for b in calibrated_buckets if b["group_key"] == gk and b["window"] == "5h"), None)
-            bw = next((b for b in calibrated_buckets if b["group_key"] == gk and b["window"] == "weekly"), None)
-            if b5 and bw and b5["window_start_local"] == bw["window_start_local"]:
+            b5 = next(
+                (b for b in calibrated_buckets if b["group_key"] == gk and b["window"] == "5h"),
+                None,
+            )
+            bw = next(
+                (b for b in calibrated_buckets if b["group_key"] == gk and b["window"] == "weekly"),
+                None,
+            )
+            if gk in fresh_start_groups:
                 multipliers[gk] = round(u5 / uw, 4)
             elif b5 and bw and b5["implied_pool_base_usd"] and bw["implied_pool_base_usd"]:
                 multipliers[gk] = round(
@@ -566,25 +702,29 @@ def calibrate_antigravity(
         "provider_rule_description": cmd_data.get("description", ""),
         "weekly_to_5h_multipliers": multipliers,
         "buckets": calibrated_buckets,
-        "warnings": stability_warnings,
+        "warnings": top_warnings,
     }
 
 
 def calibrate_codex(
     account_email: str | None = None,
     fixture: dict[str, Any] | None = None,
+    timeout: float = DEFAULT_CMD_TIMEOUT,
 ) -> dict[str, Any]:
     tz = local_tz()
     now = dt.datetime.now(tz)
+    top_warnings: list[str] = []
 
     if fixture is not None:
         usage_list = fixture["usage"]
         now = parse_iso_datetime(fixture["now"], tz) if fixture.get("now") else now
     else:
-        usage_list = run_json_cmd(
+        usage_list, notices = run_json_cmd(
             ["tokscale", "usage", "--json"],
             "Install tokscale (`bun install -g tokscale` or `npm install -g tokscale`).",
+            timeout=timeout,
         )
+        top_warnings.extend(notices)
 
     codex_accounts = [u for u in usage_list if str(u.get("provider", "")).lower() == "codex"]
     if not codex_accounts:
@@ -597,12 +737,16 @@ def calibrate_codex(
                 selected = a
                 break
         if selected is None:
-            raise CalibrationError(f"Codex account '{account_email}' not found in `tokscale usage --json`.")
+            raise CalibrationError(
+                f"Codex account '{account_email}' not found in `tokscale usage --json`."
+            )
     else:
-        selected = next((a for a in codex_accounts if (a.get("account") or {}).get("is_active")), codex_accounts[0])
+        selected = next(
+            (a for a in codex_accounts if (a.get("account") or {}).get("is_active")),
+            codex_accounts[0],
+        )
 
     multi_account = len(codex_accounts) > 1
-    top_warnings: list[str] = []
     if multi_account:
         top_warnings.append(
             f"Detected {len(codex_accounts)} Codex accounts in `tokscale usage`; "
@@ -627,11 +771,13 @@ def calibrate_codex(
                 dur = dt.timedelta(hours=5)
             elif "30d" in low or "month" in low:
                 dur = dt.timedelta(days=30)
+            elif "day" in low or "daily" in low or "24h" in low:
+                dur = dt.timedelta(days=1)
         reset_raw = str(m.get("resets_at") or "")
-        reset_local = parse_iso_datetime(reset_raw, tz) if reset_raw else now
-        win_start = (reset_local - dur) if dur else reset_local
-        sdate = win_start.strftime("%Y-%m-%d")
-        if earliest_date is None or sdate < earliest_date:
+        reset_local = parse_iso_datetime(reset_raw, tz) if reset_raw else None
+        win_start = (reset_local - dur) if (dur is not None and reset_local is not None) else None
+        sdate = win_start.strftime("%Y-%m-%d") if win_start is not None else None
+        if sdate is not None and (earliest_date is None or sdate < earliest_date):
             earliest_date = sdate
         parsed_metrics.append(
             {
@@ -646,24 +792,63 @@ def calibrate_codex(
 
     if fixture is not None:
         hourly_entries = fixture.get("hourly", {}).get("entries", [])
-    else:
-        h_json = run_json_cmd(
+    elif earliest_date is not None:
+        h_json, notices = run_json_cmd(
             [
                 "tokscale",
                 "hourly",
                 "-c",
                 "codex",
                 "--since",
-                earliest_date or now.strftime("%Y-%m-%d"),
+                earliest_date,
                 "--json",
                 "--no-spinner",
             ],
             "Install tokscale (`bun install -g tokscale` or `npm install -g tokscale`).",
+            timeout=timeout,
         )
         hourly_entries = h_json.get("entries", [])
+        for n in notices:
+            if n not in top_warnings:
+                top_warnings.append(n)
+    else:
+        hourly_entries = []
 
     buckets = []
     for pm in parsed_metrics:
+        used_frac = max(0.0, min(1.0, pm["used_pct"] / 100.0))
+        if pm["win_start"] is None or pm["reset_local"] is None:
+            buckets.append(
+                {
+                    "group_name": f"Codex ({selected.get('plan', 'Unknown')})",
+                    "group_key": "codex",
+                    "bucket_id": f"codex-{pm['label'].lower()}",
+                    "window": pm["label"].lower(),
+                    "window_start_local": "unknown",
+                    "reset_time_local": (
+                        pm["reset_local"].isoformat(timespec="seconds")
+                        if pm["reset_local"]
+                        else "unknown"
+                    ),
+                    "remaining_fraction": round(1.0 - used_frac, 6),
+                    "used_pct": round(pm["used_pct"], 4),
+                    "spend_base_usd": None,
+                    "spend_min_usd": None,
+                    "spend_upper_usd": None,
+                    "message_count_since_date": 0,
+                    "alignment_method": "unknown_window_duration",
+                    "implied_pool_base_usd": None,
+                    "implied_pool_min_usd": None,
+                    "implied_pool_upper_usd": None,
+                    "confidence": "UNKNOWN_WINDOW",
+                    "warnings": [
+                        f"UNKNOWN_WINDOW_DURATION: unrecognized Codex window label '{pm['label']}' "
+                        "or missing resets_at; cannot derive window_start without guessing."
+                    ],
+                }
+            )
+            continue
+
         start_floor = pm["win_start"].replace(minute=0, second=0, microsecond=0)
         boundary_frac = (pm["win_start"].minute * 60 + pm["win_start"].second) / 3600.0
         spend = 0.0
@@ -679,7 +864,6 @@ def calibrate_codex(
                 spend += cost * (1.0 - boundary_frac)
                 msgs += int(round(mc * (1.0 - boundary_frac)))
 
-        used_frac = max(0.0, min(1.0, pm["used_pct"] / 100.0))
         conf, reasons = grade_confidence(
             used_fraction=used_frac,
             shift_abs=0.0,
@@ -698,6 +882,7 @@ def calibrate_codex(
                 "remaining_fraction": round(1.0 - used_frac, 6),
                 "used_pct": round(pm["used_pct"], 4),
                 "spend_base_usd": round(spend, 4),
+                "spend_min_usd": round(spend, 4),
                 "spend_upper_usd": round(spend, 4),
                 "message_count_since_date": msgs,
                 "alignment_method": "codex_hourly_window",
@@ -719,41 +904,49 @@ def calibrate_codex(
     }
 
 
-def calibrate_custom(args: argparse.Namespace) -> dict[str, Any]:
+def calibrate_custom(
+    args: argparse.Namespace,
+    timeout: float = DEFAULT_CMD_TIMEOUT,
+) -> dict[str, Any]:
     tz = local_tz()
     now = dt.datetime.now(tz)
+    top_warnings: list[str] = []
 
     if args.used_pct is not None and args.remaining_fraction is not None:
         raise CalibrationError("Specify only one of --used-pct or --remaining-fraction.")
     if args.used_pct is not None:
-        if not (0.0 <= args.used_pct <= 100.0) or math.isnan(args.used_pct):
-            raise CalibrationError("--used-pct must be between 0 and 100.")
+        if not math.isfinite(args.used_pct) or not (0.0 <= args.used_pct <= 100.0):
+            raise CalibrationError("--used-pct must be a finite number between 0 and 100.")
         used_frac = args.used_pct / 100.0
     elif args.remaining_fraction is not None:
-        if not (0.0 <= args.remaining_fraction <= 1.0) or math.isnan(args.remaining_fraction):
-            raise CalibrationError("--remaining-fraction must be between 0 and 1.")
+        if not math.isfinite(args.remaining_fraction) or not (0.0 <= args.remaining_fraction <= 1.0):
+            raise CalibrationError("--remaining-fraction must be a finite number between 0 and 1.")
         used_frac = 1.0 - args.remaining_fraction
     else:
         raise CalibrationError("--provider custom requires --used-pct or --remaining-fraction.")
 
     if args.spend_usd is not None:
-        if args.spend_usd < 0 or math.isnan(args.spend_usd):
-            raise CalibrationError("--spend-usd must be non-negative.")
+        if not math.isfinite(args.spend_usd) or args.spend_usd < 0:
+            raise CalibrationError("--spend-usd must be a finite non-negative number.")
         spend_base = float(args.spend_usd)
-        spend_upper = (
-            float(args.cache_write_upper_usd)
-            if args.cache_write_upper_usd is not None
-            else spend_base
-        )
+        if args.cache_write_upper_usd is not None:
+            if not math.isfinite(args.cache_write_upper_usd):
+                raise CalibrationError("--cache-write-upper-usd must be a finite number.")
+            spend_upper = float(args.cache_write_upper_usd)
+        else:
+            spend_upper = spend_base
         if spend_upper < spend_base:
             raise CalibrationError("--cache-write-upper-usd cannot be less than --spend-usd.")
         method = "manual_spend_input"
         msgs = 0
     elif args.client and args.since:
-        m_json = run_json_cmd(
+        m_json, notices = run_json_cmd(
             ["tokscale", "models", "-c", args.client, "--since", args.since, "--json", "--no-spinner"],
             "Install tokscale (`bun install -g tokscale` or `npm install -g tokscale`).",
+            timeout=timeout,
         )
+        top_warnings.extend(notices)
+        top_warnings.extend(inspect_tokscale_completeness(m_json))
         entries = m_json.get("entries", [])
         spend_base = sum(float(e.get("cost") or 0.0) for e in entries)
         spend_upper = spend_base + estimate_cache_write_uplift_usd(entries)
@@ -782,6 +975,7 @@ def calibrate_custom(args: argparse.Namespace) -> dict[str, Any]:
                 "remaining_fraction": round(1.0 - used_frac, 6),
                 "used_pct": round(used_frac * 100.0, 4),
                 "spend_base_usd": round(spend_base, 4),
+                "spend_min_usd": round(spend_base, 4),
                 "spend_upper_usd": round(spend_upper, 4),
                 "message_count_since_date": msgs,
                 "alignment_method": method,
@@ -792,7 +986,7 @@ def calibrate_custom(args: argparse.Namespace) -> dict[str, Any]:
                 "warnings": reasons,
             }
         ],
-        "warnings": [],
+        "warnings": top_warnings,
     }
 
 
@@ -811,24 +1005,34 @@ def render_markdown(result: dict[str, Any]) -> str:
             lines.append("- Weekly / 5h multiplier: " + ", ".join(mult_parts))
     lines.append("")
     lines.append(
-        "| Pool | Window | Window Start -> Reset | Local Spend (Base ~ CW Upper) | Quota Used | Implied Pool ($ API eq.) | Confidence |"
+        "| Pool | Window | Window Start -> Reset | Local Spend (Min/Base ~ CW Upper) | Quota Used | Implied Pool ($ API eq.) | Confidence |"
     )
     lines.append("| :--- | :---: | :--- | :---: | :---: | :---: | :---: |")
 
     for b in result["buckets"]:
-        if abs(b["spend_upper_usd"] - b["spend_base_usd"]) > 0.01:
-            spend_str = f"${b['spend_base_usd']:.2f} ~ ${b['spend_upper_usd']:.2f}"
-        else:
-            spend_str = f"${b['spend_base_usd']:.2f}"
+        s_min = b.get("spend_min_usd")
+        s_base = b.get("spend_base_usd")
+        s_upper = b.get("spend_upper_usd")
+        s_low = s_min if s_min is not None else s_base
 
-        if b["implied_pool_base_usd"] is None:
-            pool_str = "N/A (untouched)"
-        elif b["implied_pool_upper_usd"] is not None and abs(
-            b["implied_pool_upper_usd"] - b["implied_pool_base_usd"]
-        ) > 0.5:
-            pool_str = f"**${b['implied_pool_base_usd']:.0f} ~ ${b['implied_pool_upper_usd']:.0f}**"
+        if s_low is None or s_upper is None:
+            spend_str = "N/A"
+        elif abs(s_upper - s_low) > 0.01:
+            spend_str = f"${s_low:.2f} ~ ${s_upper:.2f}"
         else:
-            pool_str = f"**${b['implied_pool_base_usd']:.0f}**"
+            spend_str = f"${s_low:.2f}"
+
+        p_min = b.get("implied_pool_min_usd")
+        p_base = b.get("implied_pool_base_usd")
+        p_upper = b.get("implied_pool_upper_usd")
+        p_low = p_min if p_min is not None else p_base
+
+        if p_low is None:
+            pool_str = "N/A (unknown window)" if b["confidence"] == "UNKNOWN_WINDOW" else "N/A (untouched)"
+        elif p_upper is not None and abs(p_upper - p_low) > 0.5:
+            pool_str = f"**${p_low:.0f} ~ ${p_upper:.0f}**"
+        else:
+            pool_str = f"**${p_low:.0f}**"
 
         win_range = f"`{b['window_start_local']}` -> `{b['reset_time_local']}`"
         lines.append(
@@ -869,8 +1073,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--settle-seconds",
         type=float,
-        default=4.0,
-        help="Delay in seconds between consecutive Antigravity /usage reads (default: 4.0).",
+        default=5.0,
+        help="Delay in seconds between consecutive Antigravity /usage reads (default: 5.0).",
+    )
+    p.add_argument(
+        "--timeout",
+        type=float,
+        default=DEFAULT_CMD_TIMEOUT,
+        help="Subprocess timeout in seconds for tokscale/agy commands (default: 60).",
     )
     p.add_argument(
         "--account-email",
@@ -914,7 +1124,11 @@ def main(argv: list[str] | None = None) -> int:
         if not args.input_fixture.is_file():
             print(f"Error: fixture file not found: {args.input_fixture}", file=sys.stderr)
             return 2
-        fixture = json.loads(args.input_fixture.read_text(encoding="utf-8"))
+        try:
+            fixture = json.loads(args.input_fixture.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"Error: failed to read fixture JSON '{args.input_fixture}': {exc}", file=sys.stderr)
+            return 2
 
     try:
         if args.provider == "antigravity":
@@ -922,17 +1136,22 @@ def main(argv: list[str] | None = None) -> int:
                 samples_count=args.samples,
                 settle_seconds=args.settle_seconds,
                 fixture=fixture,
+                timeout=args.timeout,
             )
         elif args.provider == "codex":
-            result = calibrate_codex(account_email=args.account_email, fixture=fixture)
+            result = calibrate_codex(
+                account_email=args.account_email,
+                fixture=fixture,
+                timeout=args.timeout,
+            )
         else:
-            result = calibrate_custom(args)
+            result = calibrate_custom(args, timeout=args.timeout)
     except CalibrationError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
 
     if args.json:
-        print(json.dumps(result, indent=2, ensure_ascii=False))
+        print(json.dumps(result, indent=2, ensure_ascii=False, allow_nan=False))
     else:
         print(render_markdown(result))
     return 0

@@ -3730,6 +3730,24 @@ Daymade Skill Evolver 组装已有 Skills，为指定现有 Skill 完成一轮�
 
 ---
 
+### **ai-quota-calibrator** - 黑盒 AI 订阅配额实证反推
+
+> **安装**：`claude plugin install ai-quota-calibrator@daymade-skills`
+
+将本地 `tokscale` 真实消耗与平台实时配额比例（Antigravity Gemini/Claude 池、Codex 及其他百分比订阅）按窗口起点精确对齐，反推 5 小时池与周池的等效 API 美元规模、周÷5h 倍率与当前火力下的剩余续航。
+
+**适用场景**：查询黑盒订阅 5 小时/周额度大概相当于多少 API 美元、排查第三方模型池掉额度快的原因、用双次稳态采样与 Cache Write 敏感度区间校准真实消耗。
+
+```text
+用 ai-quota-calibrator 结合 tokscale 校准我当前的 Antigravity Gemini 和 Claude 配额池。
+```
+
+**要求**：`tokscale` CLI（`antigravity-cli` / `codex` 等本地客户端）、Antigravity 另需 `agy` CLI，以及 Python 3.9+ 标准库（零第三方 pip 依赖）。
+
+📚 **文档**：[ai-quota-calibrator](./ai-quota-calibrator/SKILL.md)。
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。

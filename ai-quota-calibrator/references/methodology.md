@@ -32,6 +32,7 @@ two settled snapshots recovers the exact multiplier.
 | `MEDIUM` | `2% <= used_pct < 10%`, OR `>= 10%` with minor active-session drift (`|Δ| > 0.002` but `|Δ|/used <= 15%` and `|Δ| <= 1.5%`), OR multi-account caveat | Solid order-of-magnitude estimate; re-check when idle or once >= 10% is consumed |
 | `LOW` | `used_pct < 2%`, `used_pct >= 99.9%` (`SATURATED`), severe reading jitter (`|Δ|/used > 15%` or `|Δ| > 1.5%`), or unresolved mixed-hour ambiguity | Directional only; do not treat as a firm pool size |
 | `UNTOUCHED` | `used_pct == 0%` (`remaining_fraction == 1.0`) | Bucket has not started; no inversion possible |
+| `UNKNOWN_WINDOW` | Unrecognized window duration label or missing `reset_time` | Cannot derive `window_start` without guessing; spend and pool remain `N/A` |
 
 ## 3. Why Single-Turn Cold Probes Mislead
 
@@ -98,15 +99,15 @@ To align a bucket's window `[window_start, now]` for a model group `G`:
      `(minute * 60 + second) / 3600`.
    - **Zero pre-window presence** (no hour before `window_start` contains any
      model in `G`): zero subtraction needed—`models --since` is exact!
-   - **Algebraic separation for mixed hours**: when two groups (`G1`, `G2`)
-     share mixed hours inside `[window_start, now]`, and one group (`G2`) has
-     zero presence before `window_start` on that day, `G2`'s exact in-window
-     spend equals `models_since[G2]`, so `G1`'s spend inside those mixed hours
-     is `sum(mixed_hours.cost) - models_since[G2]`.
    - **Unresolvable mixed boundary**: if a pre-window hour mixes multiple
-     groups with no algebraic separation, keep a transparent `[min, max]`
-     subtraction range and emit a `MIXED_HOUR_AMBIGUITY` warning rather than
-     guessing a split.
+     groups with no fresh-start proof, keep a transparent `[min, upper]`
+     interval in both JSON (`spend_min_usd`, `implied_pool_min_usd`) and
+     Markdown, and emit a `MIXED_HOUR_AMBIGUITY` warning rather than guessing a
+     split.
+
+Note: Local timezone offset is derived from the system clock at observation time;
+for weekly windows that cross a daylight-saving-time (DST) transition, boundary
+hours may shift by 1 hour.
 
 ## 6. Provider Notes
 
