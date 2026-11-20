@@ -640,12 +640,25 @@ operator procedure; no bundled tool enforces its deployment or process boundarie
    Set test-worker concurrency from the effective CPU allocation, including
    ancestor quota/period and cpuset/affinity bounds, rather than the host's
    advertised core count or a runtime's parallelism default. Shared-parent
-   capacity is an upper bound, not an exclusive reservation. Use the existing
+   capacity is an upper bound, not an exclusive reservation. Avoid stacking
+   competing low-CPU duplicate check containers on the same physical host; prefer
+   fewer adequately sized listeners matched to real host cores. Use the existing
    test runner's worker controls and verify the original suite under the real
    service limits before increasing timeouts. Keep assertions and timeout
    failure semantics; a lower worker count cannot excuse a genuine regression.
    The repository executor owns worker settings; read cgroup/runtime observations
    and actual suite results to accept the change.
+
+   For mixed-architecture pools (for example, Linux ARM64 and X64 runners sharing
+   one checks label), pin architecture-specific checksums for downloaded tool
+   archives instead of a single-architecture hash, and keep tool/provider cache
+   paths partitioned by `${{ runner.os }}-${{ runner.arch }}`. Route heavy
+   target-architecture container builds (such as `linux/amd64` images) to a
+   dedicated native builder profile with strict job/workflow allowlisting rather
+   than slow QEMU emulation on an ARM64 check host. On Linux filesystems mounted
+   with `relatime`, avoid asserting full `os.stat()` equality to prove a file was
+   untouched because `st_atime` can advance on reads; compare inode, mode, size,
+   `st_mtime_ns` and `st_ctime_ns` instead.
 
    Configure job hooks with the supported `.sh` or `.ps1` entry point: GitHub runs
    Bash with `-e <path>` or PowerShell with `-command ". '<path>'"`. A Python
