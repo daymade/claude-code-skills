@@ -81,10 +81,11 @@ def render_html_report(result: dict[str, Any]) -> str:
         ))
     elif buckets:
         b0 = buckets[0]
+        b0_rem = float(b0.get("remaining_fraction") or 0.0) * 100.0
         kpi_cards.append((
             "主配额池状态",
-            f"余 {b0['remaining_fraction']*100:.1f}%",
-            f"{b0['group_name']} ({b0['window']}) · 重置 {b0.get('time_to_reset') or '—'}",
+            f"余 {b0_rem:.1f}%",
+            f"{_esc(b0.get('group_name'))} ({_esc(b0.get('window'))}) · 重置 {_esc(b0.get('time_to_reset') or '—')}",
             "kpi-neutral",
         ))
 
@@ -133,11 +134,13 @@ def render_html_report(result: dict[str, Any]) -> str:
         for k, v, s, cls in kpi_cards
     )
 
-    # Strict Lie Factor = 1.00 capacity bars across buckets with valid implied USD
+    # Strict Lie Factor = 1.00 capacity bars across buckets with valid positive implied USD
     valid_caps = [
         float(b["implied_pool_base_usd"])
         for b in buckets
-        if b.get("implied_pool_base_usd") is not None and not b.get("boundary_hour_overcount")
+        if b.get("implied_pool_base_usd") is not None
+        and float(b["implied_pool_base_usd"]) > 0.0
+        and not b.get("boundary_hour_overcount")
     ]
     max_cap = max(valid_caps) if valid_caps else 1.0
 
@@ -150,14 +153,19 @@ def render_html_report(result: dict[str, Any]) -> str:
         is_overcount = bool(b.get("boundary_hour_overcount"))
         used_pct = float(b.get("used_pct") or 0.0)
         rem_pct = float(b.get("remaining_fraction") or 0.0) * 100.0
-        ttr = b.get("time_to_reset") or "—"
-        reset_at = (b.get("reset_time_local") or "")[11:19] or (b.get("reset_time_local") or "—")
+        ttr = _esc(b.get("time_to_reset") or "—")
+        reset_raw = str(b.get("reset_time_local") or "")
+        reset_at = _esc(reset_raw[11:19] if len(reset_raw) >= 19 else (reset_raw or "—"))
 
-        if is_overcount or cap_val is None:
-            cap_str = "刚刷新 · 待满 1h 校准" if is_overcount else "待更多用量校准"
+        if is_overcount or cap_val is None or float(cap_val) <= 0.0:
+            note_txt = (
+                f"窗口内已用 {used_pct:.1f}% · 跨整点刷新暂不外推美元上限"
+                if is_overcount
+                else f"窗口内已用 {used_pct:.1f}% · 待更多用量校准美元上限"
+            )
             bar_html = f"""<div class="bar-wrap bar-uncalibrated">
               <div class="bar-pct-fill" style="width:{min(100.0, used_pct):.2f}%"></div>
-              <span class="bar-inline-note">窗口内已用 {used_pct:.1f}% · 跨整点刷新暂不外推美元上限</span>
+              <span class="bar-inline-note">{note_txt}</span>
             </div>"""
         else:
             if cap_upper is not None and abs(float(cap_upper) - float(cap_val)) > 1.0:
@@ -198,42 +206,48 @@ def render_html_report(result: dict[str, Any]) -> str:
         </tr>""")
 
     # Section 2: Real Spend Forensics & Zero-Compression Lossless Savings
+    sec_num = 2
     forensics_section_html = ""
     if forensics or top_sessions:
         breakdown_html = ""
         savings_html = ""
-        if forensics:
-            tot_w = max(0.01, float(forensics.get("window_total_usd") or 0.0))
+        if forensics and float(forensics.get("window_total_usd") or 0.0) > 0.0:
+            tot_w = float(forensics["window_total_usd"])
             sub_usd = float((forensics.get("concurrent_subagents") or {}).get("cost_usd") or 0.0)
             ttl_waste = float((forensics.get("ttl_cold_misses") or {}).get("avoidable_waste_usd") or 0.0)
-            norm_usd = max(0.0, tot_w - sub_usd - ttl_waste)
+            # Clamp segments proportionally to never exceed 100%
+            sub_usd_disp = min(tot_w, sub_usd)
+            ttl_waste_disp = min(max(0.0, tot_w - sub_usd_disp), ttl_waste)
+            norm_usd = max(0.0, tot_w - sub_usd_disp - ttl_waste_disp)
             p_norm = (norm_usd / tot_w) * 100.0
-            p_ttl = (ttl_waste / tot_w) * 100.0
-            p_sub = (sub_usd / tot_w) * 100.0
+            p_ttl = (ttl_waste_disp / tot_w) * 100.0
+            p_sub = (sub_usd_disp / tot_w) * 100.0
 
             zero_save = float(forensics.get("zero_compression_savings_usd") or 0.0)
             zero_pct = float(forensics.get("zero_compression_savings_pct") or 0.0)
             sub_cnt = int((forensics.get("concurrent_subagents") or {}).get("count") or 0)
             ttl_cnt = int((forensics.get("ttl_cold_misses") or {}).get("count") or 0)
             prim = forensics.get("primary_session") or {}
+            avg_k = prim.get("avg_context_k")
+            avg_k_txt = f"{avg_k}k" if avg_k is not None else "—"
 
             breakdown_html = f"""<div class="forensics-box">
               <div class="fb-head">
                 <div>
                   <strong>当前窗口真实开销拆解（{_esc(forensics.get('group_key', ''))} 池 · 实测 ${_esc(f'{tot_w:.2f}')}）</strong>
-                  <span class="muted">主会话 <code>{_esc(prim.get('short_id', '—'))}</code> 峰值上下文 <strong>{_esc(prim.get('peak_context_k', 0))}k</strong> / 均上下文 {_esc(prim.get('avg_context_k', 0))}k</span>
+                  <span class="muted">主会话 <code>{_esc(prim.get('short_id', '—'))}</code> 峰值上下文 <strong>{_esc(prim.get('peak_context_k', 0))}k</strong> / 均上下文 {_esc(avg_k_txt)}</span>
                 </div>
                 <div class="fb-save">不压缩主会话即可无损省 <strong>${zero_save:.2f}（{zero_pct:.1f}%）</strong></div>
               </div>
               <div class="stacked-bar" role="img" aria-label="窗口花费结构：主会话正常缓存读、5分钟缓存过期20倍重传损耗、并发子代理消耗">
                 <div class="sb-seg sb-norm" style="width:{p_norm:.2f}%" title="主会话正常缓存读与输出：${norm_usd:.2f} ({p_norm:.1f}%)"></div>
-                <div class="sb-seg sb-ttl" style="width:{p_ttl:.2f}%" title="5 分钟缓存过期 20× 冷重传损耗：${ttl_waste:.2f} ({p_ttl:.1f}%)"></div>
-                <div class="sb-seg sb-sub" style="width:{p_sub:.2f}%" title="并发子代理消耗：${sub_usd:.2f} ({p_sub:.1f}%)"></div>
+                <div class="sb-seg sb-ttl" style="width:{p_ttl:.2f}%" title="5 分钟缓存过期 20× 冷重传损耗：${ttl_waste_disp:.2f} ({p_ttl:.1f}%)"></div>
+                <div class="sb-seg sb-sub" style="width:{p_sub:.2f}%" title="并发子代理消耗：${sub_usd_disp:.2f} ({p_sub:.1f}%)"></div>
               </div>
               <div class="sb-legend">
                 <span><i class="dot dot-norm"></i>主会话正常缓存读与推理：<strong>${norm_usd:.2f}</strong>（{p_norm:.1f}%）</span>
-                <span><i class="dot dot-ttl"></i>5 分钟缓存过期 20× 冷重传损耗（{ttl_cnt} 次）：<strong class="txt-alert">${ttl_waste:.2f}</strong>（{p_ttl:.1f}%）</span>
-                <span><i class="dot dot-sub"></i>并发子代理消耗（{sub_cnt} 个会话）：<strong class="txt-warn">${sub_usd:.2f}</strong>（{p_sub:.1f}%）</span>
+                <span><i class="dot dot-ttl"></i>5 分钟缓存过期 20× 冷重传损耗（{ttl_cnt} 次）：<strong class="txt-alert">${ttl_waste_disp:.2f}</strong>（{p_ttl:.1f}%）</span>
+                <span><i class="dot dot-sub"></i>并发子代理消耗（{sub_cnt} 个会话）：<strong class="txt-warn">${sub_usd_disp:.2f}</strong>（{p_sub:.1f}%）</span>
               </div>
             </div>"""
 
@@ -246,13 +260,13 @@ def render_html_report(result: dict[str, Any]) -> str:
               <div class="sav-card">
                 <div class="sav-tag">杠杆 1 · 零损最高收益</div>
                 <div class="sav-title">并发子代理全部分流至 Gemini</div>
-                <div class="sav-num txt-safe">直省 ${sub_usd:.2f}（{(sub_usd/tot_w*100):.1f}%）</div>
+                <div class="sav-num txt-safe">直省 ${sub_usd_disp:.2f}（{p_sub:.1f}%）</div>
                 <p>不碰主会话上下文。当前窗口检出 {sub_cnt} 个并发子代理会话直接吃掉 Opus 迷你 5h 池。</p>
               </div>
               <div class="sav-card">
                 <div class="sav-tag">杠杆 2 · 避开 20× 隐形税</div>
                 <div class="sav-title">避免 250k+ 高上下文静置 &gt;5 分钟</div>
-                <div class="sav-num txt-safe">直省 ${ttl_waste:.2f}（{(ttl_waste/tot_w*100):.1f}%）</div>
+                <div class="sav-num txt-safe">直省 ${ttl_waste_disp:.2f}（{p_ttl:.1f}%）</div>
                 <p>Prompt Cache 5 分钟过期后重传按 $4/M 计费（缓存读的 20 倍）。实测命中：{_esc(ttl_detail)}。</p>
               </div>
               <div class="sav-card">
@@ -307,15 +321,16 @@ def render_html_report(result: dict[str, Any]) -> str:
 
         forensics_section_html = f"""<section class="card">
           <div class="sec-head">
-            <h2>2. 钱花哪去了？实时窗口归因与零压缩省钱账单</h2>
+            <h2>{sec_num}. 钱花哪去了？实时窗口归因与零压缩省钱账单</h2>
             <span class="muted">基于本地实时日志自动拆解 · 零硬编码 · 绝不建议 &lt;250k 反常识压缩</span>
           </div>
           {breakdown_html}
           {savings_html}
           {sess_table_html}
         </section>"""
+        sec_num += 1
 
-    # Section 3: Dynamic Live Routing + Same-Machine Codex Standby Accounts
+    # Section 3 (or 2 if forensics omitted): Dynamic Live Routing + Same-Machine Codex Standby Accounts
     routing_rows = []
     for r in summary.get("live_routing") or []:
         r_cls = "badge-safe" if r.get("tone") == "safe" else ("badge-warn" if r.get("tone") == "warn" else "badge-neutral")
@@ -353,6 +368,31 @@ def render_html_report(result: dict[str, Any]) -> str:
             <tbody>{''.join(cx_rows)}</tbody>
           </table>
         </div>"""
+
+    routing_section_html = ""
+    if routing_rows or codex_html:
+        routing_table_html = (
+            f"""<table class="data-table">
+              <thead>
+                <tr>
+                  <th>工程任务类型</th>
+                  <th>此刻推荐通道</th>
+                  <th>实时依据</th>
+                  <th>防撞墙 / 防浪费纪律</th>
+                </tr>
+              </thead>
+              <tbody>{''.join(routing_rows)}</tbody>
+            </table>"""
+            if routing_rows else ""
+        )
+        routing_section_html = f"""<section class="card">
+          <div class="sec-head">
+            <h2>{sec_num}. 接下来怎么配最值？（实时状态驱动分流表）</h2>
+            <span class="muted">随此刻配额池状态自动切换，解锁后再次运行自动更新为绿灯建议</span>
+          </div>
+          {routing_table_html}
+          {codex_html}
+        </section>"""
 
     # Transparent caveats / warnings
     all_warnings = list(result.get("warnings") or [])
@@ -591,24 +631,7 @@ def render_html_report(result: dict[str, Any]) -> str:
 
   {forensics_section_html}
 
-  <section class="card">
-    <div class="sec-head">
-      <h2>3. 接下来怎么配最值？（实时状态驱动分流表）</h2>
-      <span class="muted">随此刻配额池状态自动切换，解锁后再次运行自动更新为绿灯建议</span>
-    </div>
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th>工程任务类型</th>
-          <th>此刻推荐通道</th>
-          <th>实时依据</th>
-          <th>防撞墙 / 防浪费纪律</th>
-        </tr>
-      </thead>
-      <tbody>{''.join(routing_rows)}</tbody>
-    </table>
-    {codex_html}
-  </section>
+  {routing_section_html}
 
   {warnings_html}
 

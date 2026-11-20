@@ -47,7 +47,7 @@ zero-dependency Python 3.9+ calibrator directly.
 
 ```bash
 python3 "<skill-dir>/scripts/calibrate_quota.py" --provider antigravity \
-  --plan-usd 250 --include-codex --html /tmp/ai-quota-cockpit.html --open
+  --include-codex --html /tmp/ai-quota-cockpit.html --open
 ```
 
 - Defaults: `--samples 2 --settle-seconds 5`, `--timeout 60`, automatic top-5

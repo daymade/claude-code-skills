@@ -134,15 +134,23 @@ To align a bucket's window `[window_start, now]` for a model group `G`:
      `(minute * 60 + second) / 3600`.
    - **Zero pre-window presence** (no hour before `window_start` contains any
      model in `G`): zero subtraction needed—`models --since` is exact.
-   - **Unresolvable mixed boundary & mid-hour 5h reset overcount**: if a pre-window
-  hour mixes multiple groups with no fresh-start proof, keep a transparent
-  `[min, upper]` interval in both JSON (`spend_min_usd`, `implied_pool_min_usd`)
-  and Markdown, and emit `MIXED_HOUR_AMBIGUITY`. Furthermore, because a 5-hour
-  pool's capacity or remaining dollars can never exceed its sibling weekly pool,
-  whenever a freshly reset `5h` bucket's implied cap, remaining runway, or
-  low-confidence upper bound exceeds the sibling `weekly` pool by `> 5%`, emit
-  `MID_HOUR_RESET_OVERCOUNT`, set `boundary_hour_overcount = true`, and withhold
-  the invalid dollar projection until post-reset spend settles.
+      - **Unresolvable mixed boundary & mid-hour 5h reset overcount**: if a
+     pre-window hour mixes multiple groups with no fresh-start proof, keep a
+     transparent `[min, upper]` interval in both JSON (`spend_min_usd`,
+     `implied_pool_min_usd`) and Markdown, and emit `MIXED_HOUR_AMBIGUITY`.
+     Furthermore, because a 5-hour pool's capacity can never exceed its sibling
+     weekly pool, whenever a `5h` bucket's implied cap exceeds the sibling
+     `weekly` pool by `> 5%` (or a `LOW`-confidence `5h` bucket's upper bound
+     exceeds `weekly` by `> 5%` with `spend_min_usd == 0` or `< 10%` used),
+     emit `MID_HOUR_RESET_OVERCOUNT`, set `boundary_hour_overcount = true`, and
+     withhold the invalid 5h dollar projection until post-reset spend settles.
+     (Independent remaining dollars `rem5` vs `remw` are intentionally NOT
+     compared here, since a freshly reset 5h pool can legitimately have more
+     remaining dollars than a nearly spent weekly pool.)
+
+Note: Local timezone offset is derived from the system clock at observation time;
+for weekly windows that cross a daylight-saving-time (DST) transition, boundary
+hours may shift by 1 hour.
 
 ## 8. Bounded Turn-Level Forensics & Lossless Savings
 

@@ -936,15 +936,27 @@ def calibrate_antigravity(
             )
             continue
 
-        spend_info = compute_group_window_spend(
-            group_key=gk,
-            window_start=spec["window_start_local"],
-            models_since_entries=models_by_date.get(spec["start_date"], []),
-            hourly_entries=hourly_entries,
-            tz=tz,
-            model_classifier=classify_antigravity_model,
-            fresh_window_start=gk in fresh_start_groups,
-        )
+        if round(used, 6) <= 0.0:
+            spend_info = {
+                "spend_base_usd": 0.0,
+                "spend_min_usd": 0.0,
+                "spend_upper_usd": 0.0,
+                "cache_write_extra_usd": 0.0,
+                "message_count": 0,
+                "window_message_count": 0,
+                "alignment_method": "untouched_bucket",
+                "warnings": [],
+            }
+        else:
+            spend_info = compute_group_window_spend(
+                group_key=gk,
+                window_start=spec["window_start_local"],
+                models_since_entries=models_by_date.get(spec["start_date"], []),
+                hourly_entries=hourly_entries,
+                tz=tz,
+                model_classifier=classify_antigravity_model,
+                fresh_window_start=(gk in fresh_start_groups or spec["window"] == "weekly"),
+            )
         mixed_amb = any("MIXED_HOUR_AMBIGUITY" in w for w in spend_info["warnings"])
         signed_delta = delta_map.get(spec["bucket_id"], 0.0)
         sibling_weekly_used = by_group_used.get(gk, {}).get("weekly", 1.0)
@@ -1009,8 +1021,10 @@ def calibrate_antigravity(
             }
         )
 
-    # Guard against physically impossible 5h > weekly implied pool or runway caused by a mid-hour 5h reset
+    # Guard against physically impossible 5h > weekly implied pool caused by a mid-hour 5h reset
     # or mixed-hour ambiguity sweeping pre-reset spend from boundary hours in `tokscale hourly`.
+    # Note: do NOT compare independent remaining dollars (rem5 vs remw), because a clean fresh 5h
+    # window can legitimately have more remaining dollars than a nearly spent weekly window.
     for gk in dict.fromkeys(b["group_key"] for b in calibrated_buckets):
         b5 = next((b for b in calibrated_buckets if b["group_key"] == gk and b["window"] == "5h"), None)
         bw = next((b for b in calibrated_buckets if b["group_key"] == gk and b["window"] == "weekly"), None)
@@ -1019,19 +1033,16 @@ def calibrate_antigravity(
         p5 = b5.get("implied_pool_base_usd")
         p5_hi = b5.get("implied_pool_upper_usd")
         pw = bw.get("implied_pool_base_usd")
-        rem5 = b5.get("remaining_usd_base")
-        remw = bw.get("remaining_usd_base")
         if p5 is None or pw is None:
             continue
         exceeds_cap = p5 > pw * 1.05
-        exceeds_runway = (rem5 is not None and remw is not None and rem5 > remw * 1.05)
         low_conf_upper_exceeds = (
             b5.get("confidence") == "LOW"
             and p5_hi is not None
             and p5_hi > pw * 1.05
             and (b5.get("spend_min_usd") == 0.0 or b5.get("used_pct", 100.0) < 10.0)
         )
-        if exceeds_cap or exceeds_runway or low_conf_upper_exceeds:
+        if exceeds_cap or low_conf_upper_exceeds:
             b5["boundary_hour_overcount"] = True
             b5["confidence"] = "LOW"
             b5["implied_pool_base_usd"] = None
@@ -1039,7 +1050,9 @@ def calibrate_antigravity(
             b5["implied_pool_upper_usd"] = None
             b5["remaining_usd_base"] = None
             b5["remaining_usd_upper"] = None
+            b5["avg_cost_per_msg_usd"] = None
             b5["estimated_remaining_msgs"] = None
+            b5["burn_rate_usd_per_hour"] = None
             b5["eta_to_exhaustion"] = None
             b5["warnings"].append(
                 f"MID_HOUR_RESET_OVERCOUNT: 5h window started at {b5['window_start_local']} "
@@ -1249,15 +1262,40 @@ def analyze_antigravity_turn_forensics(
         except ValueError:
             win_start_dt = None
 
-    spans: dict[str, dict[str, Any]] = {}
-    ttl_events: list[dict[str, Any]] = []
-    ttl_actual_total = 0.0
-    ttl_waste_total = 0.0
-
+    # Deduplicate by session_id because `tokscale --group-by session,model` can emit multiple rows per session.
+    sessions_by_id: dict[str, dict[str, Any]] = {}
     for s in group_sessions:
         sid = str(s.get("session_id") or "")
         if not sid or sid == "unknown":
             continue
+        prev = sessions_by_id.get(sid)
+        cost = float(s.get("cost_usd") or 0.0)
+        msgs = int(s.get("message_count") or 0)
+        if prev is None:
+            sessions_by_id[sid] = {
+                "session_id": sid,
+                "model": str(s.get("model") or ""),
+                "cost_usd": cost,
+                "message_count": msgs,
+                "avg_context_k": s.get("avg_context_k"),
+            }
+        else:
+            prev["cost_usd"] += cost
+            prev["message_count"] += msgs
+            if s.get("avg_context_k") is not None and (
+                prev["avg_context_k"] is None or float(s["avg_context_k"]) > float(prev["avg_context_k"])
+            ):
+                prev["avg_context_k"] = s.get("avg_context_k")
+
+    if not sessions_by_id:
+        return None
+    dedup_sessions = sorted(sessions_by_id.values(), key=lambda x: x["cost_usd"], reverse=True)
+
+    spans: dict[str, dict[str, Any]] = {}
+    ttl_events_by_sid: dict[str, list[dict[str, Any]]] = {}
+
+    for s in dedup_sessions:
+        sid = s["session_id"]
         t_path = base_dir / sid / ".system_generated" / "logs" / "transcript.jsonl"
         if not t_path.is_file():
             continue
@@ -1266,6 +1304,7 @@ def analyze_antigravity_turn_forensics(
         peak_ctx = 0
         first_ts: dt.datetime | None = None
         last_ts: dt.datetime | None = None
+        sid_ttl_events: list[dict[str, Any]] = []
         try:
             with t_path.open("r", encoding="utf-8") as fh:
                 for raw_line in fh:
@@ -1275,13 +1314,18 @@ def analyze_antigravity_turn_forensics(
                         obj = json.loads(raw_line)
                     except json.JSONDecodeError:
                         continue
-                    if obj.get("type") != "PLANNER_RESPONSE":
+                    if not isinstance(obj, dict) or obj.get("type") != "PLANNER_RESPONSE":
                         continue
                     model = str(obj.get("model") or s.get("model") or "")
                     if classify_antigravity_model(model) != target_group:
                         continue
                     ts_raw = obj.get("created_at")
-                    ts_dt = parse_iso_datetime(str(ts_raw), tz) if ts_raw else None
+                    ts_dt: dt.datetime | None = None
+                    if ts_raw:
+                        try:
+                            ts_dt = parse_iso_datetime(str(ts_raw), tz)
+                        except ValueError:
+                            ts_dt = None
                     if win_start_dt is not None and ts_dt is not None and ts_dt < win_start_dt:
                         continue
 
@@ -1305,9 +1349,7 @@ def analyze_antigravity_turn_forensics(
                         r_in, r_cr, r_out = _turn_rates(model)
                         turn_cost = inp * r_in + cr * r_cr + out * r_out
                         avoidable = max(0.0, inp - 2000) * max(0.0, r_in - r_cr)
-                        ttl_actual_total += turn_cost
-                        ttl_waste_total += avoidable
-                        ttl_events.append(
+                        sid_ttl_events.append(
                             {
                                 "sid": sid[:8],
                                 "time": ts_dt.strftime("%H:%M:%S") if ts_dt else "unknown",
@@ -1328,47 +1370,59 @@ def analyze_antigravity_turn_forensics(
                 "first_ts": first_ts,
                 "last_ts": last_ts,
             }
+            if sid_ttl_events:
+                ttl_events_by_sid[sid] = sid_ttl_events
 
     if not spans:
         return None
 
-    primary = group_sessions[0]
-    p_sid = str(primary["session_id"])
-    p_span = spans.get(p_sid)
-    if p_span is None:
+    primary = next((s for s in dedup_sessions if s["session_id"] in spans), None)
+    if primary is None:
         return None
+    p_sid = primary["session_id"]
+    p_span = spans[p_sid]
 
     subagent_rows: list[dict[str, Any]] = []
+    subagent_sids: set[str] = set()
     sub_cost = 0.0
-    for s in group_sessions[1:]:
-        sid = str(s.get("session_id") or "")
+    for s in dedup_sessions:
+        sid = s["session_id"]
+        if sid == p_sid:
+            continue
         sp = spans.get(sid)
-        # Concurrent multi-turn session overlapping primary session's active time span
-        overlaps = False
-        if sp and p_span["first_ts"] and p_span["last_ts"] and sp["first_ts"] and sp["last_ts"]:
-            overlaps = (
-                sp["turns"] >= 2
-                and sp["first_ts"] <= p_span["last_ts"]
-                and sp["last_ts"] >= p_span["first_ts"]
-            )
-        elif int(s.get("message_count") or 0) >= 2:
-            overlaps = True
+        # Require verified transcript span overlapping the primary session (never classify pre-window/missing transcripts).
+        if not (sp and p_span["first_ts"] and p_span["last_ts"] and sp["first_ts"] and sp["last_ts"]):
+            continue
+        overlaps = (
+            sp["turns"] >= 2
+            and sp["first_ts"] <= p_span["last_ts"]
+            and sp["last_ts"] >= p_span["first_ts"]
+        )
         if overlaps:
-            c = float(s.get("cost_usd") or 0.0)
+            c = float(s["cost_usd"])
             sub_cost += c
+            subagent_sids.add(sid)
             subagent_rows.append(
                 {
                     "session_id": sid,
                     "short_id": sid[:8],
                     "cost_usd": round(c, 2),
-                    "turns": sp["turns"] if sp else int(s.get("message_count") or 0),
+                    "turns": sp["turns"],
                 }
             )
 
-    window_total = sum(float(s.get("cost_usd") or 0.0) for s in group_sessions)
+    # Count only non-subagent TTL cold-resend waste so offloaded subagents are never double-counted.
+    ttl_events: list[dict[str, Any]] = []
+    for sid, evs in ttl_events_by_sid.items():
+        if sid not in subagent_sids:
+            ttl_events.extend(evs)
+    ttl_actual_total = sum(float(e["cost_usd"]) for e in ttl_events)
+    ttl_waste_total = sum(float(e["waste_usd"]) for e in ttl_events)
+
+    window_total = sum(float(s["cost_usd"]) for s in dedup_sessions)
     if target_bucket and target_bucket.get("spend_base_usd"):
         window_total = max(window_total, float(target_bucket["spend_base_usd"]))
-    zero_save = round(sub_cost + ttl_waste_total, 2)
+    zero_save = round(min(window_total, sub_cost + ttl_waste_total), 2)
     zero_pct = round((zero_save / window_total) * 100.0, 1) if window_total > 0 else 0.0
 
     ttl_events.sort(key=lambda e: e["waste_usd"], reverse=True)
@@ -1378,7 +1432,7 @@ def analyze_antigravity_turn_forensics(
         "primary_session": {
             "session_id": p_sid,
             "short_id": p_sid[:8],
-            "cost_usd": round(float(primary.get("cost_usd") or 0.0), 2),
+            "cost_usd": round(float(primary["cost_usd"]), 2),
             "avg_context_k": primary.get("avg_context_k"),
             "peak_context_k": p_span["peak_context_k"],
             "turns": p_span["turns"],
@@ -1408,7 +1462,10 @@ def fetch_codex_standby_accounts(
     tz = local_tz()
     warnings: list[str] = []
     if fixture is not None:
-        raw_list = fixture.get("codex_usage") or fixture.get("usage") or []
+        raw_candidate = fixture.get("codex_usage")
+        if raw_candidate is None and isinstance(fixture.get("usage"), list):
+            raw_candidate = fixture.get("usage")
+        raw_list = raw_candidate if isinstance(raw_candidate, list) else []
     else:
         try:
             raw_list, notices = run_json_cmd(
@@ -1417,15 +1474,18 @@ def fetch_codex_standby_accounts(
                 timeout=timeout,
             )
             warnings.extend(notices)
+            if not isinstance(raw_list, list):
+                raw_list = []
         except CalibrationError as exc:
             return [], [f"CODEX_STANDBY_UNAVAILABLE: {exc}"]
 
     out: list[dict[str, Any]] = []
     for u in raw_list:
-        if str(u.get("provider") or "").lower() != "codex":
+        if not isinstance(u, dict) or str(u.get("provider") or "").lower() != "codex":
             continue
-        metrics = u.get("metrics") or []
-        m = metrics[0] if metrics else {}
+        metrics = [m for m in (u.get("metrics") or []) if isinstance(m, dict)]
+        # Select the most constrained window so a locked weekly quota is not masked by an open 5h window.
+        m = max(metrics, key=lambda item: float(item.get("used_percent") or 0.0)) if metrics else {}
         reset_raw = str(m.get("resets_at") or "")
         reset_short = "—"
         if reset_raw:
@@ -1448,6 +1508,10 @@ def fetch_codex_standby_accounts(
     return out, warnings
 
 
+def _fmt_pct_plain(val: float | None) -> str:
+    return f"{val:.1f}%" if val is not None else "—"
+
+
 def build_business_summary(
     result: dict[str, Any],
     plan_usd: float | None = None,
@@ -1458,72 +1522,126 @@ def build_business_summary(
     forensics = result.get("window_forensics")
     codex_accounts = codex_accounts or []
 
-    g_w = next((b for b in buckets if b.get("bucket_id") == "gemini-weekly"), None)
-    g_5 = next((b for b in buckets if b.get("bucket_id") == "gemini-5h"), None)
-    p_w = next((b for b in buckets if b.get("bucket_id") == "3p-weekly"), None)
-    p_5 = next((b for b in buckets if b.get("bucket_id") == "3p-5h"), None)
+    g_w = next((b for b in buckets if b.get("group_key") == "gemini" and b.get("window") == "weekly"), None)
+    g_5 = next((b for b in buckets if b.get("group_key") == "gemini" and b.get("window") == "5h"), None)
+    p_w = next((b for b in buckets if b.get("group_key") == "3p" and b.get("window") == "weekly"), None)
+    p_5 = next((b for b in buckets if b.get("group_key") == "3p" and b.get("window") == "5h"), None)
 
     open_codex = [c for c in codex_accounts if float(c.get("used_pct") or 0.0) < 99.9]
     codex_hint = (
         f"；同机另有 {len(open_codex)} 个空载 Codex 备用号" if open_codex else ""
     )
 
-    if result.get("provider") == "antigravity" and (g_w or p_w or p_5):
+    if result.get("provider") == "antigravity" and (g_w or g_5 or p_w or p_5):
         p5_locked = bool(p_5 and p_5.get("lockout_state") in ("LOCKED", "SOFT_LOCKOUT"))
-        p5_ttr = p_5.get("time_to_reset") if p_5 else "—"
-        p5_reset_at = (p_5.get("reset_time_local") or "")[11:19] if p_5 else "—"
+        pw_locked = bool(p_w and p_w.get("lockout_state") in ("LOCKED", "SOFT_LOCKOUT"))
+        g5_locked = bool(g_5 and g_5.get("lockout_state") in ("LOCKED", "SOFT_LOCKOUT"))
+        gw_locked = bool(g_w and g_w.get("lockout_state") in ("LOCKED", "SOFT_LOCKOUT"))
+        opus_locked = p5_locked or pw_locked
+        gemini_locked = g5_locked or gw_locked
+
+        # Binding lockout bucket per group (weekly overrides 5h when both locked)
+        opus_lock_b = p_w if pw_locked else (p_5 if p5_locked else None)
+        gemini_lock_b = g_w if gw_locked else (g_5 if g5_locked else None)
+
+        p_lock_ttr = opus_lock_b.get("time_to_reset") if opus_lock_b else "—"
+        p_lock_at = (opus_lock_b.get("reset_time_local") or "")[11:19] if opus_lock_b else "—"
+        g_lock_ttr = gemini_lock_b.get("time_to_reset") if gemini_lock_b else "—"
+
         gw_rem_usd = g_w.get("remaining_usd_base") if g_w else None
         gw_rem_pct = round(g_w["remaining_fraction"] * 100.0, 1) if g_w else None
         g5_rem_pct = round(g_5["remaining_fraction"] * 100.0, 1) if g_5 else None
         pw_rem_usd = p_w.get("remaining_usd_base") if p_w else None
         pw_rem_pct = round(p_w["remaining_fraction"] * 100.0, 1) if p_w else None
+        p5_rem_pct = round(p_5["remaining_fraction"] * 100.0, 1) if p_5 else None
+        p5_rem_usd = p_5.get("remaining_usd_base") if p_5 else None
         pw_ttr_sec = p_w.get("time_to_reset_seconds") if p_w else None
         pw_ttr = p_w.get("time_to_reset") if p_w else "—"
 
-        # Headline + subline adapt dynamically to LOCKED vs OPEN!
-        if p5_locked:
-            headline = f"Opus 5h 当前锁死（{p5_ttr} 后于 {p5_reset_at} 解锁），立刻切 Gemini 池无阻塞干活"
+        gw_cap = g_w.get("implied_pool_base_usd") if g_w else None
+        pw_cap = p_w.get("implied_pool_base_usd") if p_w else None
+        ratio_str = (
+            f"约为 Opus 周池的 {gw_cap / pw_cap:.0f}×"
+            if (gw_cap and pw_cap and pw_cap > 0)
+            else "远大于 Opus 独立池"
+        )
+
+        # Headline + subline handle ALL 4 real lock states cleanly!
+        if opus_locked and gemini_locked:
+            headline = f"Antigravity 双池当前均已锁死（Opus 距解锁 {p_lock_ttr} / Gemini 距解锁 {g_lock_ttr}）"
             subline = (
-                f"Gemini 与 Claude/GPT 为两套完全独立配额池：Gemini 5h 池余 {g5_rem_pct}% / 周池余 "
-                f"{_fmt_usd_plain(gw_rem_usd)}（{gw_rem_pct}%），Opus 周池尚余 {_fmt_usd_plain(pw_rem_usd)}（{pw_rem_pct}%）{codex_hint}。"
+                f"当前订阅内 Gemini 与 Claude/GPT 均已触达限流，建议先切同机备用账号或等待最快重置窗口{codex_hint}。"
+            )
+        elif opus_locked:
+            lock_scope = "Opus 周池" if pw_locked else "Opus 5h"
+            headline = f"{lock_scope} 当前锁死（{p_lock_ttr} 后于 {p_lock_at} 解锁），立刻切 Gemini 池无阻塞干活"
+            subline = (
+                f"Gemini 与 Claude/GPT 为两套完全独立配额池：Gemini 5h 池余 {_fmt_pct_plain(g5_rem_pct)} / 周池余 "
+                f"{_fmt_usd_plain(gw_rem_usd)}（{_fmt_pct_plain(gw_rem_pct)}），Opus 周池尚余 {_fmt_usd_plain(pw_rem_usd)}（{_fmt_pct_plain(pw_rem_pct)}）{codex_hint}。"
+            )
+        elif gemini_locked:
+            lock_scope = "Gemini 周池" if gw_locked else "Gemini 5h"
+            headline = f"{lock_scope} 当前锁死（{g_lock_ttr} 后解锁），可暂切 Opus 池承接高优任务"
+            subline = (
+                f"Gemini 与 Claude/GPT 为两套独立配额池：Opus 5h 余 {_fmt_pct_plain(p5_rem_pct)} / 周池余 "
+                f"{_fmt_usd_plain(pw_rem_usd)}（{_fmt_pct_plain(pw_rem_pct)}），注意严控并发子代理以防耗尽 Opus 池{codex_hint}。"
             )
         else:
-            p5_rem_pct = round(p_5["remaining_fraction"] * 100.0, 1) if p_5 else None
-            p5_rem_usd = p_5.get("remaining_usd_base") if p_5 else None
-            headline = f"双池均可用：Opus 5h 余 {p5_rem_pct}%（{_fmt_usd_plain(p5_rem_usd)}），Gemini 周池余 {_fmt_usd_plain(gw_rem_usd)}"
+            headline = f"双池均可用：Opus 5h 余 {_fmt_pct_plain(p5_rem_pct)}（{_fmt_usd_plain(p5_rem_usd)}），Gemini 周池余 {_fmt_usd_plain(gw_rem_usd)}"
             subline = (
                 f"Gemini 与 Claude/GPT 为两套独立配额池：Opus 5h 可随时用于单主会话核心架构决策，"
                 f"并发子代理与长上下文重构仍优先走 Gemini 池以防提前撞墙{codex_hint}。"
             )
 
-        primary_open = {
-            "headline": f"Gemini 5h 余 {g5_rem_pct}%" if g5_rem_pct is not None else "Gemini 可用",
-            "detail": (
-                f"周池尚余 {_fmt_usd_plain(gw_rem_usd)}（{gw_rem_pct}% · 重置 {g_w.get('time_to_reset') or '—'}）"
-                if g_w else "同订阅独立主池"
-            ),
-        }
+        if not gemini_locked:
+            primary_open = {
+                "headline": f"Gemini 5h 余 {_fmt_pct_plain(g5_rem_pct)}",
+                "detail": (
+                    f"周池尚余 {_fmt_usd_plain(gw_rem_usd)}（{_fmt_pct_plain(gw_rem_pct)} · 重置 {g_w.get('time_to_reset') or '—'}）"
+                    if g_w else "同订阅独立主池"
+                ),
+            }
+        elif not opus_locked:
+            primary_open = {
+                "headline": f"Opus 5h 余 {_fmt_pct_plain(p5_rem_pct)}",
+                "detail": f"Gemini 锁死（{g_lock_ttr} 后解锁），Opus 周池余 {_fmt_usd_plain(pw_rem_usd)}",
+            }
+        else:
+            primary_open = {
+                "headline": f"Codex 备用 {len(open_codex)} 号" if open_codex else "双池等待解锁",
+                "detail": f"Gemini {g_lock_ttr} / Opus {p_lock_ttr} 后解锁",
+            }
+
         watched = {
-            "label": "Opus 5 小时池状态",
-            "value": f"锁死 · {p5_ttr} 解锁" if p5_locked else f"可用 · 余 {round(p_5['remaining_fraction']*100,1) if p_5 else 0}%",
-            "detail": (
-                f"解锁时间 {p5_reset_at} · 周池尚余 {_fmt_usd_plain(pw_rem_usd)}（{pw_rem_pct}%）"
-                if p_5 else "—"
+            "label": "Opus 池状态",
+            "value": (
+                f"{'周池' if pw_locked else ''}锁死 · {p_lock_ttr} 解锁"
+                if opus_locked
+                else f"可用 · 余 {_fmt_pct_plain(p5_rem_pct)}"
             ),
-            "is_locked": p5_locked,
+            "detail": (
+                f"解锁时间 {p_lock_at} · 周池尚余 {_fmt_usd_plain(pw_rem_usd)}（{_fmt_pct_plain(pw_rem_pct)}）"
+                if opus_locked
+                else f"周池尚余 {_fmt_usd_plain(pw_rem_usd)}（{_fmt_pct_plain(pw_rem_pct)} · 重置 {pw_ttr}）"
+            ),
+            "is_locked": opus_locked,
         }
 
         # Explicit "不用 Opus 亏不亏？" answer
         days_left = (pw_ttr_sec / 86400.0) if isinstance(pw_ttr_sec, (int, float)) else None
-        if pw_rem_pct is not None and days_left is not None and days_left <= 2.0 and pw_rem_pct >= 40.0:
+        if pw_locked:
+            waste_status = "ON_TRACK"
+            waste_head = "本周 Opus 已用满"
+            waste_detail = f"专属 Opus 周池已 100% 消化完毕（零浪费），将在 {pw_ttr} 后刷新下一周额度。"
+        elif pw_rem_pct is not None and days_left is not None and days_left <= 2.0 and pw_rem_pct >= 40.0:
             waste_status = "HIGH_WASTE_RISK"
             waste_head = f"建议尽快用掉 {_fmt_usd_plain(pw_rem_usd)}"
-            waste_detail = f"双池独立！距 Opus 周重置仅剩 {pw_ttr} 但还剩 {pw_rem_pct}% 专属额度，不用就作废。"
+            waste_detail = f"双池独立！距 Opus 周重置仅剩 {pw_ttr} 但还剩 {_fmt_pct_plain(pw_rem_pct)} 专属额度，不用就作废。"
         elif pw_rem_pct is not None:
             waste_status = "ON_TRACK"
             waste_head = f"独立池 · 周余 {_fmt_usd_plain(pw_rem_usd)}"
             waste_detail = (
-                f"不用 Opus 确实浪费专属周池（~{_fmt_usd_plain(p_w.get('implied_pool_base_usd'))}/周），"
+                f"不用 Opus 确实浪费专属周池（~{_fmt_usd_plain(pw_cap)}/周），"
                 f"但当前已用 {100.0 - pw_rem_pct:.1f}% 且距周重置还有 {pw_ttr}，按需花在核心主任务即可。"
             )
         else:
@@ -1548,7 +1666,6 @@ def build_business_summary(
             ),
         }
 
-        # Dynamic 4-workload routing table driven by live pool states
         sub_save_str = (
             f"本窗并发子代理实耗 ${forensics['concurrent_subagents']['cost_usd']:.2f}（{forensics['concurrent_subagents']['share_pct']}%）"
             if forensics and forensics["concurrent_subagents"]["count"] > 0
@@ -1560,41 +1677,64 @@ def build_business_summary(
             else "250k+ 长上下文静置超 5 分钟会触发 20× 全价重传"
         )
 
+        gemini_chan = (
+            f"Gemini 锁死（{g_lock_ttr} 后解锁）" + (" · 暂切 Codex 备用号" if open_codex else " · 暂切备用通道")
+            if gemini_locked else "Gemini 5h / 周池"
+        )
+        gemini_tone = "warn" if gemini_locked else "safe"
+        deep_chan = (
+            ("Codex 备用号 / 等待最快解锁" if open_codex else f"等待最快解锁（Opus {p_lock_ttr} / Gemini {g_lock_ttr}）")
+            if (opus_locked and gemini_locked)
+            else (f"先用 Gemini · {p_lock_at} 解锁后切 Opus" if opus_locked else "直接使用 Opus 5.5（单主会话）")
+        )
+        deep_tone = "warn" if opus_locked else "safe"
+
         live_routing = [
             {
                 "workload": "长上下文代码重构 / 持续多文件读写",
                 "pattern": ">250k 上下文持续工作",
-                "channel": "Gemini 5h / 周池",
-                "tone": "safe",
-                "reason": f"Gemini 5h 池余 {g5_rem_pct}% / 周池余 {_fmt_usd_plain(gw_rem_usd)}，体量约为 Opus 周池的 40×+。",
+                "channel": gemini_chan,
+                "tone": gemini_tone,
+                "reason": (
+                    f"Gemini 当前锁死（{g_lock_ttr} 后解锁）。"
+                    if gemini_locked else
+                    f"Gemini 5h 池余 {_fmt_pct_plain(g5_rem_pct)} / 周池余 {_fmt_usd_plain(gw_rem_usd)}，体量{ratio_str}。"
+                ),
                 "rule": f"无需为了省钱把主会话压到 <250k；若用 Opus 跑长会话，严避 >5 分钟静置冷重传（{ttl_save_str}）。",
             },
             {
                 "workload": "并发多子代理 / 批量审计与改造",
                 "pattern": "2+ 并行 Subagent",
-                "channel": "Gemini 池（禁止并开 Opus 子代理）",
-                "tone": "safe",
+                "channel": gemini_chan if gemini_locked else "Gemini 池（禁止并开 Opus 子代理）",
+                "tone": gemini_tone,
                 "reason": f"{sub_save_str}。",
                 "rule": "主会话可以按需用 Opus，但所有并发子代理统一分流到 Gemini，主会话零压缩即可大幅延长存活时间。",
             },
             {
                 "workload": "高难架构决策 / 单主会话深度推理",
                 "pattern": "单主会话、高决策密度",
-                "channel": f"先用 Gemini · {p5_reset_at} 解锁后切 Opus" if p5_locked else "直接使用 Opus 5.5（单主会话）",
-                "tone": "warn" if p5_locked else "safe",
+                "channel": deep_chan,
+                "tone": deep_tone,
                 "reason": (
-                    f"Opus 5h 距解锁仅剩 {p5_ttr}，解锁后周池仍余 {_fmt_usd_plain(pw_rem_usd)}（{pw_rem_pct}%）可完整消费。"
-                    if p5_locked else
-                    f"Opus 5h 当前可用，周池尚余 {_fmt_usd_plain(pw_rem_usd)}（{pw_rem_pct}%），正是消化专属 Opus 额度的最佳场景。"
+                    f"{'Opus 周池已耗尽' if pw_locked else f'Opus 5h 距解锁仅剩 {p_lock_ttr}'}，周池余 {_fmt_usd_plain(pw_rem_usd)}（{_fmt_pct_plain(pw_rem_pct)}）。"
+                    if opus_locked else
+                    f"Opus 5h 当前可用，周池尚余 {_fmt_usd_plain(pw_rem_usd)}（{_fmt_pct_plain(pw_rem_pct)}），正是消化专属 Opus 额度的最佳场景。"
                 ),
                 "rule": "保持单主会话连续对话，离座 >5 分钟前先收尾或切换，避免 250k+ 上下文冷重传。",
             },
             {
                 "workload": "日常检索 / 问答 / 快速定位",
                 "pattern": "短对话、高频触发",
-                "channel": "Gemini 5h 池" + (" / Codex 备用号" if open_codex else ""),
-                "tone": "safe",
-                "reason": f"Gemini 5h 余 {g5_rem_pct}%，把稀缺的 Opus 周池完整留给高难主任务。",
+                "channel": (
+                    "Codex 备用号" if (gemini_locked and open_codex)
+                    else ("Opus 5h（暂代）" if (gemini_locked and not opus_locked) else "Gemini 5h 池" + (" / Codex 备用号" if open_codex else ""))
+                ),
+                "tone": "warn" if (gemini_locked and not open_codex) else "safe",
+                "reason": (
+                    f"Gemini 锁死（{g_lock_ttr} 后解锁），先用可用备用池承接短查询。"
+                    if gemini_locked else
+                    f"Gemini 5h 余 {_fmt_pct_plain(g5_rem_pct)}，把稀缺的 Opus 周池完整留给高难主任务。"
+                ),
                 "rule": "独立短任务新开会话，不携带无关历史上下文。",
             },
         ]
@@ -2276,6 +2416,10 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    if args.plan_usd is not None and (not math.isfinite(args.plan_usd) or args.plan_usd <= 0):
+        print(f"Error: --plan-usd must be a finite positive number (got {args.plan_usd}).", file=sys.stderr)
+        return 2
 
     fixture = None
     if args.input_fixture is not None:
