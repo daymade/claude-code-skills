@@ -528,6 +528,56 @@ python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord receive "$RECEIVED_FILE" \
 多份冲突、读取覆盖不完整时保留 unknown。此分支只恢复同一入站的证据，不授权换通信通道、
 重启业务、回复过期请求或绕过宿主拒绝。
 
+### 从 Claude 跨会话入站原件接收
+
+Claude 宿主显示的 `<cross-session-message from-name="…">` 不走 `inspect-inbound`：该命令只接受
+`codex:<canonical UUID>`。不要按聊天显示手抄 wrapper，也不要把 `origin.body` 单独喂给
+`coord receive`——前者可能丢空白，后者缺少 `_prepared_core` 需要的 host wrapper。
+
+已知当前 Claude Session ID 与入站 `peer-message-id` 时，从该会话的精确宿主事件取件：
+
+```bash
+(
+set -eu
+umask 077
+python3 - "$SESSION_JSONL" "$INBOUND_MESSAGE_ID" "$RECEIVED_FILE" <<'PY'
+import json, os, sys
+from pathlib import Path
+session, message_id, output = sys.argv[1:]
+marker = f"[peer-message-id: {message_id}]"
+matches = []
+for line in Path(session).read_text(encoding="utf-8").splitlines():
+    if message_id not in line:
+        continue
+    row = json.loads(line)
+    content = row.get("content") if isinstance(row, dict) else None
+    lines = content.splitlines() if isinstance(content, str) else []
+    if (row.get("type") == "queue-operation" and row.get("operation") == "enqueue"
+            and lines and lines[0].startswith('<cross-session-message')
+            and len(lines) >= 3
+            and (lines[1] == marker or lines[1].startswith(marker + " "))
+            and lines[-1] == '</cross-session-message>'):
+        matches.append(content)
+if len(matches) != 1:
+    raise SystemExit("Claude inbound is not one exact enqueue host-wrapped match; retain unknown")
+fd = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+with os.fdopen(fd, "wb") as saved:
+    saved.write(matches[0].encode("utf-8"))
+PY
+python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord receive "$RECEIVED_FILE" \
+  --actor "claude-session:$SESSION_UUID"
+)
+```
+
+只接受唯一一条 `type=queue-operation` 且 `operation=enqueue` 的记录；wrapper 首行必须是
+`<cross-session-message…>`，第二行必须以该入站自身 ID 的 marker 开头（同行可带协议 hint），
+末行必须是 `</cross-session-message>`。hint 的完整合法性由 `coord receive` 的既有解析器校验，这里不重复收窄，
+以免拒绝协议允许的空格或方括号 reply 地址。用列表而不是集合计数，避免相同内容的多条 enqueue/remove 被去重后伪装成唯一命中。
+`splitlines()` 只用于遍历和校验 JSONL 记录；写回的是原始 `content` 字符串字节，不 strip、不重排、不补行尾，并以 `0600` 创建。
+零命中、多条冲突、只有 remove、JSON 损坏或找不到精确会话事件时保留 unknown；能从当前会话事件直接确认的，
+不要另起历史全量扫描。领取成功后按正文分流处理，动作完成再 `coord finish`；接收成功只证明协调记录被领取，
+不证明业务完成或用户授权。
+
 ## 覆盖与验收
 
 新装可初始化、重复调用使用同一状态、并发同事项只 reserve 一条、过期请求不引发
