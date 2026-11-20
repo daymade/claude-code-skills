@@ -331,6 +331,8 @@ For hook model-context delivery claims or ordinary-interface notification visibi
 for current-version/partial-structure SQLite upgrades, use that file's #59.
 Before accepting persisted evidence that releases a hook block, read
 [release-evidence failure handling](daymade-claude-code/claude-code-hooks/references/hook_pitfalls.md#68-invalid-release-evidence-can-escape-into-an-outer-fail-open-handler).
+For Git inspections whose stdout must not hide a nonzero exit, or dispatcher-owned
+environment state, read [hook_pitfalls.md #69/#70](daymade-claude-code/claude-code-hooks/references/hook_pitfalls.md).
 
 Python entry points registered as synchronous Claude Code/Codex lifecycle hooks or
 background services (LaunchAgents included) must call a fixed direct interpreter
@@ -971,6 +973,8 @@ before preparing the task checkout, including sparse and `--no-checkout` worktre
 
 For repository recovery or convergence under concurrent work, enter
 [git-safety-net's Outcome contract](git-safety-net/SKILL.md#outcome-contract--keep-the-safety-net-subordinate-to-the-users-job).
+For branch or ref retirement, follow
+[Preservation before retirement](git-safety-net/references/merge_verification.md#preservation-before-retirement).
 For consolidating completed-task evidence, enter
 [task evidence closeout](daymade-macos/macos-cleaner/references/task-evidence-closeout.md).
 For stash export or independent recovery, follow the
