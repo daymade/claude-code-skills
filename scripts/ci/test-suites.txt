@@ -89,6 +89,7 @@ python-unittest  ghostty-use/scripts
 python-unittest  report-with-html/tests
 python-unittest  daymade-codex/local-codex/scripts
 python-unittest  frontend-visual-qa/tests
+node-test        frontend-visual-qa/tests/route-census
 python-unittest  competitors-analysis/tests
 python-unittest  scrapling-skill/tests
 python-unittest  marketplace-health-check/tests

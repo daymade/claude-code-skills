@@ -82,6 +82,8 @@ gh workflow run workflow-name \
   -f config='{"env":"production","debug":false}'
 ```
 
+`gh workflow run` returns asynchronously before the new run ID is immediately visible via `gh run view` or `gh run watch`. Record the latest existing run ID (`prev_id`) for that workflow before dispatching, wait ~8–10 seconds, then poll `gh run list --workflow=<workflow> --event workflow_dispatch` with a bounded retry loop for a run with `databaseId > prev_id` before attaching `gh run watch`. Never treat an immediate `HTTP 404` on a freshly dispatched run ID as proof the dispatch failed or re-dispatch without listing runs first.
+
 ---
 
 ## Viewing Workflow Runs
@@ -137,15 +139,14 @@ gh run view run-id --json status,conclusion,jobs,createdAt
 ### Real-Time Monitoring
 
 ```bash
-# Watch workflow run in real-time
-gh run watch run-id
+# Watch workflow run in real-time (prefer --interval 15 for multi-minute runs)
+gh run watch run-id --interval 15 --exit-status
 
-# Watch with log output
-gh run watch run-id --exit-status
-
-# Watch interval (check every N seconds)
+# Watch with a shorter interval only for brief (<2 min) runs
 gh run watch run-id --interval 10
 ```
+
+Prefer `--interval 15` (or higher) when watching multi-minute runs or chaining several watches in one session: `gh run watch` defaults to a 3-second poll interval, which can exhaust the GitHub REST hourly rate limit (`HTTP 403`) on long pipelines or concurrent jobs.
 
 When watching a run or PR checks (`gh pr checks NUMBER -R OWNER/REPO --watch`) on a repository that routes jobs to **self-hosted runners**, check runner availability before waiting (or as soon as a job stays `QUEUED` for more than ~2 minutes):
 
@@ -640,12 +641,25 @@ operator procedure; no bundled tool enforces its deployment or process boundarie
    Set test-worker concurrency from the effective CPU allocation, including
    ancestor quota/period and cpuset/affinity bounds, rather than the host's
    advertised core count or a runtime's parallelism default. Shared-parent
-   capacity is an upper bound, not an exclusive reservation. Use the existing
+   capacity is an upper bound, not an exclusive reservation. Avoid stacking
+   competing low-CPU duplicate check containers on the same physical host; prefer
+   fewer adequately sized listeners matched to real host cores. Use the existing
    test runner's worker controls and verify the original suite under the real
    service limits before increasing timeouts. Keep assertions and timeout
    failure semantics; a lower worker count cannot excuse a genuine regression.
    The repository executor owns worker settings; read cgroup/runtime observations
    and actual suite results to accept the change.
+
+   For mixed-architecture pools (for example, Linux ARM64 and X64 runners sharing
+   one checks label), pin architecture-specific checksums for downloaded tool
+   archives instead of a single-architecture hash, and keep tool/provider cache
+   paths partitioned by `${{ runner.os }}-${{ runner.arch }}`. Route heavy
+   target-architecture container builds (such as `linux/amd64` images) to a
+   dedicated native builder profile with strict job/workflow allowlisting rather
+   than slow QEMU emulation on an ARM64 check host. On Linux filesystems mounted
+   with `relatime`, avoid asserting full `os.stat()` equality to prove a file was
+   untouched because `st_atime` can advance on reads; compare inode, mode, size,
+   `st_mtime_ns` and `st_ctime_ns` instead.
 
    Configure job hooks with the supported `.sh` or `.ps1` entry point: GitHub runs
    Bash with `-e <path>` or PowerShell with `-command ". '<path>'"`. A Python
