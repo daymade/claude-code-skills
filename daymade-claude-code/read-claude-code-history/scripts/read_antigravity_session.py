@@ -328,9 +328,15 @@ def query_sessions(
         fts_error = None
 
         if fts_expr:
+            fts_cur = None
             try:
                 user_col_idx, agent_col_idx = _fts_body_column_indices(conn)
-                fts_rows = conn.execute(
+                fts_where = ["conversations_fts MATCH ?"]
+                fts_params: list[Any] = [fts_expr]
+                if exclude_current:
+                    fts_where.append("conversation_id != ?")
+                    fts_params.append(exclude_current)
+                fts_cur = conn.execute(
                     f"""
                     SELECT conversation_id, chunk_index, chunk_first_step, chunk_last_step,
                            title, workspace,
@@ -338,16 +344,22 @@ def query_sessions(
                            snippet(conversations_fts, {agent_col_idx}, '[', ']', '...', 18) AS agent_snippet,
                            bm25(conversations_fts) AS rank_score
                     FROM conversations_fts
-                    WHERE conversations_fts MATCH ?
+                    WHERE {' AND '.join(fts_where)}
                     ORDER BY rank_score
-                    LIMIT ?
                     """,
-                    (fts_expr, max(limit * 8, 50)),
-                ).fetchall()
+                    fts_params,
+                )
                 fts_used = True
-                for r in fts_rows:
+                post_fill_scanned = 0
+                post_fill_budget = max(limit * 16, 200)
+                for r in fts_cur:
                     cid = r["conversation_id"]
-                    if exclude_current and cid == exclude_current:
+                    if len(hits_by_conv) >= limit and cid not in hits_by_conv:
+                        post_fill_scanned += 1
+                        if post_fill_scanned >= post_fill_budget or all(
+                            len(h["matched_chunks"]) >= 4 for h in hits_by_conv.values()
+                        ):
+                            break
                         continue
                     meta = meta_by_id.get(cid)
                     if meta:
@@ -357,7 +369,10 @@ def query_sessions(
                         workspaces = parse_workspace_uris(meta["workspace_uris"])
                     else:
                         raw_ws = (r["workspace"] or "").strip()
-                        workspaces = [raw_ws] if raw_ws else []
+                        if raw_ws.startswith("file://"):
+                            workspaces = [unquote(urlparse(raw_ws).path)]
+                        else:
+                            workspaces = [raw_ws] if raw_ws else []
                     if not workspace_matches_project(workspaces, project):
                         continue
                     entry = hits_by_conv.setdefault(cid, {
@@ -377,36 +392,47 @@ def query_sessions(
                             "user_snippet": (r["user_snippet"] or "").strip(),
                             "agent_snippet": (r["agent_snippet"] or "").strip(),
                         })
+                    if len(hits_by_conv) >= limit and all(
+                        len(h["matched_chunks"]) >= 4 for h in hits_by_conv.values()
+                    ):
+                        break
             except sqlite3.Error as exc:
                 fts_error = str(exc)
+            finally:
+                if fts_cur is not None:
+                    fts_cur.close()
 
         # Also check metadata title/preview LIKE (bounded to SQLite summary table only;
         # helps CJK substring queries where unicode61 tokenizer splits on whitespace).
         cleaned_query = query.strip()
-        if cleaned_query:
+        if cleaned_query and len(hits_by_conv) < limit:
             like_pat = f"%{_escape_like(cleaned_query)}%"
-            like_rows = conn.execute(
-                """
+            like_where = ["(title LIKE ? ESCAPE '\\' OR preview LIKE ? ESCAPE '\\')"]
+            like_params: list[Any] = [like_pat, like_pat]
+            if exclude_current:
+                like_where.append("conversation_id != ?")
+                like_params.append(exclude_current)
+            if not include_subagents:
+                like_where.append("TRIM(COALESCE(parent_conversation_id, '')) = ''")
+                like_where.append("COALESCE(nesting_depth, 0) <= 0")
+            like_cur = conn.execute(
+                f"""
                 SELECT conversation_id, title, preview, step_count, last_modified_time,
                        workspace_uris, parent_conversation_id, nesting_depth
                 FROM conversation_summaries
-                WHERE title LIKE ? ESCAPE '\\' OR preview LIKE ? ESCAPE '\\'
+                WHERE {' AND '.join(like_where)}
                 ORDER BY last_modified_time DESC
-                LIMIT ?
                 """,
-                (like_pat, like_pat, max(limit * 4, 25)),
-            ).fetchall()
-            for r in like_rows:
-                cid = r["conversation_id"]
-                if exclude_current and cid == exclude_current:
-                    continue
-                is_sub = bool((r["parent_conversation_id"] or "").strip()) or int(r["nesting_depth"] or 0) > 0
-                if is_sub and not include_subagents:
-                    continue
-                workspaces = parse_workspace_uris(r["workspace_uris"])
-                if not workspace_matches_project(workspaces, project):
-                    continue
-                if cid not in hits_by_conv:
+                like_params,
+            )
+            try:
+                for r in like_cur:
+                    cid = r["conversation_id"]
+                    if cid in hits_by_conv:
+                        continue
+                    workspaces = parse_workspace_uris(r["workspace_uris"])
+                    if not workspace_matches_project(workspaces, project):
+                        continue
                     hits_by_conv[cid] = {
                         "conversation_id": cid,
                         "title": r["title"] or "",
@@ -422,6 +448,10 @@ def query_sessions(
                             "agent_snippet": "",
                         }],
                     }
+                    if len(hits_by_conv) >= limit:
+                        break
+            finally:
+                like_cur.close()
     except sqlite3.Error as exc:
         return {
             "mode": "query",
