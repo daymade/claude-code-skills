@@ -978,7 +978,7 @@ def calibrate_antigravity(
 
         # For LOCKOUT_CAP (exact fresh 5h hard cap), the spend itself is the cap even if
         # soft-locked at 99.3% used (avoids tiny 0.7% extrapolation drift).
-        divisor = 1.0 if confidence == "LOCKOUT_CAP" else used
+        divisor = 0.0 if confidence == "UNTOUCHED" else (1.0 if confidence == "LOCKOUT_CAP" else used)
         implied_base = (spend_info["spend_base_usd"] / divisor) if divisor > 0 else None
         implied_min = (spend_info["spend_min_usd"] / divisor) if divisor > 0 else None
         implied_upper = (spend_info["spend_upper_usd"] / divisor) if divisor > 0 else None
@@ -1545,7 +1545,8 @@ def build_business_summary(
         gemini_lock_b = g_w if gw_locked else (g_5 if g5_locked else None)
 
         p_lock_ttr = opus_lock_b.get("time_to_reset") if opus_lock_b else "—"
-        p_lock_at = (opus_lock_b.get("reset_time_local") or "")[11:19] if opus_lock_b else "—"
+        p_lock_raw = str(opus_lock_b.get("reset_time_local") or "") if opus_lock_b else ""
+        p_lock_at = p_lock_raw[11:19] if len(p_lock_raw) >= 19 else "—"
         g_lock_ttr = gemini_lock_b.get("time_to_reset") if gemini_lock_b else "—"
 
         gw_rem_usd = g_w.get("remaining_usd_base") if g_w else None
@@ -1727,13 +1728,24 @@ def build_business_summary(
                 "pattern": "短对话、高频触发",
                 "channel": (
                     "Codex 备用号" if (gemini_locked and open_codex)
-                    else ("Opus 5h（暂代）" if (gemini_locked and not opus_locked) else "Gemini 5h 池" + (" / Codex 备用号" if open_codex else ""))
+                    else (
+                        "Opus 5h（暂代）" if (gemini_locked and not opus_locked)
+                        else (
+                            f"等待最快解锁（Opus {p_lock_ttr} / Gemini {g_lock_ttr}）"
+                            if (gemini_locked and opus_locked)
+                            else "Gemini 5h 池" + (" / Codex 备用号" if open_codex else "")
+                        )
+                    )
                 ),
                 "tone": "warn" if (gemini_locked and not open_codex) else "safe",
                 "reason": (
-                    f"Gemini 锁死（{g_lock_ttr} 后解锁），先用可用备用池承接短查询。"
-                    if gemini_locked else
-                    f"Gemini 5h 余 {_fmt_pct_plain(g5_rem_pct)}，把稀缺的 Opus 周池完整留给高难主任务。"
+                    f"Antigravity 双池当前均已锁死（Gemini {g_lock_ttr} / Opus {p_lock_ttr} 后解锁），暂等待最快重置窗口。"
+                    if (gemini_locked and opus_locked and not open_codex)
+                    else (
+                        f"Gemini 锁死（{g_lock_ttr} 后解锁），先用可用备用池承接短查询。"
+                        if gemini_locked else
+                        f"Gemini 5h 余 {_fmt_pct_plain(g5_rem_pct)}，把稀缺的 Opus 周池完整留给高难主任务。"
+                    )
                 ),
                 "rule": "独立短任务新开会话，不携带无关历史上下文。",
             },
@@ -2272,9 +2284,11 @@ def render_markdown(result: dict[str, Any]) -> str:
         ttl = forensics["ttl_cold_misses"]
         lines.append("")
         lines.append("#### Window Loss Attribution & Zero-Compression Savings")
+        avg_k = prim.get("avg_context_k")
+        avg_k_disp = f"`{avg_k}k`" if avg_k is not None else "`—`"
         lines.append(
             f"- Primary session `{prim['short_id']}`: `${prim['cost_usd']:.2f}` "
-            f"(avg `{prim.get('avg_context_k')}k` / peak `{prim['peak_context_k']}k` context, `{prim['turns']}` turns)."
+            f"(avg {avg_k_disp} / peak `{prim['peak_context_k']}k` context, `{prim['turns']}` turns)."
         )
         lines.append(
             f"- Concurrent subagents (`{sub['count']}`): `${sub['cost_usd']:.2f}` (`{sub['share_pct']}%` of window spend)."

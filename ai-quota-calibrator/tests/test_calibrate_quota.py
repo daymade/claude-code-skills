@@ -958,6 +958,44 @@ class CalibrateQuotaTests(unittest.TestCase):
         }
         bs = cq.build_business_summary(both_locked)
         self.assertIn("双池当前均已锁死", bs["headline"])
+        self.assertNotIn("Gemini 5h 池", bs["live_routing"][3]["channel"])
+        self.assertIn("等待最快解锁", bs["live_routing"][3]["channel"])
+
+        # 4b. Post-5h-rollover rolling weekly + mixed start_hour_floor stays exact; untouched 5h emits no false ambiguity
+        roll_now = cq.dt.datetime(2026, 11, 21, 6, 36, 0, tzinfo=tz)
+        roll_usage = make_antigravity_usage(
+            g_weekly=0.65, g_5h=0.92, p_weekly=0.45, p_5h=1.0,
+            g_weekly_reset=(cq.dt.datetime(2026, 11, 20, 5, 30, 0, tzinfo=tz) + cq.dt.timedelta(days=7)).astimezone(cq.dt.timezone.utc).isoformat(),
+            g_5h_reset=(cq.dt.datetime(2026, 11, 21, 5, 55, 0, tzinfo=tz) + cq.dt.timedelta(hours=5)).astimezone(cq.dt.timezone.utc).isoformat(),
+            p_weekly_reset=(cq.dt.datetime(2026, 11, 21, 1, 33, 42, tzinfo=tz) + cq.dt.timedelta(days=7)).astimezone(cq.dt.timezone.utc).isoformat(),
+            p_5h_reset=(cq.dt.datetime(2026, 11, 21, 6, 33, 42, tzinfo=tz) + cq.dt.timedelta(hours=5)).astimezone(cq.dt.timezone.utc).isoformat(),
+        )
+        roll_fix = {
+            "now": roll_now.isoformat(),
+            "usage_samples": [roll_usage],
+            "models_by_date": {
+                "2026-11-20": [{"model": "gemini-4-neon", "provider": "google", "input": 1000, "cacheWrite": 0, "messageCount": 5000, "cost": 700.0}],
+                "2026-11-21": [
+                    {"model": "gemini-4-neon", "provider": "google", "input": 1000, "cacheWrite": 0, "messageCount": 1000, "cost": 200.0},
+                    {"model": "claude-opus-5-5", "provider": "anthropic", "input": 1000, "cacheWrite": 0, "messageCount": 312, "cost": 27.50},
+                ],
+            },
+            "hourly": {
+                "entries": [
+                    {"hour": "2026-11-21 00:00", "models": ["gemini-4-neon"], "cost": 60.0},
+                    {"hour": "2026-11-21 01:00", "models": ["gemini-4-neon", "claude-opus-5-5"], "cost": 40.0},
+                ]
+            },
+            "sessions": {"entries": []},
+        }
+        roll_res = cq.calibrate_antigravity(samples_count=1, settle_seconds=0, fixture=roll_fix, top_sessions=0)
+        b_pw_roll = next(b for b in roll_res["buckets"] if b["bucket_id"] == "3p-weekly")
+        b_p5_roll = next(b for b in roll_res["buckets"] if b["bucket_id"] == "3p-5h")
+        self.assertEqual(b_pw_roll["confidence"], "HIGH")
+        self.assertAlmostEqual(b_pw_roll["implied_pool_base_usd"], 50.0, places=1)
+        self.assertEqual(b_p5_roll["confidence"], "UNTOUCHED")
+        self.assertEqual(b_p5_roll["spend_base_usd"], 0.0)
+        self.assertFalse(any("MIXED_HOUR_AMBIGUITY" in w for w in b_p5_roll["warnings"]))
 
         # 5. HTML escapes XSS payloads & handles implied_pool_base_usd == 0.0 without ZeroDivisionError
         import render_report_html as rrh  # noqa: E402
