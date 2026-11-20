@@ -162,6 +162,20 @@ class CliErrorReceiptTests(unittest.TestCase):
         self.assertEqual((code, errors), (0, ""))
         self.assertIsInstance(json.loads(output), list)
 
+    def test_unregistered_from_sender_explains_local_script_fallback(self):
+        code, output, errors = self.run_cli([
+            "--claude-home", str(self.root / "claude"),
+            "--codex-home", str(self.root / "codex"),
+            "send", "claude:fixture", "--message", "fixture",
+            "--from", "custom-host:session-1", "--kind", "notice", "--json",
+        ])
+        self.assertEqual(code, peer.EXIT_TARGET)
+        self.assertIn("local-script", errors)
+        self.assertIn("omit --from", errors)
+        receipt = json.loads(output)
+        self.assertEqual(receipt["status"], "error")
+        self.assertIn("local-script", receipt["error"])
+
 
 if __name__ == "__main__":
     unittest.main()

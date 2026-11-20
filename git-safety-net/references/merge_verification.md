@@ -938,8 +938,18 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
    scheduled job runs from is also in use, although it looks idle: no process holds it between runs,
    and its files stop changing once it is pinned. Before retiring, search the scheduler definitions
    for its absolute path (launchd plists in `~/Library/LaunchAgents`, `crontab -l`, systemd units).
+   Use **bidirectional ancestor-prefix matching** rather than exact string or single-parent `dirname`
+   equality: a plist often pins a parent task root (such as `~/.local/share/<task-dir>/`) while linked
+   worktrees live two or three directories deeper (for example `.../<subtask>/artifacts/source`), so
+   a match holds whenever a scheduled path is an ancestor prefix of the worktree path or vice versa.
    Real case: a detached "deploy" worktree with no open handles and no file change in ten days was
    the working copy of a LaunchAgent that ran every 30 minutes.
+   When batch-retiring a large set of verified-landed local branches (`ANCESTOR` / `LANDED-AT-MERGE`
+   with no `clean-changes:` regression / `MERGED-CONTENT`), separate zero-checkout refs (`pure`
+   branches with no linked worktree, `prunable` worktrees whose directory is already gone, and
+   verified-clean ephemeral `/private/tmp/` worktrees) from persistent task-directory or dirty
+   worktrees: retire the first tier safely while keeping persistent/scheduler-rooted and dirty
+   worktrees for individual review.
    Check known consumers outside the checkout too: task manifests, artifact indexes or local
    release receipts can store its absolute path, including files in another repository's Git
    metadata. Search the exact path only in the task's known consumer stores; do not infer global
