@@ -491,15 +491,47 @@ gh workflow view workflow-name --yaml
 
 ### Workflow Performance Monitoring
 
+Before adding runners or blaming queue congestion when CI feels slow, break
+observed runs into three durations and bind each job to its actual execution
+pool:
+
+1. **Queue wait** (`job.started_at - job.created_at`) — separates runner
+   saturation from slow execution (a negative value indicates a carried-over
+   job from a partial rerun; exclude it from queue-wait averages).
+2. **Setup, checkout, and post-job cleanup** (`Set up job`, `actions/checkout`,
+   package/system installs, and `Complete job` workspace wipes).
+3. **Workload execution** (serial test loops, single-threaded suites, builds).
+
 ```bash
 # Get average run duration
 gh run list --workflow=ci --limit 50 --json createdAt,updatedAt | \
   jq '[.[] | ((.updatedAt | fromdate) - (.createdAt | fromdate))] | add / length'
 
-# Find longest running jobs
-gh api repos/{owner}/{repo}/actions/runs/{run_id}/jobs | \
-  jq '.jobs | sort_by(.started_at) | reverse | .[0:5]'
+# Break one run down by runner pool, queue wait, total duration, and slowest steps
+gh api -X GET 'repos/OWNER/REPO/actions/runs/RUN_ID/jobs?per_page=100' --paginate \
+  --jq '.jobs[] | {
+    name,
+    runner_name,
+    labels,
+    queue_s: (if .started_at and .created_at then ((.started_at | fromdateiso8601) - (.created_at | fromdateiso8601)) else null end),
+    total_s: (if .completed_at and .started_at then ((.completed_at | fromdateiso8601) - (.started_at | fromdateiso8601)) else null end),
+    top_steps: ([(.steps // [])[] | select(.started_at != null and .completed_at != null) | {
+      name,
+      duration_s: ((.completed_at | fromdateiso8601) - (.started_at | fromdateiso8601))
+    }] | sort_by(-.duration_s) | .[0:5])
+  }'
 ```
+
+Inspect two recurring misdiagnoses from that output before changing capacity:
+
+- **Wrong runner pool:** confirm `runner_name` and `labels`. Jobs running on
+  GitHub-hosted runners or a separate repository's pool gain nothing from adding
+  runners elsewhere.
+- **Shared-host cgroup ceiling:** when multiple self-hosted Linux listeners
+  share a host slice/cgroup and execution steps are slow despite low queue wait,
+  compare effective unit and ancestor `CPUQuota`/`MemoryMax` against actual host
+  cores and available memory before adding more listeners (see
+  [Self-Hosted Runner Capacity and Acceptance](#self-hosted-runner-capacity-and-acceptance)).
 
 ---
 
