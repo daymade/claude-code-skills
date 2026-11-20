@@ -503,6 +503,8 @@ Process exit alone does not establish the measured result.
 
 A `tests/` directory under a Skill does **not** automatically run in CI.
 [The registry](scripts/ci/test-suites.txt) owns suite admission and membership;
+[the selector](scripts/ci/select_registered_suites.py) owns diff-based suite selection
+and on-demand tool flags;
 [the dispatcher](scripts/ci/run_registered_tests.sh) owns their execution commands.
 [The workflow](.github/workflows/ci.yml) owns job environments, dependency installation,
 timeouts and additional test steps. For required-check readback, bootstrap mismatches, installation stalls,
