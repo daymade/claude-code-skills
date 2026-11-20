@@ -175,6 +175,33 @@ not a universal host protocol. Missing call IDs, child observations, startup tim
 or legacy handler completions remain separate unknowns. Do not manufacture host
 wall time from internal timings.
 
+Read the producer before filtering phases. A `start` row written before event
+collection may lack the session identity present on `complete`; select the current
+session's `complete`, then join its other phases by the producer's invocation key
+(such as `pid + event_sha256`) instead of dropping every unidentified start. For a
+bundle, `module_complete` may use each member's group name rather than the bundle
+name; match the same invocation across groups and enumerate the actual member
+rows. A start without its corresponding completion is incomplete execution, not a
+healthy quiet pass.
+
+## Compare registration shapes
+
+For an authorized consolidation A/B, freeze old and new registration snapshots
+while holding the consumed source bytes, event payload and relevant environment
+constant. Execute every matched real handler with journal and other task state
+redirected to isolated temporary locations. Use warmups plus paired trials in
+alternating old/new order; reproduce the host's parallel handler semantics when
+that is what production uses. A registration-only comparison does not prove that
+a historical source revision had the same behavior or cost.
+
+Report configured entry counts, observed host wall time and child CPU separately,
+with sample counts and dispersion. Label `RUSAGE_CHILDREN` as the measured child
+reaping scope; if descendants or detached grandchildren are not tracked, their
+process count and CPU remain unknown. A median CPU reduction is not evidence of a
+wall-time improvement, and a faster harmless probe does not establish the cost of
+a representative dangerous branch. Verify the adopted registration in the actual
+current or fresh host before claiming a user-visible effect.
+
 ## Replay both directions
 
 Keep replay answers with private task evidence; do not register a new checker.
