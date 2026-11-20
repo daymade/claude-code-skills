@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **prior-work-retrieval** (`daymade-claude-code` v5.2.15 → v5.2.16): Exempt only host-read-only `Explore` agents from the production receipt gate while keeping general-purpose, missing-type, `Task`, and arbitrary interpreter execution gated.
 - **claude-code-hooks** (`daymade-claude-code` v5.2.14 → v5.2.15): Require fail-closed Git checks to preserve nonzero statuses despite plausible stdout and isolate dispatcher-owned state from inherited environment, with healthy and dangerous calibration.
 - **git-safety-net** (`git-safety-net` v1.29.2 → v1.29.3): Require annotated archive tags to match both the remote tag object and the peeled frozen branch tip before branch retirement.
 - **lark-cli-router** (`lark-cli-router` v1.0.5 → v1.0.6): Document that `drive +member-add` can return `ok: true` without changing an already-present collaborator's role, and route existing-member permission updates through `lark-cli api PUT /open-apis/drive/v1/permissions/{token}/members/{member_id}` with `+member-list` readback.
