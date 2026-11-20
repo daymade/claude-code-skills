@@ -745,7 +745,289 @@ class CalibrateQuotaTests(unittest.TestCase):
             limit=5,
         )
         self.assertAlmostEqual(summary[0]["cache_read_pct"], 89.0, places=1)
+        self.assertAlmostEqual(summary[0]["avg_context_k"], 166.7, places=1)
         self.assertFalse(summary[0]["context_snowball"])
+
+    def test_mid_hour_reset_overcount_withholds_bogus_5h_projection(self) -> None:
+        tz = cq.local_tz()
+        now = cq.dt.datetime(2026, 11, 21, 6, 20, 0, tzinfo=tz)
+        g_w_reset = (cq.dt.datetime(2026, 11, 20, 5, 30, 0, tzinfo=tz) + cq.dt.timedelta(days=7)).astimezone(cq.dt.timezone.utc).isoformat()
+        # 5h just reset mid-hour at 05:55 -> only 5.26% used while mixed boundary hour has $203.80
+        g_5_reset = (cq.dt.datetime(2026, 11, 21, 5, 55, 0, tzinfo=tz) + cq.dt.timedelta(hours=5)).astimezone(cq.dt.timezone.utc).isoformat()
+        p_start = cq.dt.datetime(2026, 11, 21, 1, 33, 42, tzinfo=tz)
+        p_w_reset = (p_start + cq.dt.timedelta(days=7)).astimezone(cq.dt.timezone.utc).isoformat()
+        p_5_reset = (p_start + cq.dt.timedelta(hours=5)).astimezone(cq.dt.timezone.utc).isoformat()
+
+        usage = make_antigravity_usage(
+            g_weekly=0.6611,
+            g_5h=0.9474,
+            p_weekly=0.4491,
+            p_5h=0.0,
+            g_weekly_reset=g_w_reset,
+            g_5h_reset=g_5_reset,
+            p_weekly_reset=p_w_reset,
+            p_5h_reset=p_5_reset,
+        )
+        fixture = {
+            "now": now.isoformat(),
+            "usage_samples": [usage],
+            "models_by_date": {
+                "2026-11-20": [{"model": "gemini-4-neon", "provider": "google", "input": 1000, "cacheWrite": 0, "messageCount": 5000, "cost": 712.08}],
+                "2026-11-21": [{"model": "gemini-4-neon", "provider": "google", "input": 1000, "cacheWrite": 0, "messageCount": 1000, "cost": 203.80},
+                               {"model": "claude-opus-5-5", "provider": "anthropic", "input": 1000, "cacheWrite": 0, "messageCount": 312, "cost": 27.20}],
+            },
+            "hourly": {
+                "entries": [
+                    {"hour": "2026-11-21 04:00", "models": ["gemini-4-neon", "claude-opus-5-5"], "cost": 100.0},
+                    {"hour": "2026-11-21 05:00", "models": ["gemini-4-neon", "claude-opus-5-5"], "cost": 108.0},
+                ]
+            },
+            "sessions": {"entries": []},
+        }
+        res = cq.calibrate_antigravity(samples_count=1, settle_seconds=0, fixture=fixture, top_sessions=0)
+        b_g5 = next(b for b in res["buckets"] if b["bucket_id"] == "gemini-5h")
+        self.assertTrue(b_g5.get("boundary_hour_overcount"))
+        self.assertIsNone(b_g5["implied_pool_base_usd"])
+        self.assertIsNone(b_g5["remaining_usd_base"])
+        self.assertIsNone(res["weekly_to_5h_multipliers"]["gemini"])
+        self.assertTrue(any("MID_HOUR_RESET_OVERCOUNT" in w for w in b_g5["warnings"]))
+        md = cq.render_markdown(res)
+        self.assertIn("N/A (mid-hour reset)", md)
+
+    def test_turn_forensics_business_summary_and_live_html_report(self) -> None:
+        tz = cq.local_tz()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            brain = Path(tmpdir) / "brain"
+            for sid, lines in {
+                "sess-main-0001": [
+                    {"type": "PLANNER_RESPONSE", "created_at": "2026-11-21T01:34:00+08:00", "model": "claude-opus-5-5", "input_tokens": 45000, "cache_read_tokens": 0, "output_tokens": 400},
+                    {"type": "PLANNER_RESPONSE", "created_at": "2026-11-21T02:10:00+08:00", "model": "claude-opus-5-5", "input_tokens": 2000, "cache_read_tokens": 300000, "output_tokens": 500},
+                    {"type": "PLANNER_RESPONSE", "created_at": "2026-11-21T02:36:00+08:00", "model": "claude-opus-5-5", "input_tokens": 350000, "cache_read_tokens": 5000, "output_tokens": 600},
+                ],
+                "sess-sub-0002": [
+                    {"type": "PLANNER_RESPONSE", "created_at": "2026-11-21T01:50:00+08:00", "model": "claude-opus-5-5", "input_tokens": 20000, "cache_read_tokens": 60000, "output_tokens": 300},
+                    {"type": "PLANNER_RESPONSE", "created_at": "2026-11-21T01:54:00+08:00", "model": "claude-opus-5-5", "input_tokens": 2000, "cache_read_tokens": 90000, "output_tokens": 300},
+                ],
+            }.items():
+                log_dir = brain / sid / ".system_generated" / "logs"
+                log_dir.mkdir(parents=True, exist_ok=True)
+                (log_dir / "transcript.jsonl").write_text("\n".join(json.dumps(x) for x in lines), encoding="utf-8")
+
+            # Construct realistic calibration result with 1.5 days left on 3p-weekly & 60% unused -> HIGH_WASTE_RISK
+            now = cq.dt.datetime(2026, 11, 21, 6, 30, 0, tzinfo=tz)
+            result = {
+                "provider": "antigravity",
+                "observed_at_local": now.isoformat(timespec="seconds"),
+                "buckets": [
+                    {"group_name": "Gemini Models", "group_key": "gemini", "bucket_id": "gemini-weekly", "window": "weekly", "window_start_local": "2026-11-16T06:00:00+08:00", "reset_time_local": "2026-11-23T06:00:00+08:00", "remaining_fraction": 0.70, "used_pct": 30.0, "lockout_state": "OPEN", "spend_base_usd": 600.0, "spend_min_usd": 600.0, "spend_upper_usd": 600.0, "implied_pool_base_usd": 2000.0, "implied_pool_upper_usd": 2000.0, "remaining_usd_base": 1400.0, "time_to_reset": "2d 0h", "time_to_reset_seconds": 172800, "confidence": "HIGH", "warnings": []},
+                    {"group_name": "Gemini Models", "group_key": "gemini", "bucket_id": "gemini-5h", "window": "5h", "window_start_local": "2026-11-21T05:55:00+08:00", "reset_time_local": "2026-11-21T10:55:00+08:00", "remaining_fraction": 0.95, "used_pct": 5.0, "lockout_state": "OPEN", "spend_base_usd": 20.0, "spend_min_usd": 0.0, "spend_upper_usd": 40.0, "implied_pool_base_usd": None, "implied_pool_upper_usd": None, "remaining_usd_base": None, "boundary_hour_overcount": True, "time_to_reset": "4h 25m", "time_to_reset_seconds": 15900, "confidence": "LOW", "warnings": []},
+                    {"group_name": "Claude and GPT models", "group_key": "3p", "bucket_id": "3p-weekly", "window": "weekly", "window_start_local": "2026-11-15T18:00:00+08:00", "reset_time_local": "2026-11-22T18:00:00+08:00", "remaining_fraction": 0.60, "used_pct": 40.0, "lockout_state": "OPEN", "spend_base_usd": 20.0, "spend_min_usd": 20.0, "spend_upper_usd": 20.0, "implied_pool_base_usd": 50.0, "implied_pool_upper_usd": 50.0, "remaining_usd_base": 30.0, "time_to_reset": "1d 11h", "time_to_reset_seconds": 126000, "confidence": "HIGH", "warnings": []},
+                    {"group_name": "Claude and GPT models", "group_key": "3p", "bucket_id": "3p-5h", "window": "5h", "window_start_local": "2026-11-21T01:33:42+08:00", "reset_time_local": "2026-11-21T06:33:42+08:00", "remaining_fraction": 0.0, "used_pct": 100.0, "lockout_state": "LOCKED", "spend_base_usd": 20.0, "spend_min_usd": 20.0, "spend_upper_usd": 20.0, "implied_pool_base_usd": 20.0, "implied_pool_upper_usd": 20.0, "remaining_usd_base": 0.0, "time_to_reset": "4m", "time_to_reset_seconds": 240, "confidence": "LOCKOUT_CAP", "warnings": []},
+                ],
+                "top_sessions": [
+                    {"session_id": "sess-main-0001", "group_key": "3p", "model": "claude-opus-5-5", "message_count": 3, "cost_usd": 15.0, "avg_cost_per_msg_usd": 5.0, "avg_context_k": 234.0, "cache_read_pct": 43.0, "share_of_group_spend_pct": 75.0, "context_snowball": False},
+                    {"session_id": "sess-sub-0002", "group_key": "3p", "model": "claude-opus-5-5", "message_count": 2, "cost_usd": 5.0, "avg_cost_per_msg_usd": 2.5, "avg_context_k": 86.0, "cache_read_pct": 87.0, "share_of_group_spend_pct": 25.0, "context_snowball": False},
+                ],
+                "warnings": [],
+            }
+            forensics = cq.analyze_antigravity_turn_forensics(result, brain_dir=brain)
+            self.assertIsNotNone(forensics)
+            assert forensics is not None
+            self.assertEqual(forensics["primary_session"]["peak_context_k"], 355.0)
+            self.assertEqual(forensics["concurrent_subagents"]["count"], 1)
+            self.assertAlmostEqual(forensics["concurrent_subagents"]["cost_usd"], 5.0, places=2)
+            self.assertEqual(forensics["ttl_cold_misses"]["count"], 1)
+            self.assertGreater(forensics["ttl_cold_misses"]["avoidable_waste_usd"], 1.3)
+            self.assertGreater(forensics["zero_compression_savings_usd"], 6.3)
+
+            result["window_forensics"] = forensics
+            codex = [{"email": "standby@example.com", "plan": "Free", "is_active": False, "window": "30d", "used_pct": 0.0, "reset_local_short": "12-17 16:13", "credit_usd": 20.0}]
+            result["codex_standby_accounts"] = codex
+            result["business_summary"] = cq.build_business_summary(result, plan_usd=250.0, codex_accounts=codex)
+            self.assertEqual(result["business_summary"]["waste_risk"]["status"], "HIGH_WASTE_RISK")
+            self.assertAlmostEqual(result["business_summary"]["plan_roi"]["roi_multiple"], 2.48, places=2)
+
+            import render_report_html as rrh  # noqa: E402
+            html_out = rrh.render_html_report(result)
+            self.assertNotIn("https://", html_out)
+            self.assertNotIn("http://", html_out)
+            self.assertIn("sess-mai", html_out)
+            self.assertIn("standby@example.com", html_out)
+            self.assertIn("跨整点刷新暂不外推美元上限", html_out)
+
+    def test_v120_review_regressions_edge_cases_and_xss(self) -> None:
+        tz = cq.local_tz()
+        # 1. Clean mid-week 5h reset where rem5 ($20) > remw ($15) must NOT trigger MID_HOUR_RESET_OVERCOUNT
+        now = cq.dt.datetime(2026, 11, 21, 8, 0, 0, tzinfo=tz)
+        p_w_reset = (cq.dt.datetime(2026, 11, 16, 8, 0, 0, tzinfo=tz) + cq.dt.timedelta(days=7)).astimezone(cq.dt.timezone.utc).isoformat()
+        p_5_reset = (cq.dt.datetime(2026, 11, 21, 6, 0, 0, tzinfo=tz) + cq.dt.timedelta(hours=5)).astimezone(cq.dt.timezone.utc).isoformat()
+        g_w_reset = p_w_reset
+        g_5_reset = p_5_reset
+        usage = make_antigravity_usage(
+            g_weekly=0.70, g_5h=0.80, p_weekly=0.30, p_5h=0.80,
+            g_weekly_reset=g_w_reset, g_5h_reset=g_5_reset, p_weekly_reset=p_w_reset, p_5h_reset=p_5_reset,
+        )
+        fixture = {
+            "now": now.isoformat(),
+            "usage_samples": [usage, usage],
+            "models_by_date": {
+                "2026-11-16": [
+                    {"model": "gemini-4-neon", "provider": "google", "input": 1000, "cacheWrite": 0, "messageCount": 300, "cost": 600.0},
+                    {"model": "claude-opus-5-5", "provider": "anthropic", "input": 1000, "cacheWrite": 0, "messageCount": 200, "cost": 35.0},
+                ],
+                "2026-11-21": [
+                    {"model": "gemini-4-neon", "provider": "google", "input": 1000, "cacheWrite": 0, "messageCount": 100, "cost": 100.0},
+                    {"model": "claude-opus-5-5", "provider": "anthropic", "input": 1000, "cacheWrite": 0, "messageCount": 50, "cost": 5.0},
+                ],
+            },
+            "hourly": {"entries": []},
+            "sessions": {"entries": []},
+        }
+        res = cq.calibrate_antigravity(samples_count=2, settle_seconds=0, fixture=fixture, top_sessions=0)
+        b_p5 = next(b for b in res["buckets"] if b["bucket_id"] == "3p-5h")
+        self.assertFalse(b_p5.get("boundary_hour_overcount", False))
+        self.assertEqual(b_p5["confidence"], "HIGH")
+        self.assertAlmostEqual(b_p5["implied_pool_base_usd"], 25.0, places=1)
+        self.assertAlmostEqual(b_p5["remaining_usd_base"], 20.0, places=1)
+
+        # 2. Forensics dedupes multi-model rows, ignores missing/pre-window transcripts, does not double-count subagent TTL
+        with tempfile.TemporaryDirectory() as tmpdir:
+            brain = Path(tmpdir) / "brain"
+            for sid, lines in {
+                "main-mm-1": [
+                    {"type": "PLANNER_RESPONSE", "created_at": "2026-11-21T01:34:00+08:00", "model": "claude-opus-5-5", "input_tokens": 40000, "cache_read_tokens": 0, "output_tokens": 300},
+                    {"type": "PLANNER_RESPONSE", "created_at": "2026-11-21T02:20:00+08:00", "model": "claude-sonnet-5-5", "input_tokens": 2000, "cache_read_tokens": 250000, "output_tokens": 300},
+                ],
+                "sub-ttl-2": [
+                    {"type": "PLANNER_RESPONSE", "created_at": "2026-11-21T01:50:00+08:00", "model": "claude-opus-5-5", "input_tokens": 20000, "cache_read_tokens": 0, "output_tokens": 200},
+                    {"type": "PLANNER_RESPONSE", "created_at": "2026-11-21T01:58:00+08:00", "model": "claude-opus-5-5", "input_tokens": 120000, "cache_read_tokens": 0, "output_tokens": 200},
+                ],
+            }.items():
+                ld = brain / sid / ".system_generated" / "logs"
+                ld.mkdir(parents=True, exist_ok=True)
+                (ld / "transcript.jsonl").write_text("\n".join(json.dumps(x) for x in lines), encoding="utf-8")
+            f_res = cq.analyze_antigravity_turn_forensics(
+                {
+                    "buckets": [{"group_key": "3p", "window": "5h", "lockout_state": "LOCKED", "window_start_local": "2026-11-21T01:33:42+08:00", "spend_base_usd": 12.0}],
+                    "top_sessions": [
+                        {"session_id": "main-mm-1", "group_key": "3p", "model": "claude-opus-5-5", "message_count": 20, "cost_usd": 6.0, "avg_context_k": 200.0},
+                        {"session_id": "main-mm-1", "group_key": "3p", "model": "claude-sonnet-5-5", "message_count": 10, "cost_usd": 2.0, "avg_context_k": 150.0},
+                        {"session_id": "sub-ttl-2", "group_key": "3p", "model": "claude-opus-5-5", "message_count": 2, "cost_usd": 3.0, "avg_context_k": 70.0},
+                        {"session_id": "missing-3", "group_key": "3p", "model": "claude-opus-5-5", "message_count": 15, "cost_usd": 1.0, "avg_context_k": 90.0},
+                    ],
+                },
+                brain_dir=brain,
+            )
+            assert f_res is not None
+            self.assertAlmostEqual(f_res["primary_session"]["cost_usd"], 8.0, places=2)
+            self.assertEqual(f_res["concurrent_subagents"]["count"], 1)  # missing-3 excluded, main-mm-1 not self-subagent
+            self.assertEqual(f_res["ttl_cold_misses"]["count"], 0)  # subagent TTL not double-counted
+            self.assertAlmostEqual(f_res["zero_compression_savings_usd"], 3.0, places=2)
+
+        # 3. fetch_codex_standby_accounts ignores dict usage & picks max used_percent metric
+        cx_empty, _ = cq.fetch_codex_standby_accounts(fixture={"usage": {"status": "SUCCESS"}})
+        self.assertEqual(cx_empty, [])
+        cx_multi, _ = cq.fetch_codex_standby_accounts(
+            fixture={
+                "codex_usage": [
+                    {
+                        "provider": "Codex",
+                        "email": "a@example.com",
+                        "plan": "Pro",
+                        "metrics": [
+                            {"label": "5h", "used_percent": 10.0, "resets_at": "2026-11-21T10:00:00Z"},
+                            {"label": "Weekly", "used_percent": 100.0, "resets_at": "2026-11-24T10:00:00Z"},
+                        ],
+                    }
+                ]
+            }
+        )
+        self.assertEqual(cx_multi[0]["window"], "Weekly")
+        self.assertEqual(cx_multi[0]["used_pct"], 100.0)
+
+        # 4. build_business_summary handles Gemini locked / both locked accurately
+        both_locked = {
+            "provider": "antigravity",
+            "observed_at_local": now.isoformat(timespec="seconds"),
+            "buckets": [
+                {"group_key": "gemini", "window": "weekly", "lockout_state": "OPEN", "remaining_fraction": 0.5, "time_to_reset": "3d", "spend_base_usd": 100.0, "implied_pool_base_usd": 200.0, "remaining_usd_base": 100.0},
+                {"group_key": "gemini", "window": "5h", "lockout_state": "LOCKED", "remaining_fraction": 0.0, "time_to_reset": "2h", "reset_time_local": "2026-11-21T10:00:00+08:00"},
+                {"group_key": "3p", "window": "weekly", "lockout_state": "LOCKED", "remaining_fraction": 0.0, "time_to_reset": "4d", "reset_time_local": "2026-11-25T10:00:00+08:00", "spend_base_usd": 50.0, "implied_pool_base_usd": 50.0, "remaining_usd_base": 0.0},
+                {"group_key": "3p", "window": "5h", "lockout_state": "OPEN", "remaining_fraction": 1.0, "time_to_reset": "5h"},
+            ],
+        }
+        bs = cq.build_business_summary(both_locked)
+        self.assertIn("双池当前均已锁死", bs["headline"])
+        self.assertNotIn("Gemini 5h 池", bs["live_routing"][3]["channel"])
+        self.assertIn("等待最快解锁", bs["live_routing"][3]["channel"])
+
+        # 4b. Post-5h-rollover rolling weekly + mixed start_hour_floor stays exact; untouched 5h emits no false ambiguity
+        roll_now = cq.dt.datetime(2026, 11, 21, 6, 36, 0, tzinfo=tz)
+        roll_usage = make_antigravity_usage(
+            g_weekly=0.65, g_5h=0.92, p_weekly=0.45, p_5h=1.0,
+            g_weekly_reset=(cq.dt.datetime(2026, 11, 20, 5, 30, 0, tzinfo=tz) + cq.dt.timedelta(days=7)).astimezone(cq.dt.timezone.utc).isoformat(),
+            g_5h_reset=(cq.dt.datetime(2026, 11, 21, 5, 55, 0, tzinfo=tz) + cq.dt.timedelta(hours=5)).astimezone(cq.dt.timezone.utc).isoformat(),
+            p_weekly_reset=(cq.dt.datetime(2026, 11, 21, 1, 33, 42, tzinfo=tz) + cq.dt.timedelta(days=7)).astimezone(cq.dt.timezone.utc).isoformat(),
+            p_5h_reset=(cq.dt.datetime(2026, 11, 21, 6, 33, 42, tzinfo=tz) + cq.dt.timedelta(hours=5)).astimezone(cq.dt.timezone.utc).isoformat(),
+        )
+        roll_fix = {
+            "now": roll_now.isoformat(),
+            "usage_samples": [roll_usage],
+            "models_by_date": {
+                "2026-11-20": [{"model": "gemini-4-neon", "provider": "google", "input": 1000, "cacheWrite": 0, "messageCount": 5000, "cost": 700.0}],
+                "2026-11-21": [
+                    {"model": "gemini-4-neon", "provider": "google", "input": 1000, "cacheWrite": 0, "messageCount": 1000, "cost": 200.0},
+                    {"model": "claude-opus-5-5", "provider": "anthropic", "input": 1000, "cacheWrite": 0, "messageCount": 312, "cost": 27.50},
+                ],
+            },
+            "hourly": {
+                "entries": [
+                    {"hour": "2026-11-21 00:00", "models": ["gemini-4-neon"], "cost": 60.0},
+                    {"hour": "2026-11-21 01:00", "models": ["gemini-4-neon", "claude-opus-5-5"], "cost": 40.0},
+                ]
+            },
+            "sessions": {"entries": []},
+        }
+        roll_res = cq.calibrate_antigravity(samples_count=1, settle_seconds=0, fixture=roll_fix, top_sessions=0)
+        b_pw_roll = next(b for b in roll_res["buckets"] if b["bucket_id"] == "3p-weekly")
+        b_p5_roll = next(b for b in roll_res["buckets"] if b["bucket_id"] == "3p-5h")
+        self.assertEqual(b_pw_roll["confidence"], "HIGH")
+        self.assertAlmostEqual(b_pw_roll["implied_pool_base_usd"], 50.0, places=1)
+        self.assertEqual(b_p5_roll["confidence"], "UNTOUCHED")
+        self.assertEqual(b_p5_roll["spend_base_usd"], 0.0)
+        self.assertFalse(any("MIXED_HOUR_AMBIGUITY" in w for w in b_p5_roll["warnings"]))
+
+        # 5. HTML escapes XSS payloads & handles implied_pool_base_usd == 0.0 without ZeroDivisionError
+        import render_report_html as rrh  # noqa: E402
+        xss_html = rrh.render_html_report(
+            {
+                "provider": "custom",
+                "observed_at_local": now.isoformat(timespec="seconds"),
+                "buckets": [
+                    {
+                        "group_name": "<script>xss()</script>",
+                        "group_key": "custom",
+                        "bucket_id": "custom",
+                        "window": "<img onerror=1>",
+                        "remaining_fraction": 0.5,
+                        "used_pct": 50.0,
+                        "lockout_state": "OPEN",
+                        "implied_pool_base_usd": 0.0,
+                        "confidence": "LOW",
+                        "time_to_reset": "<b>1h</b>",
+                        "reset_time_local": "<i>soon</i>",
+                        "warnings": [],
+                    }
+                ],
+                "business_summary": {"headline": "ok", "subline": "ok", "live_routing": []},
+            }
+        )
+        self.assertNotIn("<script>xss()</script>", xss_html)
+        self.assertNotIn("<img onerror=1>", xss_html)
+        self.assertIn("&lt;script&gt;xss()&lt;/script&gt;", xss_html)
+
+        # 6. CLI rejects non-finite --plan-usd
+        self.assertEqual(cq.main(["--provider", "custom", "--used-pct", "10", "--spend-usd", "5", "--plan-usd", "nan"]), 2)
 
 
 if __name__ == "__main__":
