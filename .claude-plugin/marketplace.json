@@ -529,7 +529,7 @@
       "description": "Operates GitHub via gh CLI and REST/GraphQL — PRs, issues, Actions, self-hosted Runner inventory/capacity, repos, collaborators, org permissions, 2FA — with explicit target, authorization, and independent readback. Use when a write reports success but state didn't change, or choosing gh/REST/GraphQL/UI-only. Not for local Git recovery (use git-safety-net), maintainer PR review (use github-review-pr), or upstream contribution (use github-contributor).",
       "source": "./github-ops",
       "strict": false,
-      "version": "1.17.7",
+      "version": "1.17.8",
       "category": "developer-tools",
       "keywords": [
         "github",
@@ -1390,7 +1390,7 @@
       "description": "Calibrates black-box AI subscription quotas into API dollars, runway, and top burning sessions by reconciling tokscale spend against live provider fractions (Antigravity, Codex, custom caps). Use when asked how big a 5h/weekly quota is, why a pool hit rate limit, or 额度相当于多少钱/反推配额/谁烧光了额度. Not for ccusage audits (claude-usage-analyst) or Codex reset news (tibo-reset-codex).",
       "source": "./ai-quota-calibrator",
       "strict": false,
-      "version": "1.1.0",
+      "version": "1.2.0",
       "category": "developer-tools",
       "keywords": [
         "quota",

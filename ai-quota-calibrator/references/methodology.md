@@ -134,17 +134,45 @@ To align a bucket's window `[window_start, now]` for a model group `G`:
      `(minute * 60 + second) / 3600`.
    - **Zero pre-window presence** (no hour before `window_start` contains any
      model in `G`): zero subtraction needed—`models --since` is exact.
-   - **Unresolvable mixed boundary**: if a pre-window hour mixes multiple
-     groups with no fresh-start proof, keep a transparent `[min, upper]`
-     interval in both JSON (`spend_min_usd`, `implied_pool_min_usd`) and
-     Markdown, and emit a `MIXED_HOUR_AMBIGUITY` warning rather than guessing a
-     split.
+      - **Unresolvable mixed boundary & mid-hour 5h reset overcount**: if a
+     pre-window hour mixes multiple groups with no fresh-start proof, keep a
+     transparent `[min, upper]` interval in both JSON (`spend_min_usd`,
+     `implied_pool_min_usd`) and Markdown, and emit `MIXED_HOUR_AMBIGUITY`.
+     Furthermore, because a 5-hour pool's capacity can never exceed its sibling
+     weekly pool, whenever a `5h` bucket's implied cap exceeds the sibling
+     `weekly` pool by `> 5%` (or a `LOW`-confidence `5h` bucket's upper bound
+     exceeds `weekly` by `> 5%` with `spend_min_usd == 0` or `< 10%` used),
+     emit `MID_HOUR_RESET_OVERCOUNT`, set `boundary_hour_overcount = true`, and
+     withhold the invalid 5h dollar projection until post-reset spend settles.
+     (Independent remaining dollars `rem5` vs `remw` are intentionally NOT
+     compared here, since a freshly reset 5h pool can legitimately have more
+     remaining dollars than a nearly spent weekly pool.)
 
 Note: Local timezone offset is derived from the system clock at observation time;
 for weekly windows that cross a daylight-saving-time (DST) transition, boundary
 hours may shift by 1 hour.
 
-## 8. Provider Notes
+## 8. Bounded Turn-Level Forensics & Lossless Savings
+
+When `top_sessions` is populated for Antigravity, `analyze_antigravity_turn_forensics()`
+reads local `transcript.jsonl` files **strictly for those session IDs** (never
+scanning the full transcript directory) to separate three real cost drivers:
+
+1. **Primary session normal burn**: cache-read and reasoning spend of the top
+   session, along with its average (`avg_context_k`) and peak (`peak_context_k`)
+   prompt context length.
+2. **Concurrent subagents**: multi-turn sessions in the same quota group whose
+   active window overlaps the primary session (e.g., subagents spawned onto an
+   Opus 5h pool instead of Gemini).
+3. **5-minute Prompt Cache TTL cold resends (`20×`)**: turns after turn 1 with
+   `>= 50k` fresh `input_tokens`, which re-pay full input rate (`$4/M`) instead
+   of cached read rate (`$0.20/M`).
+
+The resulting `zero_compression_savings_usd` quantifies how much quota can be
+saved purely by offloading concurrent subagents and avoiding `>5m` cold resends
+on `250k+` sessions—without recommending unrealistic `<250k` auto-compact rules.
+
+## 9. Provider Notes
 
 ### Antigravity (`--provider antigravity`)
 - **Quota source**: `agy -p /usage --output-format json` (`command.data.groups[].buckets[]`).
