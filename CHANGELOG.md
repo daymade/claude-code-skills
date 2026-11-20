@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **claude-code-hooks** (`daymade-claude-code` v5.2.14 → v5.2.15): Require fail-closed Git checks to preserve nonzero statuses despite plausible stdout and isolate dispatcher-owned state from inherited environment, with healthy and dangerous calibration.
+- **git-safety-net** (`git-safety-net` v1.29.2 → v1.29.3): Require annotated archive tags to match both the remote tag object and the peeled frozen branch tip before branch retirement.
 - **lark-cli-router** (`lark-cli-router` v1.0.5 → v1.0.6): Document that `drive +member-add` can return `ok: true` without changing an already-present collaborator's role, and route existing-member permission updates through `lark-cli api PUT /open-apis/drive/v1/permissions/{token}/members/{member_id}` with `+member-list` readback.
 - **claude-switch-models-setup** (`daymade-claude-code` v5.2.13 → v5.2.14): Clarify that `~/.claude/settings/<provider>.json` must remain host-portable and omit host-specific absolute-path `hooks` (hooks are converged per machine from default `settings.json` by `sync-profile-settings.py`).
 - **github-ops** (`github-ops` v1.17.2 → v1.17.3): Add guidance to check `/actions/runners` online/busy status before waiting on `gh run watch` / `gh pr checks --watch` for repositories routing jobs to self-hosted runners.

@@ -921,6 +921,14 @@ stashes and unique uncommitted bytes retain their own preservation procedures.
    independently recheck the retained carrier. A moved ref or lost carrier reopens classification;
    the absence of a bundle does not remove this final gate. After removal, verify the commit still
    resolves through its retained carrier or required recovery artifact.
+6. When the retained carrier is an annotated archive tag, independently read back both remote
+   identities before deleting the branch: `refs/tags/<tag>` must equal the local annotated tag
+   object, and `refs/tags/<tag>^{}` must equal the frozen branch tip. A read with both exact patterns,
+   `git ls-remote --exit-code <remote> refs/tags/<tag> 'refs/tags/<tag>^{}'`, returns these rows
+   for an annotated tag; preserve command failure and missing rows as unsatisfied evidence. Comparing only the
+   peeled commit also accepts a lightweight tag and does not prove that the agreed annotated
+   archive object was retained. After branch deletion, verify that the branch is absent and both
+   tag identities still resolve.
 
 ## Worktree retirement — prove the checkout is disposable before removal
 
