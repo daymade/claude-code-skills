@@ -100,6 +100,8 @@ run was blocked. See [GitHub billing](https://docs.github.com/en/actions/concept
 
 ## 3. Remove unnecessary demand before moving execution
 
+Audit and remove dead demand **before** scaling self-hosted runners: retired workflows still targeting hosted runners, redundant `push` triggers already enforced by `strict: true` PR branch protection, duplicate reusable CI jobs re-run inside every release workflow, and closed one-off incident tests that add runtime without protecting active contracts. Adding workers to a bloated CI hides contention instead of fixing it.
+
 For each expensive job, name the behavior it protects and the inputs that can
 change it. Use actual historical diffs for both directions: unrelated business
 prose should avoid application builds; application, dependency, CI, test and
@@ -109,6 +111,19 @@ executable prompt or application input; file extension alone is not a safe rule.
 Prefer a repository-owned change selector with a conservative full-check outcome
 for unknown paths, missing/truncated diff information or unsupported events.
 Selector failure must remain visible and cannot make a required check succeed.
+When adding path-filtered domain suites inside a single required check job, verify
+three recurring failure modes before merge:
+
+1. **Tool-setup `if:` parity**: every conditional runtime/package-manager step
+   (such as `setup-uv`, `setup-node`, `setup-go`, or CLI installers) must enable
+   whenever **any** downstream domain step that invokes it is enabled.
+2. **Cross-domain and naming blind spots**: replay real file paths across shared
+   modules, IaC roots, and kebab-case vs snake-case script/test pairs to ensure
+   editing a production file triggers every suite that parses or validates it.
+3. **CI self-change full fallback**: edits to the workflow file itself, root
+   `Makefile`, or shared quality task definitions should force all domain suites
+   to run rather than partially validating a changed selector.
+
 Inspect branch rules and required check names before filtering. Workflow-level
 path skips can leave required checks pending; use job selection or an always
 reported aggregate where that contract needs a terminal result. Do not weaken
@@ -174,8 +189,15 @@ CI implementation must enforce the comparison and fallback.
 
 Cancel superseded validation within the same relevant branch/PR when its existing
 contract permits; preserve release single-writer behavior and do not cancel a
-deployment to save minutes. Use the repository's deployment owner and the
-[concurrency contract](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency).
+deployment to save minutes. Avoid collapsing unrelated release traffic behind one
+global lock: route genuinely read-only operations (checks, plans, inspections) to
+a per-run concurrency group so they never block writes or each other, and scope
+write locks by target environment (for example, staging vs production). When a
+caller workflow invokes a reusable multi-environment release workflow, give the
+caller job its own serialization group and lock each inner deployment job on its
+matching target-environment group rather than nesting the same concurrency group
+across caller and callee (which deadlocks). Use the repository's deployment owner
+and the [concurrency contract](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency).
 
 After demand selection, use workflow_operations.md's **Self-Hosted Runner Capacity
 and Acceptance** procedure before changing `runs-on`. Registration scope, labels,
