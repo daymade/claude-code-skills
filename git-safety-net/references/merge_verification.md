@@ -971,12 +971,12 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
    and report its existing validation limit without inventing a new release approval. Recheck
    relocated consumers after removal; unknown required consumer coverage stops that retirement.
 
-   Apply three additional exclusions before batch-retiring clean `ANCESTOR` worktrees or
+   Apply these additional guards before batch-retiring clean `ANCESTOR` worktrees or
    fast-forwarding a shared primary checkout:
    - **Fresh 0-commit concurrent worktrees (false-positive `ANCESTOR`):** a worktree just
      created from `origin/main` by another active session has zero commits ahead and zero dirty
      files, so `merge-base --is-ancestor` reports `ANCESTOR`. Skip any worktree whose directory
-     or `.git` gitlink `mtime` falls within a recent activity window (for example, 4 hours)
+     or `.git` pointer file `mtime` falls within a recent activity window (for example, 4 hours)
      unless its exact PR/task is verified closed and retired.
    - **Externally managed and runtime worktrees:** exclude host-application worktree stores
      (such as `~/.codex/worktrees/`), live service/runtime producer checkouts, and external
@@ -984,8 +984,9 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
      external tool registries or live runtimes.
    - **Non-destructive `main` alignment on a shared primary checkout:** when the primary
      checkout is on a stale `main` with mixed dirty files (for example when local symlinks
-     consume it), split tracked files that already satisfy `git diff --quiet origin/main -- <path>`
-     as landed residues before `git merge --ff-only origin/main`, and preserve genuinely unlanded
+     consume it), split tracked files that satisfy both `git diff --quiet origin/main -- <path>`
+     and `git diff --cached --quiet -- <path>` as landed residues before
+     `git merge --ff-only origin/main`, and preserve genuinely unlanded
      hunks via patch export → fast-forward → `git apply` with before/after SHA-256 verification.
      When another live session has the primary checkout on a feature branch, update the
      non-checked-out `main` ref non-invasively via `git fetch origin main:main` without moving

@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **git-safety-net** (`git-safety-net` v1.29.4 → v1.29.5): Remove persisted count (`three`) and submodule `gitlink` terminology collision in `references/merge_verification.md` (use `.git` pointer file `mtime`), and require `git diff --cached --quiet -- <path>` alongside working-tree parity before clearing landed residues.
 - **git-safety-net** (`git-safety-net` v1.29.3 → v1.29.4): Document guarding against freshly created 0-commit concurrent worktrees (false-positive `ANCESTOR` via recent `mtime`), excluding externally managed/runtime worktree stores during batch retirement, and non-destructive `main` alignment (`git diff --quiet origin/main` residue splitting + patch SHA-256 roundtrip, plus `git fetch origin main:main` when another live session holds a feature branch).
 - **peer-message** (`peer-message` v1.27.6 → v1.27.7): Add non-invasive closeout handoff guidance under §5.1 (complete zero-intrusion ref/prune steps first, then send a one-way `--kind notice` with exact PR/SHA/worktree paths to the live owner).
 - **macos-watchdog** (`daymade-macos` v1.34.16 → v1.34.17): Document checking `launchctl print-disabled gui/$(id -u)` alongside loaded state before batch-reloading or upgrading LaunchAgents so intentionally disabled legacy/superseded jobs are preserved instead of re-enabled.
