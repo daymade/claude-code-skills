@@ -482,4 +482,5 @@ jobs:
         run: uv run --frozen python -m pytest tests/test_code_scan.py tests/test_security_scan.py tests/test_package_skill.py -q
 
       - name: Check registered Skill code and repository scripts
-        run: python3 daymade-skill/skill-creator/scripts/creator.py code_scan "${{ github.workspace }}" --marketplace
+        working-directory: daymade-skill/skill-creator
+        run: uv run --frozen python -m scripts.code_scan "${{ github.workspace }}" --marketplace

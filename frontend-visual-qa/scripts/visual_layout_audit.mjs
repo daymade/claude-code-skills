@@ -7,6 +7,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { collectAttentionInventory } from "./attention_inventory.mjs";
+import { isWrappedControlElement } from "./control_classification.mjs";
 import { collectPaintedText } from "./painted_text_probe.mjs";
 
 function loadPlaywright() {
@@ -268,6 +269,7 @@ for (const viewport of viewports) {
     mediaWalkRequested: scrollVisibleMedia,
     sectionSelector,
     screenshotSections,
+    controlClassifierSource: isWrappedControlElement.toString(),
   });
   result.meta.href = targetEvidence(result.meta.href);
   result.meta.mediaPreparation = mediaPreparation;
@@ -893,7 +895,11 @@ function collectScreenshotSections({ sectionSelector, maxCount, includeFirstView
   }
 }
 
-function auditPage({ viewportName, requestedWidth, isMobile, forbidPatterns, requirePatterns, pageType, expectedWindowWidth, contentSelector, mediaSelector, mediaWalkRequested, sectionSelector, screenshotSections }) {
+function auditPage({ viewportName, requestedWidth, isMobile, forbidPatterns, requirePatterns, pageType, expectedWindowWidth, contentSelector, mediaSelector, mediaWalkRequested, sectionSelector, screenshotSections, controlClassifierSource }) {
+  if (typeof controlClassifierSource !== "string" || !controlClassifierSource) {
+    throw new Error("control classifier source is required");
+  }
+  const isWrappedControlElement = new Function(`return (${controlClassifierSource})`)();
   const issues = [];
   const forbiddenTerms = forbidPatterns.map((pattern) => new RegExp(pattern, "g"));
   const requiredTerms = requirePatterns.map((pattern) => new RegExp(pattern, "g"));
@@ -901,10 +907,10 @@ function auditPage({ viewportName, requestedWidth, isMobile, forbidPatterns, req
     "h1", "h2", "h3", "h4", "p", "button", "a", "strong", "em", "td", "th",
     "[role='button']", "[role='tab']", "[role='menuitem']", "[role='switch']",
     "[role='checkbox']", "[role='radio']", "[role='link']",
+    "[tabindex]:not([tabindex^='-'])",
     "[class*='tag']", "[class*='badge']", "[class*='pill']", "[class*='nav']",
     "[class*='title']", "[class*='label']", "[class*='note']", "[class*='eyebrow']",
   ].join(",");
-  const controlParts = new Set(["tag", "tags", "badge", "badges", "pill", "pills", "button", "btn", "tab", "tabs", "nav", "menu", "link", "chip", "chips", "toggle", "switch", "seg", "opt", "qbadge", "tier"]);
   const headingParts = new Set(["title", "heading", "headline", "eyebrow"]);
   const labelParts = new Set(["label", "title", "name", "caption"]);
   const helperParts = new Set(["helper", "hint", "error", "message", "feedback", "description", "note", "caption"]);
@@ -1205,10 +1211,17 @@ function auditPage({ viewportName, requestedWidth, isMobile, forbidPatterns, req
     const classTokens = className.split(/\s+/).filter(Boolean);
     const isHeading = /^H[1-4]$/.test(el.tagName) || classTokens.some((token) => /(^|[-_])(title|heading)([-_]|$)/i.test(token)) || hasSemanticPart(el, headingParts);
     const role = el.getAttribute("role") || "";
-    const isInteractiveAnchor = el.tagName === "A" && hasSemanticPart(el, controlParts);
-    const isControlClass = classTokens.some((token) => /^(tag|badge|pill|btn|button|tab|nav|seg__opt|qbadge|tier)$/.test(token));
-    const isControlRole = /^(button|tab|menuitem|switch|checkbox|radio|link)$/.test(role);
-    const isControl = el.tagName === "BUTTON" || isInteractiveAnchor || isControlRole || isControlClass || hasSemanticPart(el, controlParts);
+    // Class inference is allowed only after an observable interaction signal.
+    // The shared classifier also excludes semantic navigation/menu containers,
+    // so a wrapped `div.nav` is not mistaken for a control.
+    const isControl = isWrappedControlElement({
+      tagName: el.tagName,
+      role,
+      href: el.getAttribute("href"),
+      tabindex: el.getAttribute("tabindex"),
+      className,
+      contentEditable: el.getAttribute("contenteditable"),
+    });
     const isTableLabel = /T[HD]/.test(el.tagName);
     const rect = el.getBoundingClientRect();
     const fontSize = Number.parseFloat(style.fontSize) || 0;
@@ -2189,6 +2202,7 @@ function auditPage({ viewportName, requestedWidth, isMobile, forbidPatterns, req
 
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
       const value = node.nodeValue || "";
+      const fontSize = Number.parseFloat(getComputedStyle(node.parentElement).fontSize) || 0;
       for (let offset = 0; offset < value.length;) {
         const char = Array.from(value.slice(offset))[0];
         const next = offset + char.length;
@@ -2197,7 +2211,16 @@ function auditPage({ viewportName, requestedWidth, isMobile, forbidPatterns, req
           range.setStart(node, offset);
           range.setEnd(node, next);
           const rect = range.getBoundingClientRect();
-          if (rect.width > 0 && rect.height > 0) chars.push({ char, top: rect.top, left: rect.left });
+          if (rect.width > 0 && rect.height > 0) {
+            chars.push({
+              char,
+              top: rect.top,
+              bottom: rect.bottom,
+              height: rect.height,
+              fontSize,
+              left: rect.left,
+            });
+          }
           range.detach();
         }
         offset = next;
@@ -2208,7 +2231,7 @@ function auditPage({ viewportName, requestedWidth, isMobile, forbidPatterns, req
     chars.sort((a, b) => a.top - b.top || a.left - b.left);
     const rows = [];
     for (const item of chars) {
-      const row = rows.find((candidate) => Math.abs(candidate.top - item.top) <= 3);
+      const row = rows.find((candidate) => candidate.items.some((existing) => sharesRenderedLine(existing, item)));
       if (row) {
         row.items.push(item);
         row.top = (row.top + item.top) / 2;
@@ -2219,6 +2242,16 @@ function auditPage({ viewportName, requestedWidth, isMobile, forbidPatterns, req
     return rows
       .sort((a, b) => a.top - b.top)
       .map((row) => row.items.sort((a, b) => a.left - b.left).map((item) => item.char).join(""));
+  }
+
+  function sharesRenderedLine(left, right) {
+    const overlap = Math.min(left.bottom, right.bottom) - Math.max(left.top, right.top);
+    const shorterHeight = Math.min(left.height, right.height);
+    const hasVerticalOverlap = shorterHeight > 0 && overlap >= shorterHeight * 0.5;
+    const largerFontSize = Math.max(left.fontSize, right.fontSize);
+    const fontTolerance = Math.max(2, largerFontSize * 0.5);
+    const hasCompatibleFontSize = Math.abs(left.fontSize - right.fontSize) <= fontTolerance;
+    return hasVerticalOverlap && hasCompatibleFontSize;
   }
 
   function awkwardChineseBoundary(lines) {
