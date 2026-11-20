@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **claude-code-hooks** (`daymade-claude-code` v5.2.18 → v5.2.19): Document in Pitfall #6 when to materialize standalone hook copies from immutable `origin/main` (with SHA-256 parity and `--selftest`) instead of symlinking into a shared multi-branch source checkout that switches branches.
+- **github-ops** (`github-ops` v1.17.4 → v1.17.5): Document separate GitHub REST (`core`) vs GraphQL rate-limit buckets in `api_reference.md` and cross-link the proactive GraphQL check-run query and no-`--delete-branch` merge path in `pr_operations.md`.
+- **github-ops** (`github-ops` v1.17.3 → v1.17.4): Document isolating authorized `--admin` merge commands from compound local cleanup scripts, handling asynchronous `mergeStateStatus` (`UNKNOWN` → `BLOCKED`) under `REVIEW_REQUIRED` rulesets, and using Git protocol readback and exact-tip deletion when `--delete-branch` hits a REST `403` rate limit after merge.
 - **prior-work-retrieval** (`daymade-claude-code` v5.2.17 → v5.2.18): Exempt only host-read-only `Explore` agents from the production receipt gate while keeping general-purpose, missing-type, `Task`, and arbitrary interpreter execution gated.
 - **github-ops** (`github-ops` v1.17.4 → v1.17.5): Document a bounded GitHub API rate-limit fallback that can use an explicitly identified already-authenticated browser session while preserving exact-target and independent-readback requirements.
 - **git-safety-net** (`git-safety-net` v1.29.3 → v1.29.4): State the no-synchronizer boundary for a dirty fast-forward: preserve staged, unstaged, untracked and ignored content through a verified guarded transaction, or wait for the WIP owner; do not substitute an ad hoc patch/hold merge.

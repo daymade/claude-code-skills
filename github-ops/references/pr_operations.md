@@ -665,6 +665,11 @@ interface lacks leases, use the native Git sequence above. Plain legacy
   preserving its current tip first. A failed query remains unknown; local worktree retirement
   stays with `git-safety-net`.
 
+- **When `gh api rate_limit` already shows REST `core` exhausted while `graphql` quota remains**,
+  read check-runs/annotations via `gh api graphql` and omit `--delete-branch` upfront on
+  `gh pr merge` before retiring the ref over SSH Git (see
+  [Separate REST vs GraphQL Quotas](api_reference.md#separate-rest-vs-graphql-quotas)).
+
 - **A strict require-up-to-date ruleset can leave the next PR behind after another lands.**
   Read the current base and head, then integrate the new base under the repository's history
   policy. Use a history-preserving merge when permitted. Rebase only when the repository
