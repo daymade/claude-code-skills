@@ -46,14 +46,20 @@ zero-dependency Python 3.9+ calibrator directly.
 ### 1. Antigravity (Gemini Models & Claude/GPT 3P Pools)
 
 ```bash
-python3 "<skill-dir>/scripts/calibrate_quota.py" --provider antigravity
+python3 "<skill-dir>/scripts/calibrate_quota.py" --provider antigravity \
+  --include-codex --html /tmp/ai-quota-cockpit.html --open
 ```
 
-- Defaults: `--samples 2 --settle-seconds 5`, `--timeout 60`, and automatic
-  top-5 session attribution whenever any bucket is `>= 80%` used or locked.
-- Pass `--top-sessions N` to always include top `N` sessions (or `0` to skip),
-  `--json` for structured output, or `--samples 1` only when no concurrent
-  Antigravity sessions are active.
+- Defaults: `--samples 2 --settle-seconds 5`, `--timeout 60`, automatic top-5
+  session attribution whenever any bucket is `>= 80%` used or locked, and
+  bounded turn-level forensics (strictly scoped to `top_sessions` IDs) separating
+  primary-session burn, concurrent subagents, and 5-minute Prompt Cache TTL
+  cold-resend (`20x`) waste.
+- Pass `--plan-usd <monthly_price>` (when known) to compute weekly API ROI,
+  `--include-codex` to append live same-machine Codex standby accounts,
+  `--html <path> [--open]` to generate and open a zero-CDN live business cockpit,
+  `--top-sessions N` to override top-session count (`0` to skip), `--json` for
+  structured output, or `--samples 1` only when no concurrent sessions are active.
 
 ### 2. Codex (via `tokscale usage` + `tokscale hourly`)
 
@@ -113,9 +119,17 @@ new provider.
    surface mixed-hour boundaries transparently as `[min, upper]` in both JSON
    and Markdown, and report both base `tokscale` spend and 5-minute cache-write
    upper bounds when `cacheWrite == 0`.
-5. **Surface attribution limits and actionable recovery.**
-   - Always check `top_sessions` when a pool is `>= 80%` or locked to identify
-     `CONTEXT_SNOWBALL` long-context sessions.
+5. **Guard against mid-hour 5h reset overcounts & report lossless savings honestly.**
+   - When a `5h` bucket resets mid-hour, `tokscale hourly` can mix pre-reset
+     spend into the boundary hour and make a naive `5h` implied cap or runway
+     exceed its sibling `weekly` pool. The script flags `MID_HOUR_RESET_OVERCOUNT`,
+     withholds bogus dollar projections, and reports `%` remaining cleanly until
+     post-reset spend settles.
+   - Always check `top_sessions` and `window_forensics` when a pool is `>= 80%`
+     or locked to quantify concurrent subagents, `CONTEXT_SNOWBALL` average/peak
+     context length, and 5-minute Prompt Cache TTL cold-resend (`20x`) waste—
+     preferring zero-compression lossless levers (subagent offload + avoiding
+     `>5m` cold resends) over unrealistic `<250k` auto-compact rules.
    - Multi-machine/web/IDE usage on the **same** account **underestimates**
      pool size; multiple accounts sharing **one** local client directory
      **overestimates** single-account capacity.

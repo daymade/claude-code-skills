@@ -1390,7 +1390,7 @@
       "description": "Calibrates black-box AI subscription quotas into API dollars, runway, and top burning sessions by reconciling tokscale spend against live provider fractions (Antigravity, Codex, custom caps). Use when asked how big a 5h/weekly quota is, why a pool hit rate limit, or 额度相当于多少钱/反推配额/谁烧光了额度. Not for ccusage audits (claude-usage-analyst) or Codex reset news (tibo-reset-codex).",
       "source": "./ai-quota-calibrator",
       "strict": false,
-      "version": "1.1.0",
+      "version": "1.2.0",
       "category": "developer-tools",
       "keywords": [
         "quota",
