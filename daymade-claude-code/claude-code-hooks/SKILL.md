@@ -387,6 +387,14 @@ a guard; use bounded deployment/liveness checks (rule 4; Pattern C in
   [ConfigChange contract](https://code.claude.com/docs/en/hooks#configchange)
   allows settings changes to be applied to a running session; it does not prove
   this particular registration has fired.
+- **Cover every active agent host on the machine, not just one.** A guard enforced
+  only in Claude Code (or Claude Code + Codex) still leaves unguarded hosts such as
+  Antigravity (`~/.gemini/config/hooks.json`, which reads camelCase `toolCall` JSON
+  on stdin and expects `{"decision":"allow"|"deny"}` on stdout) wide open to the
+  same failure. Keep one SSOT classifier behind thin per-host adapters instead of
+  duplicating detection logic, note that already-running sessions may not hot-reload
+  newly added hook files, and verify interception in a fresh process of each target
+  host (for Antigravity, a fresh `agy -p` run).
 - **If the guard needs a release valve, make it a *human* gate, not an env var.**
   A static `GUARD_OK=1` escape hatch is no gate — the model can set the env var
   itself. Use a native macOS dialog (`osascript` — the model can't click);

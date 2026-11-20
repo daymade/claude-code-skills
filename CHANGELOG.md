@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **claude-code-hooks** (`daymade-claude-code` v5.2.15 → v5.2.16): Add multi-host parity guidance under Rule 4 for mirroring guardrails across Claude Code, Codex, and Antigravity (`~/.gemini/config/hooks.json`) using one shared classifier behind thin host adapters and verifying end-to-end in a fresh headless session (e.g., `agy -p`).
 - **ai-quota-calibrator** (`ai-quota-calibrator` v1.0.0): Add new standalone Skill and zero-dependency Python 3.9+ calibrator (`scripts/calibrate_quota.py`) that reconciles local `tokscale` spend against live provider quota fractions (`agy -p /usage --output-format json`, `tokscale usage --json`, or custom percentage inputs) with two-read stability & ratio checks, local-timezone window alignment, bounded mixed-hour uncertainty, unpriced-model notices, cache-write sensitivity bounds, and confidence grading.
 - **claude-code-hooks** (`daymade-claude-code` v5.2.14 → v5.2.15): Require fail-closed Git checks to preserve nonzero statuses despite plausible stdout and isolate dispatcher-owned state from inherited environment, with healthy and dangerous calibration.
 - **git-safety-net** (`git-safety-net` v1.29.2 → v1.29.3): Require annotated archive tags to match both the remote tag object and the peeled frozen branch tip before branch retirement.
