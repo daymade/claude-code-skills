@@ -138,6 +138,15 @@ Every entry here is a bug that shipped. When a hook misbehaves, match the
   and symlink into `~/.claude/hooks/`; recovery is one `ln -s`. The SessionStart
   health check's `[ -e "$h" ]` test (which follows the link) reports a dangling
   symlink at startup.
+- **Boundary — mutable multi-branch source checkouts:** the symlink layout
+  assumes the source repository's working tree stays on `main`. When multiple
+  sessions switch branches in that shared checkout, symlinking directly from
+  `~/.claude/hooks/` or `~/.gemini/config/hooks/` into the working tree makes
+  the hook go dangling whenever another session checks out a branch predating
+  the file. In that topology, materialize standalone copies from immutable
+  `origin/main` (e.g., `git show origin/main:<hook-path>`) into the host hook
+  directory instead of symlinking, and verify SHA-256 parity plus `--selftest`
+  after each merged update.
 
 ---
 
