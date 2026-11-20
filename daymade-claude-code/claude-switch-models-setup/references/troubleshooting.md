@@ -433,6 +433,19 @@ Inspect the dry-run between those commands. Follow the source architecture's
 collision and recovery rules; legacy entries are not automatically retired.
 Restart affected existing sessions after repairing metadata discovery.
 
+### Canonical checkout is behind and dirty
+
+If the registered canonical checkout has unrelated WIP and is behind `origin/main`, source sync
+will keep serving the old bytes. Do not hand-redirect `~/.agents/skills` or Claude links to a
+temporary worktree/clone. Wait for the WIP owner, then fast-forward the canonical checkout and
+rerun the dry-run/apply pair. If a verified guarded synchronizer is available, it must preserve
+staged, unstaged, untracked and ignored content while reconciling HEAD, index and working tree;
+an ad hoc patch/hold fast-forward is not a substitute.
+
+After alignment, verify the canonical HEAD, restored WIP hashes/untracked count, actual linked
+file bytes, and one representative route or Skill load. Report publication, installed-content
+match and runtime behavior separately.
+
 ## Claude-side skills never update while Codex-side sync looks perfectly healthy
 
 `source-sync.out.log` keeps printing its success line, nothing warns, and
