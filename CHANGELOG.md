@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **report-with-html** (`report-with-html` v1.7.3 → v1.7.4): Add a recurring-live-cockpit vs static-report boundary in Workflow Step 1 and the independent-review prompt so aesthetic polish loops never downgrade live tools into hardcoded snapshots or demo-chrome bloat.
+- **ai-quota-calibrator** (`ai-quota-calibrator` v1.2.1 → v1.2.2): Document concise chat-summary delivery when `--html --open` already opens the live business cockpit.
 - **ai-quota-calibrator** (`ai-quota-calibrator` v1.2.0 → v1.2.1): Upgrade the live zero-CDN HTML business cockpit (`scripts/render_report_html.py`) with Architectural Ceramic tactile materiality, a recessed sapphire-glass live quartz countdown chronometer, an interactive strict `Lie Factor = 1.00` borosilicate sight-glass reservoir + clickable brushed-aluminum optical magnification loupe (`真实美元尺度` / `单池 100% 归一化` toggle), a glass-spectrometer window loss breakdown bar, and calibrated recessed Codex standby gauges while preserving lean zero-bloat business clarity.
 - **peer-message** (`peer-message` v1.27.7 → v1.27.8): Add a Claude-host `<cross-session-message>` receive recipe that extracts the exact `operation=enqueue` `queue-operation.content`, anchors the wrapper's own marker line, validates one unique match, and uses `coord receive --actor claude-session:<UUID>` without hand-copying, normalizing, or world-readable temporary files.
 - **product-analysis** (v1.0.5 → v1.0.6): Align the marketplace trigger description with the Skill frontmatter so catalog discovery and the installed Skill advertise the same scope and triggers.
