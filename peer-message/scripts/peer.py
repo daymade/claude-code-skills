@@ -1675,7 +1675,12 @@ def cmd_replies(args: argparse.Namespace) -> int:
 def common_message_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("message_file", nargs="?", help="UTF-8 message file")
     parser.add_argument("--message", help="inline message text")
-    parser.add_argument("--from", "--from-name", dest="sender", help="sender address/name")
+    parser.add_argument(
+        "--from", "--from-name", dest="sender",
+        help="sender address resolvable in Claude/Codex registries or 'local-script'; "
+        "non-Claude/Codex hosts sending a one-way --kind notice should omit --from "
+        "(defaults to local-script) and identify themselves in the message body",
+    )
     parser.add_argument("--reply-to", help="address the receiver should use to reply")
     parser.add_argument("--wait", type=wait_seconds, default=0, metavar="SECONDS")
     parser.add_argument("--json", action="store_true")
@@ -1756,7 +1761,19 @@ def prepare_coordination(board, args, target, body, sender):
         raise PeerError("expires-in must be positive", EXIT_USAGE)
     expires = (board.clock() + args.expires_in if args.expires_in is not None
                else coordination.deadline(args.expires_at))
-    return board.prepare(canonical_address(sender, args), canonical_address(target, args), body,
+    try:
+        canonical_sender = canonical_address(sender, args)
+    except PeerError as exc:
+        if exc.exit_code == EXIT_TARGET and sender != "local-script":
+            raise PeerError(
+                f"{exc}; --from must be a resolvable Claude/Codex address or 'local-script' "
+                "(omit --from for a one-way --kind notice from a non-Claude/Codex host and "
+                "state sender identity in the message body)",
+                EXIT_TARGET,
+                outcome=exc.outcome,
+            ) from exc
+        raise
+    return board.prepare(canonical_sender, canonical_address(target, args), body,
                          topic=args.topic, kind=args.kind,
                          expires=expires,
                          event=args.event, reply_to=args.in_reply_to,
