@@ -670,10 +670,10 @@
     },
     {
       "name": "product-analysis",
-      "description": "Multi-path parallel product analysis with cross-model test-time compute scaling. Spawns parallel agents (Claude Code + Codex CLI) for multi-perspective exploration, then synthesizes findings into actionable optimization plans. Supports self-audit, UX audit, API audit, architecture review, and competitive benchmarking via competitors-analysis skill",
+      "description": "Multi-path parallel product analysis with cross-model test-time compute scaling. Spawns parallel agents (Claude Code agent teams + Codex CLI) to explore product from multiple perspectives, then synthesizes findings into actionable optimization plans. Can invoke competitors-analysis for competitive benchmarking. Use when \"product audit\", \"self-review\", \"发布前审查\", \"产品分析\", \"analyze our product\", \"UX audit\", or \"信息架构审计\".",
       "source": "./product-analysis",
       "strict": false,
-      "version": "1.0.5",
+      "version": "1.0.6",
       "category": "productivity",
       "keywords": [
         "product-analysis",
@@ -1390,7 +1390,7 @@
       "description": "Calibrates black-box AI subscription quotas into API dollars, runway, and top burning sessions by reconciling tokscale spend against live provider fractions (Antigravity, Codex, custom caps). Use when asked how big a 5h/weekly quota is, why a pool hit rate limit, or 额度相当于多少钱/反推配额/谁烧光了额度. Not for ccusage audits (claude-usage-analyst) or Codex reset news (tibo-reset-codex).",
       "source": "./ai-quota-calibrator",
       "strict": false,
-      "version": "1.2.0",
+      "version": "1.2.1",
       "category": "developer-tools",
       "keywords": [
         "quota",
