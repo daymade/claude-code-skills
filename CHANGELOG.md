@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-watchdog** (`daymade-macos` v1.34.15): Document `WatchPaths` self-triggering write/prune loops and `ThrottleInterval` noise starvation caveats.
+- `daymade-claude-code` v5.2.10: Make `DISABLE_AUTOUPDATER` optional in `claude-switch-models-setup` docs and active third-party templates so native auto-updates work without Anthropic account login; cross-reference Antigravity transcript collection in `read-claude-code-history`.
+- `daymade-skill` v1.82.0: Add Agent-native category/bounded lookup to `skills-search`, adaptive hot/cold multi-host evolution (including Antigravity and verified Claude 2.1.x plugin override boundaries) to `skill-governance`, and local automation/MCP/LaunchAgent guardrails to `skill-creator`.
 - **macos-watchdog** (`daymade-macos` v1.34.13 → v1.34.14): Document building explicit minimal `PATH` entries in LaunchAgent plists instead of snapshotting installer shell `PATH`, and add the 0-Token state-transition health monitor pattern with readback-gated alerting.
 - **lark-cli-router** (`lark-cli-router` v1.0.4 → v1.0.5): Document verifying response wrapper field names (`im +messages-mget` returns `data.messages`, not `data.items`) and inspecting Bitable `+field-list` / allowing brief eventual consistency before unified `+record-list` readback.
 - `terraform-skill` v1.5.17: Verify application relocation through the destination host, shared gateway and authenticated user journey. Reuse a verified running image for placement-only moves.

@@ -51,12 +51,11 @@ Make sure the profile's `env` block includes:
 {
   "ENABLE_TOOL_SEARCH": "false",
   "DISABLE_GROWTHBOOK": "1",
-  "DISABLE_TELEMETRY": "1",
-  "DISABLE_AUTOUPDATER": "1"
+  "DISABLE_TELEMETRY": "1"
 }
 ```
 
-These flags prevent Claude Code from trying Anthropic-only features when talking to a third-party endpoint.
+These flags prevent Claude Code from trying Anthropic-only features when talking to a third-party endpoint. Leave `DISABLE_AUTOUPDATER` unset unless you need offline/version-pinned behavior — native auto-update only fetches public releases from `downloads.claude.ai/claude-code-releases` without Anthropic login.
 
 Related boundary: `advisorModel` (a top-level settings.json key holding an
 Anthropic model name like `"fable"`) is in the converger's DENYLIST alongside
