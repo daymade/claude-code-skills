@@ -168,6 +168,15 @@ docs already cite. Then say in your report which you picked and on which of thos
 an arbitrary pick becomes permanent once step 2 points everything else at it, so it should
 be a stated decision rather than an accident of which file you opened first.
 
+**Machine-consumed contract sets need bidirectional validation.** When the changed fact is
+a source list, outcome set, feature flag, or retired/ignored value, the producer's emitted or
+observed keys are only one side. Enumerate every machine consumer that requires, allows, or
+silently ignores those keys. Where the task already authorizes implementation, update the
+consumer config and add a check that compares the sets in both directions; otherwise record
+the consumer/config/check gap and report it through step 3. A consumer that still treats a
+retired value as active has not adopted the change, even when the producer is healthy. File
+mtime and a green producer are clues, not adoption evidence.
+
 **3. Resolve implementation disagreements from established intent and authorization.**
 Treat code, scripts, config, and observed runs as evidence of current behavior, not as
 automatic authority over intended behavior. When a requirement, authoritative source, or
