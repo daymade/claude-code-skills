@@ -1,12 +1,10 @@
 ---
 name: frontend-visual-qa
 description: >-
-  Audits rendered UI and specific task/object-link handoffs; excludes ordinary source citations alone.
-  Audits already-rendered UI and Markdown/Obsidian image layout — web app, deck/slide, dashboard, design-system, or Electron/native app
-  — via real-browser/native-app journeys and a Playwright sweep. Use after UI implementation to find
-  typography, overflow, responsive, routing, data-viz, browser-output, or native-shell defects, or
-  to compare a render against a reference. Not for greenfield UI design (use ui-designer) or
-  QA-program setup (use qa-expert).
+  Audits rendered UI, whole-site route censuses and task/object-link handoffs in web apps, decks, dashboards,
+  design systems, Markdown/Obsidian and Electron. Uses real-browser journeys and Playwright for typography,
+  overflow, responsive, routing, data-viz, browser-output or native-shell defects and reference comparisons.
+  Excludes source-only citation checks, greenfield design (ui-designer) and QA setup (qa-expert).
 ---
 
 # Frontend Visual QA
@@ -32,7 +30,10 @@ profile that covers the request:
 - **page contract** — dashboard/admin, landing/deck, design-system artifact,
   browser tool/game, map/GIS, or review tool;
 - **reference parity** — comparison with a named screenshot, product, or tier;
-- **data visualization** — chart hierarchy, tokens, semantics, and accessibility.
+- **data visualization** — chart hierarchy, tokens, semantics, and accessibility;
+- **whole-site census** — sitemap-derived route coverage and repeatable structural
+  errors across declared viewports, used to choose where full visual inspection
+  is required.
 
 For a specific task/object link handoff, select **state and journey** for that
 destination, including authoritative machine and run/job identity when titles
@@ -418,10 +419,72 @@ Pass headers through `--header-env "Name: ENV_NAME"`; argv contains only the
 header/env names, never the value. Raw `--header` is disabled. Values stay on the
 target origin; TLS stays enabled except for an explicitly trusted self-signed origin.
 
+#### Whole-Site Route Census
+
+For a release-wide or sitemap-owned surface, enumerate canonical routes and run
+the bounded structural census from the audited project so it resolves that
+project's existing Playwright dependency:
+
+    node <skill-root>/scripts/route_census.mjs \
+      --url 'https://reader.example/' \
+      --viewport 1440x900 --viewport 390x844 \
+      --limit 20 --out <new-empty-directory>
+
+Use `--sitemap <url-or-file>` instead of `--url` when the sitemap is not at the
+site-root `sitemap.xml`. Sitemap indexes are followed recursively; canonical
+routes retain sitemap order, are de-duplicated, and `--limit` both selects the
+first N and stops discovery with `discovery.truncated: true`. Discovery is also
+capped at 100 sitemap documents and 10,000 routes. A run accepts at most 20
+viewport entries and 100 explicit probes. With no `--viewport`, the census uses
+1440x900 and 390x844.
+
+URL boundaries fail closed: an HTTP(S) root never follows `file:` children; a
+local file root follows only `file:` children inside its own directory; canonical
+routes and probes are same-origin by default. Use `--allow-origin <origin>` only
+for an intentional cross-origin route set. Loopback, private and link-local
+targets require an exact `--allow-target <host>` entry. Sitemap redirects are
+validated hop by hop before the next fetch, and browser main-frame redirects are
+intercepted and checked before continuation. The browser policy applies only to
+main-frame navigations; cross-origin iframes and subresources are not blocked by
+the route-origin rule. Hostnames are also resolved and rejected when they map
+into restricted address space; documentation-only hosts (`example.*`, `.test`,
+`.invalid`) are exempt for fixtures. This reduces DNS-based bypasses but cannot
+eliminate DNS rebinding between validation and connection.
+Each route/viewport has a 45-second hard deadline covering navigation, readiness
+and evaluation; override it only with `--route-timeout-ms <1000-300000>`.
+
+Use `--probe <url> --probe-expected-status <status>` for a deliberate probe such
+as an unknown localized-404 route. Probe records carry
+`routeKind: "localized-404-probe"` and `expectedStatus`; a matching 404 is an
+observation, not a confirmed census error. Canonical records carry
+`routeKind: "canonical"` and expect HTTP 200 unless the route set is explicitly
+modeled another way.
+
+It writes `records.jsonl` plus `summary.json` and checks unexpected statuses,
+fatal page/navigation/deadline failures, horizontal overflow, console errors,
+broken and pending viewport-visible images, missing alt text, broken same-page
+hash targets, duplicate IDs, missing/duplicate visible H1, missing visible main
+landmark, and empty rendered text. Path-style hash routes such as `#/app` and
+hashbangs such as `#!dashboard` or `#!` are not treated as element anchors. Pending images
+are warnings; the other listed conditions are confirmed errors. Exit 0 means no
+confirmed structural error, 1 means at least one, and 2 means invalid input or
+runtime/setup failure. Records retain sitemap order through `routeIndex` and
+persist only redacted, hashed route evidence; keep any exact-route mapping local
+and out of shared evidence.
+
+The census is Level C triage and **does not clear visual acceptance**. It does
+not inspect composition, typography, crop, focus appearance, or the user journey,
+and a zero exit is not a visual pass. For every appearance claim, capture the
+affected routes with `visual_layout_audit.mjs` or the canonical harness and
+**open every cited screenshot**; an unopened screenshot or a clean
+`summary.json` cannot support “looks correct.”
+
 Run the probe regressions from a project that already provides Playwright:
 
 ```bash
 node --test <skill-root>/tests/test_silent_degradation_probe.mjs
+node --test <skill-root>/tests/route-census/test_route_census.mjs
+node --test <skill-root>/tests/route-census/test_visual_layout_audit_regressions.mjs
 ```
 
 ### 5. Exercise Journeys And Outputs
@@ -619,6 +682,9 @@ check the available agent tools can perform.
 
 - scripts/visual_layout_audit.mjs — Playwright-powered mechanical viewport,
   layout, and media-state sweep with screenshots and JSON evidence.
+- scripts/route_census.mjs — sitemap-derived whole-site structural census with
+  JSONL records, aggregate summary, documented exit codes, and no screenshot or
+  visual-acceptance claim.
 - scripts/attention_inventory.mjs — observed text/geometry, repetition and label
   echo inventory used by the sweep; it never certifies necessity.
 - scripts/painted_text_probe.mjs — vertical text-fragment clipping used by the

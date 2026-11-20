@@ -66,6 +66,46 @@ grid, number of controls, or “one article per row” as the only valid design.
 The packet supplies semantic controls only: actual pixels, clicks, freshness
 and human aesthetic acceptance remain unverified until separately observed.
 
+## Cross-entry return context matrix (跨入口返回上下文矩阵)
+
+When the same article, source, or record is reachable from more than one entry,
+return context is part of the journey contract. Do not verify only the primary
+card -> reader -> back path. Build a matrix for every material entry, such as
+home/featured, topic or collection, search/results, chronology, and an original
+source or citation preview when one exists:
+
+| Entry | Incoming route/query | Context to retain | Return control | Required returned state |
+|---|---|---|---|---|
+| named entry | exact route plus filters/sort/query | scroll owner, selection, expanded disclosure, locale | in-app return and browser back, separately | same entry identity and retained context, with focus on the originating trigger |
+
+For each row, open the object, change the local state that the product promises
+to preserve, then exercise every provided return path. Compare the actual route,
+query, filter/sort, scroll position, selected item, expanded state, locale, and
+focus target after return. If two entries intentionally share one context, say
+so and verify that shared contract; do not infer it because one return happened
+to work. A correct reader page cannot substitute for a lost originating entry.
+
+## Localized 404 (本地化 404)
+
+Probe an unknown route through both a direct URL entry and client-side
+navigation, in every shipped locale. A healthy not-found state uses the selected
+language for its title, explanation, and actions; keeps the expected shell,
+navigation, locale switcher, and footer; avoids raw framework/backend text,
+stack traces, and mixed-language fallback; and provides a working return and
+search or discovery action. Verify the action's resulting route rather than its
+label alone.
+
+Keep transport and rendering separate. A direct request to a missing server
+route should return a real 404 response; an SPA fallback may return HTTP 200 and
+render the localized not-found view. Record which case occurred. Run the direct
+probe explicitly with `route_census.mjs --probe <unknown-url>
+--probe-expected-status 404` (or `200` for the SPA fallback). Its record carries
+`routeKind: "localized-404-probe"` and `expectedStatus`; a matching status is a
+probe observation, not by itself a product defect or confirmed census error. The
+defect is an unlocalized, unusable, or wrongly routed not-found experience, or a
+canonical route (whose record has `routeKind: "canonical"` and expects 200)
+returning an error.
+
 ## Observed case: working controls left the deks and summaries unchecked
 
 An anonymized research publication received “还有 ai slop” after a local repair

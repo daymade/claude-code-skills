@@ -673,7 +673,7 @@
       "description": "Multi-path parallel product analysis with cross-model test-time compute scaling. Spawns parallel agents (Claude Code + Codex CLI) for multi-perspective exploration, then synthesizes findings into actionable optimization plans. Supports self-audit, UX audit, API audit, architecture review, and competitive benchmarking via competitors-analysis skill",
       "source": "./product-analysis",
       "strict": false,
-      "version": "1.0.3",
+      "version": "1.0.5",
       "category": "productivity",
       "keywords": [
         "product-analysis",
@@ -1119,10 +1119,10 @@
     },
     {
       "name": "frontend-visual-qa",
-      "description": "Audits rendered UI and specific task/object-link handoffs; excludes ordinary source citations alone. Audits already-rendered UI and Markdown/Obsidian image layout — web app, deck/slide, dashboard, design-system, or Electron/native app — via real-browser/native-app journeys and a Playwright sweep. Use after UI implementation to find typography, overflow, responsive, routing, data-viz, browser-output, or native-shell defects, or to compare a render against a reference. Not for greenfield UI design (use ui-designer) or QA-program setup (use qa-expert).",
+      "description": "Audits rendered UI, whole-site route censuses and task/object-link handoffs in web apps, decks, dashboards, design systems, Markdown/Obsidian and Electron. Uses real-browser journeys and Playwright for typography, overflow, responsive, routing, data-viz, browser-output or native-shell defects and reference comparisons. Excludes source-only citation checks, greenfield design (ui-designer) and QA setup (qa-expert).",
       "source": "./frontend-visual-qa",
       "strict": false,
-      "version": "1.21.52",
+      "version": "1.22.1",
       "category": "design",
       "keywords": [
         "frontend",
