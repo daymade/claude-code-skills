@@ -147,6 +147,15 @@ gh run watch run-id --exit-status
 gh run watch run-id --interval 10
 ```
 
+When watching a run or PR checks (`gh pr checks NUMBER -R OWNER/REPO --watch`) on a repository that routes jobs to **self-hosted runners**, check runner availability before waiting (or as soon as a job stays `QUEUED` for more than ~2 minutes):
+
+```bash
+gh api -X GET 'repos/OWNER/REPO/actions/runners?per_page=100' --paginate \
+  --jq '.runners[] | {id,name,status,busy,labels:[.labels[].name]}'
+```
+
+If every matching runner is `offline` or `busy` on a long-running job, diagnose the runner/queue instead of polling an empty queue.
+
 ---
 
 ## Downloading Artifacts and Logs
