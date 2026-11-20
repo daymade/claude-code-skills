@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **lark-cli-router** (`lark-cli-router` v1.0.5 → v1.0.6): Document that `drive +member-add` can return `ok: true` without changing an already-present collaborator's role, and route existing-member permission updates through `lark-cli api PUT /open-apis/drive/v1/permissions/{token}/members/{member_id}` with `+member-list` readback.
 - **claude-switch-models-setup** (`daymade-claude-code` v5.2.13 → v5.2.14): Clarify that `~/.claude/settings/<provider>.json` must remain host-portable and omit host-specific absolute-path `hooks` (hooks are converged per machine from default `settings.json` by `sync-profile-settings.py`).
 - **github-ops** (`github-ops` v1.17.2 → v1.17.3): Add guidance to check `/actions/runners` online/busy status before waiting on `gh run watch` / `gh pr checks --watch` for repositories routing jobs to self-hosted runners.
 - **read-claude-code-history** (`daymade-claude-code` v5.2.12 → v5.2.13): Fix `read_antigravity_session.py --query` pre-filter SQLite `LIMIT` starvation by streaming FTS5/metadata cursors with SQL-side `exclude_current`/subagent filtering and bounded post-fill termination so `--project` queries are not dropped behind higher-ranked hits in other workspaces.
