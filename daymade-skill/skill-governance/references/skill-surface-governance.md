@@ -595,6 +595,11 @@ Record the thresholds, the per-Skill decision, and the backup path in the change
 report. Never hide a batch selected by install location, marketplace, or name
 pattern without running steps 1–5 on each member.
 
+### Host-specific enforcement boundaries (verified)
+
+- **Claude Code `2.1.x` plugin boundary**: `skillOverrides` (`"user-invocable-only"` / `"off"`) only governs personal (`~/.claude/skills`), project, built-in, and `anthropic-skills:*` Skills. Skills bundled inside enabled non-Anthropic marketplace plugins bypass `skillOverrides` and remain `"on"`. To hide a standalone cold plugin from Claude's model prompt, disable it in `enabledPlugins` (keeping `~/.agents/skills/<name>` intact for on-demand lookup via `skills-search`). Suite plugins that bundle a hot Router alongside cold children stay enabled in `enabledPlugins` unless split at source.
+- **Antigravity (`agy`) projection & transcript collection**: Antigravity has no `user-invocable-only` mode and enforces a strict `<skills>` context budget (~144 items). Project the Hot Set into `~/.gemini/config/skills.json` using `include_only` (non-destructively preserving sibling entries/keys) and keep cold Skills discoverable via Agent-native `local-skills-search` MCP browsing. When parsing Antigravity `transcript.jsonl`, unwrap JSON-quoted `Path` strings in `read_file`, count only installed paths (`/.agents/skills/`, `/.claude/skills/`, `/.codex/skills/`) to avoid workspace dev/audit pollution, and do not double-count `call_mcp_tool(ToolName="get_local_skill")` calls already logged in `telemetry.jsonl`.
+
 
 ## 16. Audit an explicit delivery contract
 

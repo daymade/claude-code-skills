@@ -12,7 +12,6 @@
     "CLAUDE_CODE_SUBAGENT_MODEL": "MiniMax-M3.1-Flash[1m]",
     "DISABLE_GROWTHBOOK": "1",
     "DISABLE_TELEMETRY": "1",
-    "DISABLE_AUTOUPDATER": "1",
     "ENABLE_TOOL_SEARCH": "false"
   }
 }

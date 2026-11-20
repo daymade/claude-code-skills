@@ -140,6 +140,16 @@ Implement in the observer and convergence worker:
 - A persistent watcher process needs its own supervision policy (an explicit
   `KeepAlive` policy and crash handling). `WatchPaths` alone supervises
   nothing; do not describe a WatchPaths-triggered job as a resident watcher.
+- **Prevent self-triggering write/prune loops**: never rewrite, rotate, or
+  prune the watched path unconditionally inside the handler; every write resets
+  the path's mtime/inode and re-arms `launchd` on the next `ThrottleInterval`
+  beat. Separate handler state from the trigger file, or gate maintenance
+  rewrites behind a strict size/age threshold under a shared sidecar lock.
+- **Keep noisy low-value writes out of watched files**: appending frequent
+  read-only telemetry (e.g., list/browse calls) to a `WatchPaths` target fires
+  the job immediately and burns the `ThrottleInterval` window, delaying or
+  starving high-value mutations that arrive seconds later. Only emit
+  state-changing signals to watched paths.
 
 ## Failure and unknown paths
 

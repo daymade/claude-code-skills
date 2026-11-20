@@ -268,8 +268,8 @@ GRAY_ACKNOWLEDGED = {
     # settings.json carries the same name with a CONFLICTING value; which
     # layer actually wins is unverified, so auto-writing it is a guess.
     "autoCompactEnabled",
-    # Third-party profiles already force this off via DISABLE_AUTOUPDATER=1
-    # in their provider settings; the .claude.json flag is redundant there.
+    # Per-profile updater policy (optional DISABLE_AUTOUPDATER=1 when version-pinned;
+    # native auto-update uses public release URLs without Anthropic account login).
     "autoUpdates",
     # Model routing is provider identity (same boundary as ANTHROPIC_MODEL).
     "teammateDefaultModel",

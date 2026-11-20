@@ -1,15 +1,36 @@
 ---
 name: skills-search
 description: >-
-  Finds Skills in configured local repositories before searching CCPM. Use when
-  discovering or reusing a Skill, finding PDF/code-review tools, inspecting a Skill,
-  listing installed/popular/recent Skills, or installing/updating/removing Claude Code Skills/plugins.
+  Runtime Tool-Search-Tool for local cold/hot Skills and configured local repositories
+  before searching CCPM. Use BEFORE improvising whenever a task needs an external service,
+  platform workflow, media/doc tool, or domain SOP not covered by preloaded Skills/Routers,
+  and when discovering, inspecting, or managing Skills/plugins.
 allowed-tools: Bash, Read
 ---
 
 # Skills Search — Agent Behavioral Directives
 
-## Local repositories first
+## Runtime cold-library search (Agent-Native Lookup)
+
+When the host preloads only a compact Hot Set + Routers, all remaining ~260
+standalone cold Skills stay on disk in `~/.agents/skills/` (plus configured extra
+local repos). **Let the Agent itself inspect the compact catalog semantically**
+instead of relying solely on keyword matching:
+
+- **MCP (`local-skills-search`)**:
+  1. `list_skill_categories()` → inspect 9 compact domain categories (~220 tokens).
+  2. `browse_skill_category(category)` → read bounded one-line summaries and choose by intent (for ambiguous cross-domain intents, delegate `browse_skill_category("all", confirm_full_scan=true)` to a fast isolated subagent so main context stays clean).
+  3. `search_local_skills(query)` → fast shortcut when an exact service/tool name is known.
+  4. `get_local_skill(name, query=...)` → load bounded `SKILL.md` (default 16K chars/page with `offset` pagination) + `scripts/` / `references/` and record telemetry.
+- **Zero-dependency CLI fallback** (see [runtime tool search](references/runtime-tool-search.md)):
+
+```bash
+python3 <skill-dir>/scripts/runtime_search.py categories --raw
+python3 <skill-dir>/scripts/runtime_search.py browse <category> --raw
+python3 <skill-dir>/scripts/runtime_search.py get '<matched-skill-name>' --query '<short-intent>' --raw
+```
+
+## Local repositories first (immutable Git source audit)
 
 For capability discovery or experience reuse, read
 [local repository search](references/local-repository-search.md) and execute its
@@ -130,8 +151,8 @@ For Claude Desktop users who want native tool integration (no Bash needed), the 
 }
 ```
 
-The MCP server wraps the external `ccpm` CLI. It does not search this Skill's
-configured local repositories; local discovery remains with the bundled helper.
+The `skills-search-mcp` server wraps the external `ccpm` CLI. It does not search this Skill's
+configured local repositories; local discovery remains with `local-skills-search` / the bundled helper.
 
 ## Troubleshooting
 

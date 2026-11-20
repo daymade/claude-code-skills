@@ -24,13 +24,14 @@
 
 ## 当前依据与证据边界
 
-核验日期：2026-09-24。以下区分运行时契约、工程建议和研究结果，不按“引用数量”自动升级为高置信结论。
+核验日期：2026-11-20。以下区分运行时契约、工程建议和研究结果，不按“引用数量”自动升级为高置信结论。
 
 | 来源与类型 | 支持什么 | 不支持什么 |
 |---|---|---|
 | [Claude Code best practices](https://code.claude.com/docs/en/best-practices)，官方工程建议 | 保留不可从代码可靠推断的项目约定；用真实任务观察指令修改后的行为 | 不授权删除用户明确要求的长期契约；不证明每条规则都须重写成固定格式 |
 | [Claude Code memory](https://code.claude.com/docs/en/memory)，宿主机制 | import 展开加载；无条件 rules 常驻，paths 规则按匹配文件读取加载；应核对实际加载面 | 不证明拆文件就省上下文；CLAUDE.md 的篇幅建议不等于模型通用遵循上限 |
 | [Codex AGENTS.md](https://developers.openai.com/codex/guides/agents-md/)，宿主机制 | 分开核对全局与项目层级的 override、fallback、合并顺序和加载预算 | 不把 Claude 的路径规则或导入语法直接外推到 Codex；配置存在不能替代加载读回 |
+| Antigravity (`agy`) 内置 Rules Guide (`agy-customizations/docs/rules.md`)，宿主机制 | 全局规则入口为 `~/.gemini/config/GEMINI.md` 与 `rules/*.md`；单文件硬上限 24,000 字节（按行截断），总规则预算 20,000 tokens（超预算降级为路径指针）；跨宿主共享单一全局文件前须核对字节上限并用全新 `agy -p` 抽查首/中/末句 | 仅描述 Antigravity 宿主截断机制，不外推为 Claude Code/Codex 的上限，也不证明低于 24 KB 即无遵循度衰减 |
 | [Anthropic Skill authoring](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices)，官方编写建议 | 主文保留概览、细节一层可达；以具体任务验证 Skill | 不要求每次维护都运行完整模型矩阵；不以篇幅或评测数量替代本次成功标准 |
 | [OpenAI Harness engineering](https://openai.com/index/harness-engineering/)，工程经验 | 简短导航连接到有维护归属的文档来源 | 不是随机对照试验，文中规模不是所有仓库的最佳阈值 |
 | [Gloaguen et al., v2](https://arxiv.org/html/2602.11988v2)，限定任务实验 | 在所测模型/软件任务中，生成的上下文文件增加了成本，成功率收益并不稳定 | 未测这里的全局授权契约，也不是 GPT-6/Fable 5.1 的规则数量上限实验 |
