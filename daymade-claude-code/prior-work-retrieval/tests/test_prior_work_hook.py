@@ -704,6 +704,9 @@ class PriorWorkHookTests(unittest.TestCase):
             ("Agent", "general-purpose"),
             ("Agent", None),
             ("Task", "Explore"),
+            ("functions.Agent", "Explore"),
+            ("mcp__example__Agent", "Explore"),
+            ("other.Agent", "Explore"),
         ):
             with self.subTest(tool_name=tool_name, subagent_type=subagent_type):
                 event = {
