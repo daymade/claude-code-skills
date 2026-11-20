@@ -3528,3 +3528,48 @@ Replay each rejected variant through the outer entrypoint and retain a matching
 healthy control. Independently inject an internal probe failure: assert its
 declared exit code and diagnostic. A valid receipt need not authorize every
 action, and a nonblocking fault must not be reported as a healthy no-match.
+
+## 69. `$(git … || true)` can turn valid-looking stdout plus failure into approval
+
+- **Failure:** a fail-closed dispatcher captures `observed="$(git … || true)"`
+  and then compares only the text. A stub or real Git wrapper can print the exact
+  expected SHA or object type and still exit nonzero; `|| true` discards that
+  status, so the comparison succeeds and the downstream operation runs without
+  valid evidence.
+- **Fix:** preserve the command status in the condition itself, then compare its
+  output. For example:
+
+  ```bash
+  if ! observed="$(git show-ref --verify --hash "$remote_ref" 2>/dev/null)" \
+      || [[ "$observed" != "$local_sha" ]]; then
+    echo "archive tag identity could not be verified" >&2
+    return 1
+  fi
+  ```
+
+  Apply the same pattern to object-type and peeled-commit inspections. Do not
+  infer success from nonempty or syntactically valid output.
+- **Bidirectional calibration:** keep a healthy control whose Git commands exit
+  0. For every inspection used as evidence, inject the exact expected stdout
+  together with a nonzero exit, and assert both rejection and no downstream
+  call. A no-output failure fixture cannot catch this defect: the old text
+  comparison already rejects it.
+
+## 70. Dispatcher-owned shell state must not inherit the caller's environment
+
+- **Failure:** a dispatcher initializes an internal variable on its established
+  branch paths but reads it on a new path without initialization. An inherited
+  value can redirect an inspection to an unrelated repository, changing a healthy
+  request from accept to reject. An interactive shell where the variable happens
+  to be unset hides this defect.
+- **Fix:** initialize every dispatcher-owned variable at entry or declare it
+  `local` in the owning function, and reset route-specific state for each
+  invocation. For example, use `pinned_source=""` before route dispatch unless
+  that variable is an explicitly declared caller input. Do not solve this by
+  erasing the whole environment; declared credentials, paths and test controls
+  still need their documented behavior.
+- **Bidirectional calibration:** run the real entrypoint with the healthy input
+  twice, once with the internal variable unset and once with it pointing to an
+  unrelated empty repository. Require identical acceptance and downstream
+  payloads. Keep the dangerous malformed-input controls as well, so isolating
+  the environment cannot turn into unconditional approval.

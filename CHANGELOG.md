@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **claude-code-hooks** (`daymade-claude-code` v5.2.14 → v5.2.15): Require fail-closed Git checks to preserve nonzero statuses despite plausible stdout and isolate dispatcher-owned state from inherited environment, with healthy and dangerous calibration.
+- **git-safety-net** (`git-safety-net` v1.29.2 → v1.29.3): Require annotated archive tags to match both the remote tag object and the peeled frozen branch tip before branch retirement.
 - **claude-switch-models-setup** (`daymade-claude-code` v5.2.13 → v5.2.14): Clarify that `~/.claude/settings/<provider>.json` must remain host-portable and omit host-specific absolute-path `hooks` (hooks are converged per machine from default `settings.json` by `sync-profile-settings.py`).
 - **github-ops** (`github-ops` v1.17.2 → v1.17.3): Add guidance to check `/actions/runners` online/busy status before waiting on `gh run watch` / `gh pr checks --watch` for repositories routing jobs to self-hosted runners.
 - **read-claude-code-history** (`daymade-claude-code` v5.2.12 → v5.2.13): Fix `read_antigravity_session.py --query` pre-filter SQLite `LIMIT` starvation by streaming FTS5/metadata cursors with SQL-side `exclude_current`/subagent filtering and bounded post-fill termination so `--project` queries are not dropped behind higher-ranked hits in other workspaces.
