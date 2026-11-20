@@ -1706,6 +1706,7 @@ claude plugin install windows-remote-desktop-connection-doctor@daymade-skills
 **主要功能：**
 - 自动识别项目类型和 `codex` 可用性
 - 按任务选择[审计范围](product-analysis/SKILL.md#scope-modes)
+- `ux` 与 `full` 范围在综合前必须取得 `frontend-visual-qa` 的真实渲染证据流
 - Claude 与可选 Codex 代理并行探索
 - 按[综合判断方法](product-analysis/references/synthesis_methodology.md)核对证据和选择优先级
 - 输出可落地的优化方案（行动项 + 依据）
@@ -2836,6 +2837,8 @@ claude plugin install frontend-visual-qa@daymade-skills
 - A–D 证据阶梯，禁止用 headless、renderer 或 handler 结果冒充真实 GUI 验证
 - 先确认 state/viewport（含已登录但无角色状态与精确投影/演示画布），再结合已打开的截图与 DOM 几何取证
 - 加固后的 Playwright 机械扫描：HTTP/final URL、有效移动端视口、溢出、裁切、自定义控件焦点候选、图片和 section 证据
+- 基于 sitemap 的全站路由结构普查，可重复发现结构性错误，并明确不与视觉验收混为一谈
+- 强制覆盖可选视觉资产塌缩、跨入口返回上下文与本地化 404 旅程
 - 核心视觉、复杂旅程/页面类型、data-viz 三类按需 reference，覆盖单位/来源/时间/新鲜度、密集碰撞、runtime 文案真实性和真实文件选择器边界
 - 自包含公开 fixture 的行为 eval 与触发 eval
 

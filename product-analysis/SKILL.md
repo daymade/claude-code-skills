@@ -25,6 +25,9 @@ Multi-path parallel product analysis that combines **Claude Code agent teams** a
     │                   │
     └────────┬──────────┘
              │
+      Phase 1.5: rendered UX gate (ux/full)
+      frontend-visual-qa
+             │
       Synthesis (main context)
              │
       Structured Report
@@ -58,8 +61,8 @@ Parse `$ARGUMENTS` to determine analysis scope:
 
 | Scope | What it covers | Typical agents |
 |-------|---------------|----------------|
-| `full` | UX + API + Architecture + Docs (default) | 5 Claude + Codex (if available) |
-| `ux` | Frontend navigation, information density, user journey, empty state, onboarding | 3 Claude + Codex (if available) |
+| `full` | UX + API + Architecture + Docs, including the Phase 1.5 rendered UX gate (default) | 5 Claude + Codex (if available) + frontend-visual-qa |
+| `ux` | Frontend navigation, information density, user journey, empty state, onboarding, including the Phase 1.5 rendered UX gate | 3 Claude + Codex (if available) + frontend-visual-qa |
 | `api` | Backend API coverage, endpoint health, error handling, consistency | 2 Claude + Codex (if available) |
 | `arch` | Module structure, dependency graph, code duplication, separation of concerns | 2 Claude + Codex (if available) |
 | `compare X Y` | Self-audit + competitive benchmarking (invokes `/competitors-analysis`) | 3 Claude + competitors-analysis |
@@ -144,6 +147,26 @@ Run 2-3 Codex commands in parallel (background Bash), one per major dimension.
 
 **Important**: Codex runs in the project's working directory. It has full filesystem access. The `--full-auto` flag (or `--dangerously-bypass-approvals-and-sandbox` for older versions) enables autonomous execution.
 
+## Phase 1.5: Rendered UX Gate (`ux` and `full` scopes)
+
+After source exploration and before synthesis, use the Skill tool to invoke `/frontend-visual-qa` against the canonical rendered artifact. This gate is required for `ux` and `full`; it does not apply to `api` or `arch`.
+
+Give `frontend-visual-qa` a bounded audit contract that names:
+
+- the canonical target identity, actor, conditional state, and representative data;
+- the declared viewport matrix, including wide and narrow desktop widths when both are supported;
+- the key journeys and states needed to test the UX claims, such as first run or empty state, the primary task, error and recovery, and navigation return paths;
+- the required evidence level and the read-only or fix authority.
+
+Return its current-render status, findings with viewport/state/reproduction, verified journeys, delivery readback, and unverified surfaces into synthesis as a distinct evidence stream. Missing or blocked rendered evidence is a gap in the UX/full audit; do not replace it with source inspection.
+
+**Division of labor**:
+
+- `product-analysis` owns multi-perspective product judgment: combining source and rendered evidence, resolving scope differences, assigning P0/P1/P2 priorities, and proposing changes.
+- `frontend-visual-qa` owns rendered evidence: pixel and layout inspection, responsive viewports, state and journey exercise, and canonical-target/delivery readback.
+
+Source files, component existence, DOM geometry, build success, and static interaction traces can generate hypotheses or support diagnosis, but they do not satisfy this gate. Pixel-level composition and real interaction/journey evidence must come from the rendered product.
+
 ## Phase 2: Competitive Benchmarking (compare scope only)
 
 When scope is `compare`, invoke the competitors-analysis skill for each competitor:
@@ -222,7 +245,9 @@ Produce a layered optimization report:
 - [ ] Launch Claude Code Explore agents (3-5 parallel, background)
 - [ ] Launch Codex CLI commands (2-3 parallel, background) if detected
 - [ ] Invoke `/competitors-analysis` if `compare` scope
-- [ ] Collect all agent results
+- [ ] Collect all source-agent results
+- [ ] For `ux`/`full`, invoke `/frontend-visual-qa` on the canonical render with declared viewports and key journeys
+- [ ] Record rendered status, verified journeys, delivery readback, and unverified surfaces separately from source findings
 - [ ] Cross-validate findings
 - [ ] Quantify metrics
 - [ ] Generate structured report with P0/P1/P2 priorities

@@ -1660,6 +1660,7 @@ Audit UX, API, architecture and selected competitor implementations using parall
 **Key features:**
 - Auto-detects tool context (project stack + optional `codex` availability)
 - Select the applicable [audit scope](product-analysis/SKILL.md#scope-modes)
+- `ux` and `full` scopes require a rendered `frontend-visual-qa` evidence stream before synthesis
 - Evidence verification and priority selection through the [synthesis method](product-analysis/references/synthesis_methodology.md)
 - Built-in comparison hooks with `competitors-analysis`
 
@@ -2815,6 +2816,8 @@ Audit the UI users can actually see, with explicit evidence levels and no source
 - A–D evidence ladder that prevents headless, renderer-only, or handler-only checks from masquerading as real GUI proof
 - State/viewport-first workflow, including authenticated-but-role-less branches and exact projection/deck canvases, plus inspected screenshots and DOM geometry
 - Hardened Playwright-powered sweep for navigation status, effective mobile viewport, overflow, clipping, custom-control focusability, images, and section evidence
+- Sitemap-derived whole-site route census for repeatable structural errors, explicitly separated from visual acceptance
+- Required journey coverage for optional-asset collapse, cross-entry return context, and localized 404 behavior
 - Conditional references for core visual checks, complex journeys/page contracts, and data visualization—including units/source/time/freshness, dense collisions, runtime-label truth, and real file-dialog boundaries
 - Public behavior and trigger evals with self-contained fixtures
 

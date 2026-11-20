@@ -1205,10 +1205,16 @@ function auditPage({ viewportName, requestedWidth, isMobile, forbidPatterns, req
     const classTokens = className.split(/\s+/).filter(Boolean);
     const isHeading = /^H[1-4]$/.test(el.tagName) || classTokens.some((token) => /(^|[-_])(title|heading)([-_]|$)/i.test(token)) || hasSemanticPart(el, headingParts);
     const role = el.getAttribute("role") || "";
-    const isInteractiveAnchor = el.tagName === "A" && hasSemanticPart(el, controlParts);
     const isControlClass = classTokens.some((token) => /^(tag|badge|pill|btn|button|tab|nav|seg__opt|qbadge|tier)$/.test(token));
     const isControlRole = /^(button|tab|menuitem|switch|checkbox|radio|link)$/.test(role);
-    const isControl = el.tagName === "BUTTON" || isInteractiveAnchor || isControlRole || isControlClass || hasSemanticPart(el, controlParts);
+    const isInteractiveAnchor = el.tagName === "A"
+      && Boolean(el.getAttribute("href"))
+      && (isControlClass || isControlRole || hasSemanticPart(el, controlParts));
+    // A class such as `topic-nav` or `related-links` describes an ordinary
+    // semantic container, not a control. Reserve wrapped-control errors for
+    // native controls, explicit interactive roles, and links whose own class
+    // or role identifies them as controls.
+    const isControl = el.tagName === "BUTTON" || isInteractiveAnchor || isControlRole || isControlClass;
     const isTableLabel = /T[HD]/.test(el.tagName);
     const rect = el.getBoundingClientRect();
     const fontSize = Number.parseFloat(style.fontSize) || 0;
@@ -2189,6 +2195,7 @@ function auditPage({ viewportName, requestedWidth, isMobile, forbidPatterns, req
 
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
       const value = node.nodeValue || "";
+      const fontSize = Number.parseFloat(getComputedStyle(node.parentElement).fontSize) || 0;
       for (let offset = 0; offset < value.length;) {
         const char = Array.from(value.slice(offset))[0];
         const next = offset + char.length;
@@ -2197,7 +2204,16 @@ function auditPage({ viewportName, requestedWidth, isMobile, forbidPatterns, req
           range.setStart(node, offset);
           range.setEnd(node, next);
           const rect = range.getBoundingClientRect();
-          if (rect.width > 0 && rect.height > 0) chars.push({ char, top: rect.top, left: rect.left });
+          if (rect.width > 0 && rect.height > 0) {
+            chars.push({
+              char,
+              top: rect.top,
+              bottom: rect.bottom,
+              height: rect.height,
+              fontSize,
+              left: rect.left,
+            });
+          }
           range.detach();
         }
         offset = next;
@@ -2208,7 +2224,7 @@ function auditPage({ viewportName, requestedWidth, isMobile, forbidPatterns, req
     chars.sort((a, b) => a.top - b.top || a.left - b.left);
     const rows = [];
     for (const item of chars) {
-      const row = rows.find((candidate) => Math.abs(candidate.top - item.top) <= 3);
+      const row = rows.find((candidate) => candidate.items.some((existing) => sharesRenderedLine(existing, item)));
       if (row) {
         row.items.push(item);
         row.top = (row.top + item.top) / 2;
@@ -2219,6 +2235,16 @@ function auditPage({ viewportName, requestedWidth, isMobile, forbidPatterns, req
     return rows
       .sort((a, b) => a.top - b.top)
       .map((row) => row.items.sort((a, b) => a.left - b.left).map((item) => item.char).join(""));
+  }
+
+  function sharesRenderedLine(left, right) {
+    const overlap = Math.min(left.bottom, right.bottom) - Math.max(left.top, right.top);
+    const shorterHeight = Math.min(left.height, right.height);
+    const hasVerticalOverlap = shorterHeight > 0 && overlap >= shorterHeight * 0.5;
+    const largerFontSize = Math.max(left.fontSize, right.fontSize);
+    const fontTolerance = Math.max(2, largerFontSize * 0.5);
+    const hasCompatibleFontSize = Math.abs(left.fontSize - right.fontSize) <= fontTolerance;
+    return hasVerticalOverlap && hasCompatibleFontSize;
   }
 
   function awkwardChineseBoundary(lines) {
