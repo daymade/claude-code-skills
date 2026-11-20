@@ -14,7 +14,7 @@
       "description": "Routes Feishu/Lark/Doubao operations through the version-matched guides embedded in lark-cli. Use for documents, wiki, sheets, Base, minutes, meetings, calendar, messaging, mail, tasks, approval, authentication, permissions and lark-cli troubleshooting.",
       "source": "./lark-cli-router",
       "strict": false,
-      "version": "1.0.4",
+      "version": "1.0.5",
       "category": "productivity",
       "keywords": [
         "feishu",
@@ -349,7 +349,7 @@
       "description": "Apple-platform development and operations suite for macOS window capture, TCC and Keychain dialog diagnosis, Full Disk Access repair, iOS/macOS app development, disk cleanup, and launchd watchdogs.",
       "source": "./daymade-macos",
       "strict": false,
-      "version": "1.34.14",
+      "version": "1.34.15",
       "category": "suite",
       "keywords": [
         "suite",

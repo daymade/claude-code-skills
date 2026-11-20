@@ -68,7 +68,7 @@ class EvolveSkillSurfaceTests(unittest.TestCase):
         self.codex_cfg.write_text(
             'model = "gpt-6.2-sol"\n\n'
             '[[skills.config]]\n'
-            'path = "/Users/test/.codex/skills/.system/skill-creator/SKILL.md"\n'
+            f'path = "{self.base}/.codex/skills/.system/skill-creator/SKILL.md"\n'
             'enabled = false\n\n'
             '[[skills.config]]\n'
             f'path = "{self.installed}/doc-to-markdown/SKILL.md"\n'
@@ -123,7 +123,7 @@ class EvolveSkillSurfaceTests(unittest.TestCase):
                     "created_at": t_recent_iso,
                     "tool_calls": [{
                         "name": "read_file",
-                        "args": {"Path": json.dumps("/Users/test/workspace/md/claude-code-skills/cold-quiet/SKILL.md")},
+                        "args": {"Path": json.dumps(str(self.base / "workspace" / "claude-code-skills" / "cold-quiet" / "SKILL.md"))},
                     }],
                 }),
                 json.dumps({
