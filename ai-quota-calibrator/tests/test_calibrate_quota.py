@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -849,11 +850,29 @@ class CalibrateQuotaTests(unittest.TestCase):
 
             import render_report_html as rrh  # noqa: E402
             html_out = rrh.render_html_report(result)
+            # Zero external CDNs/URLs (only standard W3C SVG XML namespace is permitted)
             self.assertNotIn("https://", html_out)
-            self.assertNotIn("http://", html_out)
+            self.assertNotIn("http://", html_out.replace("http://www.w3.org/2000/svg", ""))
             self.assertIn("sess-mai", html_out)
             self.assertIn("standby@example.com", html_out)
             self.assertIn("跨整点刷新暂不外推美元上限", html_out)
+            # v1.2.1 Architectural Ceramic craft + live interactive elements
+            self.assertIn("id=\"quartzClock\"", html_out)
+            self.assertIn("id=\"reservoirHost\"", html_out)
+            self.assertIn("data-scale=\"true\"", html_out)
+            self.assertIn("data-scale=\"norm\"", html_out)
+            self.assertIn("0% 已用 · 100% 空载可用", html_out)
+            self.assertIn("95%→100% 锁销微距游标", html_out)
+            # Verify embedded DATA JSON parses cleanly and encodes proportional Lie Factor = 1.00 ratios
+            m_data = re.search(r"const DATA = (\{.*?\});", html_out)
+            self.assertIsNotNone(m_data)
+            assert m_data is not None
+            payload = json.loads(m_data.group(1))
+            self.assertEqual(payload["maxCap"], 2000.0)
+            self.assertEqual(payload["defaultLoupeIdx"], 3)  # locked 3p-5h auto-focused in loupe
+            p_3p5 = payload["pools"][3]
+            self.assertAlmostEqual(p_3p5["pctOfMax"], 1.0, places=2)  # $20 / $2000 = 1.00%
+            self.assertTrue(p_3p5["locked"])
 
     def test_v120_review_regressions_edge_cases_and_xss(self) -> None:
         tz = cq.local_tz()
