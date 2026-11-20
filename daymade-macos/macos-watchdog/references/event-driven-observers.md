@@ -176,7 +176,10 @@ Implement in the observer and convergence worker:
    observer's version or lifecycle. Explain its business work from the declared
    inputs, current phase and latest completed outcome, including failed rounds.
 3. Inspect the exact service with `launchctl print gui/$(id -u)/<label>` and
-   the worker's own task/queue state. A missing PID alone does not prove there
+   the worker's own task/queue state. When batch-upgrading or reloading a group
+   of LaunchAgents, also check `launchctl print-disabled gui/$(id -u)` so
+   intentionally disabled legacy or superseded jobs stay disabled rather than
+   being silently re-enabled. A missing PID alone does not prove there
    is no pending work. Coordinate or defer replacement if ownership, active
    work or pending intent is unknown; preserve pending intent for recovery.
    A shared daemon's PPID identifies a launcher, not a session. Low CPU, GUI exit
