@@ -130,6 +130,26 @@ reported aggregate where that contract needs a terminal result. Do not weaken
 protection to work around a pending check. See [GitHub path filtering and skipped
 checks](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onpushpull_requestpull_request_targetpathspaths-ignore).
 
+Two selector-level patterns eliminate recurring overhead without weakening
+coverage:
+
+- **Sparse checkout for selector jobs:** On large repositories — especially
+  self-hosted runners whose post-job hook wipes the workspace after each job —
+  configure the lightweight selector job with `sparse-checkout` covering only CI
+  scripts, workflow files, and selector tests instead of checking out and
+  deleting the entire tree on every run. When the selector must enumerate
+  repository roots (such as packages or skills), read the Git tree directly
+  (`git ls-tree -r --name-only HEAD`) rather than walking a full working tree.
+- **Fail-closed boolean flags for heavy system tools and self-calibration:**
+  Emit explicit selector flags (defaulting to `true` on full-check runs, unknown
+  paths, or diff errors) to gate expensive system-package installs (such as
+  `ffmpeg`, browsers, or document toolchains) and CI self-calibration suites so
+  routine docs or unrelated changes skip them while every unconditional security
+  and impacted-target check still runs. Keep any runtime setup action (such as
+  `setup-uv`, `setup-node`, or `setup-python`) unconditional whenever an
+  unconditional step in the same job invokes that runtime, matching
+  **Tool-setup `if:` parity** above.
+
 Map duplicate workflows by actual commands, fixtures and assertions. Preserve
 distinct suites while reusing a build only when its SHA, dependencies, environment
 and artifact contents match the consumer. A reusable workflow can retain a safe
