@@ -107,6 +107,7 @@ Determine which scenario applies:
 - **`docker build` can't fetch base images** → VM/container proxy propagation (Step 2G)
 - **`docker pull` works but `docker build` still dies fetching base-image tokens (TLS/i-o timeout) on a WSL2 + Docker Desktop host, or every runbook proxy port on a Windows+v2rayN host silently died after a v2rayN upgrade** → buildkit direct-dials past the DD proxy override / v2rayN ≥7.17 LAN-port split (references/windows_host_tun_wsl_cascade.md §2026-08-23)
 - **`git clone` fails with `Connection closed by 198.18.x.x`** → two different mechanisms produce this; Step 2H separates them
+- **`gh api` / GitHub Actions reads fail with EOF or reset, or a proxy-generated 403 while ordinary HTTPS works** → first consult `~/.claude/references/site-access-matrix.md`; `gh` does not inherit the system proxy, so use its recorded explicit proxy and bounded retry. Treat remote Actions `pending/queued` as remote queue state, not proof of a local tunnel failure. A GitHub-origin `403`/`429` is separate: inspect rate-limit headers, error text, authentication and permissions before retrying or changing network path.
 - **Every domestic/DIRECT-rule site fails at once (TLS `unexpected EOF` mid-handshake, proxy-port CONNECT returns 503, Node CLIs report `UNKNOWN_CERTIFICATE_VERIFICATION_ERROR`) while proxied overseas sites keep working** → TUN DIRECT split-brain (Step 2J)
 - **One hostname fails after a DNS/delegation move while other sites work** → read [single-host DNS migration](references/single-host-dns-migration.md) before diagnosing a broken forwarding plane or restarting a shared tunnel.
 - **Everything on macOS fails at once — domestic AND overseas, and even Step 2J's real-IP probe fails** → do not declare an outage yet; run the physical-interface discriminator in "TUN full-stall vs genuine outage" (above Step 2A)
@@ -122,6 +123,13 @@ Determine which scenario applies:
 - **Windows+WSL host: everything offline at once (domestic AND overseas), WSL dead too, "even Tailscale won't come online" — and/or the user tried several recovery actions (switched NICs, toggled TUN) and can't tell which one fixed it** → Windows host TUN cascade + event-log forensics (Step 5C)
 - **Tailscale, DNS, route ownership, and proxy reachability all pass, but large transfers remain slow and switching the active proxy node changes throughput** → proxy node / exit / chain capacity workflow in [references/proxy_node_chain_throughput.md](references/proxy_node_chain_throughput.md)
 - **You want one app's bulk traffic (BaiduNetdisk downloads, Feishu/Lark uploads) off the metered proxy — or out of the status-bar counter entirely** → not a conflict; a splitting task. Use the existing local traffic-splitting workflow if one is installed and verified; this skill does not bundle a splitter, target list, replay helper or subscription-wipe guard. For mechanism diagnosis, read [references/proxy_conflict_reference.md](references/proxy_conflict_reference.md) § "Per-app traffic splitting on macOS" — which of the three mechanisms (DIRECT rule / `tun-excluded-routes` / `always-real-ip`) can work for the app depends on whether it connects to literal IPs or the system resolver, and the DNS-layer keys are inert on the macOS Catalyst build.
+
+### GitHub API and Actions under TUN
+
+- The site-access matrix is the authority for `api.github.com`; do not infer the route from a fake IP or from one successful browser request. When it specifies an explicit proxy, set it on the `gh` process itself and keep retries bounded.
+- A local EOF does not establish that a GitHub Actions run stopped. Query the exact run through the working API path, or from a clean observer, and separate `queued`, `in_progress`, `completed/failure` from transport failure.
+- A GitHub-origin `403` or `429` is not a transport symptom. Read `x-ratelimit-*`, `retry-after`, the error message and the authenticated identity first; back off or correct auth/permissions instead of reflexively switching tunnel route.
+- An unauthenticated request to a private repository API can return `404`; that is an identity/coverage result, not evidence that the run or repository object is absent.
 
 **Key distinctions**:
 - SSH does NOT use `http_proxy`/`NO_PROXY` env vars. If SSH works but HTTP doesn't → Layer 2.
