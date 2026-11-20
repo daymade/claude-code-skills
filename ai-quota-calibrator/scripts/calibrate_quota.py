@@ -298,17 +298,20 @@ def estimate_cache_write_uplift_usd(entries: list[dict[str, Any]]) -> float:
 def assess_antigravity_stability(
     samples: list[dict[str, Any]],
 ) -> tuple[dict[str, Any], list[str], list[str], dict[str, float]]:
-    """Compare 1..N usage snapshots with directional (rebound vs burn) awareness.
+    """Compare 1..N usage snapshots across all consecutive pairs with directional awareness.
 
-    Returns (chosen_sample, warnings, info_notes, signed_delta_by_bucket) where
-    signed_delta = v_last - v_first (negative = monotonic burn, positive = rebound).
+    Returns (chosen_sample, warnings, info_notes, signed_delta_by_bucket) where:
+    - positive signed_delta indicates an upward rebound in at least one consecutive step
+      (magnitude = max of net shift, total spread, and max rebound step);
+    - negative signed_delta indicates monotonic non-increasing burn across all steps
+      (magnitude = total spread);
+    - 0.0 indicates stability within STABILITY_TOLERANCE across all steps.
     """
     if not samples:
         raise CalibrationError("No Antigravity /usage samples available.")
     if len(samples) == 1:
         return samples[0], [], [], {}
 
-    first = samples[0]
     last = samples[-1]
     warnings: list[str] = []
     info_notes: list[str] = []
@@ -329,46 +332,67 @@ def assess_antigravity_stability(
                 by_group_win.setdefault(gk, {})[win] = max(0.0, 1.0 - rem)
         return by_id, by_group_win
 
-    m1, gw1 = extract_buckets(first)
-    m2, gw2 = extract_buckets(last)
-    for bid, v2 in m2.items():
-        v1 = m1.get(bid, v2)
-        signed = v2 - v1
-        delta_by_bucket[bid] = signed
-        if signed > STABILITY_TOLERANCE:
+    extracted = [extract_buckets(s) for s in samples]
+    last_map, _ = extracted[-1]
+
+    for bid in last_map:
+        series = [m[bid] for m, _ in extracted if bid in m]
+        if len(series) < 2:
+            delta_by_bucket[bid] = 0.0
+            continue
+        v_first, v_last = series[0], series[-1]
+        steps = [round(series[i + 1] - series[i], 6) for i in range(len(series) - 1)]
+        max_rebound = max((d for d in steps if d > 0.0), default=0.0)
+        max_drop = max((-d for d in steps if d < 0.0), default=0.0)
+        spread = round(max(series) - min(series), 6)
+        net_delta = round(v_last - v_first, 6)
+        effective_shift = round(max(abs(net_delta), spread, max_rebound, max_drop), 6)
+        used_now = round(max(0.0, 1.0 - v_last), 6)
+
+        if max_rebound > STABILITY_TOLERANCE:
+            delta_by_bucket[bid] = effective_shift
             warnings.append(
                 f"RESERVATION_REFUND_OR_REPLICA_LAG: bucket '{bid}' rebounded upward by "
-                f"+{signed * 100:.2f}% ({v1 * 100:.2f}% -> {v2 * 100:.2f}%) between reads."
+                f"+{max_rebound * 100:.2f}% ({v_first * 100:.2f}% -> {v_last * 100:.2f}%) between reads."
             )
-        elif signed < -STABILITY_TOLERANCE:
-            used_now = max(0.0, 1.0 - v2)
-            rel = abs(signed) / max(used_now, 1e-6)
-            if used_now >= 0.20 and rel <= 0.05 and abs(signed) <= 0.015:
+        elif effective_shift > STABILITY_TOLERANCE:
+            delta_by_bucket[bid] = -effective_shift
+            rel = round(effective_shift / max(used_now, 1e-6), 6)
+            if used_now >= 0.20 and rel <= 0.05 and effective_shift <= 0.015:
                 info_notes.append(
                     f"CONCURRENT_BURN: bucket '{bid}' decreased monotonically by "
-                    f"{abs(signed) * 100:.2f}% ({v1 * 100:.2f}% -> {v2 * 100:.2f}%, "
+                    f"{effective_shift * 100:.2f}% ({v_first * 100:.2f}% -> {v_last * 100:.2f}%, "
                     f"{rel * 100:.1f}% relative) from an active session."
                 )
             else:
                 warnings.append(
-                    f"Bucket '{bid}' decreased by {abs(signed) * 100:.2f}% between consecutive "
-                    f"reads ({v1 * 100:.2f}% -> {v2 * 100:.2f}%), indicating active in-flight "
+                    f"Bucket '{bid}' decreased by {effective_shift * 100:.2f}% between consecutive "
+                    f"reads ({v_first * 100:.2f}% -> {v_last * 100:.2f}%), indicating active in-flight "
                     f"requests or 1% pre-reservation."
                 )
+        else:
+            delta_by_bucket[bid] = 0.0
 
-    for gk, w2 in gw2.items():
-        w1 = gw1.get(gk, {})
-        u5_1, uw_1 = w1.get("5h", 0.0), w1.get("weekly", 0.0)
-        u5_2, uw_2 = w2.get("5h", 0.0), w2.get("weekly", 0.0)
-        if u5_1 > 0.005 and uw_1 > 0.005 and u5_2 > 0.005 and uw_2 > 0.005:
-            r1 = u5_1 / uw_1
-            r2 = u5_2 / uw_2
-            if abs(r2 - r1) > RATIO_SHIFT_TOLERANCE:
-                warnings.append(
-                    f"Group '{gk}' used_5h/used_weekly ratio shifted between consecutive reads "
-                    f"({r1:.2f}x -> {r2:.2f}x), consistent with a flat 1% in-flight reservation "
-                    f"or 0% floor clamping."
-                )
+    ratio_warned: set[str] = set()
+    for idx in range(len(extracted) - 1):
+        gw1 = extracted[idx][1]
+        gw2 = extracted[idx + 1][1]
+        for gk, w2 in gw2.items():
+            if gk in ratio_warned:
+                continue
+            w1 = gw1.get(gk, {})
+            u5_1, uw_1 = w1.get("5h", 0.0), w1.get("weekly", 0.0)
+            u5_2, uw_2 = w2.get("5h", 0.0), w2.get("weekly", 0.0)
+            if u5_1 > 0.005 and uw_1 > 0.005 and u5_2 > 0.005 and uw_2 > 0.005:
+                r1 = u5_1 / uw_1
+                r2 = u5_2 / uw_2
+                if abs(r2 - r1) > RATIO_SHIFT_TOLERANCE:
+                    ratio_warned.add(gk)
+                    warnings.append(
+                        f"Group '{gk}' used_5h/used_weekly ratio shifted between consecutive reads "
+                        f"({r1:.2f}x -> {r2:.2f}x), consistent with a flat 1% in-flight reservation "
+                        f"or 0% floor clamping."
+                    )
 
     return last, warnings, info_notes, delta_by_bucket
 
@@ -492,8 +516,9 @@ def grade_confidence(
 ) -> tuple[str, list[str]]:
     reasons: list[str] = []
     used_norm = round(used_fraction, 6)
-    shift_abs = abs(signed_delta)
-    is_rebound = signed_delta > STABILITY_TOLERANCE
+    signed_norm = round(signed_delta, 6)
+    shift_abs = round(abs(signed_norm), 6)
+    is_rebound = signed_norm > STABILITY_TOLERANCE
 
     if used_norm <= 0.0:
         return "UNTOUCHED", ["Bucket is at 100% remaining; no spend to invert."]
@@ -504,7 +529,7 @@ def grade_confidence(
             "threshold); new requests may already be rate-limited."
         )
 
-    rel_shift = shift_abs / max(used_fraction, 1e-6)
+    rel_shift = round(shift_abs / max(used_norm, 1e-6), 6)
     severe_jitter = shift_abs > STABILITY_TOLERANCE and (rel_shift > 0.15 or shift_abs > 0.015)
 
     # Fresh simultaneous 5h window hitting lockout while sibling weekly remains open directly
@@ -549,7 +574,7 @@ def grade_confidence(
 
     # Monotonic downward burn (signed_delta < -STABILITY_TOLERANCE):
     # tolerate small relative concurrent burn (<= 5% relative on >= 20% used) without downgrading HIGH.
-    if signed_delta < -STABILITY_TOLERANCE:
+    if signed_norm < -STABILITY_TOLERANCE:
         if not (used_norm >= 0.20 and rel_shift <= 0.05):
             reasons.append(
                 f"ACTIVE_SESSION_DRIFT: bucket moved {shift_abs * 100:.2f}% during sampling "
@@ -593,12 +618,14 @@ def compute_runway_metrics(
         ttr_sec = None
         ttr_str = None
 
+    raw_rem_usd: float | None = None
     if lockout_state in ("LOCKED", "SOFT_LOCKOUT"):
         rem_usd_base = 0.0
         rem_usd_upper = 0.0
     elif implied_base is not None:
-        rem_usd_base = round(implied_base * remaining_fraction, 2)
-        rem_usd_upper = round((implied_upper or implied_base) * remaining_fraction, 2)
+        raw_rem_usd = max(0.0, implied_base * remaining_fraction)
+        rem_usd_base = round(raw_rem_usd, 2)
+        rem_usd_upper = round(max(0.0, (implied_upper or implied_base) * remaining_fraction), 2)
     else:
         rem_usd_base = None
         rem_usd_upper = None
@@ -616,16 +643,19 @@ def compute_runway_metrics(
     else:
         est_rem_msgs = None
 
+    raw_burn_rate: float | None = None
     burn_rate: float | None = None
     if window_start is not None and spend_base is not None and spend_base > 0:
         elapsed_h = (now - window_start).total_seconds() / 3600.0
         if elapsed_h >= 0.05:
-            burn_rate = round(spend_base / elapsed_h, 2)
+            raw_burn_rate = spend_base / elapsed_h
+            burn_rate = round(raw_burn_rate, 2)
 
     if lockout_state in ("LOCKED", "SOFT_LOCKOUT"):
         eta_str: str | None = "0m (locked)"
-    elif rem_usd_base is not None and burn_rate is not None and burn_rate > 0:
-        eta_str = format_duration((rem_usd_base / burn_rate) * 3600.0)
+    elif raw_rem_usd is not None and raw_rem_usd > 0 and raw_burn_rate is not None and raw_burn_rate > 0:
+        eta_sec = (raw_rem_usd / raw_burn_rate) * 3600.0
+        eta_str = "< 1m" if eta_sec < 60 else format_duration(eta_sec)
     else:
         eta_str = None
 
@@ -663,8 +693,9 @@ def summarize_top_sessions(
         cost = float(e.get("cost") or 0.0)
         msgs = int(e.get("messageCount") or 0)
         inp = int(e.get("input") or 0)
+        cw = int(e.get("cacheWrite") or 0)
         cr = int(e.get("cacheRead") or 0)
-        tot_in = inp + cr
+        tot_in = inp + cw + cr
         cr_pct = round((cr / tot_in * 100.0), 1) if tot_in > 0 else 0.0
         cpm = (cost / msgs) if msgs > 0 else 0.0
         by_group_total[gk] = by_group_total.get(gk, 0.0) + cost
@@ -888,6 +919,7 @@ def calibrate_antigravity(
                     "spend_min_usd": None,
                     "spend_upper_usd": None,
                     "message_count_since_date": 0,
+                    "window_message_count": 0,
                     "alignment_method": "unknown_window_duration",
                     "implied_pool_base_usd": None,
                     "implied_pool_min_usd": None,
@@ -932,7 +964,7 @@ def calibrate_antigravity(
 
         # For LOCKOUT_CAP (exact fresh 5h hard cap), the spend itself is the cap even if
         # soft-locked at 99.3% used (avoids tiny 0.7% extrapolation drift).
-        divisor = 1.0 if is_fresh_lockout_cap else used
+        divisor = 1.0 if confidence == "LOCKOUT_CAP" else used
         implied_base = (spend_info["spend_base_usd"] / divisor) if divisor > 0 else None
         implied_min = (spend_info["spend_min_usd"] / divisor) if divisor > 0 else None
         implied_upper = (spend_info["spend_upper_usd"] / divisor) if divisor > 0 else None
@@ -1002,29 +1034,36 @@ def calibrate_antigravity(
             multipliers[gk] = None
             clamped_multipliers[gk] = False
 
-    # Build alternate-pool switch recommendations when any group is LOCKED or SOFT_LOCKOUT
+    # Build alternate-pool switch recommendations when any group is LOCKED or SOFT_LOCKOUT.
+    # When multiple windows in a group are locked, report the binding (longest) lockout.
     locked_groups: dict[str, dict[str, Any]] = {}
     open_groups: dict[str, dict[str, Any]] = {}
+
+    def _lockout_rank(bucket: dict[str, Any]) -> tuple[int, int]:
+        ttr_sec = bucket.get("time_to_reset_seconds")
+        return (ttr_sec if isinstance(ttr_sec, int) else -1, 1 if bucket["window"] == "weekly" else 0)
+
     for b in calibrated_buckets:
         gk = b["group_key"]
         if b["lockout_state"] in ("LOCKED", "SOFT_LOCKOUT"):
             prev = locked_groups.get(gk)
-            if prev is None or b["window"] == "5h":
+            if prev is None or _lockout_rank(b) > _lockout_rank(prev):
                 locked_groups[gk] = b
-    for gk in {b["group_key"] for b in calibrated_buckets}:
+    for gk in dict.fromkeys(b["group_key"] for b in calibrated_buckets):
         if gk in locked_groups:
             continue
         gb = [b for b in calibrated_buckets if b["group_key"] == gk]
         if gb and all(b["lockout_state"] == "OPEN" for b in gb):
-            b5 = next((b for b in gb if b["window"] == "5h"), gb[0])
-            bw = next((b for b in gb if b["window"] == "weekly"), gb[0])
+            b5 = next((b for b in gb if b["window"] == "5h"), None)
+            bw = next((b for b in gb if b["window"] == "weekly"), None)
+            rep = b5 or bw or gb[0]
             open_groups[gk] = {
-                "group_name": b5["group_name"],
+                "group_name": rep["group_name"],
                 "group_key": gk,
-                "remaining_5h_pct": round(b5["remaining_fraction"] * 100.0, 1),
-                "remaining_weekly_pct": round(bw["remaining_fraction"] * 100.0, 1),
-                "remaining_5h_usd": b5["remaining_usd_base"],
-                "remaining_weekly_usd": bw["remaining_usd_base"],
+                "remaining_5h_pct": round(b5["remaining_fraction"] * 100.0, 1) if b5 is not None else None,
+                "remaining_weekly_pct": round(bw["remaining_fraction"] * 100.0, 1) if bw is not None else None,
+                "remaining_5h_usd": b5["remaining_usd_base"] if b5 is not None else None,
+                "remaining_weekly_usd": bw["remaining_usd_base"] if bw is not None else None,
             }
 
     switch_recommendations: list[dict[str, Any]] = []
@@ -1042,11 +1081,12 @@ def calibrate_antigravity(
             )
 
     # Top-session attribution: auto-enabled on high burn (>=80% or locked) unless explicitly 0
-    high_pressure_groups = {
-        b["group_key"]
+    high_pressure_buckets = [
+        b
         for b in calibrated_buckets
         if b["used_pct"] >= AUTO_SESSIONS_USED_THRESHOLD or b["lockout_state"] != "OPEN"
-    }
+    ]
+    high_pressure_groups = {b["group_key"] for b in high_pressure_buckets}
     effective_top_n = (
         top_sessions
         if top_sessions is not None
@@ -1055,14 +1095,15 @@ def calibrate_antigravity(
     session_attribution: list[dict[str, Any]] = []
     sess_since: str | None = None
     if effective_top_n > 0:
-        # Anchor session lookup to the most relevant active window start date
+        # Anchor session lookup to the earliest start date among the high-pressure buckets
+        # (so a 5h-only lockout stays tightly scoped to 5h, while a weekly lockout covers the full week).
+        anchor_buckets = high_pressure_buckets if high_pressure_buckets else calibrated_buckets
         target_dates = [
             b["window_start_local"][:10]
-            for b in calibrated_buckets
+            for b in anchor_buckets
             if b["window_start_local"] != "unknown"
-            and (not high_pressure_groups or b["group_key"] in high_pressure_groups)
         ]
-        sess_since = max(target_dates) if target_dates else now.strftime("%Y-%m-%d")
+        sess_since = min(target_dates) if target_dates else now.strftime("%Y-%m-%d")
         if fixture is not None:
             raw_sessions = (
                 (fixture.get("sessions_by_date") or {}).get(sess_since)
@@ -1248,6 +1289,7 @@ def calibrate_codex(
                     "spend_min_usd": None,
                     "spend_upper_usd": None,
                     "message_count_since_date": 0,
+                    "window_message_count": 0,
                     "alignment_method": "unknown_window_duration",
                     "implied_pool_base_usd": None,
                     "implied_pool_min_usd": None,
@@ -1323,19 +1365,21 @@ def calibrate_codex(
         )
 
     session_attribution: list[dict[str, Any]] = []
-    any_high_pressure = any(
-        b["used_pct"] >= AUTO_SESSIONS_USED_THRESHOLD or b["lockout_state"] != "OPEN"
+    high_pressure_buckets = [
+        b
         for b in buckets
-    )
+        if b["used_pct"] >= AUTO_SESSIONS_USED_THRESHOLD or b["lockout_state"] != "OPEN"
+    ]
     effective_top_n = (
         top_sessions
         if top_sessions is not None
-        else (DEFAULT_TOP_SESSIONS if any_high_pressure else 0)
+        else (DEFAULT_TOP_SESSIONS if high_pressure_buckets else 0)
     )
     sess_since: str | None = None
     if effective_top_n > 0 and earliest_date is not None:
-        valid_dates = [b["window_start_local"][:10] for b in buckets if b["window_start_local"] != "unknown"]
-        sess_since = max(valid_dates) if valid_dates else earliest_date
+        anchor_buckets = high_pressure_buckets if high_pressure_buckets else buckets
+        valid_dates = [b["window_start_local"][:10] for b in anchor_buckets if b["window_start_local"] != "unknown"]
+        sess_since = min(valid_dates) if valid_dates else earliest_date
         if fixture is not None:
             raw_sessions = (
                 (fixture.get("sessions_by_date") or {}).get(sess_since)
@@ -1561,12 +1605,19 @@ def render_markdown(result: dict[str, Any]) -> str:
         lines.append("")
         lines.append("#### Lockout & Alternate Pool Recommendations")
         for rec in result["switch_recommendations"]:
-            alts = ", ".join(
-                f"**{a['group_name']}** ({a['remaining_5h_pct']}% 5h"
-                + (f" / ~${a['remaining_5h_usd']:.0f}" if a.get("remaining_5h_usd") is not None else "")
-                + f", {a['remaining_weekly_pct']}% weekly)"
-                for a in rec["available_alternatives"]
-            )
+            alt_strs = []
+            for a in rec["available_alternatives"]:
+                win_parts = []
+                if a.get("remaining_5h_pct") is not None:
+                    p5 = f"{a['remaining_5h_pct']}% 5h"
+                    if a.get("remaining_5h_usd") is not None:
+                        p5 += f" / ~${a['remaining_5h_usd']:.0f}"
+                    win_parts.append(p5)
+                if a.get("remaining_weekly_pct") is not None:
+                    win_parts.append(f"{a['remaining_weekly_pct']}% weekly")
+                detail = f" ({', '.join(win_parts)})" if win_parts else ""
+                alt_strs.append(f"**{a['group_name']}**{detail}")
+            alts = ", ".join(alt_strs)
             lines.append(
                 f"- **{rec['locked_group']}** (`{rec['locked_bucket']}`) is `{rec['lockout_state']}` "
                 f"(resets in `{rec['resets_in']}` at `{rec['reset_time_local']}`). "

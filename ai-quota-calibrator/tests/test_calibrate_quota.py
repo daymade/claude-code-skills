@@ -438,6 +438,7 @@ class CalibrateQuotaTests(unittest.TestCase):
         self.assertEqual(len(res["buckets"]), 1)
         b = res["buckets"][0]
         self.assertEqual(b["confidence"], "UNKNOWN_WINDOW")
+        self.assertEqual(b["window_message_count"], 0)
         self.assertIsNone(b["spend_base_usd"])
         self.assertIsNone(b["implied_pool_base_usd"])
         self.assertTrue(any("UNKNOWN_WINDOW_DURATION" in w for w in b["warnings"]))
@@ -601,6 +602,150 @@ class CalibrateQuotaTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, msg=proc.stderr)
         payload = json.loads(proc.stdout)
         self.assertEqual(len(payload["buckets"]), 4)
+
+    def test_dual_lockout_prefers_binding_weekly_reset_and_weekly_session_anchor(self) -> None:
+        tz = cq.local_tz()
+        now = cq.dt.datetime(2026, 11, 21, 12, 0, 0, tzinfo=tz)
+        g_w_reset = (now + cq.dt.timedelta(days=5)).astimezone(cq.dt.timezone.utc).isoformat()
+        g_5_reset = (now + cq.dt.timedelta(hours=3)).astimezone(cq.dt.timezone.utc).isoformat()
+        # 3p-weekly started 2026-11-15 (resets in 5d 12h? Wait: start = reset - 7d -> reset = now + 1d 12h or 5d 12h)
+        p_w_start = cq.dt.datetime(2026, 11, 19, 12, 0, 0, tzinfo=tz)
+        p_w_reset = (p_w_start + cq.dt.timedelta(days=7)).astimezone(cq.dt.timezone.utc).isoformat()
+        p_5_start = cq.dt.datetime(2026, 11, 21, 9, 0, 0, tzinfo=tz)
+        p_5_reset = (p_5_start + cq.dt.timedelta(hours=5)).astimezone(cq.dt.timezone.utc).isoformat()
+
+        # Both 3p-weekly AND 3p-5h locked -> recommendation MUST report binding 3p-weekly (5d 0h), NOT 3p-5h (2h 0m)
+        u_dual = make_antigravity_usage(
+            g_weekly=0.70,
+            g_5h=0.80,
+            p_weekly=0.0,
+            p_5h=0.0,
+            g_weekly_reset=g_w_reset,
+            g_5h_reset=g_5_reset,
+            p_weekly_reset=p_w_reset,
+            p_5h_reset=p_5_reset,
+        )
+        fixture_dual = {
+            "now": now.isoformat(),
+            "usage_samples": [u_dual],
+            "models_by_date": {
+                "2026-11-19": [{"model": "claude-opus-5-5", "provider": "anthropic", "input": 1000, "cost": 50.0, "messageCount": 200}],
+                "2026-11-21": [{"model": "claude-opus-5-5", "provider": "anthropic", "input": 1000, "cost": 2.0, "messageCount": 10}],
+            },
+            "hourly": {"entries": []},
+            "sessions_by_date": {
+                "2026-11-19": [
+                    {"sessionId": "week-burner-001", "model": "claude-opus-5-5", "messageCount": 180, "input": 1_000_000, "cacheRead": 30_000_000, "cost": 45.0},
+                ],
+                "2026-11-21": [
+                    {"sessionId": "today-tiny-002", "model": "claude-opus-5-5", "messageCount": 10, "input": 100_000, "cacheRead": 1_000_000, "cost": 2.0},
+                ],
+            },
+        }
+        res_dual = cq.calibrate_antigravity(samples_count=1, settle_seconds=0, fixture=fixture_dual)
+        self.assertEqual(len(res_dual["switch_recommendations"]), 1)
+        rec = res_dual["switch_recommendations"][0]
+        self.assertEqual(rec["locked_bucket"], "3p-weekly")
+        self.assertEqual(rec["resets_in"], "5d 0h")
+        self.assertEqual(res_dual["top_sessions_since"], "2026-11-19")
+        self.assertEqual(res_dual["top_sessions"][0]["session_id"], "week-burner-001")
+
+        # Codex weekly locked (started 2026-11-19) while 5h is low (started 2026-11-21) -> anchors to 2026-11-19
+        codex_fixture = {
+            "now": now.isoformat(),
+            "usage": [
+                {
+                    "provider": "Codex",
+                    "account": {"id": "acc-1", "is_active": True},
+                    "plan": "Pro",
+                    "email": "user@example.com",
+                    "metrics": [
+                        {"label": "Weekly", "used_percent": 100.0, "remaining_percent": 0.0, "resets_at": p_w_reset},
+                        {"label": "5h", "used_percent": 10.0, "remaining_percent": 90.0, "resets_at": p_5_reset},
+                    ],
+                }
+            ],
+            "hourly": {"entries": [{"hour": "2026-11-19 14:00", "cost": 150.0, "messageCount": 100}]},
+            "sessions_by_date": {
+                "2026-11-19": [
+                    {"sessionId": "codex-week-burner", "model": "gpt-5.4", "messageCount": 100, "input": 500_000, "cacheRead": 20_000_000, "cost": 150.0},
+                ],
+                "2026-11-21": [
+                    {"sessionId": "codex-today-tiny", "model": "gpt-5.4", "messageCount": 2, "input": 10_000, "cacheRead": 50_000, "cost": 0.2},
+                ],
+            },
+        }
+        res_codex = cq.calibrate_codex(fixture=codex_fixture)
+        self.assertEqual(res_codex["top_sessions_since"], "2026-11-19")
+        self.assertEqual(res_codex["top_sessions"][0]["session_id"], "codex-week-burner")
+
+    def test_multisample_rebound_ieee754_boundaries_eta_and_cache_write_pct(self) -> None:
+        # 1. Three-sample ping-pong [0.50, 0.55, 0.50] must detect rebound -> LOW (NOT silent HIGH)
+        #    and drop-then-rebound [0.50, 0.49, 0.496] must detect rebound -> MEDIUM (NOT CONCURRENT_BURN/HIGH)
+        s_a = make_antigravity_usage(g_weekly=0.50, g_5h=0.50, p_weekly=0.805, p_5h=0.515)
+        s_b = make_antigravity_usage(g_weekly=0.55, g_5h=0.49, p_weekly=0.802, p_5h=0.507)
+        s_c = make_antigravity_usage(g_weekly=0.50, g_5h=0.496, p_weekly=0.800, p_5h=0.500)
+        _, warnings, notes, dmap = cq.assess_antigravity_stability([s_a, s_b, s_c])
+
+        # g_weekly ping-pong [0.50, 0.55, 0.50]: rebound +5% -> severe jitter LOW
+        self.assertGreater(dmap["gemini-weekly"], 0.04)
+        self.assertTrue(any("RESERVATION_REFUND_OR_REPLICA_LAG" in w and "gemini-weekly" in w for w in warnings))
+        conf_gw, _ = cq.grade_confidence(0.50, dmap["gemini-weekly"], False)
+        self.assertEqual(conf_gw, "LOW")
+
+        # g_5h drop-then-rebound [0.50, 0.49, 0.496]: rebound +0.6% -> MEDIUM (NOT CONCURRENT_BURN/HIGH)
+        self.assertGreater(dmap["gemini-5h"], 0.0)
+        self.assertTrue(any("RESERVATION_REFUND_OR_REPLICA_LAG" in w and "gemini-5h" in w for w in warnings))
+        self.assertFalse(any("CONCURRENT_BURN" in n and "gemini-5h" in n for n in notes))
+        conf_g5, _ = cq.grade_confidence(1.0 - 0.496, dmap["gemini-5h"], False)
+        self.assertEqual(conf_g5, "MEDIUM")
+
+        # Exact IEEE-754 boundary: p_weekly 0.805 -> 0.800 (used == 20.0%, drop 0.5%, rel 2.5%) -> CONCURRENT_BURN + HIGH
+        self.assertTrue(any("CONCURRENT_BURN" in n and "3p-weekly" in n for n in notes))
+        self.assertFalse(any("3p-weekly" in w for w in warnings))
+        conf_pw, _ = cq.grade_confidence(1.0 - 0.800, dmap["3p-weekly"], False)
+        self.assertEqual(conf_pw, "HIGH")
+
+        # Exact IEEE-754 boundary: p_5h 0.515 -> 0.500 (used == 50.0%, drop 1.5%, rel 3.0%) -> CONCURRENT_BURN + HIGH
+        self.assertTrue(any("CONCURRENT_BURN" in n and "3p-5h" in n for n in notes))
+        self.assertFalse(any("3p-5h" in w for w in warnings))
+        conf_p5, _ = cq.grade_confidence(1.0 - 0.500, dmap["3p-5h"], False)
+        self.assertEqual(conf_p5, "HIGH")
+
+        # 2. Tiny open spend must never render eta_to_exhaustion == "expired"
+        tz = cq.local_tz()
+        now = cq.dt.datetime(2026, 11, 21, 12, 0, 0, tzinfo=tz)
+        runway = cq.compute_runway_metrics(
+            now=now,
+            window_start=now - cq.dt.timedelta(minutes=3),
+            reset_local=now + cq.dt.timedelta(hours=4),
+            remaining_fraction=0.011,
+            lockout_state="OPEN",
+            spend_base=0.001,
+            implied_base=0.00101,
+            implied_upper=0.00101,
+            window_msgs=1,
+        )
+        self.assertNotEqual(runway["eta_to_exhaustion"], "expired")
+        self.assertEqual(runway["eta_to_exhaustion"], "< 1m")
+
+        # 3. summarize_top_sessions includes cacheWrite in cache_read_pct denominator
+        summary = cq.summarize_top_sessions(
+            [
+                {
+                    "sessionId": "cw-test-01",
+                    "model": "claude-opus-5-5",
+                    "messageCount": 60,
+                    "input": 100_000,
+                    "cacheWrite": 1_000_000,
+                    "cacheRead": 8_900_000,
+                    "cost": 6.0,
+                }
+            ],
+            limit=5,
+        )
+        self.assertAlmostEqual(summary[0]["cache_read_pct"], 89.0, places=1)
+        self.assertFalse(summary[0]["context_snowball"])
 
 
 if __name__ == "__main__":
