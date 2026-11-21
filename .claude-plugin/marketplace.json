@@ -32,14 +32,7 @@
       "strict": false,
       "version": "1.0.0",
       "category": "utilities",
-      "keywords": [
-        "cookies",
-        "chrome",
-        "session-migration",
-        "login",
-        "backup",
-        "restore"
-      ]
+      "keywords": ["cookies", "chrome", "session-migration", "login", "backup", "restore"]
     },
     {
       "name": "floorplan-finder",
@@ -48,13 +41,7 @@
       "strict": false,
       "version": "1.0.0",
       "category": "utilities",
-      "keywords": [
-        "floor-plan",
-        "property-search",
-        "layout-verification",
-        "户型图",
-        "房源"
-      ]
+      "keywords": ["floor-plan", "property-search", "layout-verification", "户型图", "房源"]
     },
     {
       "name": "app-evolver",
