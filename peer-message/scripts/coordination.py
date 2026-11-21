@@ -233,21 +233,23 @@ def codex_delegation_inner(text):
     return inner
 
 
-def _prepared_core(envelope, metadata_start):
+def _prepared_core(envelope, metadata_start, message_id):
     """Remove known transport framing without stripping prepared body whitespace."""
     if metadata_start == 0:
         return envelope
     wrappers = (
-        (r'<peer-message protocol="1" message-id="[^\s"\[\]]+" '
+        (r'<peer-message protocol="1" message-id="(?P<transport_id>[^\s"\[\]]+)" '
          r'from="[^"\r\n]+"(?: reply-to="[^"\r\n]+")?>\n', "peer-message"),
-        (r'<cross-session-message(?: from="(?P<reply>[^"\r\n]+)")? '
-         r'from-name="[^"\r\n]+">\n'
-         r'\[peer-message-id: [^\s\[\]]+\]'
-         r'(?P<hint>[^\r\n]*)\n', "cross-session-message"),
+        (r'<cross-session-message(?P<attrs>(?: [a-z][a-z0-9-]*="[^"\r\n]*")*)>\n'
+         r'(?:\[peer-message-id: (?P<transport_id>[^\s\[\]]+)\](?P<hint>[^\r\n]*)\n)?',
+         "cross-session-message"),
     )
     for header, tag in wrappers:
         match = re.match(header, envelope)
         if not match:
+            continue
+        transport_id = match.group("transport_id")
+        if transport_id and transport_id != message_id:
             continue
         prefix = envelope[match.end():metadata_start]
         if tag == "peer-message":
@@ -256,8 +258,13 @@ def _prepared_core(envelope, metadata_start):
         else:
             if metadata_start != match.end():
                 continue
+            attr_items = re.findall(r' ([a-z][a-z0-9-]*)="([^"\r\n]*)"', match.group("attrs") or "")
+            attr_names = [name for name, _ in attr_items]
+            if len(attr_names) != len(set(attr_names)):
+                continue
+            attrs = dict(attr_items)
             hint = match.group("hint") or ""
-            reply = html.unescape(match.group("reply") or "")
+            reply = html.unescape(attrs.get("from") or "")
             reply_hint = reply.startswith("codex:") and hint == f" [reply: peer.py send {reply}]"
             session_hint = re.fullmatch(r" \[from-session: [^\s\[\]]+\]", hint)
             if hint and not (reply_hint or session_hint):
@@ -724,7 +731,7 @@ class Board:
         digest = claim["envelope_digest"]
         if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
             raise CoordinationError("prepared coordination digest is invalid; retain input and state")
-        core = _prepared_core(envelope, metadata_start)
+        core = _prepared_core(envelope, metadata_start, message_id)
         if hashlib.sha256(core.encode()).hexdigest() != digest:
             raise CoordinationError("coordination content conflicts with prepared record; retain input and state")
         return "verified_prepared_core"

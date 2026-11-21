@@ -85,6 +85,15 @@ class ReceiveIntegrityTests(unittest.TestCase):
         if shape == "claude-historical-no-hint":
             return (f'<cross-session-message from="codex:sender" from-name="synthetic-display">\n'
                     f'[peer-message-id: {message_id}]\n{body}\n</cross-session-message>')
+        if shape == "claude-current-no-marker":
+            return (f'<cross-session-message from="uds:/tmp/sender.sock" '
+                    f'from-name="synthetic-display" from-mode="bypass">\n'
+                    f'{body}\n</cross-session-message>')
+        if shape == "claude-current-attrs-no-name":
+            return (f'<cross-session-message from="claude:sender" '
+                    f'from-session="synthetic-session" hop-chain="synthetic-hop" '
+                    f'from-plugin="synthetic-plugin" from-mode="bypass">\n'
+                    f'[peer-message-id: {message_id}]\n{body}\n</cross-session-message>')
         reply_to = "codex:sender" if shape == "claude-codex-hint" else "claude:sender"
         if shape == "claude-no-reply":
             reply_to = None
@@ -145,7 +154,8 @@ class ReceiveIntegrityTests(unittest.TestCase):
                 self.assertEqual(result["integrity"], "verified_prepared_core")
 
     def test_exact_native_and_current_historical_wrappers_preserve_core_whitespace(self):
-        shapes = ("native", "codex", "codex-historical", "claude", "claude-codex-hint", "claude-no-reply")
+        shapes = ("native", "codex", "codex-historical", "claude", "claude-codex-hint", "claude-no-reply",
+                  "claude-current-no-marker", "claude-current-attrs-no-name")
         count = 0
         for shape in shapes:
             for body in ("synthetic body", "synthetic body\n尾行  \n\t\n", ""):
@@ -159,7 +169,16 @@ class ReceiveIntegrityTests(unittest.TestCase):
                         self.assertIn("coordination_only", result["authority"])
                         self.assertEqual(board.receive(envelope, "codex:receiver")["status"], "already_processing")
                         count += 1
-        self.assertEqual(count, 48)
+        self.assertEqual(count, 66)
+
+    def test_transport_message_id_must_match_coordination_id(self):
+        for shape in ("codex", "claude", "claude-current-attrs-no-name"):
+            with self.subTest(shape=shape), self.board() as board:
+                prepared = self.prepare(board)
+                valid = self.wrap(prepared, shape)
+                wrong = valid.replace(prepared["message_id"], "wrong-transport-id", 1)
+                self.assertNotEqual(wrong, valid)
+                self.assert_rejected_unchanged(board, wrong, "unknown coordination envelope framing")
 
     def test_known_historical_transport_prefixes_keep_exact_body_and_whitespace(self):
         count = 0
@@ -178,7 +197,8 @@ class ReceiveIntegrityTests(unittest.TestCase):
     def test_prepended_or_inline_payload_is_not_verified_as_transport_framing(self):
         count = 0
         shapes = ("codex", "codex-historical", "codex-legacy-warning", "codex-legacy-coordination",
-                  "claude", "claude-codex-hint", "claude-no-reply", "claude-historical-no-hint")
+                  "claude", "claude-codex-hint", "claude-no-reply", "claude-historical-no-hint",
+                  "claude-current-no-marker", "claude-current-attrs-no-name")
         for state in ("active-state", "closed", "retired"):
             for shape in shapes:
                 self.now = 1000
@@ -194,27 +214,38 @@ class ReceiveIntegrityTests(unittest.TestCase):
                     try:
                         valid = self.wrap(prepared, shape)
                         changes = [
-                            self.wrap(prepared, shape, "NEW SYNTHETIC BLOCKER\n" + prepared["body"]),
-                            valid.replace(">\n", "> NEW SYNTHETIC BLOCKER\n", 1),
-                            valid.replace(prepared["message_id"], prepared["message_id"] + " NEW SYNTHETIC BLOCKER", 1),
+                            ("prepended-body", self.wrap(prepared, shape, "NEW SYNTHETIC BLOCKER\n" + prepared["body"])),
+                            ("inline-header", valid.replace(">\n", "> NEW SYNTHETIC BLOCKER\n", 1)),
                         ]
-                        if shape.startswith("claude"):
-                            changes.append(valid.replace("]\n", "] NEW SYNTHETIC BLOCKER\n", 1))
-                        else:
-                            changes.append(valid.replace("\n", "\nNEW SYNTHETIC BLOCKER\n", 1))
+                        if shape != "claude-current-no-marker":
+                            changes.append(("inline-id", valid.replace(
+                                prepared["message_id"],
+                                prepared["message_id"] + " NEW SYNTHETIC BLOCKER",
+                                1,
+                            )))
+                        if shape.startswith("claude") and shape != "claude-current-no-marker":
+                            changes.append(("inline-marker", valid.replace("]\n", "] NEW SYNTHETIC BLOCKER\n", 1)))
+                        elif not shape.startswith("claude"):
+                            changes.append(("inline-prefix", valid.replace("\n", "\nNEW SYNTHETIC BLOCKER\n", 1)))
                         if "legacy-warning" in shape or "legacy-coordination" in shape or shape == "codex":
-                            changes.append(valid.replace("untrusted coordination", "NEW SYNTHETIC BLOCKER", 1))
-                        for changed in changes:
-                            self.assertNotEqual(changed, valid)
-                            self.assert_rejected_unchanged(reader, changed, "unknown coordination envelope framing")
-                            count += 1
+                            changes.append(("inline-legacy-warning", valid.replace(
+                                "untrusted coordination", "NEW SYNTHETIC BLOCKER", 1
+                            )))
+                        for label, changed in changes:
+                            with self.subTest(label=label):
+                                self.assertNotEqual(changed, valid)
+                                self.assert_rejected_unchanged(
+                                    reader, changed,
+                                    r"unknown coordination envelope framing|invalid coordination metadata",
+                                )
+                                count += 1
                         result = reader.receive(valid, "codex:receiver")
                         self.assertEqual(result["status"], "action_needed" if state == "active-state" else "ignore_closed")
                         self.assertEqual(result["integrity"], "verified_prepared_core")
                     finally:
                         if reader is not board:
                             reader.close()
-        self.assertEqual(count, 105)
+        self.assertEqual(count, 123)
 
     def test_claude_hint_is_complete_and_codex_reply_hint_matches_header(self):
         with self.board() as board:

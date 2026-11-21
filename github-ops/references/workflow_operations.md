@@ -623,6 +623,14 @@ operator procedure; no bundled tool enforces its deployment or process boundarie
    deployment inventory. Reuse a compatible profile or prepare a separate one
    within existing setup authorization; do not treat missing registration as
    unavailable hardware or borrow another repository's production listener.
+
+   A registered replica is not enough when workflow code pins exact identities.
+   Inspect selector scripts and validation-reuse code for hardcoded `RUNNER_NAME`,
+   runner-name sets or artifact-profile names. Express a homogeneous numbered pool
+   as a validated pattern (for example `private-ci-skills-4090-*` plus `skills-*`),
+   keep foreign or malformed names fail-closed, and update the code/tests in the
+   same change. Otherwise the new runner receives jobs but fails the selector, or
+   downstream jobs silently fall back to a default listener.
 2. **Reuse the deployment owner.** Locate the project's current IaC, runner
    profiles and runbook, then read a successful run of the actual target job.
    Preserve its supported OS, architecture, isolation, resource budget and network
