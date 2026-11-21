@@ -277,7 +277,7 @@ For missing page files or attachments, follow
 
 For HTML report creation or updates, enter
 [report-with-html's Define success workflow](report-with-html/SKILL.md#workflow)
-for reader/use, evidence precision, delivery location and investigation acceptance.
+for reader/use, live-cockpit vs static-report boundary, evidence precision, delivery location and investigation acceptance.
 Its [technical comparison reading order](report-with-html/references/visualization-patterns.md)
 owns concrete plans, cost boundaries and next-verification choices; do not turn a research
 shortlist into purchase or deployment approval.

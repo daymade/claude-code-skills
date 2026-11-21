@@ -3787,9 +3787,9 @@ Specialist retrieval and video Skills are optional; no bundled runtime dependenc
 
 > **Install**: `claude plugin install ai-quota-calibrator@daymade-skills`
 
-Estimate the true API-dollar capacity, weekly-to-5h multiplier, and remaining runway of percentage-based AI subscriptions (Antigravity Gemini/Claude pools, Codex, custom percentage caps) by reconciling local `tokscale` spend against live provider quota fractions.
+Estimate the true API-dollar capacity, weekly-to-5h multiplier, remaining runway, and zero-compression lossless savings of percentage-based AI subscriptions (Antigravity Gemini/Claude pools, Codex, custom percentage caps) by reconciling local `tokscale` spend against live provider quota fractions—with an optional zero-CDN live HTML business cockpit and same-machine Codex standby monitoring.
 
-**When to use:** Answer how much API value a 5-hour or weekly subscription pool equals, diagnose why a pool hit rate limit (including `< 1%` soft lockout, `CONTEXT_SNOWBALL` top burning sessions, reset countdown, and alternate open pools), or calibrate burn rate with directional stability checks and cache-write sensitivity bounds.
+**When to use:** Answer how much API value a 5-hour or weekly subscription pool equals, diagnose why a pool hit rate limit (including `< 1%` soft lockout, `MID_HOUR_RESET_OVERCOUNT`, `CONTEXT_SNOWBALL` top burning sessions, concurrent subagents, 5-minute Prompt Cache TTL `20×` cold resends, reset countdown, and alternate open pools), or calibrate burn rate with directional stability checks and cache-write sensitivity bounds.
 
 ```text
 Use ai-quota-calibrator to calibrate my current Antigravity Gemini and Claude quota pools with tokscale.
