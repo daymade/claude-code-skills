@@ -120,6 +120,30 @@ use bypass privileges without an `--admin` argument. Follow the
 Switching account, credential, host or interface invalidates earlier identity
 evidence. Recheck before the next write; do not reuse a prior session's pass.
 
+For a read-only landing observation, use the same helper without a trailing `gh`
+command:
+
+```bash
+python3 <github-ops-dir>/scripts/checked_gh.py \
+  --expected-login EXPECTED_LOGIN --host HOST \
+  --landing-preflight OWNER/REPO#NUMBER \
+  --head FULL_SHA --base main --local-repo PATH \
+  --remote origin --proxy-source auto --deadline-seconds 240
+```
+
+`--landing-preflight` is mutually exclusive with `--publication-preflight`,
+`--ack-merge-bypass` and a trailing command. It verifies the actor, fresh remote
+base, PR target/state/draft/base/head, `merge-tree`, one `gh pr checks` read and a
+final mergeability read. stdout is one schema-version-2 JSON receipt; unknown
+evidence stays `null`. Exit `0` is `ready`, `2` is `unknown`/input/transport, `3`
+is `blocked`, and `4` is `pending`. `auto` accepts only an explicit
+`HTTPS_PROXY`/`ALL_PROXY` (either case) and otherwise fails closed with
+`proxy_missing`; `none` removes all proxy variables. Proxy endpoints and tokens
+never enter the receipt or stderr. A `ready` receipt is not merge authorization:
+merge still goes through the guarded `pr merge --match-head-commit` entry and
+must be reread immediately before the write. See
+[landing preflight](references/pr_operations.md#landing-preflight).
+
 Reference examples show native `gh` operation syntax. Execute hosted-state
 mutations by passing those arguments after the helper's `--`, with an explicit
 repository or account scope; bare `gh` remains suitable for readback and
