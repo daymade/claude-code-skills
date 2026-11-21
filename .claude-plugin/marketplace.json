@@ -1323,7 +1323,7 @@
       "description": "Produces standalone reader-facing HTML reports/dashboards and review workbenches — evidence-backed, browser-verified. Use for a visual HTML report or requests for “可视化报告”“图表报告” or a standalone HTML dashboard; load data-visualization-discipline before charts. Not for product UI, chat or Markdown unless asked to become a report, or PowerPoint.",
       "source": "./report-with-html",
       "strict": false,
-      "version": "1.7.4",
+      "version": "1.7.5",
       "category": "documentation",
       "keywords": [
         "HTML报告",
@@ -1390,7 +1390,7 @@
       "description": "Calibrates black-box AI subscription quotas into API dollars, runway, and top burning sessions by reconciling tokscale spend against live provider fractions (Antigravity, Codex, custom caps). Use when asked how big a 5h/weekly quota is, why a pool hit rate limit, or 额度相当于多少钱/反推配额/谁烧光了额度. Not for ccusage audits (claude-usage-analyst) or Codex reset news (tibo-reset-codex).",
       "source": "./ai-quota-calibrator",
       "strict": false,
-      "version": "1.2.1",
+      "version": "1.2.2",
       "category": "developer-tools",
       "keywords": [
         "quota",

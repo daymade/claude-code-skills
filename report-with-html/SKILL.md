@@ -220,7 +220,11 @@ the named result is decided; do not add a reviewer merely because a small fix la
 
    Resolve the actual reader and intended use from the original request, later corrections,
    and the current project contract. Distinguish a publication-ready draft from an actual
-   external publication. Set evidence precision for that use: for private investigation,
+   external publication, and distinguish a **one-off static report** from a **recurring live
+   decision cockpit**: aesthetic polish loops must never downgrade a recurring live tool into a
+   hardcoded dead snapshot, and every interactive control must map to a concrete reader decision
+   rather than demo chrome (such as replay players or ungrounded sliders) added to chase a
+   visual score. Set evidence precision for that use: for private investigation,
    retain traceable original identifiers, paths, and logs rather than silently substituting
    a public, redacted edition. Follow the authorized project's existing delivery directory
    or document library; a scratch directory is a working location. If no destination is
