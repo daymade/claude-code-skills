@@ -1,0 +1,22 @@
+[
+  {"query": "为什么我已经用了 --dangerously-skip-permissions，agent team 的 teammate 还一直弹 Bash 权限？", "should_trigger": true},
+  {"query": "background subagent 在 bypassPermissions 下卡住，但主界面没有出现权限提示", "should_trigger": true},
+  {"query": "Plan Mode 里派出的 teammate 一直等待 team lead approval，怎么排查？", "should_trigger": true},
+  {"query": "一个 permission dialog 开着，其他 teammate 的消息全都不来了", "should_trigger": true},
+  {"query": "帮我整理一份 Claude Code 权限 bug 反馈，包含最小复现和脱敏证据", "should_trigger": true},
+  {"query": "Claude Code 子代理没有继承主会话的权限模式，怎么确认是哪一层的问题？", "should_trigger": true},
+  {"query": "PermissionRequest hook 没有收到 teammate 的权限请求，怎么定位投递链？", "should_trigger": true},
+  {"query": "为什么 Claude Code 的权限卡延迟出现，worker 已经卡了十分钟", "should_trigger": true},
+  {"query": "一个 background subagent 在 bypass 下读取工作目录外文件后被权限卡住，怎么排查？", "should_trigger": true},
+  {"query": "Agent Teams teammate 的权限请求显示已发送，但 lead 界面没有批准按钮", "should_trigger": true},
+  {"query": "帮我把 npm 加入 permissions.allow", "should_trigger": false},
+  {"query": "把 permissions.defaultMode 改成 bypassPermissions", "should_trigger": false},
+  {"query": "写一个 PermissionRequest hook 自动允许所有 Bash 命令", "should_trigger": false},
+  {"query": "MCP OAuth 登录失败，一直要求重新授权", "should_trigger": false},
+  {"query": "为什么今天 Claude 的额度突然烧完了", "should_trigger": false},
+  {"query": "读取这个 session 的工具调用和 hook 输入", "should_trigger": false},
+  {"query": "帮我配置 Claude Code 的 statusline", "should_trigger": false},
+  {"query": "创建一个 agent team 做对抗 review", "should_trigger": false},
+  {"query": "危险 rm 在 bypassPermissions 下还会要求确认吗？", "should_trigger": false},
+  {"query": "macOS 的完全磁盘访问或钥匙串授权弹窗怎么处理？", "should_trigger": false}
+]

@@ -208,7 +208,7 @@ codex plugin add daymade-codex@daymade-skills
 claude plugin install daymade-claude-code@daymade-skills
 ```
 
-一次安装即可获得扩展 Claude Code 本体的全部 power-user 技能——跨代码、项目文档、Skill/SOP、会议、微信归档与对话历史的已有工作检索；跨 Claude Code/Codex 的快速本地对话发现；会话恢复；CLAUDE.md 调优；故障诊断；statusline 配置；导出修复；marketplace 开发与 suite 收敛；终端截图渲染；用量分析；以及多 Provider 模型切换：
+一次安装即可获得扩展 Claude Code 本体的全部 power-user 技能——跨代码、项目文档、Skill/SOP、会议、微信归档与对话历史的已有工作检索；跨 Claude Code/Codex 的快速本地对话发现；会话恢复；CLAUDE.md 调优；故障诊断；权限提示与 Agent Team teammate 分诊；statusline 配置；导出修复；marketplace 开发与 suite 收敛；终端截图渲染；用量分析；以及多 Provider 模型切换：
 
 ```text
 /daymade-claude-code:claude-code-ops-router
@@ -222,6 +222,7 @@ claude plugin install daymade-claude-code@daymade-skills
 /daymade-claude-code:statusline-generator
 /daymade-claude-code:fixing-claude-export-conversations
 /daymade-claude-code:marketplace-dev
+/daymade-claude-code:claude-code-permission-triage
 /daymade-claude-code:terminal-screenshot
 /daymade-claude-code:claude-usage-analyst
 /daymade-claude-code:claude-switch-models-setup
@@ -480,7 +481,15 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 > **安装**：`claude plugin install daymade-claude-code@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-claude-code:claude-code-ops-router`）
 
-按任务读取一个专用 Skill：插件和 Skill 故障、marketplace、状态栏、模型 Profile 与源码同步、1M 上下文提前压缩、用量和额度定时器、memory 迁移、导出 `.txt` 修复。原有专用斜杠命令仍可手动调用。
+按任务读取一个专用 Skill：插件和 Skill 故障、marketplace、权限提示与 Agent Team teammate 分诊、MCP 启动上下文、状态栏、模型 Profile 与源码同步、1M 上下文提前压缩、用量和额度定时器、memory 迁移、导出 `.txt` 修复。原有专用斜杠命令仍可手动调用。
+
+---
+
+### **claude-code-permission-triage** - Claude Code 权限提示分诊
+
+> **安装**：`claude plugin install daymade-claude-code@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-claude-code:claude-code-permission-triage`）
+
+诊断 subagent、后台 worker 与 Agent Team teammate 出现的异常、缺失、延迟、卡住或错投权限提示。区分卡片类型、投递状态、worker 类型和有效模式时间线，匹配已知上游 issue，并生成脱敏反馈。不修改权限规则、不编写或修改 hook、不处理 MCP OAuth，也不负责读取历史会话。
 
 ---
 

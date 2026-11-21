@@ -23,7 +23,8 @@ SPECS = {
         "router": "claude-code-ops-router",
         "cold": {
             "claude-skills-troubleshooting", "statusline-generator",
-            "claude-export-txt-better", "marketplace-dev", "claude-usage-analyst",
+            "claude-export-txt-better", "marketplace-dev",
+            "claude-code-permission-triage", "claude-usage-analyst",
             "claude-switch-models-setup", "claude-migrate-memory-to-doc",
             "claude-code-ping-start-5h-quota",
         },
@@ -34,10 +35,9 @@ SPECS = {
             "tech-selection", "terminal-screenshot", "agent-web-search-setup",
             "read-claude-web-conversation", "claude-md-progressive-disclosurer",
         },
-        "prefix": ("plugin/Skill repair", "marketplace", "statusline",
-                   "model profiles/source sync", "1M/[1m] context",
-                   "usage/quota reset ping", "memory→docs", ".txt repair",
-                   "MCP startup context"),
+        "prefix": ("plugin/Skill repair", "marketplace", "permission-triage",
+                   "statusline", "model sync", "1M/[1m]", "usage/quota ping",
+                   "memory→docs", ".txt repair", "MCP startup context"),
     },
 }
 
