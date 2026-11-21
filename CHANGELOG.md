@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **claude-code-permission-triage** (`daymade-claude-code` v5.3.0 → v5.3.1): Add a manual-only router child for triaging unexpected, missing, delayed, parked, or misdelivered Claude Code permission prompts across subagents, background workers, and Agent Team teammates; include event/delivery/worker/mode classification, known-issue search, statistics guardrails, sanitized upstream feedback, and router trigger fixtures.
+- **claude-code-permission-triage** (`daymade-claude-code` v5.3.1 → v5.3.2): Add a manual-only router child for triaging unexpected, missing, delayed, parked, or misdelivered Claude Code permission prompts across subagents, background workers, and Agent Team teammates; include event/delivery/worker/mode classification, known-issue search, statistics guardrails, sanitized upstream feedback, and router trigger fixtures.
 - **ai-quota-calibrator** (`ai-quota-calibrator` v1.2.2 → v1.2.3): Align `references/methodology.md` §7 with rolling `weekly` `exact_fresh_window_start` behavior in `calibrate_quota.py`, update `README.md` catalog summary for live HTML cockpit and lossless forensics, and align `CLAUDE.md` `report-with-html` pointer with the live-cockpit boundary.
 - **report-with-html** (`report-with-html` v1.7.4 → v1.7.5): Add a recurring-live-cockpit vs static-report boundary in Workflow Step 1 and the independent-review prompt so aesthetic polish loops never downgrade live tools into hardcoded snapshots or demo-chrome bloat.
 - **ai-quota-calibrator** (`ai-quota-calibrator` v1.2.1 → v1.2.2): Document concise chat-summary delivery when `--html --open` already opens the live business cockpit.
