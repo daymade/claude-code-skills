@@ -365,6 +365,13 @@ final，也不通过归档线程实现静默。默认 receive 保留 `action_nee
 `content conflicts` 后保留失败输入，从原宿主事件重新取件并比较字节；只在取得原件后重试。
 不能靠试删空白、重算 prepared 摘要或换通道使冲突输入通过。仅剩手抄件时保留未核实状态。
 
+当前 Claude 原生入站若已有 `type='queue-operation'`、`operation='enqueue'` 记录，
+其 `content` 才是完整的 `cross-session-message` 信封；按
+[既有 Claude receipt 形态](protocol-and-discovery.md#claude)选择该字段。
+不要用附带宿主说明的展开 user message，也不要用剥离 wrapper 的 `origin.body`
+替代它。这是原字段选择，不是文本规范化；没有该记录时仍沿所属历史 reader
+和未知覆盖出口处理，不全库扫描。
+
 保留完整原信封；有本地 prepared 摘要时，receive 先核对正文及协调元数据，再领取或判断过期/关闭。`integrity=verified_prepared_core` 只证明与该本地准备记录一致，不证明发送者身份或用户授权。正文冲突、损坏摘要或不能识别的包装明确报错，保留输入和状态，不能按旧回执忽略，也不要重写正文凑过检查。无摘要的旧记录仍按旧生命周期处理并标 `unavailable_legacy_digest`；无协调字段标 `legacy_no_metadata`，都不补造摘要或有效期。正常的新消息仍使用自己的 ID 处理，不因话题相同被丢弃。
 
 确需回信时关联原 id；短时请求已过期/关闭时回信也会被发送前抑制：

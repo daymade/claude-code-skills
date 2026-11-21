@@ -180,7 +180,18 @@ Before removing a review worktree, inspect the affected source repository's loca
 release receipts for its exact `review_repo` path. Prefer the private archive's
 maintained checkout for the durable binding; a receipt pointing at a temporary
 checkout keeps that checkout in use even after publication. Keep private receipt
-paths and review content out of the public distribution.
+paths and review content out of the public distribution. A review report's
+historical mention of a source checkout is not itself a machine binding; classify
+it separately from an actual receipt `review_repo` or another live consumer.
+
+If the maintained archive cannot safely converge, a clean existing review
+worktree that already contains the exact review commits may instead be moved to
+a durable archive path with `git worktree move`. This is relocation, not deletion
+or a substitute for publication. Before moving, freeze its HEAD, branch, clean
+status, review blobs and receipt bytes, and resolve scheduler, process and known
+consumer occupancy. After moving, prove old-path absence and new-path identity,
+then use that retained checkout for the same attestation below. Do not manufacture
+a fresh archive with missing refs or rewrite the review to match a different HEAD.
 
 1. Record each affected receipt's candidate, exact Skill scope, review commit,
    path and blob, plus its current verification outcome. Separate a currently
