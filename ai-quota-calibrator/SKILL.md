@@ -139,7 +139,11 @@ new provider.
 ## Output Format
 
 Deliver a concise, direct diagnostic report (do not dump raw commands for the
-user to run):
+user to run). When `--html <path> --open` is used to open the live decision
+cockpit in the browser, keep the chat reply ultra-concise (3 bullet business
+conclusions: active/locked status + reset countdown, top zero-compression
+lossless savings lever, and clickable link to the opened HTML) instead of
+repeating the full calibration table in chat. For text-only output, include:
 
 1. **Headline status & pool capacity**: Implied API-dollar size of each pool
    (base ~ CW upper), `Weekly ÷ 5h` multiplier (noting clamp lower bound if
