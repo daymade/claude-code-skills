@@ -187,6 +187,18 @@ Use the existing source-sync owner and approved activation policy for any needed
 reconciliation; do not switch their branch, copy a new cache or redirect the alias
 into a disposable review worktree to manufacture a match.
 
+**Installed-content readback checklist.** Resolve the installed alias, then read
+the target checkout's current branch and full HEAD as diagnostic context. Compare
+the consumed `SKILL.md`, changed references and required helpers with the intended
+published commit, using at least one version-specific marker from this release.
+Content equality is the decision criterion: if every consumed path matches the
+published commit, report `installed-content=match` even when the shared checkout is
+on another branch or has unrelated dirty paths. If a consumed path differs, or the
+comparison cannot be completed, report `installed-content=stale|unknown`. In either
+case, do not switch the target branch or overwrite the worktree. A source merge,
+passing plugin catalog, or valid symlink alone is not evidence that the current host
+is consuming the new bytes.
+
 Then run the requested fresh-host catalog check and, when task behavior is part
 of delivery, observe the host consume the Skill and check its result separately.
 Report publication, installed-content match, discovery and task behavior at their

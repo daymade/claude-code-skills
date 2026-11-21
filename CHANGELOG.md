@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **peer-message** (`peer-message` v1.27.10 → v1.28.0): Add a credential-safe process-to-registry-socket recipe for locating a hidden shared-repository release owner when coordination records and guessed candidates do not identify the writer; never emit full argv and never stop processes.
+- **github-ops** (`github-ops` v1.19.3 → v1.20.0): Add a narrow stale-hosted-mergeability exception for an independently verified clean base/head, commit-scoped green required checks, and one close/reopen recomputation; preserve exact-head and protection gates and stop if dirtiness persists.
+- **skill-governance** (`daymade-skill` v1.82.2 → v1.83.0): Require installed-content readback to compare consumed paths with the published commit, using branch/HEAD only as context and reporting stale/unknown only on difference or incomplete comparison instead of switching branches.
 - **github-ops** (`github-ops` v1.19.1 → v1.19.2): Add resilient deadline-bounded watch loops and mid-run per-job log retrieval, pre-scale runner-name allowlist checks, and macOS-to-Linux self-hosted migration traps in `workflow_operations.md`; add duplicate-suite/queue-vs-idle checks, canonical-derived fail-closed path selectors, and `$GITHUB_OUTPUT`/`env:` expression-injection hygiene in `ci-demand-and-notifications.md`.
 - **peer-message** (`peer-message` v1.27.9 → v1.27.10): Accept current Claude host wrapper variants without weakening prepared-core identity checks; see `peer-message/references/local-coordination.md` for the supported shapes and exact intake recipe.
 - **daymade-skill** (`daymade-skill` v1.82.1 → v1.82.2): Add recovery guidance when `source_contract audit`’s owner inventory reports a missing sibling source path: verify branch/HEAD/WIP, materialize only the exact `origin/main` path when safe, and never switch or clean a shared checkout.

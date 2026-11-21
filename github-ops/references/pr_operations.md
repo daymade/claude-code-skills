@@ -378,10 +378,25 @@ real integration issue. When local and hosted results disagree, follow
 [the merge-semantics diagnostic](https://github.com/daymade/claude-code-skills/blob/main/github-review-pr/SKILL.md#when-local-and-hosted-merge-results-disagree)
 before attributing the discrepancy to a cache; local attributes and drivers can
 change merge semantics. Preserve required checks and wait for confirmed mergeability.
-Do not close/reopen the PR or push an empty commit merely to refresh
-that state. A later base/head change invalidates this observation; repeat the
-preflight against the new objects. These are executor checks, not a server-side
-lock on the base branch.
+Except for the single bounded recomputation permitted by
+[Independently green candidate with stale hosted mergeability](#independently-green-candidate-with-stale-hosted-mergeability),
+do not close/reopen the PR or push an empty commit merely to refresh that state.
+A later base/head change invalidates this observation; repeat the preflight against
+the new objects. These are executor checks, not a server-side lock on the base branch.
+
+### Independently green candidate with stale hosted mergeability
+
+A narrow exception exists when all of the following are independently true: the
+remote base was refreshed twice and stayed fixed; the exact PR head did not
+change; `git merge-tree --write-tree <head> <verified-base>` exits `0` with a
+tree; every required check is bound to that exact head and passed; and the
+landing preflight still reports `DIRTY`/`CONFLICTING` from the hosted API. In
+that case, record the pre-reopen API state and perform at most one close/reopen
+solely to force GitHub to recompute mergeability. Re-read the exact head, base,
+checks and mergeability afterward. If it remains dirty, stop and use the
+merge-semantics diagnostic; do not bounce the API, push an empty commit, or
+treat the local tree as permission to bypass a real conflict. This exception
+does not relax exact-head, required-check, review or branch-protection gates.
 
 ### Landing preflight
 
@@ -416,6 +431,8 @@ cannot silently change the local merge-tree object graph. Local Git version,
 attributes/drivers, partial or shallow state can still differ from GitHub's
 merge semantics. When local and hosted results disagree, follow the
 [merge-semantics diagnostic](https://github.com/daymade/claude-code-skills/blob/main/github-review-pr/SKILL.md#when-local-and-hosted-merge-results-disagree);
+Except for the single bounded recomputation permitted by
+[Independently green candidate with stale hosted mergeability](#independently-green-candidate-with-stale-hosted-mergeability),
 do not close/reopen the PR or push a refresh commit merely to force agreement.
 
 stdout is exactly one schema-version-2 JSON receipt. Exit `0` means `ready`, `2`
