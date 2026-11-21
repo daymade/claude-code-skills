@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **github-ops** (`github-ops` v1.19.1 → v1.19.2): Add resilient deadline-bounded watch loops and mid-run per-job log retrieval, pre-scale runner-name allowlist checks, and macOS-to-Linux self-hosted migration traps in `workflow_operations.md`; add duplicate-suite/queue-vs-idle checks, canonical-derived fail-closed path selectors, and `$GITHUB_OUTPUT`/`env:` expression-injection hygiene in `ci-demand-and-notifications.md`.
+
 - **github-ops** (`github-ops` v1.19.0 → v1.19.1): Warn against treating `ubuntu-latest` hosted runners as a default unblocking or speedup fallback on private self-hosted repositories in `ci-demand-and-notifications.md`; add homogeneous latency pools/lane isolation, valid completed-run benchmarking comparisons, and cgroup-aware container concurrency caps (`cpu.max` rather than raw `$(nproc)`) in `workflow_operations.md`.
 - **macos-permissions** (`daymade-macos` v1.34.18 → v1.34.19): Document container/VM helper Local Network denials (`NECP` / `error: 65` on LAN proxy egress) in `references/local-network.md`, including UI grant via an authorized remote-control route, restarting the pre-grant app/daemon, handling follow-up helper admin prompts, and verifying with the original failing container command.
 - **claude-code-permission-triage** (`daymade-claude-code` v5.3.1 → v5.3.2): Add a manual-only router child for triaging unexpected, missing, delayed, parked, or misdelivered Claude Code permission prompts across subagents, background workers, and Agent Team teammates; include event/delivery/worker/mode classification, known-issue search, statistics guardrails, sanitized upstream feedback, and router trigger fixtures.

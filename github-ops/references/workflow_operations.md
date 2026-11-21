@@ -157,6 +157,29 @@ gh api -X GET 'repos/OWNER/REPO/actions/runners?per_page=100' --paginate \
 
 If every matching runner is `offline` or `busy` on a long-running job, diagnose the runner/queue instead of polling an empty queue.
 
+**Resilient monitoring for long runs (>5 min) and flaky links:** `gh pr checks --watch` and `gh run watch` can hang silently after a transient proxy/API `EOF` or laptop sleep, leaving a failed run unnoticed. Prefer a deadline-bounded polling loop that tolerates single-iteration API errors and matches the exact `headSha` + `status == "completed"`:
+
+```bash
+for attempt in $(seq 1 40); do
+  INFO=$(gh run list -R OWNER/REPO --branch BRANCH --limit 1 \
+    --json databaseId,headSha,status,conclusion \
+    -q '.[0] | "\(.databaseId) \(.headSha) \(.status) \(.conclusion // "-")" ' 2>/dev/null || true)
+  RID=$(awk '{print $1}' <<<"$INFO"); SHA=$(awk '{print $2}' <<<"$INFO"); ST=$(awk '{print $3}' <<<"$INFO")
+  if [ "$SHA" = "EXPECTED_40_CHAR_SHA" ] && [ "$ST" = "completed" ]; then
+    gh run view "$RID" -R OWNER/REPO --json jobs -q '.jobs[] | "\(.name): \(.conclusion)"'
+    break
+  fi
+  sleep 45
+done
+```
+
+For multi-job runs where one shard fails early while siblings are still running, `gh run view --log-failed` blocks until the whole run finishes. Read the completed job's log immediately via its job ID:
+
+```bash
+JOB_ID=$(gh run view RUN_ID -R OWNER/REPO --json jobs -q '.jobs[] | select(.name=="JOB_NAME") | .databaseId')
+gh api "repos/OWNER/REPO/actions/jobs/$JOB_ID/logs" | tail -n 100
+```
+
 ---
 
 ## Downloading Artifacts and Logs
@@ -698,6 +721,12 @@ operator procedure; no bundled tool enforces its deployment or process boundarie
    untouched because `st_atime` can advance on reads; compare inode, mode, size,
    `st_mtime_ns` and `st_ctime_ns` instead.
 
+   **macOS-to-Linux self-hosted migration traps:**
+   - Service units with `UMask=0077` check out files as `0600`; workflows or tests asserting world-readable (`0o444`/`a+r`) static assets need an explicit permission step or compatible umask.
+   - `actions/setup-python` builds are dynamically linked against `libpython`; child processes that strip `LD_LIBRARY_PATH` can crash by loading a mismatched system `libpython`. When the minor version matches, pass a statically linked system interpreter (such as `/usr/bin/python3`) to isolated subprocesses.
+   - Linux `<6.13` coarse jiffy mtime (~4 ms) can cause same-tick collisions on immediate same-size overwrites in filesystem freshness tests.
+   - When migrating a repository whose hosted CI was previously billing-blocked, reproduce failing tests locally on `origin/main` before debugging the runner — merges landed during the outage often carry pre-existing regressions.
+
    Configure job hooks with the supported `.sh` or `.ps1` entry point: GitHub runs
    Bash with `-e <path>` or PowerShell with `-command ". '<path>'"`. A Python
    shebang is not a supported hook launcher; use an owned shell wrapper invoking
@@ -719,6 +748,13 @@ operator procedure; no bundled tool enforces its deployment or process boundarie
    labels (such as `*-overflow` or `*-builder`), and keep dedicated
    release/deploy labels isolated from routine PR check labels to prevent
    head-of-line blocking.
+
+   **Pre-scale repository allowlist check:** before starting a newly registered
+   replica (such as `-2` or `-3`) for a repository, grep `.github/` and CI
+   scripts for hardcoded runner-name allowlists (for example, scope selectors,
+   validation-reuse scripts, or `.github/actionlint.yaml` checking exact
+   `RUNNER_NAME`). Land the allowlist update first — or keep the new listener
+   stopped until merged — so it does not reject live PR runs on admission.
 5. **Accept the actual job on the intended runner.** Read the run's exact SHA and
    specific job's runner ID/name, labels, steps and terminal conclusion. Registration,
    `online`, a network probe or another runner's successful job cannot establish
