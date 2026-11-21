@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **report-with-html** (`report-with-html` v1.7.3 → v1.7.4): Add a recurring-live-cockpit vs static-report boundary in Workflow Step 1 and the independent-review prompt so aesthetic polish loops never downgrade live tools into hardcoded snapshots or demo-chrome bloat.
+- **report-with-html** (`report-with-html` v1.7.4 → v1.7.5): Add a recurring-live-cockpit vs static-report boundary in Workflow Step 1 and the independent-review prompt so aesthetic polish loops never downgrade live tools into hardcoded snapshots or demo-chrome bloat.
 - **ai-quota-calibrator** (`ai-quota-calibrator` v1.2.1 → v1.2.2): Document concise chat-summary delivery when `--html --open` already opens the live business cockpit.
 - **report-with-html** (`report-with-html` v1.7.3 → v1.7.4): Route Chinese visual-report requests and standalone HTML dashboards to this skill plus `data-visualization-discipline`, while keeping product UI with its design-system owner; remove duplicated chart-encoding rules and retain the canonical pointer.
 - **github-ops** (`github-ops` v1.17.8 → v1.18.0): Document a bounded GitHub API rate-limit fallback that can use an explicitly identified already-authenticated browser session while preserving exact-target, single-write and independent-readback rules.
