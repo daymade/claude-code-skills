@@ -107,9 +107,9 @@ UDS 连接写两行 NDJSON 后关闭：
 地址解析不决定使用哪一种 transport；发送流程按本文件 §3 执行。
 官方 Claude peer 工具不能用这个地址寻址 Codex thread，接收者仍须先检查当前宿主的原生覆盖范围。
 
-所以 `from` **保持** `codex:<thread-id>`，同时在正文首行补 `[reply: peer.py send codex:<id>]`（这是跨产品脚本补缺提示，接收者仍先按主路由检查原生工具是否覆盖目标）——属性集合是固定的，正文首行是唯一还能说话的地方。**两个一起走**：删掉地址只为了让一类接收方少踩一次可恢复的失败，会同时夺走另一类接收方手里能用的东西，还让路由脱离了它所路由的对象。
+所以 `from` **保持** `codex:<thread-id>`，同时在正文首行补 `[reply: peer.py send codex:<id>]`（这是跨产品脚本补缺提示，接收者仍先按主路由检查原生工具是否覆盖目标）——脚本产生端的属性集合是固定的，正文首行是唯一还能说话的地方。**两个一起走**：删掉地址只为了让一类接收方少踩一次可恢复的失败，会同时夺走另一类接收方手里能用的东西，还让路由脱离了它所路由的对象。
 
-当前 Claude parser 只接受它定义的 peer 属性集合与顺序；`message-id` 因此留在正文首行，不能自创 XML attribute。脚本拒绝正文自行闭合 `cross-session-message`/`peer-message`，避免正文逃出来源边界。官方 `SendMessage` 可用时不要手写这层；让官方通道负责包装和版本适配。
+当前 Claude 接收 parser 接受宿主生成的 `<cross-session-message>` 属性序列（包括 `from`、`from-name`、`from-mode`、`from-session`、`hop-chain`、`from-plugin`），正文首行既可以是 `[peer-coordination]`，也可以先写 `[peer-message-id]`；带 transport ID 时必须与 coordination metadata ID 一致。脚本仍拒绝正文自行闭合 `cross-session-message`/`peer-message`，避免正文逃出来源边界。官方 `SendMessage` 可用时不要手写这层；让官方通道负责包装和版本适配。精确取件与校验配方见 [Claude 跨会话入站原件接收](local-coordination.md#从-claude-跨会话入站原件接收)。
 
 ## 3. Codex 发现与实时投递
 
