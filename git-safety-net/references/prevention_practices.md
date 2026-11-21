@@ -76,6 +76,16 @@ If a later hook reports a missing dependency, preserve the task worktree and
 return to repository setup to extend its sparse selection with that exact tracked
 dependency. Do not rerun initialization or replace the index to address missing files.
 
+If the sparse worktree will run tests, typecheck or a build, include the tracked
+consumer configuration in the initial `--path` set: root test/build config,
+package-local setup files, fixture manifests and any tracked files those entrypoints
+read. A collection failure caused by a missing config or setup file is an environment
+gap, not evidence that the code fails; extend the selection with the exact tracked
+dependency and rerun the same consumer. Ignored `node_modules` and local-only assets
+are not copied by a worktree, so use the repository's normal install/workspace path
+and verify the package-level dependency location before treating module resolution
+as a defect.
+
 ## Shared checkout and concurrent sessions: one writer
 
 **Failure mode:** separate sessions edit different files and assume they are independent, but they
