@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
-"""Bind gh to an expected actor; inspect publication routes and guard PR merges.
+"""Bind gh to an expected actor; inspect publication and landing routes; guard PR merges.
 
 No token is printed or persisted. This guards the gh channel only; it cannot
 attest a connector, browser, SSH remote, or another process's authentication.
-PR merges require an explicit target and full reviewed head. Raw API merges
-are rejected; --admin additionally needs an exact, separately authorized acknowledgement.
+Landing preflight is read-only and emits one JSON receipt. PR merges require an
+explicit target and full reviewed head. Raw API merges are rejected; --admin
+additionally needs an exact, separately authorized acknowledgement.
 """
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
 import re
 import subprocess
 import sys
+import time
 from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 
@@ -268,6 +271,790 @@ def _publication_unknown(code):
                       "scope": "publication_route_only", "reason": code}))
 
 
+_LANDING_NEXT_STEPS = {
+    "invalid_input": "Correct the explicit target, head, base, repository, remote and deadline inputs.",
+    "proxy_missing": "Provide an explicit HTTPS_PROXY or ALL_PROXY, or select --proxy-source none.",
+    "credential_unavailable": "Resolve this channel's approved credential route and rerun the read-only preflight.",
+    "identity_unavailable": "Resolve the read-only identity lookup and rerun the preflight.",
+    "actor_mismatch": "Verify the authorized actor before rerunning the preflight.",
+    "forbidden": "Resolve access for the verified actor; do not switch actor or API to bypass it.",
+    "rate_limited": "Wait for an authorized retry window; do not switch actor or API to bypass the limit.",
+    "transport_exhausted": "Inspect transport health and rerun the preflight with a fresh deadline.",
+    "transport_timeout": "Inspect transport health and rerun the preflight with a fresh deadline.",
+    "deadline_exceeded": "Rerun with a new deadline after resolving the slow or unavailable step.",
+    "invalid_json": "Verify the installed gh version and reread the named object without retrying malformed evidence.",
+    "remote_ref_missing": "Verify the remote and base ref, then rerun after the required object exists.",
+    "remote_ref_invalid": "Verify the named remote returns exactly one commit for the explicit base ref.",
+    "base_moved": "Reconcile the candidate with the new base and rerun all affected checks.",
+    "target_mismatch": "Verify the repository, PR number, URL and host bound to this preflight.",
+    "pr_not_open": "Read the current PR state before considering another landing attempt.",
+    "pr_draft": "Ready the PR through its normal review workflow, then rerun the preflight.",
+    "pr_base_mismatch": "Verify the PR targets the explicit base branch before rerunning.",
+    "base_drifted": "Reconcile the PR base with the verified remote tip and rerun affected checks.",
+    "head_mismatch": "Review the new head and rerun the preflight with its full commit SHA.",
+    "merge_tree_conflict": "Resolve the integration conflict and rerun checks on the resulting candidate.",
+    "merge_tree_error": "Verify local Git objects and merge-tree support without changing HEAD or the worktree.",
+    "checks_missing": "Verify required-check evidence for this PR; an empty read is not a pass.",
+    "checks_pending": "Wait for the reported checks to reach a terminal state, then reread them once.",
+    "checks_failed": "Inspect and repair the failed checks before another landing attempt.",
+    "checks_cancelled": "Inspect the cancelled checks and obtain a fresh authorized run before landing.",
+    "checks_skipping": "Do not treat skipped required checks as success; resolve the repository policy.",
+    "checks_invalid": "Verify the installed gh version and the reported check shape.",
+    "checks_unavailable": "Resolve check-read availability and rerun the preflight.",
+    "approvals_unmet": "Obtain the repository's effective approval before another landing attempt.",
+    "mergeability_conflicting": "Resolve the reported conflict before another landing attempt.",
+    "base_behind": "Update the PR base through the authorized workflow and rerun affected checks.",
+    "merge_requirements_blocked": "Inspect the current PR requirements and resolve the blocking gate.",
+    "mergeability_unknown": "Wait for GitHub to compute mergeability, then reread the PR once.",
+    "merge_state_unknown": "Inspect the current PR merge state before another landing attempt.",
+    "checks_head_mismatch": "Reread commit-scoped checks for the reviewed head; do not bind evidence from another commit.",
+}
+
+_STANDARD_READ_POLICY = {"max_attempts": 3, "timeout": 20, "backoff": (2, 5)}
+_CHECKS_READ_POLICY = {"max_attempts": 3, "timeout": 30, "backoff": (30, 60)}
+_LANDING_EXIT_CODES = {"ready": 0, "blocked": 3, "pending": 4, "unknown": 2}
+
+
+class LandingHalt(Exception):
+    """A fail-closed landing stop carrying only public classification evidence."""
+
+    def __init__(self, status, reason, *, step=None, attempts=None, recorded=False):
+        self.status = status
+        self.reason = reason
+        self.step = step
+        self.attempts = attempts
+        self.recorded = recorded
+        super().__init__(reason)
+
+
+def _utc_now():
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _landing_receipt(*, host=None, repository=None, pull_request=None, base=None,
+                     head=None, remote=None, proxy_source=None, deadline_seconds=None,
+                     reason="invalid_input"):
+    return {
+        "schema_version": 2,
+        "scope": "landing_preflight",
+        "status": "unknown",
+        "reason": reason,
+        "host": host,
+        "repository": repository,
+        "pull_request": pull_request,
+        "actor": None,
+        "observed_at": None,
+        "checks_provenance": "not_started",
+        "candidate": {"base": base, "head": head, "remote": remote},
+        "transport": {
+            "source": proxy_source,
+            "route": "unknown",
+            "status": "unknown",
+            "endpoint_recorded": False,
+        },
+        "base": {
+            "ref": f"refs/heads/{base}" if isinstance(base, str) and base else None,
+            "remote_oid": None,
+            "fetched_oid": None,
+            "verified_oid": None,
+        },
+        "pr": {
+            "number": None,
+            "url": None,
+            "state": None,
+            "is_draft": None,
+            "base_ref": None,
+            "base_oid": None,
+            "head_oid": None,
+            "review_decision": None,
+            "mergeable": None,
+            "merge_state_status": None,
+        },
+        "merge_tree": {"status": "unknown", "tree_oid": None, "conflicts": None,
+                       "replace_objects_disabled": None},
+        "checks": {
+            "status": "unknown",
+            "reason": "not_started",
+            "head": None,
+            "sources": {"check_runs": 0, "statuses": 0},
+            "summary": {"pass": 0, "pending": 0, "fail": 0, "cancel": 0,
+                        "skipping": 0, "unknown": 0},
+            "items": [],
+        },
+        "mergeability": {
+            "status": "unknown",
+            "reason": "not_started",
+            "mergeable": None,
+            "merge_state_status": None,
+            "review_decision": None,
+        },
+        "retry_policy": {
+            "standard_read": dict(_STANDARD_READ_POLICY),
+            "checks_read": dict(_CHECKS_READ_POLICY),
+            "deadline_seconds": deadline_seconds,
+        },
+        "steps": [],
+        "remaining_gates": "task authorization; guarded pr merge with --match-head-commit; post-merge readback",
+    }
+
+
+def _record_landing_step(receipt, name, status, reason, attempts=None, **evidence):
+    step = {"name": name, "status": status, "reason": reason}
+    if attempts is not None:
+        step["attempts"] = attempts
+    step.update(evidence)
+    receipt["steps"].append(step)
+
+
+def _landing_stop(receipt, status, reason, *, step=None, attempts=None, **evidence):
+    if step is not None:
+        _record_landing_step(receipt, step, status, reason, attempts, **evidence)
+    raise LandingHalt(status, reason, step=step, attempts=attempts, recorded=step is not None)
+
+
+def _finish_landing(receipt, status, reason):
+    receipt["status"] = status
+    receipt["reason"] = reason
+    receipt["observed_at"] = _utc_now()
+    return _LANDING_EXIT_CODES[status], receipt
+
+
+def _report_landing(reason):
+    next_step = _LANDING_NEXT_STEPS.get(
+        reason, "Inspect the JSON receipt and resolve the named gate before another attempt.")
+    print(f"checked-gh: landing_preflight: {reason}: {next_step}", file=sys.stderr)
+
+
+def _without_proxy_variables(environ):
+    return {key: value for key, value in environ.items()
+            if not key.casefold().endswith("_proxy")}
+
+
+def _has_explicit_proxy(environ):
+    return any(key.casefold() in {"https_proxy", "all_proxy"} and value.strip()
+               for key, value in environ.items())
+
+
+def _resolve_landing_transport(environ, source):
+    if source == "none":
+        return _without_proxy_variables(environ), {
+            "source": "none", "route": "direct", "status": "not_used",
+            "endpoint_recorded": False,
+        }
+    if source in {"auto", "environment"} and _has_explicit_proxy(environ):
+        return dict(environ), {
+            "source": "environment", "route": "proxy", "status": "configured",
+            "endpoint_recorded": False,
+        }
+    return None, {
+        "source": source, "route": "unknown", "status": "missing",
+        "endpoint_recorded": False,
+    }
+
+
+def _http_status(stderr):
+    patterns = (
+        r"\bHTTP(?:/[\d.]+)?\s+([45]\d{2})\b",
+        r"\bstatus(?:\s+code)?\s*[:=]\s*([45]\d{2})\b",
+        r"^\s*([45]\d{2})\b",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, stderr, flags=re.I | re.M)
+        if match:
+            return int(match.group(1))
+    if re.search(r"\brate[- ]limit(?:ed)?\b", stderr, flags=re.I):
+        return 429
+    if re.search(r"\bforbidden\b", stderr, flags=re.I):
+        return 403
+    return None
+
+
+def _retryable_transport(stderr):
+    status = _http_status(stderr)
+    if status in {403, 429}:
+        return False, "forbidden" if status == 403 else "rate_limited"
+    if status is not None:
+        if status in {408} or 500 <= status <= 599:
+            return True, "transport_error"
+        return False, "request_error"
+    if re.search(r"\b(?:EOF|connection reset|connection refused|broken pipe|TLS handshake|timed out|timeout)\b",
+                 stderr, flags=re.I):
+        return True, "transport_error"
+    if re.search(r"\b(?:502|503|504)\b", stderr):
+        return True, "transport_error"
+    return False, "command_failed"
+
+
+def _remaining_seconds(deadline_at, monotonic):
+    return deadline_at - monotonic()
+
+
+def _ensure_landing_deadline(deadline_at, monotonic, *, step, attempts=0):
+    if _remaining_seconds(deadline_at, monotonic) <= 0:
+        raise LandingHalt("unknown", "deadline_exceeded", step=step, attempts=attempts)
+
+
+def _run_read(command, env, run, policy, deadline_at, monotonic, sleep, step, *,
+              accept_nonzero=False, terminal_returncodes=None, failure_reason="command_failed"):
+    """Run one bounded read-only command and return (result, attempts)."""
+    terminal_returncodes = terminal_returncodes or {}
+    for attempt in range(1, policy["max_attempts"] + 1):
+        _ensure_landing_deadline(deadline_at, monotonic, step=step, attempts=attempt - 1)
+        remaining = _remaining_seconds(deadline_at, monotonic)
+        timeout = min(policy["timeout"], max(remaining, 0.001))
+        try:
+            result = run(command, env=env, capture_output=True, text=True, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            pass
+        except OSError:
+            raise LandingHalt("unknown", "io_unavailable", step=step, attempts=attempt) from None
+        else:
+            if result.returncode == 0:
+                return result, attempt
+            stderr = getattr(result, "stderr", "") or ""
+            if not isinstance(stderr, str):
+                stderr = ""
+            retryable, classified = _retryable_transport(stderr)
+            if classified in {"forbidden", "rate_limited"}:
+                raise LandingHalt("unknown", classified, step=step, attempts=attempt)
+            if result.returncode in terminal_returncodes and not retryable:
+                terminal = terminal_returncodes[result.returncode]
+                if isinstance(terminal, tuple):
+                    terminal_status, terminal_reason = terminal
+                else:
+                    terminal_status, terminal_reason = "unknown", terminal
+                raise LandingHalt(terminal_status, terminal_reason,
+                                  step=step, attempts=attempt)
+            if not retryable:
+                if accept_nonzero and bool((getattr(result, "stdout", "") or "").strip()):
+                    return result, attempt
+                raise LandingHalt("unknown", failure_reason, step=step, attempts=attempt)
+        if attempt == policy["max_attempts"]:
+            break
+        delay = policy["backoff"][attempt - 1]
+        remaining = _remaining_seconds(deadline_at, monotonic)
+        if remaining <= 0:
+            raise LandingHalt("unknown", "deadline_exceeded", step=step, attempts=attempt)
+        sleep(min(delay, remaining))
+    raise LandingHalt("unknown", "transport_exhausted", step=step,
+                      attempts=policy["max_attempts"])
+
+
+def _decode_landing_json(stdout, expected_type, step, attempts=None):
+    try:
+        value = json.loads(stdout)
+    except (TypeError, ValueError):
+        raise LandingHalt("unknown", "invalid_json", step=step, attempts=attempts) from None
+    if not isinstance(value, expected_type):
+        raise LandingHalt("unknown", "invalid_json", step=step, attempts=attempts)
+    return value
+
+
+def _valid_landing_base(base):
+    return (isinstance(base, str) and bool(base)
+            and not base.startswith(("-", "/"))
+            and not base.endswith(("/", ".", ".lock"))
+            and ".." not in base and "@{" not in base and "//" not in base
+            and not re.search(r"[\x00-\x20\x7f~^:?*\[\\]", base)
+            and all(not part.endswith(".lock") and not part.startswith(".")
+                    for part in base.split("/")))
+
+
+def _valid_landing_remote(remote):
+    return (isinstance(remote, str) and bool(remote)
+            and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]*", remote)
+            and ".." not in remote and "//" not in remote
+            and not remote.endswith("/") and "@{" not in remote)
+
+
+def _parse_landing_target(target):
+    if not isinstance(target, str):
+        raise ValueError("invalid landing target")
+    match = re.fullmatch(r"([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)#([1-9][0-9]*)", target)
+    if not match:
+        raise ValueError("invalid landing target")
+    owner, name, number = match.groups()
+    if owner in {".", ".."} or name in {".", ".."}:
+        raise ValueError("invalid landing target")
+    return f"{owner}/{name}", int(number)
+
+
+def _single_sha_output(stdout, step):
+    lines = [line.strip() for line in (stdout or "").splitlines() if line.strip()]
+    if len(lines) != 1 or not re.fullmatch(r"[0-9a-f]{40}", lines[0]):
+        raise LandingHalt("unknown", "remote_ref_invalid", step=step)
+    return lines[0]
+
+
+def _ls_remote_oid(stdout, expected_ref, step):
+    lines = [line.strip() for line in (stdout or "").splitlines() if line.strip()]
+    if len(lines) != 1:
+        raise LandingHalt("unknown", "remote_ref_invalid", step=step)
+    fields = lines[0].split()
+    if (len(fields) != 2 or not re.fullmatch(r"[0-9a-f]{40}", fields[0])
+            or fields[1] != expected_ref):
+        raise LandingHalt("unknown", "remote_ref_invalid", step=step)
+    return fields[0]
+
+
+_PR_JSON_FIELDS = ("number,url,state,isDraft,headRefOid,baseRefName,baseRefOid,"
+                   "mergeable,mergeStateStatus,reviewDecision")
+_PR_REQUIRED_FIELDS = {"number", "url", "state", "isDraft", "headRefOid", "baseRefName",
+                       "baseRefOid", "mergeable", "mergeStateStatus", "reviewDecision"}
+
+
+def _read_landing_pr(receipt, repo, host, env, run, policy, deadline_at, monotonic, sleep, step):
+    number = receipt["pull_request"]
+    result, attempts = _run_read(
+        ["gh", "pr", "view", str(number), "-R", repo, "--json", _PR_JSON_FIELDS],
+        env, run, policy, deadline_at, monotonic, sleep, step,
+        failure_reason="pr_unavailable")
+    pr = _decode_landing_json(getattr(result, "stdout", ""), dict, step, attempts)
+    if not isinstance(pr, dict) or not _PR_REQUIRED_FIELDS <= pr.keys():
+        raise LandingHalt("unknown", "invalid_json", step=step, attempts=attempts)
+    if (type(pr["number"]) is not int or pr["number"] < 1
+            or any(not isinstance(pr[key], str) or not pr[key] for key in
+                   ("url", "state", "headRefOid", "baseRefName", "baseRefOid",
+                    "mergeable", "mergeStateStatus"))
+            or type(pr["isDraft"]) is not bool
+            or (pr["reviewDecision"] is not None
+                and not isinstance(pr["reviewDecision"], str))):
+        raise LandingHalt("unknown", "invalid_json", step=step, attempts=attempts)
+    if (not re.fullmatch(r"[0-9a-fA-F]{40}", pr["headRefOid"])
+            or not re.fullmatch(r"[0-9a-fA-F]{40}", pr["baseRefOid"])):
+        raise LandingHalt("unknown", "invalid_json", step=step, attempts=attempts)
+    try:
+        target = urlsplit(pr["url"])
+    except ValueError:
+        raise LandingHalt("unknown", "invalid_json", step=step, attempts=attempts) from None
+    expected_path = f"{repo}/pull/{number}".casefold()
+    if (target.hostname is None or target.hostname.casefold() != host.casefold()
+            or target.path.strip("/").casefold() != expected_path
+            or pr["number"] != number):
+        raise LandingHalt("unknown", "target_mismatch", step=step, attempts=attempts)
+    receipt["pr"] = {
+        "number": pr["number"],
+        "url": pr["url"],
+        "state": pr["state"],
+        "is_draft": pr["isDraft"],
+        "base_ref": pr["baseRefName"],
+        "base_oid": pr["baseRefOid"].lower(),
+        "head_oid": pr["headRefOid"].lower(),
+        "review_decision": pr["reviewDecision"],
+        "mergeable": pr["mergeable"],
+        "merge_state_status": pr["mergeStateStatus"],
+    }
+    return pr, attempts
+
+
+def _validate_landing_pr(receipt, pr, attempts, *, final=False):
+    step = "mergeability" if final else "pr"
+    if pr["state"] != "OPEN":
+        _landing_stop(receipt, "blocked", "pr_not_open", step=step, attempts=attempts)
+    if pr["isDraft"] is not False:
+        _landing_stop(receipt, "blocked", "pr_draft", step=step, attempts=attempts)
+    if pr["baseRefName"] != receipt["candidate"]["base"]:
+        _landing_stop(receipt, "blocked", "pr_base_mismatch", step=step, attempts=attempts)
+    if pr["baseRefOid"].lower() != receipt["base"]["verified_oid"]:
+        _landing_stop(receipt, "blocked", "base_drifted", step=step, attempts=attempts)
+    if pr["headRefOid"].lower() != receipt["candidate"]["head"]:
+        _landing_stop(receipt, "blocked", "head_mismatch", step=step, attempts=attempts)
+
+
+def _classify_check_run(status, conclusion):
+    status = status.casefold()
+    conclusion = (conclusion or "").casefold()
+    if status in {"queued", "in_progress", "requested", "waiting", "pending"}:
+        return "pending"
+    if status != "completed":
+        return "unknown"
+    if conclusion == "success":
+        return "pass"
+    if conclusion in {"skipped", "neutral"}:
+        return "skipping"
+    if conclusion in {"cancelled", "canceled"}:
+        return "cancel"
+    if conclusion in {"failure", "timed_out", "startup_failure", "stale"}:
+        return "fail"
+    if conclusion == "action_required":
+        return "pending"
+    return "unknown"
+
+
+def _classify_commit_status(state):
+    state = state.casefold()
+    if state == "success":
+        return "pass"
+    if state == "pending":
+        return "pending"
+    if state in {"failure", "error"}:
+        return "fail"
+    return "unknown"
+
+
+def _flatten_api_pages(result, step, attempts):
+    pages = _decode_landing_json(getattr(result, "stdout", ""), list, step, attempts)
+    if any(not isinstance(page, list) for page in pages):
+        raise LandingHalt("unknown", "invalid_json", step=step, attempts=attempts)
+    return [row for page in pages for row in page]
+
+
+def _read_landing_checks(receipt, repo, host, env, run, deadline_at, monotonic, sleep):
+    step = "checks"
+    head = receipt["candidate"]["head"]
+    summary = {"pass": 0, "pending": 0, "fail": 0, "cancel": 0, "skipping": 0, "unknown": 0}
+    items = []
+    receipt["checks"] = {
+        "status": "unknown",
+        "reason": "not_classified",
+        "head": head,
+        "sources": {"check_runs": 0, "statuses": 0},
+        "summary": summary,
+        "items": items,
+    }
+    receipt["checks_provenance"] = "commit_scoped"
+
+    check_runs_result, check_runs_attempts = _run_read(
+        ["gh", "api", "--hostname", host, "--paginate", "--slurp",
+         f"repos/{repo}/commits/{head}/check-runs?per_page=100"],
+        env, run, _CHECKS_READ_POLICY, deadline_at, monotonic, sleep, step,
+        failure_reason="checks_unavailable")
+    check_runs = _flatten_api_pages(check_runs_result, step, check_runs_attempts)
+    receipt["checks"]["sources"]["check_runs"] = len(check_runs)
+    for row in check_runs:
+        if (not isinstance(row, dict)
+                or not {"name", "status", "conclusion", "head_sha", "html_url"} <= row.keys()
+                or not isinstance(row["name"], str) or not row["name"]
+                or not isinstance(row["status"], str) or not row["status"]
+                or (row["conclusion"] is not None and not isinstance(row["conclusion"], str))
+                or not isinstance(row["head_sha"], str)
+                or not re.fullmatch(r"[0-9a-fA-F]{40}", row["head_sha"])
+                or (row["html_url"] is not None and not isinstance(row["html_url"], str))):
+            _landing_stop(receipt, "unknown", "checks_invalid", step=step,
+                          attempts=check_runs_attempts)
+        if row["head_sha"].lower() != head:
+            items.append({
+                "source": "check_runs",
+                "name": row["name"],
+                "state": row["status"],
+                "bucket": "unknown",
+                "head": row["head_sha"].lower(),
+                "link": row["html_url"],
+                "classification": "unknown",
+            })
+            summary["unknown"] += 1
+            _landing_stop(receipt, "unknown", "checks_head_mismatch", step=step,
+                          attempts=check_runs_attempts)
+        classification = _classify_check_run(row["status"], row["conclusion"])
+        summary[classification] += 1
+        items.append({
+            "source": "check_runs",
+            "name": row["name"],
+            "state": row["status"].casefold(),
+            "bucket": classification,
+            "head": row["head_sha"].lower(),
+            "link": row["html_url"],
+            "classification": classification,
+        })
+
+    statuses_result, statuses_attempts = _run_read(
+        ["gh", "api", "--hostname", host, "--paginate", "--slurp",
+         f"repos/{repo}/commits/{head}/statuses?per_page=100"],
+        env, run, _CHECKS_READ_POLICY, deadline_at, monotonic, sleep, step,
+        failure_reason="checks_unavailable")
+    statuses = _flatten_api_pages(statuses_result, step, statuses_attempts)
+    receipt["checks"]["sources"]["statuses"] = len(statuses)
+    for row in statuses:
+        if (not isinstance(row, dict)
+                or not {"context", "state", "sha", "target_url"} <= row.keys()
+                or not isinstance(row["context"], str) or not row["context"]
+                or not isinstance(row["state"], str) or not row["state"]
+                or not isinstance(row["sha"], str)
+                or not re.fullmatch(r"[0-9a-fA-F]{40}", row["sha"])
+                or (row["target_url"] is not None and not isinstance(row["target_url"], str))):
+            _landing_stop(receipt, "unknown", "checks_invalid", step=step,
+                          attempts=statuses_attempts)
+        if row["sha"].lower() != head:
+            items.append({
+                "source": "statuses",
+                "name": row["context"],
+                "state": row["state"],
+                "bucket": "unknown",
+                "head": row["sha"].lower(),
+                "link": row["target_url"],
+                "classification": "unknown",
+            })
+            summary["unknown"] += 1
+            _landing_stop(receipt, "unknown", "checks_head_mismatch", step=step,
+                          attempts=statuses_attempts)
+        classification = _classify_commit_status(row["state"])
+        summary[classification] += 1
+        items.append({
+            "source": "statuses",
+            "name": row["context"],
+            "state": row["state"].casefold(),
+            "bucket": classification,
+            "head": row["sha"].lower(),
+            "link": row["target_url"],
+            "classification": classification,
+        })
+
+    total_attempts = check_runs_attempts + statuses_attempts
+    if not items:
+        receipt["checks"]["status"] = "unknown"
+        receipt["checks"]["reason"] = "checks_missing"
+        _landing_stop(receipt, "unknown", "checks_missing", step=step,
+                      attempts=total_attempts)
+    if summary["fail"]:
+        receipt["checks"]["status"] = "blocked"
+        receipt["checks"]["reason"] = "checks_failed"
+        _landing_stop(receipt, "blocked", "checks_failed", step=step,
+                      attempts=total_attempts)
+    if summary["cancel"]:
+        receipt["checks"]["status"] = "blocked"
+        receipt["checks"]["reason"] = "checks_cancelled"
+        _landing_stop(receipt, "blocked", "checks_cancelled", step=step,
+                      attempts=total_attempts)
+    if summary["skipping"]:
+        receipt["checks"]["status"] = "blocked"
+        receipt["checks"]["reason"] = "checks_skipping"
+        _landing_stop(receipt, "blocked", "checks_skipping", step=step,
+                      attempts=total_attempts)
+    if summary["unknown"]:
+        receipt["checks"]["status"] = "unknown"
+        receipt["checks"]["reason"] = "checks_invalid"
+        _landing_stop(receipt, "unknown", "checks_invalid", step=step,
+                      attempts=total_attempts)
+    if summary["pending"]:
+        receipt["checks"]["status"] = "pending"
+        receipt["checks"]["reason"] = "checks_pending"
+        _landing_stop(receipt, "pending", "checks_pending", step=step,
+                      attempts=total_attempts)
+    receipt["checks"]["status"] = "pass"
+    receipt["checks"]["reason"] = "checks_pass"
+    _record_landing_step(receipt, step, "pass", "checks_pass", total_attempts,
+                         head=head, summary=summary,
+                         source_attempts={"check_runs": check_runs_attempts,
+                                          "statuses": statuses_attempts})
+
+
+def run_landing_preflight(*, expected_login, host, target, head, base, local_repo,
+                          remote="origin", proxy_source="auto", deadline_seconds=240,
+                          environ=None, run=subprocess.run, sleep=time.sleep,
+                          monotonic=time.monotonic):
+    """Return (exit_code, receipt) for one read-only landing observation."""
+    environ = os.environ if environ is None else dict(environ)
+    remote = "origin" if remote is None else remote
+    proxy_source = "auto" if proxy_source is None else proxy_source
+    deadline_seconds = 240 if deadline_seconds is None else deadline_seconds
+    receipt = _landing_receipt(
+        host=host if isinstance(host, str) and host and "/" not in host else None,
+        repository=None, pull_request=None, base=None, head=None, remote=None,
+        proxy_source=proxy_source, deadline_seconds=deadline_seconds)
+    try:
+        if (not isinstance(expected_login, str) or not expected_login.strip()
+                or not isinstance(host, str) or not host.strip() or "/" in host):
+            raise ValueError("invalid identity input")
+        repo, number = _parse_landing_target(target)
+        if (not isinstance(head, str) or not re.fullmatch(r"[0-9a-fA-F]{40}", head)
+                or head == "0" * 40):
+            raise ValueError("invalid head")
+        if not _valid_landing_base(base):
+            raise ValueError("invalid base")
+        if not _valid_landing_remote(remote):
+            raise ValueError("invalid remote")
+        if proxy_source not in {"auto", "environment", "none"}:
+            raise ValueError("invalid proxy source")
+        if (type(deadline_seconds) is not int or deadline_seconds < 0
+                or deadline_seconds > 240):
+            raise ValueError("invalid deadline")
+        if not isinstance(local_repo, str) or not local_repo.strip():
+            raise ValueError("invalid local repository")
+        repo_path = Path(local_repo).expanduser()
+        if not repo_path.is_dir():
+            raise ValueError("invalid local repository")
+        repo_path = str(repo_path.resolve())
+    except (ValueError, RuntimeError, OSError):
+        return _finish_landing(receipt, "unknown", "invalid_input")
+
+    head = head.lower()
+    receipt["host"] = host
+    receipt["repository"] = repo
+    receipt["pull_request"] = number
+    receipt["candidate"] = {"base": base, "head": head, "remote": remote}
+    receipt["base"]["ref"] = f"refs/heads/{base}"
+    deadline_at = monotonic() + deadline_seconds
+
+    try:
+        child_env, transport = _resolve_landing_transport(environ, proxy_source)
+        receipt["transport"] = transport
+        if child_env is None:
+            _landing_stop(receipt, "unknown", "proxy_missing", step="transport")
+
+        # Credential lookup stays local; the resulting token is pinned only in
+        # the child environment and is never copied into the receipt.
+        _ensure_landing_deadline(deadline_at, monotonic, step="identity", attempts=0)
+        remaining = _remaining_seconds(deadline_at, monotonic)
+        try:
+            captured = run(["gh", "auth", "token", "--hostname", host], env=child_env,
+                           capture_output=True, text=True,
+                           timeout=min(20, max(remaining, 0.001)))
+        except subprocess.TimeoutExpired:
+            _landing_stop(receipt, "unknown", "credential_unavailable", step="identity", attempts=1)
+        except OSError:
+            _landing_stop(receipt, "unknown", "io_unavailable", step="identity", attempts=1)
+        token = (getattr(captured, "stdout", "") or "").strip()
+        if captured.returncode != 0 or not token:
+            _landing_stop(receipt, "unknown", "credential_unavailable", step="identity", attempts=1)
+        gh_env = {key: value for key, value in child_env.items()
+                  if key not in {"GH_REPO", "GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN",
+                                 "GITHUB_ENTERPRISE_TOKEN"}}
+        gh_env["GH_HOST"] = host
+        token_key = "GH_TOKEN" if host == "github.com" or host.endswith(".ghe.com") else "GH_ENTERPRISE_TOKEN"
+        gh_env[token_key] = token
+        git_env = dict(gh_env)
+        git_env["GIT_NO_REPLACE_OBJECTS"] = "1"
+
+        identity, attempts = _run_read(
+            ["gh", "api", "--hostname", host, "user"], gh_env, run,
+            _STANDARD_READ_POLICY, deadline_at, monotonic, sleep, "identity",
+            failure_reason="identity_unavailable")
+        actor = _decode_landing_json(getattr(identity, "stdout", ""), dict, "identity", attempts)
+        login = actor.get("login") if isinstance(actor, dict) else None
+        if not isinstance(login, str) or not login:
+            raise LandingHalt("unknown", "invalid_json", step="identity", attempts=attempts)
+        receipt["actor"] = login
+        if login.casefold() != expected_login.casefold():
+            _landing_stop(receipt, "unknown", "actor_mismatch", step="identity", attempts=attempts)
+        _record_landing_step(receipt, "identity", "pass", "identity_verified", attempts)
+
+        base_ref = f"refs/heads/{base}"
+        ls_command = ["git", "-C", repo_path, "ls-remote", "--exit-code", remote, base_ref]
+        first, attempts = _run_read(
+            ls_command, git_env, run, _STANDARD_READ_POLICY, deadline_at, monotonic,
+            sleep, "remote_base", terminal_returncodes={2: ("unknown", "remote_ref_missing")},
+            failure_reason="remote_ref_missing")
+        first_oid = _ls_remote_oid(getattr(first, "stdout", ""), base_ref, "remote_base")
+        receipt["base"]["remote_oid"] = first_oid
+
+        fetched, fetch_attempts = _run_read(
+            ["git", "-C", repo_path, "fetch", "--no-tags", remote,
+             f"+{base_ref}:refs/remotes/{remote}/{base}"],
+            git_env, run, _STANDARD_READ_POLICY, deadline_at, monotonic, sleep,
+            "remote_base", failure_reason="remote_ref_missing")
+        del fetched
+        resolved, resolve_attempts = _run_read(
+            ["git", "-C", repo_path, "rev-parse", "--verify",
+             f"refs/remotes/{remote}/{base}^{{commit}}"],
+            git_env, run, _STANDARD_READ_POLICY, deadline_at, monotonic, sleep,
+            "remote_base", failure_reason="remote_ref_missing")
+        fetched_oid = _single_sha_output(getattr(resolved, "stdout", ""), "remote_base")
+        receipt["base"]["fetched_oid"] = fetched_oid
+        second, second_attempts = _run_read(
+            ls_command, git_env, run, _STANDARD_READ_POLICY, deadline_at, monotonic,
+            sleep, "remote_base", terminal_returncodes={2: ("unknown", "remote_ref_missing")},
+            failure_reason="remote_ref_missing")
+        verified_oid = _ls_remote_oid(getattr(second, "stdout", ""), base_ref, "remote_base")
+        receipt["base"]["verified_oid"] = verified_oid
+        total_attempts = attempts + fetch_attempts + resolve_attempts + second_attempts
+        if len({first_oid, fetched_oid, verified_oid}) != 1:
+            _landing_stop(receipt, "blocked", "base_moved", step="remote_base",
+                          attempts=total_attempts)
+        _record_landing_step(receipt, "remote_base", "pass", "remote_base_verified",
+                             total_attempts, oid=verified_oid)
+
+        pr, pr_attempts = _read_landing_pr(
+            receipt, repo, host, gh_env, run, _STANDARD_READ_POLICY,
+            deadline_at, monotonic, sleep, "pr")
+        _validate_landing_pr(receipt, pr, pr_attempts)
+        _record_landing_step(receipt, "pr", "pass", "pr_validated", pr_attempts)
+
+        receipt["merge_tree"]["replace_objects_disabled"] = True
+        merge_result, merge_attempts = _run_read(
+            ["git", "-C", repo_path, "merge-tree", "--write-tree", head, verified_oid],
+            git_env, run, _STANDARD_READ_POLICY, deadline_at, monotonic, sleep,
+            "merge_tree", accept_nonzero=True,
+            terminal_returncodes={1: ("blocked", "merge_tree_conflict")},
+            failure_reason="merge_tree_error")
+        tree_lines = [line.strip() for line in (getattr(merge_result, "stdout", "") or "").splitlines()
+                      if line.strip()]
+        if merge_result.returncode != 0 or len(tree_lines) != 1 or not re.fullmatch(
+                r"[0-9a-f]{40}", tree_lines[0]):
+            _landing_stop(receipt, "unknown", "merge_tree_error", step="merge_tree",
+                          attempts=merge_attempts)
+        receipt["merge_tree"] = {"status": "clean", "tree_oid": tree_lines[0], "conflicts": [],
+                                 "replace_objects_disabled": True}
+        _record_landing_step(receipt, "merge_tree", "pass", "merge_tree_clean", merge_attempts,
+                             tree_oid=tree_lines[0])
+
+        _read_landing_checks(receipt, repo, host, gh_env, run, deadline_at, monotonic, sleep)
+
+        final_pr, final_attempts = _read_landing_pr(
+            receipt, repo, host, gh_env, run, _STANDARD_READ_POLICY,
+            deadline_at, monotonic, sleep, "mergeability")
+        _validate_landing_pr(receipt, final_pr, final_attempts, final=True)
+        review = final_pr["reviewDecision"]
+        if review not in {None, "", "APPROVED"}:
+            receipt["mergeability"]["status"] = "blocked"
+            receipt["mergeability"]["reason"] = "approvals_unmet"
+            _landing_stop(receipt, "blocked", "approvals_unmet", step="mergeability",
+                          attempts=final_attempts)
+        mergeable = final_pr["mergeable"]
+        merge_state = final_pr["mergeStateStatus"]
+        receipt["mergeability"].update({
+            "mergeable": mergeable,
+            "merge_state_status": merge_state,
+            "review_decision": review,
+        })
+        if mergeable == "CONFLICTING" or merge_state == "CONFLICTING":
+            receipt["mergeability"]["status"] = "blocked"
+            receipt["mergeability"]["reason"] = "mergeability_conflicting"
+            _landing_stop(receipt, "blocked", "mergeability_conflicting", step="mergeability",
+                          attempts=final_attempts)
+        if mergeable == "UNKNOWN" or merge_state == "UNKNOWN":
+            receipt["mergeability"]["status"] = "pending"
+            receipt["mergeability"]["reason"] = "mergeability_unknown"
+            _landing_stop(receipt, "pending", "mergeability_unknown", step="mergeability",
+                          attempts=final_attempts)
+        if mergeable != "MERGEABLE":
+            receipt["mergeability"]["status"] = "unknown"
+            receipt["mergeability"]["reason"] = "invalid_json"
+            _landing_stop(receipt, "unknown", "invalid_json", step="mergeability",
+                          attempts=final_attempts)
+        if merge_state == "BEHIND":
+            receipt["mergeability"]["status"] = "blocked"
+            receipt["mergeability"]["reason"] = "base_behind"
+            _landing_stop(receipt, "blocked", "base_behind", step="mergeability",
+                          attempts=final_attempts)
+        if merge_state == "BLOCKED":
+            receipt["mergeability"]["status"] = "blocked"
+            receipt["mergeability"]["reason"] = "merge_requirements_blocked"
+            _landing_stop(receipt, "blocked", "merge_requirements_blocked",
+                          step="mergeability", attempts=final_attempts)
+        if merge_state not in {"CLEAN", "UNSTABLE"}:
+            receipt["mergeability"]["status"] = "unknown"
+            receipt["mergeability"]["reason"] = "merge_state_unknown"
+            _landing_stop(receipt, "unknown", "merge_state_unknown", step="mergeability",
+                          attempts=final_attempts)
+        receipt["mergeability"]["status"] = "pass"
+        receipt["mergeability"]["reason"] = "mergeability_ready"
+        _record_landing_step(receipt, "mergeability", "pass", "mergeability_ready",
+                             final_attempts, mergeable=mergeable,
+                             merge_state_status=merge_state, review_decision=review)
+        return _finish_landing(receipt, "ready", "ready")
+    except LandingHalt as halt:
+        if halt.reason == "merge_tree_conflict":
+            receipt["merge_tree"] = {"status": "conflict", "tree_oid": None, "conflicts": None,
+                                     "replace_objects_disabled": True}
+        if halt.reason in {"checks_invalid", "checks_head_mismatch"} and receipt["checks"]["reason"] in {
+                "not_started", "not_classified"}:
+            receipt["checks"]["status"] = "unknown"
+            receipt["checks"]["reason"] = halt.reason
+        if not halt.recorded and halt.step is not None:
+            _record_landing_step(receipt, halt.step, halt.status, halt.reason, halt.attempts)
+        return _finish_landing(receipt, halt.status, halt.reason)
+
+
 def _merge_preflight(command, data_indices, host, env, run, acknowledgement):
     operation = next((i for i in range(1, len(command))
                       if i not in data_indices and not command[i].startswith("-")), None)
@@ -512,18 +1299,67 @@ def checked_invocation(expected_login: str, host: str, command: list[str],
     return run(["gh", *command], env=env).returncode
 
 
+def _argv_requests_landing(argv):
+    return any(arg == "--landing-preflight" or arg.startswith("--landing-preflight=")
+               for arg in argv)
+
+
+class _LandingAwareParser(argparse.ArgumentParser):
+    def error(self, message):
+        if _argv_requests_landing(sys.argv[1:]):
+            receipt = _landing_receipt(proxy_source=None, deadline_seconds=None)
+            _, receipt = _finish_landing(receipt, "unknown", "invalid_input")
+            print(json.dumps(receipt, separators=(",", ":"), sort_keys=True))
+            _report_landing("invalid_input")
+            raise SystemExit(2)
+        super().error(message)
+
+
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__,
-                                     epilog="Rejections print a fixed reason code and safe next step; no automatic retry.")
+    parser = _LandingAwareParser(
+        description=__doc__,
+        epilog=("Landing preflight emits one JSON receipt and uses bounded read-only retries; "
+                "other rejections print a fixed reason code and safe next step."))
     parser.add_argument("--expected-login", required=True)
     parser.add_argument("--host", default="github.com")
     parser.add_argument("--ack-merge-bypass", help="separately authorized --admin target: OWNER/REPO#PR@FULL_SHA")
     parser.add_argument("--publication-preflight", metavar="OWNER/REPO",
                         help="read live visibility, active rules and legacy protection before the first push; no gh command")
-    parser.add_argument("--base", help="explicit existing base branch for --publication-preflight")
+    parser.add_argument("--landing-preflight", metavar="OWNER/REPO#NUMBER",
+                        help="emit one read-only JSON landing receipt; no gh command")
+    parser.add_argument("--base", help="explicit existing base branch for publication or landing preflight")
+    parser.add_argument("--head", help="full reviewed commit SHA for --landing-preflight")
+    parser.add_argument("--local-repo", help="local Git repository for --landing-preflight")
+    parser.add_argument("--remote", help="Git remote name for --landing-preflight (default: origin)")
+    parser.add_argument("--proxy-source", choices=("auto", "environment", "none"),
+                        help="proxy boundary for --landing-preflight (default: auto)")
+    parser.add_argument("--deadline-seconds", type=int,
+                        help="landing preflight deadline, 0-240 seconds (default: 240)")
     parser.add_argument("command", nargs=argparse.REMAINDER,
                         help="gh arguments after --; omit to perform a read-only identity check")
     args = parser.parse_args()
+    if args.landing_preflight is not None:
+        if args.command or args.publication_preflight is not None or args.ack_merge_bypass is not None:
+            receipt = _landing_receipt(
+                host=args.host, proxy_source=args.proxy_source,
+                deadline_seconds=args.deadline_seconds)
+            _, receipt = _finish_landing(receipt, "unknown", "invalid_input")
+            print(json.dumps(receipt, separators=(",", ":"), sort_keys=True))
+            _report_landing("invalid_input")
+            return 2
+        code, receipt = run_landing_preflight(
+            expected_login=args.expected_login, host=args.host,
+            target=args.landing_preflight, head=args.head, base=args.base,
+            local_repo=args.local_repo, remote=args.remote,
+            proxy_source=args.proxy_source, deadline_seconds=args.deadline_seconds)
+        if code != 0:
+            _report_landing(receipt["reason"])
+        print(json.dumps(receipt, separators=(",", ":"), sort_keys=True))
+        return code
+    if any(value is not None for value in
+           (args.head, args.local_repo, args.remote, args.proxy_source, args.deadline_seconds)):
+        _report_rejection("invalid_input")
+        return 2
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
     try:
         return checked_invocation(args.expected_login, args.host, command, merge_bypass=args.ack_merge_bypass,
