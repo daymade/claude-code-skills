@@ -98,6 +98,13 @@ the plan, SKU rules and account budget before reporting exhaustion or a forecast
 If billing access fails, retain unknown; job annotations still prove the named
 run was blocked. See [GitHub billing](https://docs.github.com/en/actions/concepts/billing-and-usage).
 
+On private repositories that use self-hosted runners — or whenever remaining
+hosted allowance is unverified — do not treat switching jobs to GitHub-hosted
+runners (such as `ubuntu-latest`) as a default unblocking or speedup option.
+Inspect live self-hosted runner inventory, concurrency locks, and idle owned
+hardware first, and confirm remaining private allowance before adding hosted
+jobs.
+
 ## 3. Remove unnecessary demand before moving execution
 
 Audit and remove dead demand **before** scaling self-hosted runners: retired workflows still targeting hosted runners, redundant `push` triggers already enforced by `strict: true` PR branch protection, duplicate reusable CI jobs re-run inside every release workflow, and closed one-off incident tests that add runtime without protecting active contracts. Adding workers to a bloated CI hides contention instead of fixing it.
