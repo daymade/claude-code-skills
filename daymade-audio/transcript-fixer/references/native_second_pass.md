@@ -7,6 +7,8 @@ Read before Full-tier cold review or recovery from an unfinished review. Use the
 
 6. **Second pass — catch what one read missed.** For split, multi-file, or resumed Full reviews, follow [Native review packets and recovery](native_review_packets.md): freeze the complete expected file set, validate every returned span before editing, and resume only missing or failed assignments. Use that reference's JSON result contract in place of the compact-table template below. Single unsplit reviews may keep the table workflow.
 
+   **停止条件：** Full 默认只跑一次完整独立冷读。主会话逐条裁决后，如果剩余仅是缺音证、缺权威姓名或候选冲突的 pending，即停止本轮；不得为了把 pending 清零反复派全量 reviewer。只有冷读绑定快照之后由上游或作者提供新的不可变 canonical／交付版本，或原 pass 失败、截断、未完整覆盖时才重新冷读；本轮裁决与 accepted 修正的写回不算新版本。
+
    A single linear read reliably leaves residue: an idiom degraded into a near-homophone, a term wrong in just one spot among many correct ones, an acronym misheard as another. Always re-scan once for leftovers. A cheap targeted variant comes first: **trap-scan** — scan the file for every trap pattern the domain's context file documents (the recurring homophones this domain is known to produce). Resolve the file through the [context location](domain_context_guide.md#location), then run the scanner rather than truncating a manual per-trap grep list:
 
    ```bash
