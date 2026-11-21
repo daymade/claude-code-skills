@@ -383,6 +383,20 @@ that state. A later base/head change invalidates this observation; repeat the
 preflight against the new objects. These are executor checks, not a server-side
 lock on the base branch.
 
+### Independently green candidate with stale hosted mergeability
+
+A narrow exception exists when all of the following are independently true: the
+remote base was refreshed twice and stayed fixed; the exact PR head did not
+change; `git merge-tree --write-tree <head> <verified-base>` exits `0` with a
+tree; every required check is bound to that exact head and passed; and the
+landing preflight still reports `DIRTY`/`CONFLICTING` from the hosted API. In
+that case, record the pre-reopen API state and perform at most one close/reopen
+solely to force GitHub to recompute mergeability. Re-read the exact head, base,
+checks and mergeability afterward. If it remains dirty, stop and use the
+merge-semantics diagnostic; do not bounce the API, push an empty commit, or
+treat the local tree as permission to bypass a real conflict. This exception
+does not relax exact-head, required-check, review or branch-protection gates.
+
 ### Landing preflight
 
 Use the checked helper when one machine-readable observation of landing
