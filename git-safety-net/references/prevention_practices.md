@@ -80,11 +80,14 @@ If the sparse worktree will run tests, typecheck or a build, include the tracked
 consumer configuration in the initial `--path` set: root test/build config,
 package-local setup files, fixture manifests and any tracked files those entrypoints
 read. A collection failure caused by a missing config or setup file is an environment
-gap, not evidence that the code fails; extend the selection with the exact tracked
-dependency and rerun the same consumer. Ignored `node_modules` and local-only assets
-are not copied by a worktree, so use the repository's normal install/workspace path
-and verify the package-level dependency location before treating module resolution
-as a defect.
+gap, not evidence that the code fails. The repository setup owner extends the existing
+selection by unioning the exact tracked paths with
+`git sparse-checkout set --no-cone --no-sparse-index --stdin`, preserving the complete
+index; then rerun `git_prepare_sparse_worktree.py verify` with the added `--allow-path`
+entries and rerun the same consumer. Do not rerun `init` or replace the index. Ignored
+`node_modules` and local-only assets are not copied by a worktree, so use the repository's
+normal install/workspace path and verify the package-level dependency location before
+treating module resolution as a defect.
 
 ## Shared checkout and concurrent sessions: one writer
 
