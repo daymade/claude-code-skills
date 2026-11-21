@@ -239,6 +239,16 @@ use a temporary local Docker configuration and remove that configuration after t
 GHCR publication has its own preflight and digest readback; load
 `references/ghcr_publishing.md` before building or pushing an image.
 
+### 9. GitHub API rate-limit fallback
+
+When `gh`/REST/GraphQL is rate-limited, read `gh api rate_limit` before choosing another
+interface. If reset is near and the write is not urgent, schedule the exact operation for
+after reset. If the user explicitly identifies an already-authenticated browser session as
+the intended identity, a new tab in that existing browser may complete the same narrow write:
+verify the visible account, host, repository and exact PR head/base first; never select a
+different saved credential because it is convenient. After the UI write, verify through Git
+or API independently (merge commit, `ls-remote`, `git show --stat`) exactly as for `gh`.
+
 ## High-impact boundaries
 
 - Repository creation requires an explicit `OWNER/REPO` and visibility. Never default
