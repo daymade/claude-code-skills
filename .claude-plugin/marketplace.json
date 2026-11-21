@@ -1320,7 +1320,7 @@
     },
     {
       "name": "report-with-html",
-      "description": "Produces the reader-facing HTML artifact — report, dashboard, architecture view, data browser, or review workbench — evidence-backed, browser-verified. Use when the deliverable IS a visual HTML report, or the user asks for an HTML/web presentation. Load data-visualization-discipline for chart judgment. Not for chat status or Markdown prose unless asked to become a report; not for PowerPoint (deck-creator Route C).",
+      "description": "Produces standalone reader-facing HTML reports/dashboards and review workbenches — evidence-backed, browser-verified. Use for a visual HTML report or requests for “可视化报告”“图表报告” or a standalone HTML dashboard; load data-visualization-discipline before charts. Not for product UI, chat or Markdown unless asked to become a report, or PowerPoint.",
       "source": "./report-with-html",
       "strict": false,
       "version": "1.7.4",

@@ -1,11 +1,10 @@
 ---
 name: report-with-html
 description: >-
-  Produces the reader-facing HTML artifact — report, dashboard, architecture view, data browser, or
-  review workbench — evidence-backed, browser-verified. Use when the deliverable IS a visual HTML
-  report, or the user asks for an HTML/web presentation. Load data-visualization-discipline for
-  chart judgment. Not for chat status or Markdown prose unless asked to become a report; not for
-  PowerPoint (deck-creator Route C).
+  Produces standalone reader-facing HTML reports/dashboards and review workbenches — evidence-backed,
+  browser-verified. Use for a visual HTML report or requests for “可视化报告”“图表报告” or a
+  standalone HTML dashboard; load data-visualization-discipline before charts. Not for product UI,
+  chat or Markdown unless asked to become a report, or PowerPoint.
 ---
 
 # report-with-html
@@ -22,6 +21,12 @@ interactive information tool. Typical outputs include:
 - a client-facing data report or one-pager;
 - a data/archive browser or review workbench;
 - an explicitly requested HTML/web presentation.
+
+**If the user asks for a “可视化报告”“图表报告” or a standalone HTML dashboard,
+load this skill even when the request also sounds like frontend design. Load
+`data-visualization-discipline` before designing any chart. Product UI and React/
+Vue dashboards stay with their product design-system owner; this skill owns only
+the standalone HTML report artifact.**
 
 Do not trigger it for a normal status reply, generic review, code diff, issue list,
 or Markdown document. Those tasks may be reported in chat unless the user explicitly
@@ -138,18 +143,15 @@ what to investigate next from authorizing a purchase or deployment.
 
 ### Geometry and real evidence
 
-Use position and length for important quantitative comparisons. Color carries category
-or state, not a second independent measure. A geometry needs an explicit encoding key
-and a data-supported readout.
+Follow `data-visualization-discipline` for quantitative encoding, chart form,
+color, statistics, and table discipline; do not restate those rules here. For UI
+or visual-product review, real screenshots are the primary evidence: crop the
+exact defect with enough surrounding context and keep before/after crops
+identical.
 
-Do not redraw the same entity set in multiple decorative forms. Each section must
-answer a different sub-question. For UI or visual-product review, real screenshots are
-the primary evidence: crop the exact defect with enough surrounding context and keep
-before/after crops identical.
-
-Use an installed mature charting capability or the current project's declared chart
-stack for statistical charts. If neither exists, research and select a maintained
-library before implementing; do not hand-build a chart engine.
+Use an installed mature charting capability or the current project's declared
+chart stack for statistical charts. If neither exists, research and select a
+maintained library before implementing; do not hand-build a chart engine.
 
 ### Interaction and accessibility
 
