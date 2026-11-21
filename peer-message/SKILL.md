@@ -110,7 +110,7 @@ Codex 独立 thread 的原生发送直接使用[返回值驱动入口](reference
 
 **带 `[fan-out:]` 标记的消息按 ARP 语义处理**：它是发给 N 个 session 找属主的群发，不是定向问你。是你的就回复认领；不是你的**静默忽略即合规**——不用回「不是我」，更不用为它跑工具自证。标定与邻居读回义务只保留给定向问你的问题。
 
-**Claude 宿主的 `<cross-session-message>` 入站**：`inspect-inbound` 只接受 Codex target，不能拿去查 Claude。按 [Claude 跨会话入站原件接收](references/local-coordination.md#从-claude-跨会话入站原件接收) 从当前会话的精确 `queue-operation.content` 保存宿主实际 wrapper，再用 `coord receive --actor claude-session:<完整 UUID>`；不得从对话显示手抄、重排 metadata 或补末尾换行。
+**Claude 宿主的 `<cross-session-message>` 入站**：`inspect-inbound` 只接受 Codex target，不能拿去查 Claude。按 [Claude 跨会话入站原件接收](references/local-coordination.md#从-claude-跨会话入站原件接收) 从当前会话的精确 `queue-operation.content` 保存宿主实际 wrapper，再用 `coord receive --actor claude-session:<完整 UUID>`；宿主可能写 `[peer-message-id]`，也可能直接以 `[peer-coordination]` 开头，两种形状都以唯一 coordination ID 绑定同一原始记录。不得从对话显示手抄、重排 metadata 或补末尾换行。
 
 前提建立在「某条记录缺了某个标记」上时（没有 trailer、不在清单里、字段是空的），先把这个标记在同一批记录的邻居上读一遍再回答，回复里给出计数：查了几条、其中几条同样缺。邻居也普遍缺就说明它是基线、不是信号——**这个判断留给发问方，你负责让它有数可看**；邻居必须是别人也在产出的那批记录，全拿自己的历史当邻居等于没标定。只回「不是我」，等于替对方确认了它推理链上唯一的一环，它会带着一个不区分的判据走向「未知写者」。
 

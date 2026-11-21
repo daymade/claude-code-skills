@@ -534,13 +534,15 @@ Claude 宿主显示的 `<cross-session-message from-name="…">` 不走 `inspect
 `codex:<canonical UUID>`。不要按聊天显示手抄 wrapper，也不要把 `origin.body` 单独喂给
 `coord receive`——前者可能丢空白，后者缺少 `_prepared_core` 需要的 host wrapper。
 
-已知当前 Claude Session ID 与入站 `peer-message-id` 时，从该会话的精确宿主事件取件：
+已知当前 Claude Session ID 与入站 coordination ID 时，从该会话的精确宿主事件取件。
+宿主既可能在 wrapper 第二行写入 `[peer-message-id: <id>]`，也可能直接让
+`[peer-coordination: {...}]` 成为第一正文行；两种形状都必须按原始 `content` 保存：
 
 ```bash
 (
 set -eu
 umask 077
-python3 - "$SESSION_JSONL" "$INBOUND_MESSAGE_ID" "$RECEIVED_FILE" <<'PY'
+python3 - "$SESSION_JSONL" "$INBOUND_COORDINATION_ID" "$RECEIVED_FILE" <<'PY'
 import json, os, sys
 from pathlib import Path
 session, message_id, output = sys.argv[1:]
@@ -552,12 +554,26 @@ for line in Path(session).read_text(encoding="utf-8").splitlines():
     row = json.loads(line)
     content = row.get("content") if isinstance(row, dict) else None
     lines = content.splitlines() if isinstance(content, str) else []
-    if (row.get("type") == "queue-operation" and row.get("operation") == "enqueue"
+    if not (row.get("type") == "queue-operation" and row.get("operation") == "enqueue"
             and lines and lines[0].startswith('<cross-session-message')
-            and len(lines) >= 3
-            and (lines[1] == marker or lines[1].startswith(marker + " "))
             and lines[-1] == '</cross-session-message>'):
-        matches.append(content)
+        continue
+    metadata_index = next((index for index, value in enumerate(lines[1:], 1)
+                           if value.startswith("[peer-coordination: ") and value.endswith("]")), None)
+    if metadata_index is None:
+        continue
+    try:
+        metadata = json.loads(lines[metadata_index].removeprefix("[peer-coordination: ").removesuffix("]"))
+    except ValueError:
+        continue
+    if metadata.get("id") != message_id:
+        continue
+    if metadata_index == 2:
+        if not (lines[1] == marker or lines[1].startswith(marker + " ")):
+            continue
+    elif metadata_index != 1:
+        continue
+    matches.append(content)
 if len(matches) != 1:
     raise SystemExit("Claude inbound is not one exact enqueue host-wrapped match; retain unknown")
 fd = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -570,8 +586,9 @@ python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord receive "$RECEIVED_FILE" \
 ```
 
 只接受唯一一条 `type=queue-operation` 且 `operation=enqueue` 的记录；wrapper 首行必须是
-`<cross-session-message…>`，第二行必须以该入站自身 ID 的 marker 开头（同行可带协议 hint），
-末行必须是 `</cross-session-message>`。hint 的完整合法性由 `coord receive` 的既有解析器校验，这里不重复收窄，
+`<cross-session-message…>`，末行必须是 `</cross-session-message>`。第一正文行必须是该入站自身
+ID 的 `[peer-coordination: {...}]`；若宿主额外写入 marker，marker 只能紧邻在 metadata 前一行。
+不得在 metadata 前插入任意文本。hint 的完整合法性由 `coord receive` 的既有解析器校验，这里不重复收窄，
 以免拒绝协议允许的空格或方括号 reply 地址。用列表而不是集合计数，避免相同内容的多条 enqueue/remove 被去重后伪装成唯一命中。
 `splitlines()` 只用于遍历和校验 JSONL 记录；写回的是原始 `content` 字符串字节，不 strip、不重排、不补行尾，并以 `0600` 创建。
 零命中、多条冲突、只有 remove、JSON 损坏或找不到精确会话事件时保留 unknown；能从当前会话事件直接确认的，
