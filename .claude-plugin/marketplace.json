@@ -32,7 +32,14 @@
       "strict": false,
       "version": "1.0.0",
       "category": "utilities",
-      "keywords": ["cookies", "chrome", "session-migration", "login", "backup", "restore"]
+      "keywords": [
+        "cookies",
+        "chrome",
+        "session-migration",
+        "login",
+        "backup",
+        "restore"
+      ]
     },
     {
       "name": "floorplan-finder",
@@ -41,7 +48,13 @@
       "strict": false,
       "version": "1.0.0",
       "category": "utilities",
-      "keywords": ["floor-plan", "property-search", "layout-verification", "户型图", "房源"]
+      "keywords": [
+        "floor-plan",
+        "property-search",
+        "layout-verification",
+        "户型图",
+        "房源"
+      ]
     },
     {
       "name": "app-evolver",
@@ -380,7 +393,7 @@
       "description": "Audio processing suite covering the full speech pipeline: ASR transcription (Qwen3, StepFun) with batch-mode guards against music-only repetition-loop hallucinations, speaker diarization and CAM++ voiceprint identification for multi-speaker recordings, transcript error correction, structured meeting minutes generation, and TTS voice synthesis (StepFun). Install once for the complete audio workflow.",
       "source": "./daymade-audio",
       "strict": false,
-      "version": "1.65.6",
+      "version": "1.65.7",
       "category": "suite",
       "keywords": [
         "suite",

@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **daymade-audio** (`daymade-audio` v1.65.6 → v1.65.7): Bound Full cold-read rounds after one complete independent pass; re-read only for a new immutable canonical supplied after the bound snapshot or a failed, truncated, incomplete pass.
 - **peer-message** (`peer-message` v1.28.0 → v1.28.1): Align the protocol reference with the implemented Claude wrapper variants and transport-ID binding; keep the exact intake recipe owned by `references/local-coordination.md`.
 - **github-ops** (`github-ops` v1.20.0 → v1.20.1): Deduplicate runner-replica guidance so the pre-scale allowlist check owns discovery and the capacity section owns pattern-based pool representation.
 - **peer-message** (`peer-message` v1.27.10 → v1.28.0): Add a credential-safe process-to-registry-socket recipe for locating a hidden shared-repository release owner when coordination records and guessed candidates do not identify the writer; never emit full argv and never stop processes.
