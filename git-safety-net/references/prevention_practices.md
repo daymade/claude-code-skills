@@ -83,11 +83,14 @@ read. A collection failure caused by a missing config or setup file is an enviro
 gap, not evidence that the code fails. The repository setup owner extends the existing
 selection by unioning the exact tracked paths with
 `git sparse-checkout set --no-cone --no-sparse-index --stdin`, preserving the complete
-index; then rerun `git_prepare_sparse_worktree.py verify` with the added `--allow-path`
-entries and rerun the same consumer. Do not rerun `init` or replace the index. Ignored
-`node_modules` and local-only assets are not copied by a worktree, so use the repository's
-normal install/workspace path and verify the package-level dependency location before
-treating module resolution as a defect.
+index. Rerun `git_prepare_sparse_worktree.py verify` with only the paths this task is
+actually authorized to change; omit `--allow-path` when there is no owned change. Adding
+a selected config/dependency does not itself authorize editing it. Confirm each added
+dependency exists with `test -f` or an equivalent bounded check, then rerun the same
+consumer. Do not rerun `init` or replace the index. Ignored `node_modules` and local-only
+assets are not copied by a worktree, so use the repository's normal install/workspace path
+and verify the package-level dependency location before treating module resolution as a
+defect.
 
 ## Shared checkout and concurrent sessions: one writer
 
