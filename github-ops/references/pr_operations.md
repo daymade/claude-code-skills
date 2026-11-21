@@ -755,6 +755,14 @@ interface lacks leases, use the native Git sequence above. Plain legacy
   `gh pr merge` before retiring the ref over SSH Git (see
   [Separate REST vs GraphQL Quotas](api_reference.md#separate-rest-vs-graphql-quotas)).
 
+- **On a fast-moving public base, repeated `update-branch` can cost more than it preserves.**
+  If a publication/PII guard compares the candidate tree with the old hosted PR head,
+  integrating newer `main` can make already-public base content look newly introduced
+  and block the push. After the reviewed change is unchanged, prefer closing the stale
+  PR and opening one single commit on a stable fetched `main`; a new remote ref is then
+  compared with the verified default branch. Keep the old head until the replacement
+  PR exists, and do not add per-finding PII exceptions for content inherited from `main`.
+
 - **A strict require-up-to-date ruleset can leave the next PR behind after another lands.**
   Read the current base and head, then integrate the new base under the repository's history
   policy. Use a history-preserving merge when permitted. Rebase only when the repository
