@@ -124,17 +124,18 @@ To align a bucket's window `[window_start, now]` for a model group `G`:
    to get exact per-model totals from local midnight `00:00` through `now`.
 3. Query `tokscale hourly -c <client> --since <window_start_local_date> --json`
    to inspect hours before `window_start`:
-   - **Fresh simultaneous start**: when a group's `5h` and `weekly` windows
-     share the exact same `window_start` (within 5 seconds) and no hour strictly
-     before `start_hour_floor` contains that group, zero spend from that group
-     occurred before `window_start` even if the boundary hour mixed other groups—
-     `models_since[G]` is exact.
+   - **Fresh simultaneous start or rolling weekly start**: when either a group's
+     `5h` and `weekly` windows share the exact same `window_start` (within 5
+     seconds) or the bucket itself is a rolling `weekly` window, and no hour
+     strictly before `start_hour_floor` contains that group, zero spend from
+     that group occurred before `window_start` even if the boundary hour mixed
+     other groups—`models_since[G]` is exact (`exact_fresh_window_start`).
    - **Pure-group pre-window hours** (`models ⊆ G`): subtract directly; prorate
      the boundary hour containing `window_start` by
      `(minute * 60 + second) / 3600`.
    - **Zero pre-window presence** (no hour before `window_start` contains any
      model in `G`): zero subtraction needed—`models --since` is exact.
-      - **Unresolvable mixed boundary & mid-hour 5h reset overcount**: if a
+   - **Unresolvable mixed boundary & mid-hour 5h reset overcount**: if a
      pre-window hour mixes multiple groups with no fresh-start proof, keep a
      transparent `[min, upper]` interval in both JSON (`spend_min_usd`,
      `implied_pool_min_usd`) and Markdown, and emit `MIXED_HOUR_AMBIGUITY`.
