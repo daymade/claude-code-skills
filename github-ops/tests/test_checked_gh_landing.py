@@ -3,7 +3,9 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import time
@@ -48,30 +50,32 @@ def pr_data(**overrides):
     return data
 
 
-def check_row(classification, state=None):
-    states = {
-        "pass": "SUCCESS",
-        "pending": "IN_PROGRESS",
-        "fail": "FAILURE",
-        "cancel": "CANCELLED",
-        "skipping": "SKIPPED",
-        "unknown": "MYSTERY",
+def check_row(classification, head=HEAD):
+    runs = {
+        "pass": ("completed", "success"),
+        "pending": ("in_progress", None),
+        "fail": ("completed", "failure"),
+        "cancel": ("completed", "cancelled"),
+        "skipping": ("completed", "skipped"),
+        "unknown": ("completed", "mystery"),
     }
+    status, conclusion = runs[classification]
     return {
         "name": "required-test",
-        "state": state or states[classification],
-        "bucket": classification,
-        "workflow": "CI",
-        "link": "https://github.com/acme/widgets/actions/runs/1",
+        "status": status,
+        "conclusion": conclusion,
+        "head_sha": head,
+        "html_url": "https://github.com/acme/widgets/actions/runs/1",
     }
 
 
 class FakeRun:
-    def __init__(self, *, ls_remote=None, pr_views=None, checks=None, identities=None,
-                 merge_tree=None, token="top-secret-token"):
+    def __init__(self, *, ls_remote=None, pr_views=None, checks=None, statuses=None,
+                 identities=None, merge_tree=None, token="top-secret-token"):
         self.ls_remote = list(ls_remote or [f"{BASE}\t{BASE_REF}\n"])
         self.pr_views = list(pr_views or [pr_data()])
         self.checks = list(checks or [[check_row("pass")]])
+        self.statuses = list(statuses or [[]])
         self.identities = list(identities or [{"login": "alice"}])
         self.merge_tree = merge_tree or result(f"{TREE}\n")
         self.token = token
@@ -79,7 +83,10 @@ class FakeRun:
 
     @staticmethod
     def _take(queue):
-        return queue.pop(0) if len(queue) > 1 else queue[0]
+        value = queue.pop(0) if len(queue) > 1 else queue[0]
+        if isinstance(value, BaseException):
+            raise value
+        return value
 
     def __call__(self, command, **kwargs):
         command = list(command)
@@ -105,9 +112,16 @@ class FakeRun:
         if command[:3] == ["gh", "pr", "view"]:
             value = self._take(self.pr_views)
             return result(json.dumps(value)) if isinstance(value, dict) else value
-        if command[:3] == ["gh", "pr", "checks"]:
+        if command[:2] == ["gh", "api"] and "check-runs" in command[-1]:
             value = self._take(self.checks)
-            return result(json.dumps(value)) if isinstance(value, list) else value
+            if isinstance(value, list):
+                return result(json.dumps([value]))
+            return value
+        if command[:2] == ["gh", "api"] and command[-1].endswith("/statuses?per_page=100"):
+            value = self._take(self.statuses)
+            if isinstance(value, list):
+                return result(json.dumps([value]))
+            return value
         raise AssertionError(f"unexpected command: {command}")
 
 
@@ -153,6 +167,9 @@ class LandingPreflightTests(unittest.TestCase):
                          {"base": "main", "head": HEAD, "remote": "origin"})
         self.assertEqual(receipt["base"]["verified_oid"], BASE)
         self.assertEqual(receipt["merge_tree"]["status"], "clean")
+        self.assertTrue(receipt["merge_tree"]["replace_objects_disabled"])
+        self.assertEqual(receipt["checks_provenance"], "commit_scoped")
+        self.assertEqual(receipt["checks"]["head"], HEAD)
         self.assertEqual(receipt["checks"]["summary"]["pass"], 1)
         self.assertEqual(receipt["mergeability"]["status"], "pass")
         self.assertEqual(receipt["transport"],
@@ -162,7 +179,10 @@ class LandingPreflightTests(unittest.TestCase):
         self.assertEqual(commands[2][-2:], ["origin", BASE_REF])
         self.assertIn("fetch", commands[3])
         self.assertIn("merge-tree", commands[7])
+        self.assertIn("check-runs", commands[8][-1])
         self.assertNotIn("--watch", " ".join(commands[8]))
+        self.assertTrue(all(call.kwargs["env"]["GIT_NO_REPLACE_OBJECTS"] == "1"
+                            for call in fake.calls if call.command[:1] == ["git"]))
         write_verbs = {"merge", "rerun", "cancel", "update-branch", "push", "approve"}
         self.assertFalse(any(command[:2] == ["gh", "pr"] and len(command) > 2
                              and command[2] in write_verbs for command in commands))
@@ -203,6 +223,84 @@ class LandingPreflightTests(unittest.TestCase):
         self.assertEqual(len(merge_calls), 1)
         self.assertEqual(sleeps, [])
 
+    def test_merge_tree_ignores_synthetic_replace_refs(self):
+        def git(repo, *args):
+            completed = subprocess.run(
+                ["git", "-C", repo, *args], check=True, capture_output=True, text=True)
+            return completed.stdout.strip()
+
+        with tempfile.TemporaryDirectory() as repo:
+            git(repo, "init", "-q")
+            git(repo, "config", "user.name", "Landing Test")
+            git(repo, "config", "user.email", "landing@example.invalid")
+            git(repo, "config", "commit.gpgsign", "false")
+
+            Path(repo, "conflict.txt").write_text("root\n", encoding="utf-8")
+            git(repo, "add", "conflict.txt")
+            git(repo, "commit", "-q", "-m", "root")
+            root = git(repo, "rev-parse", "HEAD")
+
+            git(repo, "checkout", "-q", "-b", "base")
+            Path(repo, "conflict.txt").write_text("base\n", encoding="utf-8")
+            git(repo, "commit", "-qam", "base")
+            base_oid = git(repo, "rev-parse", "HEAD")
+
+            git(repo, "checkout", "-q", "-b", "head")
+            Path(repo, "head.txt").write_text("head\n", encoding="utf-8")
+            git(repo, "add", "head.txt")
+            git(repo, "commit", "-q", "-m", "head")
+            head_oid = git(repo, "rev-parse", "HEAD")
+
+            git(repo, "checkout", "-q", "-b", "alternate", root)
+            Path(repo, "conflict.txt").write_text("head-alternate\n", encoding="utf-8")
+            git(repo, "commit", "-qam", "alternate head")
+            alternate = git(repo, "rev-parse", "HEAD")
+            git(repo, "replace", head_oid, alternate)
+
+            control_env = dict(os.environ)
+            control_env.pop("GIT_NO_REPLACE_OBJECTS", None)
+            control = subprocess.run(
+                ["git", "-C", repo, "merge-tree", "--write-tree", head_oid, base_oid],
+                capture_output=True, text=True, env=control_env)
+            self.assertEqual(control.returncode, 1, "synthetic replace ref must change merge-tree")
+
+            fake = FakeRun(
+                ls_remote=[f"{base_oid}\trefs/heads/main\n"],
+                pr_views=[pr_data(headRefOid=head_oid, baseRefOid=base_oid)],
+                checks=[[check_row("pass", head=head_oid)]],
+            )
+
+            def hybrid_run(command, **kwargs):
+                if "merge-tree" in command:
+                    fake.calls.append(SimpleNamespace(command=list(command), kwargs=kwargs))
+                    return subprocess.run(command, **kwargs)
+                if "rev-parse" in command:
+                    fake.calls.append(SimpleNamespace(command=list(command), kwargs=kwargs))
+                    return result(f"{base_oid}\n")
+                return fake(command, **kwargs)
+
+            code, receipt = checked.run_landing_preflight(
+                expected_login="alice",
+                host="github.com",
+                target=f"{REPO}#{NUMBER}",
+                head=head_oid,
+                base="main",
+                local_repo=repo,
+                remote="origin",
+                proxy_source="none",
+                deadline_seconds=240,
+                environ={},
+                run=hybrid_run,
+                sleep=lambda _: None,
+                monotonic=time.monotonic,
+            )
+            self.assert_outcome(code, receipt, 0, "ready", "ready")
+            self.assertEqual(receipt["merge_tree"]["status"], "clean")
+            self.assertTrue(receipt["merge_tree"]["replace_objects_disabled"])
+            merge_calls = [call for call in fake.calls if "merge-tree" in call.command]
+            self.assertEqual(len(merge_calls), 1)
+            self.assertEqual(merge_calls[0].kwargs["env"]["GIT_NO_REPLACE_OBJECTS"], "1")
+
     def test_check_classifications_are_not_collapsed(self):
         cases = {
             "pass": (0, "ready", "ready"),
@@ -219,6 +317,28 @@ class LandingPreflightTests(unittest.TestCase):
                 self.assertEqual(receipt["checks"]["summary"][classification], 1)
                 if classification == "skipping":
                     self.assertNotEqual(receipt["checks"]["status"], "pass")
+
+    def test_empty_commit_scoped_checks_are_not_pass(self):
+        fake = FakeRun(checks=[[]], statuses=[[]])
+        code, receipt = invoke(fake)
+        self.assert_outcome(code, receipt, 2, "unknown", "checks_missing")
+        self.assertEqual(receipt["checks_provenance"], "commit_scoped")
+        self.assertEqual(receipt["checks"]["sources"], {"check_runs": 0, "statuses": 0})
+
+    def test_unknown_check_bucket_is_not_pass(self):
+        fake = FakeRun(checks=[[check_row("unknown")]], statuses=[[]])
+        code, receipt = invoke(fake)
+        self.assert_outcome(code, receipt, 2, "unknown", "checks_invalid")
+        self.assertEqual(receipt["checks"]["summary"]["unknown"], 1)
+        self.assertEqual(receipt["checks"]["items"][0]["bucket"], "unknown")
+        self.assertNotEqual(receipt["checks"]["status"], "pass")
+
+    def test_check_head_mismatch_is_not_bound_to_reviewed_head(self):
+        fake = FakeRun(checks=[[check_row("pass", head=OTHER)]], statuses=[[]])
+        code, receipt = invoke(fake)
+        self.assert_outcome(code, receipt, 2, "unknown", "checks_head_mismatch")
+        self.assertEqual(receipt["checks"]["items"][0]["head"], OTHER)
+        self.assertEqual(receipt["checks_provenance"], "commit_scoped")
 
     def test_auto_proxy_missing_fails_closed_without_calls(self):
         for source in ("auto", "environment"):
@@ -263,7 +383,9 @@ class LandingPreflightTests(unittest.TestCase):
         code, receipt = invoke(fake, sleeps=sleeps)
         self.assert_outcome(code, receipt, 0, "ready", "ready")
         checks_step = next(step for step in receipt["steps"] if step["name"] == "checks")
-        self.assertEqual(checks_step["attempts"], 2)
+        self.assertEqual(checks_step["attempts"], 3)
+        self.assertEqual(checks_step["source_attempts"],
+                         {"check_runs": 2, "statuses": 1})
         self.assertEqual(sleeps, [30])
 
     def test_403_and_429_do_not_retry(self):
@@ -282,6 +404,20 @@ class LandingPreflightTests(unittest.TestCase):
                                   and call.command[-1:] == ["user"]]
                 self.assertEqual(len(identity_calls), 1)
                 self.assertEqual(sleeps, [])
+
+    def test_timeout_exhausts_three_attempts(self):
+        timeout = subprocess.TimeoutExpired(["gh", "api", "user"], timeout=20)
+        fake = FakeRun(identities=[timeout])
+        sleeps = []
+        code, receipt = invoke(fake, sleeps=sleeps)
+        self.assert_outcome(code, receipt, 2, "unknown", "transport_exhausted")
+        identity_step = next(step for step in receipt["steps"] if step["name"] == "identity")
+        self.assertEqual(identity_step["attempts"], 3)
+        identity_calls = [call for call in fake.calls
+                          if call.command[:2] == ["gh", "api"]
+                          and call.command[-1:] == ["user"]]
+        self.assertEqual(len(identity_calls), 3)
+        self.assertEqual(sleeps, [2, 5])
 
     def test_malformed_json_does_not_retry(self):
         fake = FakeRun(identities=[result("not-json")])
@@ -352,8 +488,6 @@ class LandingPreflightTests(unittest.TestCase):
     def test_argparse_errors_emit_one_landing_receipt(self):
         cases = [
             ["--landing-preflight", f"{REPO}#{NUMBER}", "--deadline-seconds", "nope"],
-            ["--landing-preflight", f"{REPO}#{NUMBER}",
-             "--publication-preflight", REPO],
         ]
         for extra in cases:
             with self.subTest(extra=extra):
@@ -373,12 +507,52 @@ class LandingPreflightTests(unittest.TestCase):
                 self.assertIsNotNone(receipt["observed_at"])
                 self.assertNotIn("nope", stderr.getvalue())
 
-    def test_landing_mode_rejects_trailing_gh_command(self):
+    def test_landing_rejects_publication_with_landing_receipt(self):
         argv = [
             "checked_gh.py", "--expected-login", "alice",
             "--landing-preflight", f"{REPO}#{NUMBER}",
-            "--head", HEAD, "--base", "main", "--local-repo", "/tmp",
-            "--proxy-source", "none", "--", "pr", "view", str(NUMBER),
+            "--publication-preflight", REPO,
+        ]
+        stdout = io.StringIO()
+        with mock.patch.object(sys, "argv", argv), contextlib.redirect_stdout(stdout), \
+                contextlib.redirect_stderr(io.StringIO()):
+            code = checked.main()
+        self.assertEqual(code, 2)
+        receipt = json.loads(stdout.getvalue())
+        self.assertEqual(receipt["schema_version"], 2)
+        self.assertEqual(receipt["scope"], "landing_preflight")
+        self.assertEqual(receipt["status"], "unknown")
+        self.assertEqual(receipt["reason"], "invalid_input")
+
+    def test_publication_plus_ack_keeps_schema_v1_unknown_receipt(self):
+        argv = [
+            "checked_gh.py", "--expected-login", "alice",
+            "--publication-preflight", REPO, "--base", "main",
+            "--ack-merge-bypass", f"{REPO}#{NUMBER}@{HEAD}",
+        ]
+        stdout = io.StringIO()
+        with mock.patch.object(sys, "argv", argv), contextlib.redirect_stdout(stdout), \
+                contextlib.redirect_stderr(io.StringIO()):
+            code = checked.main()
+        self.assertEqual(code, 2)
+        lines = stdout.getvalue().strip().splitlines()
+        self.assertEqual(len(lines), 1)
+        receipt = json.loads(lines[0])
+        self.assertEqual(receipt, {
+            "schema_version": 1,
+            "status": "unknown",
+            "route": "unknown",
+            "scope": "publication_route_only",
+            "reason": "invalid_input",
+        })
+
+    def test_unexpandable_home_path_still_emits_one_landing_receipt(self):
+        argv = [
+            "checked_gh.py", "--expected-login", "alice",
+            "--landing-preflight", f"{REPO}#{NUMBER}",
+            "--head", HEAD, "--base", "main",
+            "--local-repo", "~gh-landing-user-that-does-not-exist/repo",
+            "--proxy-source", "none",
         ]
         stdout = io.StringIO()
         stderr = io.StringIO()
@@ -386,9 +560,68 @@ class LandingPreflightTests(unittest.TestCase):
                 contextlib.redirect_stderr(stderr):
             code = checked.main()
         self.assertEqual(code, 2)
-        receipt = json.loads(stdout.getvalue())
+        lines = stdout.getvalue().strip().splitlines()
+        self.assertEqual(len(lines), 1)
+        receipt = json.loads(lines[0])
+        self.assertEqual(receipt["schema_version"], 2)
         self.assertEqual(receipt["status"], "unknown")
         self.assertEqual(receipt["reason"], "invalid_input")
+        self.assertIsNotNone(receipt["observed_at"])
+        self.assertNotIn("gh-landing-user-that-does-not-exist", stderr.getvalue())
+
+    def test_landing_mode_rejects_trailing_gh_command(self):
+        for trailing in (["pr", "view", str(NUMBER)], ["pr", "merge", str(NUMBER)]):
+            with self.subTest(trailing=trailing):
+                argv = [
+                    "checked_gh.py", "--expected-login", "alice",
+                    "--landing-preflight", f"{REPO}#{NUMBER}",
+                    "--head", HEAD, "--base", "main", "--local-repo", "/tmp",
+                    "--proxy-source", "none", "--", *trailing,
+                ]
+                stdout = io.StringIO()
+                with mock.patch.object(sys, "argv", argv), contextlib.redirect_stdout(stdout), \
+                        contextlib.redirect_stderr(io.StringIO()):
+                    code = checked.main()
+                self.assertEqual(code, 2)
+                receipt = json.loads(stdout.getvalue())
+                self.assertEqual(receipt["status"], "unknown")
+                self.assertEqual(receipt["reason"], "invalid_input")
+
+
+    def test_raw_rest_and_graphql_merges_remain_rejected(self):
+        cases = [
+            ["api", f"repos/{REPO}/pulls/{NUMBER}/merge", "-X", "PUT"],
+            ["api", "graphql", "-f",
+             "query=mutation Merge { mergePullRequest(input: {pullRequestId: \"x\"}) { clientMutationId } }"],
+        ]
+        for command in cases:
+            with self.subTest(command=command[:2]):
+                fake = FakeRun()
+                with self.assertRaises(checked.GuardError) as raised:
+                    checked.checked_invocation("alice", "github.com", command, run=fake)
+                self.assertEqual(raised.exception.code, "raw_merge_rejected")
+                self.assertEqual(fake.calls, [])
+
+    def test_guarded_merge_requires_exact_head_and_admin_ack(self):
+        cases = [
+            (["pr", "merge", str(NUMBER), "-R", REPO, "--squash"],
+             None, pr_data(), "target_required"),
+            (["pr", "merge", str(NUMBER), "-R", REPO, "--squash",
+              "--match-head-commit", HEAD],
+             None, pr_data(headRefOid=OTHER), "head_mismatch"),
+            (["pr", "merge", str(NUMBER), "-R", REPO, "--squash", "--admin",
+              "--match-head-commit", HEAD],
+             None, pr_data(), "bypass_ack_required"),
+        ]
+        for command, acknowledgement, pr, reason in cases:
+            with self.subTest(reason=reason):
+                fake = FakeRun(pr_views=[pr])
+                with mock.patch("sys.stderr", new_callable=io.StringIO):
+                    with self.assertRaises(checked.GuardError) as raised:
+                        checked.checked_invocation(
+                            "alice", "github.com", command, run=fake,
+                            merge_bypass=acknowledgement)
+                self.assertEqual(raised.exception.code, reason)
 
 
 if __name__ == "__main__":

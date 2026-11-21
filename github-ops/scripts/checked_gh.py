@@ -307,6 +307,7 @@ _LANDING_NEXT_STEPS = {
     "merge_requirements_blocked": "Inspect the current PR requirements and resolve the blocking gate.",
     "mergeability_unknown": "Wait for GitHub to compute mergeability, then reread the PR once.",
     "merge_state_unknown": "Inspect the current PR merge state before another landing attempt.",
+    "checks_head_mismatch": "Reread commit-scoped checks for the reviewed head; do not bind evidence from another commit.",
 }
 
 _STANDARD_READ_POLICY = {"max_attempts": 3, "timeout": 20, "backoff": (2, 5)}
@@ -343,6 +344,7 @@ def _landing_receipt(*, host=None, repository=None, pull_request=None, base=None
         "pull_request": pull_request,
         "actor": None,
         "observed_at": None,
+        "checks_provenance": "not_started",
         "candidate": {"base": base, "head": head, "remote": remote},
         "transport": {
             "source": proxy_source,
@@ -368,10 +370,13 @@ def _landing_receipt(*, host=None, repository=None, pull_request=None, base=None
             "mergeable": None,
             "merge_state_status": None,
         },
-        "merge_tree": {"status": "unknown", "tree_oid": None, "conflicts": None},
+        "merge_tree": {"status": "unknown", "tree_oid": None, "conflicts": None,
+                       "replace_objects_disabled": None},
         "checks": {
             "status": "unknown",
             "reason": "not_started",
+            "head": None,
+            "sources": {"check_runs": 0, "statuses": 0},
             "summary": {"pass": 0, "pending": 0, "fail": 0, "cancel": 0,
                         "skipping": 0, "unknown": 0},
             "items": [],
@@ -493,7 +498,6 @@ def _run_read(command, env, run, policy, deadline_at, monotonic, sleep, step, *,
               accept_nonzero=False, terminal_returncodes=None, failure_reason="command_failed"):
     """Run one bounded read-only command and return (result, attempts)."""
     terminal_returncodes = terminal_returncodes or {}
-    last_reason = "transport_exhausted"
     for attempt in range(1, policy["max_attempts"] + 1):
         _ensure_landing_deadline(deadline_at, monotonic, step=step, attempts=attempt - 1)
         remaining = _remaining_seconds(deadline_at, monotonic)
@@ -501,7 +505,7 @@ def _run_read(command, env, run, policy, deadline_at, monotonic, sleep, step, *,
         try:
             result = run(command, env=env, capture_output=True, text=True, timeout=timeout)
         except subprocess.TimeoutExpired:
-            last_reason = "transport_timeout"
+            pass
         except OSError:
             raise LandingHalt("unknown", "io_unavailable", step=step, attempts=attempt) from None
         else:
@@ -521,20 +525,19 @@ def _run_read(command, env, run, policy, deadline_at, monotonic, sleep, step, *,
                     terminal_status, terminal_reason = "unknown", terminal
                 raise LandingHalt(terminal_status, terminal_reason,
                                   step=step, attempts=attempt)
-            if retryable:
-                last_reason = "transport_error"
-            elif accept_nonzero and bool((getattr(result, "stdout", "") or "").strip()):
-                return result, attempt
-            else:
+            if not retryable:
+                if accept_nonzero and bool((getattr(result, "stdout", "") or "").strip()):
+                    return result, attempt
                 raise LandingHalt("unknown", failure_reason, step=step, attempts=attempt)
         if attempt == policy["max_attempts"]:
-            raise LandingHalt("unknown", "transport_exhausted", step=step, attempts=attempt)
+            break
         delay = policy["backoff"][attempt - 1]
         remaining = _remaining_seconds(deadline_at, monotonic)
         if remaining <= 0:
             raise LandingHalt("unknown", "deadline_exceeded", step=step, attempts=attempt)
         sleep(min(delay, remaining))
-    raise LandingHalt("unknown", last_reason, step=step, attempts=policy["max_attempts"])
+    raise LandingHalt("unknown", "transport_exhausted", step=step,
+                      attempts=policy["max_attempts"])
 
 
 def _decode_landing_json(stdout, expected_type, step, attempts=None):
@@ -658,87 +661,181 @@ def _validate_landing_pr(receipt, pr, attempts, *, final=False):
         _landing_stop(receipt, "blocked", "head_mismatch", step=step, attempts=attempts)
 
 
-def _classify_landing_check(row):
-    bucket = row["bucket"].casefold()
-    state = row["state"].casefold()
-    if bucket == "skipping" or state == "skipped":
-        return "skipping"
-    if bucket == "cancel" or state in {"cancelled", "canceled"}:
-        return "cancel"
-    if bucket == "fail" or state in {"failure", "failed", "error", "timed_out", "startup_failure"}:
-        return "fail"
-    if bucket == "pending" or state in {"pending", "queued", "in_progress", "requested",
-                                        "waiting", "action_required"}:
+def _classify_check_run(status, conclusion):
+    status = status.casefold()
+    conclusion = (conclusion or "").casefold()
+    if status in {"queued", "in_progress", "requested", "waiting", "pending"}:
         return "pending"
-    if bucket == "pass" and state in {"success", "passed", "neutral"}:
+    if status != "completed":
+        return "unknown"
+    if conclusion == "success":
         return "pass"
+    if conclusion in {"skipped", "neutral"}:
+        return "skipping"
+    if conclusion in {"cancelled", "canceled"}:
+        return "cancel"
+    if conclusion in {"failure", "timed_out", "startup_failure", "stale"}:
+        return "fail"
+    if conclusion == "action_required":
+        return "pending"
     return "unknown"
 
 
-def _read_landing_checks(receipt, repo, env, run, deadline_at, monotonic, sleep):
+def _classify_commit_status(state):
+    state = state.casefold()
+    if state == "success":
+        return "pass"
+    if state == "pending":
+        return "pending"
+    if state in {"failure", "error"}:
+        return "fail"
+    return "unknown"
+
+
+def _flatten_api_pages(result, step, attempts):
+    pages = _decode_landing_json(getattr(result, "stdout", ""), list, step, attempts)
+    if any(not isinstance(page, list) for page in pages):
+        raise LandingHalt("unknown", "invalid_json", step=step, attempts=attempts)
+    return [row for page in pages for row in page]
+
+
+def _read_landing_checks(receipt, repo, host, env, run, deadline_at, monotonic, sleep):
     step = "checks"
-    number = receipt["pull_request"]
-    result, attempts = _run_read(
-        ["gh", "pr", "checks", str(number), "-R", repo, "--json",
-         "name,state,bucket,workflow,link"],
-        env, run, _CHECKS_READ_POLICY, deadline_at, monotonic, sleep, step,
-        accept_nonzero=True, failure_reason="checks_unavailable")
-    rows = _decode_landing_json(getattr(result, "stdout", ""), list, step, attempts)
+    head = receipt["candidate"]["head"]
     summary = {"pass": 0, "pending": 0, "fail": 0, "cancel": 0, "skipping": 0, "unknown": 0}
     items = []
     receipt["checks"] = {
         "status": "unknown",
         "reason": "not_classified",
+        "head": head,
+        "sources": {"check_runs": 0, "statuses": 0},
         "summary": summary,
         "items": items,
     }
-    for row in rows:
+    receipt["checks_provenance"] = "commit_scoped"
+
+    check_runs_result, check_runs_attempts = _run_read(
+        ["gh", "api", "--hostname", host, "--paginate", "--slurp",
+         f"repos/{repo}/commits/{head}/check-runs?per_page=100"],
+        env, run, _CHECKS_READ_POLICY, deadline_at, monotonic, sleep, step,
+        failure_reason="checks_unavailable")
+    check_runs = _flatten_api_pages(check_runs_result, step, check_runs_attempts)
+    receipt["checks"]["sources"]["check_runs"] = len(check_runs)
+    for row in check_runs:
         if (not isinstance(row, dict)
-                or not {"name", "state", "bucket", "workflow", "link"} <= row.keys()
+                or not {"name", "status", "conclusion", "head_sha", "html_url"} <= row.keys()
                 or not isinstance(row["name"], str) or not row["name"]
-                or not isinstance(row["state"], str) or not row["state"]
-                or row["bucket"] not in {"pass", "pending", "fail", "cancel", "skipping", "unknown"}
-                or (row["workflow"] is not None and not isinstance(row["workflow"], str))
-                or (row["link"] is not None and not isinstance(row["link"], str))):
-            _landing_stop(receipt, "unknown", "checks_invalid", step=step, attempts=attempts)
-        classification = _classify_landing_check(row)
+                or not isinstance(row["status"], str) or not row["status"]
+                or (row["conclusion"] is not None and not isinstance(row["conclusion"], str))
+                or not isinstance(row["head_sha"], str)
+                or not re.fullmatch(r"[0-9a-fA-F]{40}", row["head_sha"])
+                or (row["html_url"] is not None and not isinstance(row["html_url"], str))):
+            _landing_stop(receipt, "unknown", "checks_invalid", step=step,
+                          attempts=check_runs_attempts)
+        if row["head_sha"].lower() != head:
+            items.append({
+                "source": "check_runs",
+                "name": row["name"],
+                "state": row["status"],
+                "bucket": "unknown",
+                "head": row["head_sha"].lower(),
+                "link": row["html_url"],
+                "classification": "unknown",
+            })
+            summary["unknown"] += 1
+            _landing_stop(receipt, "unknown", "checks_head_mismatch", step=step,
+                          attempts=check_runs_attempts)
+        classification = _classify_check_run(row["status"], row["conclusion"])
         summary[classification] += 1
         items.append({
+            "source": "check_runs",
             "name": row["name"],
-            "state": row["state"],
-            "bucket": row["bucket"],
-            "workflow": row["workflow"],
-            "link": row["link"],
+            "state": row["status"].casefold(),
+            "bucket": classification,
+            "head": row["head_sha"].lower(),
+            "link": row["html_url"],
             "classification": classification,
         })
-    if not rows:
+
+    statuses_result, statuses_attempts = _run_read(
+        ["gh", "api", "--hostname", host, "--paginate", "--slurp",
+         f"repos/{repo}/commits/{head}/statuses?per_page=100"],
+        env, run, _CHECKS_READ_POLICY, deadline_at, monotonic, sleep, step,
+        failure_reason="checks_unavailable")
+    statuses = _flatten_api_pages(statuses_result, step, statuses_attempts)
+    receipt["checks"]["sources"]["statuses"] = len(statuses)
+    for row in statuses:
+        if (not isinstance(row, dict)
+                or not {"context", "state", "sha", "target_url"} <= row.keys()
+                or not isinstance(row["context"], str) or not row["context"]
+                or not isinstance(row["state"], str) or not row["state"]
+                or not isinstance(row["sha"], str)
+                or not re.fullmatch(r"[0-9a-fA-F]{40}", row["sha"])
+                or (row["target_url"] is not None and not isinstance(row["target_url"], str))):
+            _landing_stop(receipt, "unknown", "checks_invalid", step=step,
+                          attempts=statuses_attempts)
+        if row["sha"].lower() != head:
+            items.append({
+                "source": "statuses",
+                "name": row["context"],
+                "state": row["state"],
+                "bucket": "unknown",
+                "head": row["sha"].lower(),
+                "link": row["target_url"],
+                "classification": "unknown",
+            })
+            summary["unknown"] += 1
+            _landing_stop(receipt, "unknown", "checks_head_mismatch", step=step,
+                          attempts=statuses_attempts)
+        classification = _classify_commit_status(row["state"])
+        summary[classification] += 1
+        items.append({
+            "source": "statuses",
+            "name": row["context"],
+            "state": row["state"].casefold(),
+            "bucket": classification,
+            "head": row["sha"].lower(),
+            "link": row["target_url"],
+            "classification": classification,
+        })
+
+    total_attempts = check_runs_attempts + statuses_attempts
+    if not items:
         receipt["checks"]["status"] = "unknown"
         receipt["checks"]["reason"] = "checks_missing"
-        _landing_stop(receipt, "unknown", "checks_missing", step=step, attempts=attempts)
+        _landing_stop(receipt, "unknown", "checks_missing", step=step,
+                      attempts=total_attempts)
     if summary["fail"]:
         receipt["checks"]["status"] = "blocked"
         receipt["checks"]["reason"] = "checks_failed"
-        _landing_stop(receipt, "blocked", "checks_failed", step=step, attempts=attempts)
+        _landing_stop(receipt, "blocked", "checks_failed", step=step,
+                      attempts=total_attempts)
     if summary["cancel"]:
         receipt["checks"]["status"] = "blocked"
         receipt["checks"]["reason"] = "checks_cancelled"
-        _landing_stop(receipt, "blocked", "checks_cancelled", step=step, attempts=attempts)
+        _landing_stop(receipt, "blocked", "checks_cancelled", step=step,
+                      attempts=total_attempts)
     if summary["skipping"]:
         receipt["checks"]["status"] = "blocked"
         receipt["checks"]["reason"] = "checks_skipping"
-        _landing_stop(receipt, "blocked", "checks_skipping", step=step, attempts=attempts)
+        _landing_stop(receipt, "blocked", "checks_skipping", step=step,
+                      attempts=total_attempts)
     if summary["unknown"]:
         receipt["checks"]["status"] = "unknown"
         receipt["checks"]["reason"] = "checks_invalid"
-        _landing_stop(receipt, "unknown", "checks_invalid", step=step, attempts=attempts)
+        _landing_stop(receipt, "unknown", "checks_invalid", step=step,
+                      attempts=total_attempts)
     if summary["pending"]:
         receipt["checks"]["status"] = "pending"
         receipt["checks"]["reason"] = "checks_pending"
-        _landing_stop(receipt, "pending", "checks_pending", step=step, attempts=attempts)
+        _landing_stop(receipt, "pending", "checks_pending", step=step,
+                      attempts=total_attempts)
     receipt["checks"]["status"] = "pass"
     receipt["checks"]["reason"] = "checks_pass"
-    _record_landing_step(receipt, step, "pass", "checks_pass", attempts,
-                         summary=summary)
+    _record_landing_step(receipt, step, "pass", "checks_pass", total_attempts,
+                         head=head, summary=summary,
+                         source_attempts={"check_runs": check_runs_attempts,
+                                          "statuses": statuses_attempts})
 
 
 def run_landing_preflight(*, expected_login, host, target, head, base, local_repo,
@@ -776,7 +873,8 @@ def run_landing_preflight(*, expected_login, host, target, head, base, local_rep
         repo_path = Path(local_repo).expanduser()
         if not repo_path.is_dir():
             raise ValueError("invalid local repository")
-    except ValueError:
+        repo_path = str(repo_path.resolve())
+    except (ValueError, RuntimeError, OSError):
         return _finish_landing(receipt, "unknown", "invalid_input")
 
     head = head.lower()
@@ -785,7 +883,6 @@ def run_landing_preflight(*, expected_login, host, target, head, base, local_rep
     receipt["pull_request"] = number
     receipt["candidate"] = {"base": base, "head": head, "remote": remote}
     receipt["base"]["ref"] = f"refs/heads/{base}"
-    repo_path = str(repo_path.resolve())
     deadline_at = monotonic() + deadline_seconds
 
     try:
@@ -815,6 +912,8 @@ def run_landing_preflight(*, expected_login, host, target, head, base, local_rep
         gh_env["GH_HOST"] = host
         token_key = "GH_TOKEN" if host == "github.com" or host.endswith(".ghe.com") else "GH_ENTERPRISE_TOKEN"
         gh_env[token_key] = token
+        git_env = dict(gh_env)
+        git_env["GIT_NO_REPLACE_OBJECTS"] = "1"
 
         identity, attempts = _run_read(
             ["gh", "api", "--hostname", host, "user"], gh_env, run,
@@ -832,7 +931,7 @@ def run_landing_preflight(*, expected_login, host, target, head, base, local_rep
         base_ref = f"refs/heads/{base}"
         ls_command = ["git", "-C", repo_path, "ls-remote", "--exit-code", remote, base_ref]
         first, attempts = _run_read(
-            ls_command, gh_env, run, _STANDARD_READ_POLICY, deadline_at, monotonic,
+            ls_command, git_env, run, _STANDARD_READ_POLICY, deadline_at, monotonic,
             sleep, "remote_base", terminal_returncodes={2: ("unknown", "remote_ref_missing")},
             failure_reason="remote_ref_missing")
         first_oid = _ls_remote_oid(getattr(first, "stdout", ""), base_ref, "remote_base")
@@ -841,28 +940,23 @@ def run_landing_preflight(*, expected_login, host, target, head, base, local_rep
         fetched, fetch_attempts = _run_read(
             ["git", "-C", repo_path, "fetch", "--no-tags", remote,
              f"+{base_ref}:refs/remotes/{remote}/{base}"],
-            gh_env, run, _STANDARD_READ_POLICY, deadline_at, monotonic, sleep,
+            git_env, run, _STANDARD_READ_POLICY, deadline_at, monotonic, sleep,
             "remote_base", failure_reason="remote_ref_missing")
         del fetched
         resolved, resolve_attempts = _run_read(
             ["git", "-C", repo_path, "rev-parse", "--verify",
              f"refs/remotes/{remote}/{base}^{{commit}}"],
-            gh_env, run, _STANDARD_READ_POLICY, deadline_at, monotonic, sleep,
+            git_env, run, _STANDARD_READ_POLICY, deadline_at, monotonic, sleep,
             "remote_base", failure_reason="remote_ref_missing")
         fetched_oid = _single_sha_output(getattr(resolved, "stdout", ""), "remote_base")
         receipt["base"]["fetched_oid"] = fetched_oid
         second, second_attempts = _run_read(
-            ls_command, gh_env, run, _STANDARD_READ_POLICY, deadline_at, monotonic,
+            ls_command, git_env, run, _STANDARD_READ_POLICY, deadline_at, monotonic,
             sleep, "remote_base", terminal_returncodes={2: ("unknown", "remote_ref_missing")},
             failure_reason="remote_ref_missing")
         verified_oid = _ls_remote_oid(getattr(second, "stdout", ""), base_ref, "remote_base")
         receipt["base"]["verified_oid"] = verified_oid
         total_attempts = attempts + fetch_attempts + resolve_attempts + second_attempts
-        receipt["base"].update({
-            "remote_oid": first_oid,
-            "fetched_oid": fetched_oid,
-            "verified_oid": verified_oid,
-        })
         if len({first_oid, fetched_oid, verified_oid}) != 1:
             _landing_stop(receipt, "blocked", "base_moved", step="remote_base",
                           attempts=total_attempts)
@@ -875,26 +969,25 @@ def run_landing_preflight(*, expected_login, host, target, head, base, local_rep
         _validate_landing_pr(receipt, pr, pr_attempts)
         _record_landing_step(receipt, "pr", "pass", "pr_validated", pr_attempts)
 
+        receipt["merge_tree"]["replace_objects_disabled"] = True
         merge_result, merge_attempts = _run_read(
             ["git", "-C", repo_path, "merge-tree", "--write-tree", head, verified_oid],
-            gh_env, run, _STANDARD_READ_POLICY, deadline_at, monotonic, sleep,
+            git_env, run, _STANDARD_READ_POLICY, deadline_at, monotonic, sleep,
             "merge_tree", accept_nonzero=True,
             terminal_returncodes={1: ("blocked", "merge_tree_conflict")},
             failure_reason="merge_tree_error")
-        if merge_result.returncode == 1:
-            _landing_stop(receipt, "blocked", "merge_tree_conflict", step="merge_tree",
-                          attempts=merge_attempts)
         tree_lines = [line.strip() for line in (getattr(merge_result, "stdout", "") or "").splitlines()
                       if line.strip()]
         if merge_result.returncode != 0 or len(tree_lines) != 1 or not re.fullmatch(
                 r"[0-9a-f]{40}", tree_lines[0]):
             _landing_stop(receipt, "unknown", "merge_tree_error", step="merge_tree",
                           attempts=merge_attempts)
-        receipt["merge_tree"] = {"status": "clean", "tree_oid": tree_lines[0], "conflicts": []}
+        receipt["merge_tree"] = {"status": "clean", "tree_oid": tree_lines[0], "conflicts": [],
+                                 "replace_objects_disabled": True}
         _record_landing_step(receipt, "merge_tree", "pass", "merge_tree_clean", merge_attempts,
                              tree_oid=tree_lines[0])
 
-        _read_landing_checks(receipt, repo, gh_env, run, deadline_at, monotonic, sleep)
+        _read_landing_checks(receipt, repo, host, gh_env, run, deadline_at, monotonic, sleep)
 
         final_pr, final_attempts = _read_landing_pr(
             receipt, repo, host, gh_env, run, _STANDARD_READ_POLICY,
@@ -951,11 +1044,12 @@ def run_landing_preflight(*, expected_login, host, target, head, base, local_rep
         return _finish_landing(receipt, "ready", "ready")
     except LandingHalt as halt:
         if halt.reason == "merge_tree_conflict":
-            receipt["merge_tree"] = {"status": "conflict", "tree_oid": None, "conflicts": None}
-        if halt.reason == "checks_invalid" and receipt["checks"]["reason"] in {
+            receipt["merge_tree"] = {"status": "conflict", "tree_oid": None, "conflicts": None,
+                                     "replace_objects_disabled": True}
+        if halt.reason in {"checks_invalid", "checks_head_mismatch"} and receipt["checks"]["reason"] in {
                 "not_started", "not_classified"}:
             receipt["checks"]["status"] = "unknown"
-            receipt["checks"]["reason"] = "checks_invalid"
+            receipt["checks"]["reason"] = halt.reason
         if not halt.recorded and halt.step is not None:
             _record_landing_step(receipt, halt.step, halt.status, halt.reason, halt.attempts)
         return _finish_landing(receipt, halt.status, halt.reason)
@@ -1228,12 +1322,11 @@ def main() -> int:
                 "other rejections print a fixed reason code and safe next step."))
     parser.add_argument("--expected-login", required=True)
     parser.add_argument("--host", default="github.com")
-    exclusive = parser.add_mutually_exclusive_group()
-    exclusive.add_argument("--ack-merge-bypass", help="separately authorized --admin target: OWNER/REPO#PR@FULL_SHA")
-    exclusive.add_argument("--publication-preflight", metavar="OWNER/REPO",
-                           help="read live visibility, active rules and legacy protection before the first push; no gh command")
-    exclusive.add_argument("--landing-preflight", metavar="OWNER/REPO#NUMBER",
-                           help="emit one read-only JSON landing receipt; no gh command")
+    parser.add_argument("--ack-merge-bypass", help="separately authorized --admin target: OWNER/REPO#PR@FULL_SHA")
+    parser.add_argument("--publication-preflight", metavar="OWNER/REPO",
+                        help="read live visibility, active rules and legacy protection before the first push; no gh command")
+    parser.add_argument("--landing-preflight", metavar="OWNER/REPO#NUMBER",
+                        help="emit one read-only JSON landing receipt; no gh command")
     parser.add_argument("--base", help="explicit existing base branch for publication or landing preflight")
     parser.add_argument("--head", help="full reviewed commit SHA for --landing-preflight")
     parser.add_argument("--local-repo", help="local Git repository for --landing-preflight")
@@ -1246,7 +1339,7 @@ def main() -> int:
                         help="gh arguments after --; omit to perform a read-only identity check")
     args = parser.parse_args()
     if args.landing_preflight is not None:
-        if args.command:
+        if args.command or args.publication_preflight is not None or args.ack_merge_bypass is not None:
             receipt = _landing_receipt(
                 host=args.host, proxy_source=args.proxy_source,
                 deadline_seconds=args.deadline_seconds)

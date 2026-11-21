@@ -404,9 +404,19 @@ mode is mutually exclusive with `--publication-preflight`,
 `ls-remote` → fetch the explicit base into `refs/remotes/<remote>/<base>` →
 `rev-parse` → a second `ls-remote`; a PR read bound to the exact repository,
 number, URL, open/non-draft state, base and head; `git merge-tree --write-tree`
-without touching HEAD or the worktree; one `gh pr checks` read classified as
-pass/pending/fail/cancel/skipping/unknown; and a final PR mergeability read.
-`skipping` is never a pass.
+without touching HEAD or the worktree; commit-scoped check-runs and statuses for
+the exact reviewed head; and a final PR mergeability read. Check rows are bound
+by their own `head_sha`/`sha`, so an A→B→A PR-head window cannot transfer B's
+check evidence to A; any mismatched row is `unknown/checks_head_mismatch`.
+The receipt records `checks_provenance=commit_scoped`. `skipping` is never a
+pass.
+
+Git child processes set `GIT_NO_REPLACE_OBJECTS=1`, so repository `refs/replace/*`
+cannot silently change the local merge-tree object graph. Local Git version,
+attributes/drivers, partial or shallow state can still differ from GitHub's
+merge semantics. When local and hosted results disagree, follow the
+[merge-semantics diagnostic](https://github.com/daymade/claude-code-skills/blob/main/github-review-pr/SKILL.md#when-local-and-hosted-merge-results-disagree);
+do not close/reopen the PR or push a refresh commit merely to force agreement.
 
 stdout is exactly one schema-version-2 JSON receipt. Exit `0` means `ready`, `2`
 means `unknown` (including input, proxy and transport), `3` means `blocked`, and

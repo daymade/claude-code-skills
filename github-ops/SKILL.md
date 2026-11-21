@@ -133,15 +133,18 @@ python3 <github-ops-dir>/scripts/checked_gh.py \
 
 `--landing-preflight` is mutually exclusive with `--publication-preflight`,
 `--ack-merge-bypass` and a trailing command. It verifies the actor, fresh remote
-base, PR target/state/draft/base/head, `merge-tree`, one `gh pr checks` read and a
-final mergeability read. stdout is one schema-version-2 JSON receipt; unknown
-evidence stays `null`. Exit `0` is `ready`, `2` is `unknown`/input/transport, `3`
-is `blocked`, and `4` is `pending`. `auto` accepts only an explicit
-`HTTPS_PROXY`/`ALL_PROXY` (either case) and otherwise fails closed with
-`proxy_missing`; `none` removes all proxy variables. Proxy endpoints and tokens
-never enter the receipt or stderr. A `ready` receipt is not merge authorization:
-merge still goes through the guarded `pr merge --match-head-commit` entry and
-must be reread immediately before the write. See
+base, PR target/state/draft/base/head, `merge-tree`, commit-scoped check runs and
+statuses for the exact reviewed head, and a final mergeability read. Check rows
+whose `head_sha`/`sha` differs from `--head` are `unknown`, never rebound to the
+PR; the receipt records `checks_provenance=commit_scoped`. stdout is one
+schema-version-2 JSON receipt; unknown evidence stays `null`.
+Exit `0` is `ready`, `2` is `unknown`/input/transport, `3` is `blocked`, and `4`
+is `pending`. `auto` accepts only an explicit `HTTPS_PROXY`/`ALL_PROXY` (either
+case) and otherwise fails closed with `proxy_missing`; `none` removes all proxy
+variables. Proxy endpoints and tokens never enter the receipt or stderr. A
+`ready` receipt is not merge authorization: merge still goes through the
+guarded `pr merge --match-head-commit` entry and must be reread immediately
+before the write. See
 [landing preflight](references/pr_operations.md#landing-preflight).
 
 Reference examples show native `gh` operation syntax. Execute hosted-state
