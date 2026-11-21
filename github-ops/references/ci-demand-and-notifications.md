@@ -107,7 +107,7 @@ jobs.
 
 ## 3. Remove unnecessary demand before moving execution
 
-Audit and remove dead demand **before** scaling self-hosted runners: retired workflows still targeting hosted runners, redundant `push` triggers already enforced by `strict: true` PR branch protection, duplicate reusable CI jobs re-run inside every release workflow, and closed one-off incident tests that add runtime without protecting active contracts. Adding workers to a bloated CI hides contention instead of fixing it.
+Audit and remove dead demand **before** scaling self-hosted runners: retired workflows still targeting hosted runners, redundant `push` triggers already enforced by `strict: true` PR branch protection, duplicate reusable CI jobs re-run inside every release workflow, sequential targets that execute the same unit-test suite twice (for example, `make verify` and `make test` both running the full suite), and closed one-off incident tests that add runtime without protecting active contracts. Adding workers to a bloated CI hides contention instead of fixing it. Conversely, once per-run work is lean, measure **queue wait time against host idle capacity** — a single self-hosted runner on a mostly idle multi-core host still produces multi-PR head-of-line queues until scaled to match concurrent PR/main demand.
 
 For each expensive job, name the behavior it protects and the inputs that can
 change it. Use actual historical diffs for both directions: unrelated business
@@ -130,6 +130,16 @@ three recurring failure modes before merge:
 3. **CI self-change full fallback**: edits to the workflow file itself, root
    `Makefile`, or shared quality task definitions should force all domain suites
    to run rather than partially validating a changed selector.
+4. **Canonical derivation and fail-closed shared-fixture handling**: derive
+   test-module-to-group mappings directly from the canonical step/group table
+   rather than hand-maintained substring heuristics, and scan cross-file imports
+   or module-name references so edits to shared test fixtures or production
+   modules fail closed to the full suite (or full parallel shards).
+5. **Expression-injection and `$GITHUB_OUTPUT` hygiene**: never interpolate
+   `${{ ... }}` expressions or raw git filenames into `run:` shell commands or
+   `$GITHUB_OUTPUT` values. Emit fixed constant enum reason codes, reject
+   newlines/shell metacharacters before writing `$GITHUB_OUTPUT`, and pass
+   workflow outputs into `run:` blocks strictly via `env:`.
 
 Inspect branch rules and required check names before filtering. Workflow-level
 path skips can leave required checks pending; use job selection or an always
