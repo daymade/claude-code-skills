@@ -378,10 +378,11 @@ real integration issue. When local and hosted results disagree, follow
 [the merge-semantics diagnostic](https://github.com/daymade/claude-code-skills/blob/main/github-review-pr/SKILL.md#when-local-and-hosted-merge-results-disagree)
 before attributing the discrepancy to a cache; local attributes and drivers can
 change merge semantics. Preserve required checks and wait for confirmed mergeability.
-Do not close/reopen the PR or push an empty commit merely to refresh
-that state. A later base/head change invalidates this observation; repeat the
-preflight against the new objects. These are executor checks, not a server-side
-lock on the base branch.
+Except for the single bounded recomputation permitted by
+[Independently green candidate with stale hosted mergeability](#independently-green-candidate-with-stale-hosted-mergeability),
+do not close/reopen the PR or push an empty commit merely to refresh that state.
+A later base/head change invalidates this observation; repeat the preflight against
+the new objects. These are executor checks, not a server-side lock on the base branch.
 
 ### Independently green candidate with stale hosted mergeability
 
@@ -430,6 +431,8 @@ cannot silently change the local merge-tree object graph. Local Git version,
 attributes/drivers, partial or shallow state can still differ from GitHub's
 merge semantics. When local and hosted results disagree, follow the
 [merge-semantics diagnostic](https://github.com/daymade/claude-code-skills/blob/main/github-review-pr/SKILL.md#when-local-and-hosted-merge-results-disagree);
+Except for the single bounded recomputation permitted by
+[Independently green candidate with stale hosted mergeability](#independently-green-candidate-with-stale-hosted-mergeability),
 do not close/reopen the PR or push a refresh commit merely to force agreement.
 
 stdout is exactly one schema-version-2 JSON receipt. Exit `0` means `ready`, `2`

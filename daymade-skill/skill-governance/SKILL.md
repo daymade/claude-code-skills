@@ -171,9 +171,10 @@ All applicable claims must be proven independently:
 - entries intended cold are absent from that catalog;
 - one representative cold capability still resolves and works;
 - source-backed links or Claude installs read back with the intended identity,
-  source/version, and scope; for a link into a shared checkout, also read its
-  current branch/HEAD and a release-specific marker, reporting stale installed
-  content rather than switching the target branch;
+  source/version, and scope; for a link into a shared checkout, use branch/HEAD as
+  context but decide on consumed-path equality with the published commit, reporting
+  stale/unknown only on difference or an incomplete comparison rather than switching
+  the target branch;
 - any retired bundle and its recovery manifest still exist;
 - unresolved ownership, host-version behavior, or deliberately retained
   exceptions are explicit.
