@@ -72,7 +72,7 @@ Output directory: /Users/you/Downloads/douban-sync/your_douban_id
   Fetched 0-50 (50/639)
   Fetched 50-100 (100/639)
   ...
-  Fetched 597-639 (639/639)
+  Fetched 600-639 (639/639)
   Collected: 639
 
 === 在读 (book) ===
