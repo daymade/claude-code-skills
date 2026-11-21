@@ -13,15 +13,26 @@ resume a thread, answer a server approval, or retry an uncertain write.
 from __future__ import annotations
 
 import json
+import re
 import sys
 import time
 from typing import Any
 
 
 class DeliveryError(RuntimeError):
-    def __init__(self, message: str, outcome: str = "not_sent"):
+    def __init__(self, message: str, outcome: str = "not_sent", reason_code: str | None = None):
         super().__init__(message)
         self.outcome = outcome
+        self.reason_code = reason_code
+
+
+def _expected_turn_mismatch(error: object) -> bool:
+    if not isinstance(error, dict) or type(error.get("code")) is not int or error["code"] != -32600:
+        return False
+    message = error.get("message")
+    return isinstance(message, str) and re.fullmatch(
+        r"expected active turn id [^\s]+ but found [^\s]+", message
+    ) is not None
 
 
 def rpc(connection, request_id: int, method: str, params: dict,
@@ -41,8 +52,13 @@ def rpc(connection, request_id: int, method: str, params: dict,
             if "method" in frame or frame.get("id") != request_id:
                 continue
             if "error" in frame:
-                # A write error need not mean no side effect took place.
-                raise DeliveryError(f"{method} rejected: {frame['error']}", outcome)
+                # A write error need not mean no side effect took place. The one
+                # exception is the native expected-turn fence's exact mismatch.
+                reason_code = "target_changed" if (
+                    writing and method == "turn/steer" and _expected_turn_mismatch(frame["error"])
+                ) else None
+                raise DeliveryError(f"{method} rejected: {frame['error']}",
+                                    "not_sent" if reason_code else outcome, reason_code)
             result = frame.get("result")
             if not isinstance(result, dict):
                 raise ValueError("response is missing an object result")
@@ -84,6 +100,27 @@ def deliver(request: dict, connect=None) -> dict[str, Any]:
             return {"route": "queue", "reason": "target_not_loaded"}
         if state not in ("idle", "active") or thread.get("canAcceptDirectInput") is not True:
             raise DeliveryError(f"target cannot accept live input: {status!r}")
+        if request.get("precise") is True and state == "active":
+            turns = rpc(connection, 3, "thread/turns/list", {
+                "threadId": request["thread_id"], "limit": 1,
+                "sortDirection": "desc", "itemsView": "notLoaded",
+            })
+            rows = turns.get("data")
+            latest = rows[0] if isinstance(rows, list) and rows else None
+            if (not isinstance(latest, dict) or latest.get("status") != "inProgress"
+                    or not isinstance(latest.get("id"), str) or not latest["id"]
+                    or len(latest["id"]) > 128):
+                raise DeliveryError("active target has no steerable turn")
+            expected_turn = latest["id"]
+            result = rpc(connection, 4, "turn/steer", {
+                "threadId": request["thread_id"],
+                "input": [{"type": "text", "text": request["envelope"]}],
+                "expectedTurnId": expected_turn,
+            }, writing=True)
+            if not isinstance(result.get("turnId"), str) or result["turnId"] != expected_turn:
+                raise DeliveryError("turn/steer returned a different turn identity", "unknown")
+            return {"route": "app_server_steer", "turn_id": expected_turn,
+                    "target_state_before_send": state}
         result = rpc(connection, 3, "turn/start", {
             "threadId": request["thread_id"], "input": [],
             "toolOutput": {"namespace": "peer_message", "name": "delivery",
@@ -114,8 +151,12 @@ def main() -> int:
         print(json.dumps({"status": "accepted", **result}))
         return 0
     except Exception as exc:
-        print(json.dumps({"status": "error", "outcome": getattr(exc, "outcome", "not_sent"),
-                          "error": str(exc)}))
+        receipt = {"status": "error", "outcome": getattr(exc, "outcome", "not_sent"),
+                   "error": str(exc)}
+        reason_code = getattr(exc, "reason_code", None)
+        if isinstance(reason_code, str) and reason_code:
+            receipt["reason_code"] = reason_code
+        print(json.dumps(receipt))
         return 4
 
 
