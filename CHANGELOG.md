@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **claude-md-progressive-disclosurer** (`daymade-claude-code` v5.3.2 → v5.3.3): Extend Antigravity 24,000-byte single-file truncation guidance to project-level `CLAUDE.md` / symlinked `AGENTS.md`, document the `CLAUDE.md` index + versioned `docs/` SSOT split pattern, and add a zero-dependency UTF-8 byte-budget and relative-link guard snippet to `references/verification-recipes.md`.
 - **daymade-audio** (`daymade-audio` v1.65.6 → v1.65.7): Bound Full cold-read rounds after one complete independent pass; re-read only for a new immutable canonical supplied after the bound snapshot or a failed, truncated, incomplete pass.
 - **peer-message** (`peer-message` v1.28.0 → v1.28.1): Align the protocol reference with the implemented Claude wrapper variants and transport-ID binding; keep the exact intake recipe owned by `references/local-coordination.md`.
 - **github-ops** (`github-ops` v1.20.0 → v1.20.1): Deduplicate runner-replica guidance so the pre-scale allowlist check owns discovery and the capacity section owns pattern-based pool representation.
