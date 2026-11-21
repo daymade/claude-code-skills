@@ -1117,6 +1117,32 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
 The recovery artifacts created in step 6 may later follow § Retire task-owned temporary recovery
 artifacts. A copied ignored path that exists only in that backup keeps the artifact ineligible.
 
+### Archive a retained worktree without deleting it
+
+If an unmerged or dirty worktree cannot reach empty status under the current
+no-discard rules and its preservation commit is refused by the owning repository,
+do not force removal or hide the changes. When the authorized outcome permits
+retention but requires eliminating a temporary location, move the exact worktree
+to a durable task archive:
+
+```bash
+git -C <kept-checkout> worktree move <absolute-old-path> <absolute-new-archive-path>
+```
+
+Resolve scheduler and process occupancy, known consumers and destination absence
+before the move. Preserve external WIP patches/copies where required, but do not
+treat preservation alone as deletion eligibility. Afterward require old-path
+absence and new-path HEAD, branch, complete tracked/untracked status and WIP
+hashes to match the frozen source; separately prove the kept checkout did not
+change. The worktree still exists and is reported **archived**, not removed or
+merged.
+
+An explicitly retained branch may be renamed `archive/<task>` after immediately
+confirming the moved worktree's current branch. This communicates retention; it
+does not establish content containment or authorize deletion of the old remote
+branch. Do not use archiving to bypass receipt migration, an ownership conflict,
+or a requested destructive decision.
+
 ### Batch regular-file hashes without dropping manifest entries
 
 Use this read-only Python 3.10+ example for the regular-file subset of the complete
