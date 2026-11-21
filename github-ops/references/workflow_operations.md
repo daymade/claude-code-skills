@@ -682,6 +682,11 @@ operator procedure; no bundled tool enforces its deployment or process boundarie
    The repository executor owns worker settings; read cgroup/runtime observations
    and actual suite results to accept the change.
 
+   **Container concurrency caps:** inside cgroup-limited runner containers
+   (`cpus`, `mem_limit`, `pids_limit`), `nproc` often reports host CPUs rather
+   than container limits. Cap parallel build/test flags (such as `make -jN`) to
+   container limits or cgroup `cpu.max` (and `pids_limit`), never raw `$(nproc)`.
+
    For mixed-architecture pools (for example, Linux ARM64 and X64 runners sharing
    one checks label), pin architecture-specific checksums for downloaded tool
    archives instead of a single-architecture hash, and keep tool/provider cache
@@ -706,6 +711,14 @@ operator procedure; no bundled tool enforces its deployment or process boundarie
    does not authorize relabeling, stopping or restarting an existing listener,
    another session's process or a shared service. Diagnose those read-only unless
    the current task explicitly authorizes the exact affected process and impact.
+
+   **Homogeneous latency pools and lane isolation:** avoid mixing significantly
+   slower hosts (such as 2x+ slower VM or WSL2 runners) into the same default
+   label pool as fast hosts — GitHub dispatches randomly across matching runners
+   and degrades p50/p90 latency. Move slower or specialized hosts to distinct
+   labels (such as `*-overflow` or `*-builder`), and keep dedicated
+   release/deploy labels isolated from routine PR check labels to prevent
+   head-of-line blocking.
 5. **Accept the actual job on the intended runner.** Read the run's exact SHA and
    specific job's runner ID/name, labels, steps and terminal conclusion. Registration,
    `online`, a network probe or another runner's successful job cannot establish
@@ -715,6 +728,10 @@ operator procedure; no bundled tool enforces its deployment or process boundarie
    On failure, read the failed job/step and that runner's current Worker diagnostics
    before changing configuration. Report pending, offline, busy and failed states
    separately; stop once the requested workload and capacity claim are evidenced.
+
+   **Valid performance comparisons:** when benchmarking runners or capacity
+   changes, never compare an early-failing run's wall time against a full green
+   run; compare completed successful runs covering the same check scope.
 
 Use these read-only queries with verified repository/run identifiers:
 
