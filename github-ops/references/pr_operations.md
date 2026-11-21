@@ -383,6 +383,52 @@ that state. A later base/head change invalidates this observation; repeat the
 preflight against the new objects. These are executor checks, not a server-side
 lock on the base branch.
 
+### Landing preflight
+
+Use the checked helper when one machine-readable observation of landing
+readiness is needed. This is a read-only preflight, not a merge, rebase, branch
+update, CI rerun or authorization:
+
+```bash
+python3 "<github-ops-dir>/scripts/checked_gh.py" \
+  --expected-login EXPECTED_LOGIN --host HOST \
+  --landing-preflight OWNER/REPO#NUMBER \
+  --head FULL_REVIEWED_SHA --base main --local-repo REPO \
+  --remote origin --proxy-source auto --deadline-seconds 240
+```
+
+`--base` and `--head` are required in this mode; `--remote` defaults to `origin`,
+`--proxy-source` to `auto`, and the deadline to 240 seconds (hard maximum). The
+mode is mutually exclusive with `--publication-preflight`,
+`--ack-merge-bypass`, and a trailing `gh` command. It performs, in order:
+`ls-remote` → fetch the explicit base into `refs/remotes/<remote>/<base>` →
+`rev-parse` → a second `ls-remote`; a PR read bound to the exact repository,
+number, URL, open/non-draft state, base and head; `git merge-tree --write-tree`
+without touching HEAD or the worktree; one `gh pr checks` read classified as
+pass/pending/fail/cancel/skipping/unknown; and a final PR mergeability read.
+`skipping` is never a pass.
+
+stdout is exactly one schema-version-2 JSON receipt. Exit `0` means `ready`, `2`
+means `unknown` (including input, proxy and transport), `3` means `blocked`, and
+`4` means `pending`; argparse errors in this mode also emit an `unknown` receipt.
+Ordinary reads retry at most three times (20s timeout, 2s/5s backoff); check
+reads use 30s timeout and 30s/60s backoff. HTTP 403/429, malformed JSON and a
+merge-tree conflict are not retried. The deadline stops new calls while keeping
+already observed evidence.
+
+`--proxy-source auto|environment` uses only an explicitly present
+`HTTPS_PROXY` or `ALL_PROXY` (case-insensitive) and records
+`transport.source=environment` without an endpoint. With neither variable it
+returns `unknown/proxy_missing`; it never assumes direct access.
+`--proxy-source none` explicitly selects direct access and removes every proxy
+variable from child environments. Tokens, proxy URLs, raw HTTP bodies and raw
+child stderr are not printed.
+
+A `ready` receipt freezes nothing and grants no merge authority. Re-read the
+live PR and continue through the guarded
+[merge entry](#merging-prs) with the same full `--match-head-commit`; any base,
+head, check or mergeability change invalidates the receipt.
+
 ### Merging PRs
 
 For missing checks or a fork run awaiting approval, first follow
