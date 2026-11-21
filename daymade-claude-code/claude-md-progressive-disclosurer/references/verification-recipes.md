@@ -33,6 +33,57 @@ git ls-files -s -- AGENTS.md CLAUDE.md
 
 `git ls-files` 读的是索引：暂存后链接应为 `120000`；提交后再用 `git ls-tree HEAD -- AGENTS.md CLAUDE.md` 检查提交树。未暂存的旧索引、断链、循环链接或把目标字符串检出成普通文件，都不能报修复完成。发布后还须独立查询远端精确提交；不要用 push 回执代替远端读回。
 
+### 多宿主单文件字节上限与相对链接守卫（项目级）
+
+当项目仓把 `AGENTS.md` 软链到 `CLAUDE.md` 并由 Antigravity（单文件 24,000 UTF-8 字节硬上限）与 Claude Code / Codex 共享时，可在项目单测或 CI 中加入以下只读守卫（先用超 24,000 字节及故意断链的隔离样例双向校准，确认失败路径能报红）：
+
+```bash
+python3 - <<'PY'
+import re
+from pathlib import Path
+from urllib.parse import unquote
+
+canonical = Path('CLAUDE.md')
+raw = canonical.read_bytes()
+assert len(raw) <= 24_000, f'CLAUDE.md exceeds 24,000 UTF-8 bytes: {len(raw)}'
+
+text = raw.decode('utf-8')
+# Strip fenced code blocks (``` / ~~~) and inline backtick spans before scanning links
+prose_lines = []
+fence = None
+for line in text.splitlines():
+    m = re.match(r'^\s{0,3}(`{3,}|~{3,})', line)
+    if m:
+        marker = m.group(1)
+        if fence is None:
+            fence = (marker[0], len(marker))
+            continue
+        if marker[0] == fence[0] and len(marker) >= fence[1] and line.strip() == marker:
+            fence = None
+            continue
+    if fence is None:
+        prose_lines.append(line)
+prose = re.sub(r'(?<!`)(`+)(?!`).*?(?<!`)\1(?!`)', '', '\n'.join(prose_lines), flags=re.S)
+
+# Match [label](<dest> "title") or [label](dest "title")
+link_re = re.compile(r'\[[^\]]+\]\(\s*(?:<([^>\n]+)>|([^\s)]+))(?:\s+(?:"[^"]*"|\'[^\']*\'))?\s*\)')
+checked = 0
+missing = []
+for angle_dest, bare_dest in link_re.findall(prose):
+    target = (angle_dest or bare_dest).split('#', 1)[0].split('?', 1)[0].strip()
+    if not target or target.startswith('/') or re.match(r'^[a-zA-Z][a-zA-Z0-9+.-]+:', target):
+        continue
+    checked += 1
+    if not (canonical.parent / unquote(target)).exists():
+        missing.append(target)
+assert checked > 0, '未解析到任何相对链接；检查链接格式以免空检'
+assert not missing, f'CLAUDE.md 存在断链: {missing}'
+print(f'PASS: {len(raw)} bytes <= 24000, checked {checked} relative link(s)')
+PY
+```
+
+若正文已将分域规则拆入版本化 `docs/` SSOT，另在项目单测中断言关键规则编号或标识在 SSOT 文件中全部存在，防止后续编辑误删整条规则。字节数达标仅证明不触发 24,000 B 单文件硬截断，不替代下方真实宿主加载面与任务遵循验收。
+
 ### 检查真实宿主加载面
 
 从实际消费的 cwd 检查，保留宿主版本、入口与观察边界。Codex 先运行 `codex debug prompt-input --help` 确认当前版本提供原生渲染器；支持时，以下只读配方检查完整正文是否进入模型可见输入，不打印其他私有指令。
