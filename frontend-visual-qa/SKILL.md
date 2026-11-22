@@ -185,6 +185,14 @@ Use the strongest level required by the claim:
 | C | Fresh headless mechanical sweep from the bundled script | Overflow, wrapping, images, basic layout heuristics, screenshot candidates |
 | D | Source, lint, build, unit tests, or static DOM reasoning | Hypotheses and regression support only |
 
+On macOS, one-shot Playwright/headless automation defaults to **Chrome for Testing**
+or Playwright's bundled Chromium. It never silently falls back to regular
+`/Applications/Google Chrome.app`. `CHROME_PATH` is an explicit override; regular
+Chrome also requires `FRONTEND_VISUAL_QA_ALLOW_CLONING_CHROME=1`, because a terminated
+launch leaves a `code_sign_clone` app bundle in the user temp directory. The bundled
+`visual_layout_audit.mjs` and `route_census.mjs` share this resolver. Inline Playwright
+remains operator-controlled, so close the browser in `finally` and keep a hard timeout.
+
 Do not promote a lower level into a stronger conclusion:
 
 - A screenshot path that was never opened has no visual evidence value.
@@ -483,6 +491,7 @@ Run the probe regressions from a project that already provides Playwright:
 
 ```bash
 node --test <skill-root>/tests/test_silent_degradation_probe.mjs
+node --test <skill-root>/tests/test_browser_runtime.mjs
 node --test <skill-root>/tests/route-census/test_route_census.mjs
 node --test <skill-root>/tests/route-census/test_visual_layout_audit_regressions.mjs
 ```

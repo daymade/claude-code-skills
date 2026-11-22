@@ -9,6 +9,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { collectAttentionInventory } from "./attention_inventory.mjs";
 import { isWrappedControlElement } from "./control_classification.mjs";
 import { collectPaintedText } from "./painted_text_probe.mjs";
+import { resolveBrowserPath } from "./browser_runtime.mjs";
 
 function loadPlaywright() {
   // Resolve a Playwright browser driver across install layouts. Under a pnpm workspace,
@@ -75,6 +76,8 @@ const usage = [
   "  [--scroll-visible-media] (visit rendered media rows to trigger lazy loading)",
   "  [--section-selector section] [--screenshot-sections] [--max-section-screenshots 4]",
   "  [--out <new-empty-directory>] [--fail-on-warning]",
+  "  Environment: CHROME_PATH overrides discovery; macOS prefers Chrome for Testing.",
+  "  Regular Chrome override also requires FRONTEND_VISUAL_QA_ALLOW_CLONING_CHROME=1.",
 ].join("\n");
 
 function failUsage(message) {
@@ -103,26 +106,6 @@ function validateKnownFlags() {
     if (arg.startsWith("-")) failUsage("Unknown option: " + arg);
     failUsage("Unexpected positional argument: " + arg);
   }
-}
-
-function findChrome() {
-  const candidates = [
-    process.env.CHROME_PATH,
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
-    "/Applications/Chromium.app/Contents/MacOS/Chromium",
-    process.env.PROGRAMFILES && path.join(process.env.PROGRAMFILES, "Google/Chrome/Application/chrome.exe"),
-    process.env["PROGRAMFILES(X86)"] && path.join(process.env["PROGRAMFILES(X86)"], "Google/Chrome/Application/chrome.exe"),
-    process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, "Google/Chrome/Application/chrome.exe"),
-    process.env.PROGRAMFILES && path.join(process.env.PROGRAMFILES, "Microsoft/Edge/Application/msedge.exe"),
-    process.env["PROGRAMFILES(X86)"] && path.join(process.env["PROGRAMFILES(X86)"], "Microsoft/Edge/Application/msedge.exe"),
-    "/usr/bin/google-chrome-stable",
-    "/usr/bin/google-chrome",
-    "/usr/bin/chromium",
-    "/usr/bin/chromium-browser",
-    "/snap/bin/chromium",
-  ].filter(Boolean);
-  return candidates.find((candidate) => fs.existsSync(candidate)) || null;
 }
 
 if (process.argv.includes("--help") || process.argv.includes("-h")) {
@@ -199,7 +182,7 @@ const defaultViewports = [
 ];
 const viewports = customViewports.length ? customViewports : defaultViewports;
 
-  const executablePath = findChrome();
+  const executablePath = resolveBrowserPath();
   browser = await chromium.launch({
     ...(executablePath ? { executablePath } : {}),
     headless: true,

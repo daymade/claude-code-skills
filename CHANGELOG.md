@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.22.1 → v1.22.2): Prefer Chrome for Testing or Playwright's bundled Chromium for macOS one-shot sweeps, block implicit regular-Chrome fallback, and require a documented double override for cloning browsers; apply the same resolver to the route census and clarify the Playwright-versus-direct-CLI flag boundary.
 - **local-codex** (`daymade-codex` v2.4.16 → v2.4.17): Document fault-driven restart recovery in `references/shared-daemon-maintenance.md` when macOS `/private/tmp` cleanup unlinks the live shared Codex daemon control socket (`ENOENT`) while the daemon PID stays alive.
 - **tunnel-doctor** (`tunnel-doctor` v1.18.3 → v1.18.4): Point the proxy reference and repository entry at the canonical Step 2B-1/Step 6 DERP recovery and acceptance instead of restating the procedure.
 - **macos-watchdog** (`daymade-macos` v1.34.19 → v1.34.20): Add adaptive/quiet-hours dual-layer liveness (including startup-delay heartbeats and pause/budget standdown) and primary-channel blackout/consecutive-probe-blindness rules to `references/alert-discipline.md`.
