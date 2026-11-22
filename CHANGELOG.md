@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.22.2 → v1.22.3): Require browser-lifecycle fixes to enumerate the full active launcher surface, including capture scripts and browser-backed tests, before fix closure.
+- **macos-cleaner** (`daymade-macos` v1.34.20 → v1.34.21): Add launcher-surface closure, shared non-cloning resolver, canonical default-path guard and static scan requirements to Chromium clone recurrence prevention; require an occupancy map before hotspot candidates.
+- **skill-creator** (`daymade-skill` v1.83.0 → v1.83.1): Add guard/validator bypass review axes and extend sanitization scope to tests, fixtures and private review archives.
+- **github-ops** (`github-ops` v1.20.1 → v1.20.2): Require reading the repository merge-method policy before selecting a PR merge strategy.
 - **local-codex** (`daymade-codex` v2.4.17 → v2.4.18) Coordinates ordinary CLI and shared App Server upgrades on one exact release, with official prerelease selection and post-restart version verification.
 - **frontend-visual-qa** (v1.22.1 → v1.22.2): Prefer Chrome for Testing or Playwright's bundled Chromium for macOS one-shot sweeps, block implicit regular-Chrome fallback, and require a documented double override for cloning browsers; apply the same resolver to the route census and clarify the Playwright-versus-direct-CLI flag boundary.
 - **local-codex** (`daymade-codex` v2.4.16 → v2.4.17): Document fault-driven restart recovery in `references/shared-daemon-maintenance.md` when macOS `/private/tmp` cleanup unlinks the live shared Codex daemon control socket (`ENOENT`) while the daemon PID stays alive.
