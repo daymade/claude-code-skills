@@ -78,6 +78,7 @@ stand down without waiting for a human to disable it.
 | Setting up or recovering an already-authorized persistent calendar job with delivery deadlines | `references/launchd-plist-reference.md` § Calendar deadlines and recovery; check overdue work and actual delivery separately |
 | Cooldown/backoff/notification-throttle patterns + sanitized war stories | `references/quiet-watchdog-patterns.md` |
 | SRE alert layering (page vs ticket, fatigue numbers) | `references/alert-discipline.md` |
+| Monitoring an adaptive/quiet-hours scheduler or preventing silent channel/probe blackouts | `references/alert-discipline.md` § Adaptive cadences, quiet windows, and startup delays & § Primary-channel blackout and probe blindness |
 | A watchdog alert appears under Script Editor or its sender is unclear | `references/alert-discipline.md` § Message content; inspect the delivered card |
 | A local notification was sent but the user cannot see it | `references/alert-discipline.md` § Local notifications are not visible; verify the requested display surface |
 

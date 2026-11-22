@@ -39,6 +39,21 @@ Distinguish delivery stages separately: **attempted** → **API or transport acc
 - **Unknown sends retain their identity and must not auto-replay** — an unacknowledged send is reconciled explicitly, not blindly re-sent, or one transport hiccup multiplies into repeat pages.
 - **Recovery pairs to the prior accepted failure** — old or unknown successes do not clear a current incident; a recovery notice means nothing unless the failure notice it answers actually reached the channel.
 
+### Adaptive cadences, quiet windows, and startup delays
+
+When a watched job uses adaptive backoff, quiet hours, or a delayed first run after restart, checking only downstream work-ledger timestamps guarantees false stall alerts (or, if widened naively, hides a dead scheduler for a full day).
+
+- **Use dual-layer liveness.** Make the primary check verify scheduler heartbeats (idle, quiet-window, skipped, completed, and startup `started` lines) within a short window (e.g. `2.5×` the base heartbeat interval), and widen the downstream work-ledger idle floor to cover worst-case backoff plus the quiet window whenever the scheduler heartbeat is confirmed healthy.
+- **Include startup heartbeats.** If the scheduler intentionally delays its first round by one full interval after container or process restart, include the startup event in the heartbeat pattern so deployments do not trigger a false missing-heartbeat page during the first interval.
+- **Suppress during known standdown states.** Suppress missing-heartbeat and stall alerts when the job is intentionally paused or legitimately stopped by an expected daily budget cap.
+
+### Primary-channel blackout and probe blindness
+
+A watchdog whose primary notification transport or remote probe fails silently becomes indistinguishable from a healthy system.
+
+- **Never swallow delivery failures silently.** When sending an alert or recovery notice fails, write a clear diagnostic line to `stderr` (never exit `0` with an empty error log) and, when authorized on the host, emit a bounded local fallback notification so outages in a remote messaging relay do not create a silent blackout.
+- **Alert on consecutive probe blindness.** Persist a consecutive `unreachable_streak` counter across runs whenever a remote target (SSH/HTTP) cannot be reached; reset it on the next healthy probe, and raise an explicit unreachable alert once the streak crosses the configured threshold instead of silently skipping target log checks.
+
 ## Notification throttling
 
 The measurable harm is fatigue, not the notification itself: teams receiving >120 alerts/day showed 46% slower response and 23% lower resolution accuracy; an alert-to-actionable ratio below ~20% means you have a noise problem, and noise trains the human to ignore the channel that matters.
