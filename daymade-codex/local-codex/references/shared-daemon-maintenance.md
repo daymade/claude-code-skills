@@ -88,6 +88,20 @@ baseline (observed ≈100–200 on 0.171.0-alpha.5 with few live clients). When
 the trigger recurs, record it as
 a product bug for upstream instead of adding a restart schedule.
 
+## Fault-driven restart: dangling `/private/tmp` control socket
+
+On macOS, periodic `/tmp` cleanup can unlink the control socket file under
+`/private/tmp/codex-daemon-<uid>/<hash>` while the shared daemon process stays
+alive with an unlinked file descriptor. The stable symlink
+`~/.codex/app-server-control/app-server-control.sock` then points to a missing
+path (`ENOENT`), causing control-plane clients to report the shared owner as
+unavailable even though the daemon PID is still running.
+
+Verify read-only before restarting: `readlink ~/.codex/app-server-control/app-server-control.sock`
+and confirm the target path does not exist while `lsof -n -w -p <pid>` shows
+the daemon still running. Recover cleanly with `codex app-server daemon restart`,
+then read back that the symlink target exists and responds normally.
+
 ## Execute through the supported lifecycle
 
 ### Assess the target package before requiring patches
