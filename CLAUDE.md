@@ -830,8 +830,9 @@ That SOP owns the shell/executable binding and the limits of identity evidence.
 For Codex model-request failures, including `400 Bad Request`, enter
 [model-request diagnostics](daymade-codex/local-codex/references/model-request-diagnostics.md).
 
-For Codex component updates, native updater eligibility or an authorized shared
-backend restart, enter
+For a general local Codex upgrade, enter the
+[coordinated CLI and App Server procedure](daymade-codex/local-codex/references/shared-daemon-maintenance.md#upgrade-the-cli-and-shared-app-server-together).
+For native updater eligibility or an authorized shared backend restart, enter
 [shared daemon maintenance](daymade-codex/local-codex/references/shared-daemon-maintenance.md).
 
 ### Codex Quota and Account Checks

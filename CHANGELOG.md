@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **local-codex** (`daymade-codex` v2.4.19 → v2.4.20): Point general Codex upgrades to the coordinated CLI and App Server procedure and clarify the role of each component's updater.
+- **claude-code-hooks** (`daymade-claude-code` v5.3.3 → v5.3.4): Replace historical loading-evidence workarounds with the current coverage and host receipt recovery guidance.
 - **local-codex** (`daymade-codex` v2.4.18 → v2.4.19): Remind controller hosts to roll out and verify worker-fleet CLI version and model parity after local Codex upgrades so config sync does not drift ahead of worker binaries.
 - **local-codex** (`daymade-codex` v2.4.17 → v2.4.18) Coordinates ordinary CLI and shared App Server upgrades on one exact release, with official prerelease selection and post-restart version verification.
 - **frontend-visual-qa** (v1.22.1 → v1.22.2): Prefer Chrome for Testing or Playwright's bundled Chromium for macOS one-shot sweeps, block implicit regular-Chrome fallback, and require a documented double override for cloning browsers; apply the same resolver to the route census and clarify the Playwright-versus-direct-CLI flag boundary.
