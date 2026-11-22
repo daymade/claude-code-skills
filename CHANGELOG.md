@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.22.1 → v1.22.2): Prefer Chrome for Testing or Playwright's bundled Chromium for macOS one-shot sweeps, block implicit regular-Chrome fallback, and require a documented double override for cloning browsers; apply the same resolver to the route census and clarify the Playwright-versus-direct-CLI flag boundary.
 - **macos-watchdog** (`daymade-macos` v1.34.19 → v1.34.20): Add adaptive/quiet-hours dual-layer liveness (including startup-delay heartbeats and pause/budget standdown) and primary-channel blackout/consecutive-probe-blindness rules to `references/alert-discipline.md`.
 - **tunnel-doctor** (`tunnel-doctor` v1.18.2 → v1.18.3): Distinguish Tailscale online/DERP reachability from ordinary SSH TCP availability; add the absolute-path `tailscale nc` ProxyCommand recovery with strict host-key checks, bounded retries and the non-interactive shell alias caveat.
 - **git-safety-net** (`git-safety-net` v1.30.1 → v1.30.2): Document test/build consumer configuration and package-level dependency checks for authorized sparse worktrees, so missing config/setup files are treated as environment gaps rather than code failures.

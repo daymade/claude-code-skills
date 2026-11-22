@@ -613,12 +613,24 @@ assert on **state** (`dialog.open`, counter text, `src` changed — a dispatched
 click alone proves nothing, per trap 1) → encode the assertion results into
 `document.title` → dump and grep the marker-plus-brace.
 
-On macOS, pass `--disable-features=MacAppCodeSignClone` to a direct Chrome
-command: every launch copies the Chrome app into a temporary directory, and a
-Chrome that gets killed leaves the copy behind. Avoid `--user-data-dir` on a
-one-shot `--dump-dom`: with it, headless Chrome 154 can print the complete dump
-and then keep running. If a profile is unavoidable, read the output until it
-contains `</html>`, then stop Chrome, with a timeout.
+For Playwright on macOS, use **Chrome for Testing** or Playwright's bundled
+Chromium for one-shot automation. Regular `/Applications/Google Chrome.app`
+creates a per-launch `code_sign_clone`; if the process is terminated before
+`browser.close()`, that clone remains. The bundled resolver never silently falls
+back to regular Chrome: `CHROME_PATH` is explicit, and regular Chrome also needs
+`FRONTEND_VISUAL_QA_ALLOW_CLONING_CHROME=1`. Do not add
+`--disable-features=MacAppCodeSignClone` to Playwright launch args: Chrome keeps
+only the last `--disable-features` value, so this can replace Playwright's own
+list. Prefer a non-cloning executable and still close the browser in `finally`
+with a hard timeout.
+
+For a direct Chrome CLI command, pass
+`--disable-features=MacAppCodeSignClone`: every launch otherwise copies the
+Chrome app into a temporary directory, and a Chrome that gets killed leaves the
+copy behind. Avoid `--user-data-dir` on a one-shot `--dump-dom`: with it,
+headless Chrome 154 can print the complete dump and then keep running. If a
+profile is unavoidable, read the output until it contains `</html>`, then stop
+Chrome, with a timeout.
 
 ## 11. A media stall may be the test server: Range support × moov position
 

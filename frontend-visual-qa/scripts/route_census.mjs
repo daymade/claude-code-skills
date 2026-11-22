@@ -34,6 +34,7 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { resolveBrowserPath } from "./browser_runtime.mjs";
 
 export const MAX_SITEMAP_BYTES = 10 * 1024 * 1024;
 export const MAX_SITEMAP_DEPTH = 5;
@@ -58,6 +59,8 @@ const usage = [
   "  [--allow-origin <http(s)-origin>]... [--allow-target <host>]...",
   "  [--probe <url>]... [--probe-expected-status <100-599>]",
   "  [--route-timeout-ms <1000-300000>]",
+  "  Environment: CHROME_PATH overrides discovery; macOS prefers Chrome for Testing.",
+  "  Regular Chrome override also requires FRONTEND_VISUAL_QA_ALLOW_CLONING_CHROME=1.",
   "",
   "--url resolves sitemap.xml relative to the supplied site path.",
   "--sitemap accepts an explicit HTTP(S) URL, file URL, or local XML path.",
@@ -157,26 +160,6 @@ function loadPlaywright() {
     + "Run from the audited project that already supplies Playwright; do not install a dependency without authorization.\n"
     + `Resolution attempts:\n  - ${attempts.join("\n  - ")}`,
   );
-}
-
-function findChrome() {
-  const candidates = [
-    process.env.CHROME_PATH,
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
-    "/Applications/Chromium.app/Contents/MacOS/Chromium",
-    process.env.PROGRAMFILES && path.join(process.env.PROGRAMFILES, "Google/Chrome/Application/chrome.exe"),
-    process.env["PROGRAMFILES(X86)"] && path.join(process.env["PROGRAMFILES(X86)"], "Google/Chrome/Application/chrome.exe"),
-    process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, "Google/Chrome/Application/chrome.exe"),
-    process.env.PROGRAMFILES && path.join(process.env.PROGRAMFILES, "Microsoft/Edge/Application/msedge.exe"),
-    process.env["PROGRAMFILES(X86)"] && path.join(process.env["PROGRAMFILES(X86)"], "Microsoft/Edge/Application/msedge.exe"),
-    "/usr/bin/google-chrome-stable",
-    "/usr/bin/google-chrome",
-    "/usr/bin/chromium",
-    "/usr/bin/chromium-browser",
-    "/snap/bin/chromium",
-  ].filter(Boolean);
-  return candidates.find((candidate) => fs.existsSync(candidate)) || null;
 }
 
 function parseArgs(argv) {
@@ -1231,7 +1214,7 @@ async function main() {
 
     const viewports = options.viewports.length ? options.viewports : DEFAULT_VIEWPORTS;
     const { chromium } = loadPlaywright();
-    const executablePath = findChrome();
+    const executablePath = resolveBrowserPath();
     browser = await chromium.launch({
       ...(executablePath ? { executablePath } : {}),
       headless: true,

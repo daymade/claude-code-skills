@@ -22,7 +22,7 @@ test('retained Reader must also expose its last prose and footnote under a statu
   const measurements = { cases: [], examined: 0 };
   let browser;
   try {
-    browser = await chromium.launch({ headless: true, args: ['--disable-features=MacAppCodeSignClone'] });
+    browser = await chromium.launch({ headless: true });
     for (const viewport of [{ width: 1440, height: 900 }, { width: 1100, height: 700 }]) {
       const page = await browser.newPage({ viewport });
       const url = `http://127.0.0.1:${server.address().port}/`;
