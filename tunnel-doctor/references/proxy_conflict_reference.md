@@ -472,11 +472,10 @@ curl -s -o /dev/null -w "%{http_code}" http://<tailscale-ip>:<port>/
 # Browser must work (open in Chrome, no 503)
 ```
 
-**DERP-userspace exception:** When the main Skill's Step 2B-1 is used because ordinary TCP 22
-is unavailable, the direct route, `nc -z`, curl and browser checks above are not recovery gates.
-Verify the effective `ProxyCommand` with `ssh -G`, the authenticated identity command through
-the same alias, and the original workload. Report ordinary TCP 22, UDP and non-SSH application
-reachability as still unavailable; do not claim the direct path was repaired.
+**DERP-userspace exception:** If the main Skill's
+[Step 2B-1](../SKILL.md#step-2b-1-tailscale-onlinederp-but-ordinary-ssh-tcp-times-out) applies,
+do not use the direct-path checks above as recovery gates; follow its
+[Step 6 DERP-userspace acceptance](../SKILL.md#step-6-verify-end-to-end).
 
 ### SSH Non-Login Shell Pitfall
 

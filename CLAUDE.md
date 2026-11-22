@@ -217,6 +217,9 @@ observations separate; this file does not define another batch recipe.
 For tunnel/proxy-path failures or slow throughput, enter
 [tunnel-doctor](tunnel-doctor/SKILL.md) first. For unresolved protocol, streaming or
 throughput investigations, use [debugging-network-issues](debugging-network-issues/SKILL.md).
+For Tailscale online/DERP with ordinary SSH/TCP timeout, use
+[DERP userspace recovery](tunnel-doctor/SKILL.md#step-2b-1-tailscale-onlinederp-but-ordinary-ssh-tcp-times-out);
+its Step 6 DERP-userspace acceptance branch is the authority for that recovery.
 For a container healthcheck or internal RPC failure while the host probe succeeds,
 use tunnel-doctor's [container consumer path](tunnel-doctor/SKILL.md#2g-4-deploy-scripts-and-container-healthchecks-probe-localhost-through-proxy).
 For named Peer Relay trials or network speed claims, use
