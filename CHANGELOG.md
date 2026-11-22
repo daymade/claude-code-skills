@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **local-codex** (`daymade-codex` v2.4.16 → v2.4.17): Document fault-driven restart recovery in `references/shared-daemon-maintenance.md` when macOS `/private/tmp` cleanup unlinks the live shared Codex daemon control socket (`ENOENT`) while the daemon PID stays alive.
 - **tunnel-doctor** (`tunnel-doctor` v1.18.3 → v1.18.4): Point the proxy reference and repository entry at the canonical Step 2B-1/Step 6 DERP recovery and acceptance instead of restating the procedure.
 - **macos-watchdog** (`daymade-macos` v1.34.19 → v1.34.20): Add adaptive/quiet-hours dual-layer liveness (including startup-delay heartbeats and pause/budget standdown) and primary-channel blackout/consecutive-probe-blindness rules to `references/alert-discipline.md`.
 - **tunnel-doctor** (`tunnel-doctor` v1.18.2 → v1.18.3): Distinguish Tailscale online/DERP reachability from ordinary SSH TCP availability; add the absolute-path `tailscale nc` ProxyCommand recovery with strict host-key checks, bounded retries and the non-interactive shell alias caveat.
