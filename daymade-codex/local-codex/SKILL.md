@@ -4,7 +4,8 @@ description: >-
   Launches and manages the local OpenAI Codex CLI as a non-interactive coding sub-agent via ChatGPT
   OAuth, never API keys. Use to delegate coding tasks to Codex, run codex exec, generate or
   refactor code, or get a Codex code review; phrases like 'codex', 'run codex', 'codex exec',
-  'delegate to codex'. Also route here for shared app-server daemon lifecycle and fault recovery:
+  'delegate to codex'. Also route here for local Codex upgrades (including prereleases),
+  shared app-server daemon lifecycle and fault recovery:
   daemon restart, Codex hooks or spawns failing with 'Too many open files', fd exhaustion
   diagnostics; phrases like 'codex daemon', 'daemon 重启', 'Too many open files'.
 ---
@@ -166,6 +167,11 @@ For a session reporting `400 Bad Request` or another model-request failure, use
 changing configuration or resuming work. It covers complete error capture,
 verified HTTP/WebSocket transport, request-byte provenance, compression controls
 and recovery checks on the original SID.
+
+For a local Codex upgrade, follow
+[the coordinated CLI and App Server upgrade](references/shared-daemon-maintenance.md#upgrade-the-cli-and-shared-app-server-together).
+Select one release and verify the ordinary CLI and its shared App Server against
+that version before closing the upgrade.
 
 For native automatic-update eligibility, an authorized shared-daemon restart
 or package replacement, or fault recovery when Codex hooks or spawns fail with

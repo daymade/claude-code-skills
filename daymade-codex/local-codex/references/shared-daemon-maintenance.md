@@ -32,6 +32,60 @@ Acceptance of interruptions authorizes the covered restart, not a new recurring
 poller. Enabling an application's own updates uses its native owner; a separate
 scheduled updater requires an explicit request or an accepted fallback proposal.
 
+## Upgrade the CLI and shared App Server together
+
+A general local Codex upgrade covers the ordinary terminal CLI and its shared
+App Server in one operation. Read both versions up front and state the target
+and any required server restart. For a component-limited request, check whether
+the installation owners can change it independently. Report the coupled
+effect and get authorization before changing a shared selection outside the
+requested scope. A version query stays read-only. Include the desktop app when
+requested and use its own release channel and version.
+
+When resuming an interrupted upgrade, read the existing operation receipt and
+live versions before selecting or changing packages. Keep the recorded target
+and resume only unfinished work. Finish any pending adoption and continuation
+checks even if the target version is already running.
+
+1. Choose one exact release for both components. For a request for the latest
+   prerelease (often called “Beta”), inspect current non-draft prereleases at
+   [OpenAI's Codex releases](https://github.com/openai/codex/releases). Cross-check
+   npm's official [Codex dist-tags](https://registry.npmjs.org/-/package/@openai/codex/dist-tags)
+   if the package is published there. Resolve the version and platform asset
+   from the official release. Check the exact package for the actual installer
+   when tags disagree or lag. A tag named `beta` can point to an older build.
+2. Through the ordinary login shell, read `codex --version` and
+   `codex app-server daemon version`. Compare the CLI, the daemon's selected
+   package and its running version with the target. For a fresh operation,
+   finish with that readback if all match and package provenance is established.
+   Before any change, trace the CLI entrypoint and reported `managedCodexPath`
+   to their package
+   selectors. A retained legacy daemon can share the standalone CLI selector.
+   If the selection is shared, assess the daemon impact and follow the
+   [work preservation procedure](#bind-the-service-and-preserve-affected-work)
+   before changing that selection. Preserve the previous package and recovery
+   path for each affected component. Prepare compatible verified packages
+   using their installation owners and the
+   [package assessment](#assess-the-target-package-before-requiring-patches).
+3. Adopt the CLI through its installation owner when needed. Apply the same
+   exact release to the App Server through its supported lifecycle when needed.
+   If a shared selector has already adopted the package, restart only when
+   necessary for the running daemon to adopt it. When the selected release
+   supports `daemon update --from-cli` and the invoking
+   package passes the App Server's layout requirements, that route pins the
+   package and restarts a running daemon. For an authorized detached update,
+   pass `--yes` if the selected release requires it for noninteractive use.
+   For an in-service App Server, follow
+   the [work preservation and restart procedure](#bind-the-service-and-preserve-affected-work).
+4. Close the operation only when the ordinary CLI, the daemon's selected
+   package and the running backend all read back the target. Verify package
+   provenance and process identity as described in
+   [adoption verification](#verify-adoption-then-each-requested-continuation).
+   If the daemon was intentionally stopped, verify its selected package and
+   report that the running version has yet to be checked. If the operation
+   cannot converge, use a supported recovery
+   path when safe and report the observed versions and remaining gap.
+
 ## Bind the service and preserve affected work
 
 1. Resolve the ordinary CLI through its owning shell. Inspect that exact
