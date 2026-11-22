@@ -32,7 +32,14 @@
       "strict": false,
       "version": "1.0.0",
       "category": "utilities",
-      "keywords": ["cookies", "chrome", "session-migration", "login", "backup", "restore"]
+      "keywords": [
+        "cookies",
+        "chrome",
+        "session-migration",
+        "login",
+        "backup",
+        "restore"
+      ]
     },
     {
       "name": "floorplan-finder",
@@ -41,7 +48,13 @@
       "strict": false,
       "version": "1.0.0",
       "category": "utilities",
-      "keywords": ["floor-plan", "property-search", "layout-verification", "户型图", "房源"]
+      "keywords": [
+        "floor-plan",
+        "property-search",
+        "layout-verification",
+        "户型图",
+        "房源"
+      ]
     },
     {
       "name": "app-evolver",
@@ -248,7 +261,7 @@
       "description": "OpenAI Codex operations and design exploration suite bundling model-aware long-context workstation setup, local Codex delegation, generated-image review, static visual-direction selection, and runnable HTML interaction Design Boards under one shared namespace.",
       "source": "./daymade-codex",
       "strict": false,
-      "version": "2.4.16",
+      "version": "2.4.17",
       "category": "suite",
       "keywords": [
         "suite",
@@ -853,7 +866,7 @@
       "description": "MUST be used first for tunnel / proxy-path connectivity failures or slow throughput (网络故障 / 连不上 / 代理或隧道下超时). Diagnoses Tailscale, proxy, TUN, DNS and SSH-tunnel problems on macOS and Windows/WSL, e.g. Tailscale ping works but SSH fails, curl works but browser gets 503, Git/Docker fails behind the proxy, or downloads crawl despite a reachable proxy. Not for application-layer bugs (use debugging-network-issues).",
       "source": "./tunnel-doctor",
       "strict": false,
-      "version": "1.18.3",
+      "version": "1.18.4",
       "category": "developer-tools",
       "keywords": [
         "tailscale",
