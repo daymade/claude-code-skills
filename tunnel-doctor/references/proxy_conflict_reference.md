@@ -453,7 +453,7 @@ For full Tailscale compatibility with proxy tools, apply all four fixes:
 
 ### Quick Verification
 
-After any fix, always verify:
+For direct-path fixes, always verify:
 
 ```bash
 # Route should go through Tailscale utun, not en0
@@ -471,6 +471,12 @@ curl -s -o /dev/null -w "%{http_code}" http://<tailscale-ip>:<port>/
 
 # Browser must work (open in Chrome, no 503)
 ```
+
+**DERP-userspace exception:** When the main Skill's Step 2B-1 is used because ordinary TCP 22
+is unavailable, the direct route, `nc -z`, curl and browser checks above are not recovery gates.
+Verify the effective `ProxyCommand` with `ssh -G`, the authenticated identity command through
+the same alias, and the original workload. Report ordinary TCP 22, UDP and non-SSH application
+reachability as still unavailable; do not claim the direct path was repaired.
 
 ### SSH Non-Login Shell Pitfall
 
