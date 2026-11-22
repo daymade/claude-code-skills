@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **tunnel-doctor** (`tunnel-doctor` v1.18.2 → v1.18.3): Distinguish Tailscale online/DERP reachability from ordinary SSH TCP availability; add the absolute-path `tailscale nc` ProxyCommand recovery with strict host-key checks, bounded retries and the non-interactive shell alias caveat.
 - **git-safety-net** (`git-safety-net` v1.30.1 → v1.30.2): Document test/build consumer configuration and package-level dependency checks for authorized sparse worktrees, so missing config/setup files are treated as environment gaps rather than code failures.
 - **claude-md-progressive-disclosurer** (`daymade-claude-code` v5.3.2 → v5.3.3): Extend Antigravity 24,000-byte single-file truncation guidance to project-level `CLAUDE.md` / symlinked `AGENTS.md`, document the `CLAUDE.md` index + versioned `docs/` SSOT split pattern, and add a zero-dependency UTF-8 byte-budget and relative-link guard snippet to `references/verification-recipes.md`.
 - **peer-message** (`peer-message` v1.28.1 → v1.28.2): Add explicit `live-steer` Codex delivery that fences an active turn with `expectedTurnId` on the same App Server connection, while preserving default live tool-output, idle start, notLoaded queue, and unknown-no-resend behavior.

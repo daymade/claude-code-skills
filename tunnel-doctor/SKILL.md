@@ -96,7 +96,7 @@ Determine which scenario applies:
 - **Browser returns HTTP 503, but `curl` and SSH both work** → System proxy bypass conflict (Step 2C)
 - **`local.<domain>` fails in browser/default `curl`, but direct/no-proxy request works** → Local vanity domain proxy interception (Step 2C-1)
 - **Tailscale ping works, SSH works, but curl/HTTP times out** → HTTP proxy env var conflict (Step 2A)
-- **Tailscale ping works, SSH/TCP times out** → Check route ownership (Step 2B); a matching symptom alone does not prove a route conflict.
+- **Tailscale ping works, SSH/TCP times out** → Check route ownership (Step 2B); if the peer is online only via DERP and ordinary TCP 22 still times out, use Step 2B-1. A matching symptom alone does not prove a route conflict.
 - **Tailscale IPv4 SSH times out, or an alternate peer address triggers host-key verification** → Read [same-peer IPv4/IPv6 SSH recovery](references/tailscale_address_family_ssh.md) before declaring the host offline or changing trust/network state.
 - **Remote dev server auth redirects to `localhost` → browser can't follow** → SSH tunnel needed (Step 2D)
 - **`make status` / scripts curl to localhost fail with proxy** → localhost proxy interception (Step 2E)
@@ -345,6 +345,31 @@ Two competing routes indicate a conflict:
 ```
 
 **Root cause**: On macOS, `UGSc` (Static Gateway) takes priority over `UCSI` (Cloned Static Interface) for the same prefix length.
+
+### Step 2B-1: Tailscale online/DERP but ordinary SSH TCP times out
+
+`tailscale status` and `tailscale ping` prove control-plane or peer reachability, not that
+ordinary TCP 22 is usable. If ping reports `via DERP(...)` with no direct path and SSH times
+out, do not call the host offline. First preserve the observed route and verify that the
+target is an authorized machine.
+
+When tailscaled's userspace path works, use the standalone Tailscale binary as the SSH
+`ProxyCommand`:
+
+```sshconfig
+Host <approved-tailnet-host>
+  HostName <tailnet-ip>
+  HostKeyAlias <existing-trusted-host-key-alias>
+  StrictHostKeyChecking=yes
+  ProxyCommand /Applications/Tailscale.app/Contents/MacOS/Tailscale nc <tailnet-ip> 22
+```
+
+Use the absolute executable path in Ansible, launchd and other non-interactive callers;
+interactive shell aliases are not loaded there. Keep strict host-key verification and use a
+small bounded retry count for transient banner timeouts. Retries absorb a bad connection
+window; they do not prove host health. Verify the original authenticated command (for
+example, `hostname; id -un`) and then the original workload. `tailscale nc` carries a TCP
+stream only; it does not establish UDP or arbitrary application connectivity.
 
 ### Step 2C: Fix System Proxy Bypass (Browser 503)
 
@@ -1205,19 +1230,24 @@ distributed through the App Store or TestFlight.
 2. Download the Standalone build from https://pkgs.tailscale.com/stable/#macos
 3. Install to /Applications
 
-**Post-install CLI setup**: The standalone `tailscale` CLI binary is embedded inside the app bundle. Add an alias to your shell config:
+**Post-install CLI setup**: The standalone `tailscale` CLI binary is embedded inside the app bundle. An alias is optional for interactive shells:
 
 ```bash
-# ~/.zshrc
+# ~/.zshrc — interactive shells only
 alias tailscale="/Applications/Tailscale.app/Contents/MacOS/Tailscale"
 ```
 
-Verify:
+Ansible, launchd, scripts and non-interactive SSH callers must use the absolute binary path;
+they do not load this alias. Verify through the same entry the caller will use:
 
 ```bash
+# Interactive shell
 source ~/.zshrc
 tailscale version
 tailscale ssh <user>@<hostname>   # Should work now
+
+# Non-interactive caller
+/Applications/Tailscale.app/Contents/MacOS/Tailscale version
 ```
 
 ### Step 5C: Windows Host TUN Proxy Takes Down the Whole Machine (Including WSL and Its Tailscale)
