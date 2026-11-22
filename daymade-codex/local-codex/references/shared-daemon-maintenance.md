@@ -85,6 +85,9 @@ checks even if the target version is already running.
    report that the running version has yet to be checked. If the operation
    cannot converge, use a supported recovery
    path when safe and report the observed versions and remaining gap.
+   When the local host also acts as controller for managed worker nodes, run
+   the fleet release rollout and verify CLI version and model parity across
+   workers so configuration sync does not drift ahead of worker binaries.
 
 ## Bind the service and preserve affected work
 
