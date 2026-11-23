@@ -15,6 +15,20 @@ Use these templates after the read-only evidence phase. Apply the main skill's [
 - Disk: <total> total, <used> used, <available> available, <capacity>%
 - Scope exclusions honored: <directories/services not inspected>
 
+## Occupancy map
+
+Before listing actionable candidates, show where the measured space is. This is
+mandatory for bottleneck/hotspot requests even when the largest occupants must
+be preserved.
+
+| Root or branch | Path-accounted size | Share of measured scope | Classification | Coverage / next deciding check |
+|---|---:|---:|---|---|
+| <exact root> | <value + unit> | <percent or unknown> | <user data / runtime / cache / unknown> | <complete/partial; next check> |
+
+State the measured-scope total and every unscanned or inaccessible root. Lead
+with the largest unexplained branches, not with the easiest small deletions.
+Actionable candidates follow this map; they must not replace it.
+
 ## Evidence
 
 | Suspect | Observed value | Logical or physical? | Authority | Confidence |

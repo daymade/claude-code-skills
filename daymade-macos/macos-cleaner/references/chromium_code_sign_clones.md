@@ -240,6 +240,31 @@ inactive clones created minutes apart usually mean a launcher that ends the
 browser by killing it: each killed launch leaves its own clone. Match clone
 creation times against the tools and agent sessions that were running then.
 
+### Close the launcher surface
+
+Cleaning existing clones does not close the recurrence path. Before declaring a
+source fix complete:
+
+1. Enumerate every active `chromium.launch`, `executablePath`, browser wrapper,
+   capture script and browser-backed test in the owning repository. Exclude
+   historical `runs/`, `delivery/`, and recovery directories explicitly.
+2. Route one-shot automation through one resolver. On macOS, prefer Chrome for
+   Testing or Playwright's bundled Chromium; never silently fall back to regular
+   Chrome.
+3. Apply the same canonicalization and regular-Chrome guard to explicit paths
+   and automatically discovered candidates. Resolve symlinks, normalize case,
+   and cover stable/Beta/Dev/Canary variants.
+4. Require a documented double override for regular Chrome, and fail closed when
+   the non-cloning default is unavailable rather than launching the cloning app.
+5. Add deterministic tests for missing default, explicit regular Chrome, case
+   aliases, symlinks, default-candidate symlinks, variants and override behavior.
+6. Add a static guard that scans the active tool and site/test roots for
+   hardcoded regular Chrome. A guard limited to the originally repaired file
+   does not protect the repository.
+
+Re-run the clone analyzer after the real consumer path is fixed. A lower clone
+count without launcher closure is temporary cleanup, not recurrence prevention.
+
 Measured on Google Chrome 154 for macOS (2026-09-29):
 
 | Launch shape | Clone behavior | Fix |

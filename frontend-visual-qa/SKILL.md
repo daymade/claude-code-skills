@@ -675,6 +675,12 @@ Call **current-render status** verified only when:
 - relevant viewports and lower sections were covered;
 - affected interactions and outputs were exercised at the required evidence
   level;
+- for any browser-automation lifecycle, launcher, or clone fix, the complete
+  active browser-launcher surface was enumerated (`chromium.launch`,
+  `executablePath`, browser wrappers, capture scripts, browser-backed tests and
+  any other active launch path); scanned roots and historical run artifacts
+  excluded from that census were recorded, and every active launcher uses the
+  shared non-cloning resolver or has a recorded exception;
 - no unresolved Blocker/Major finding contradicts the pass;
 - every explicit pass condition is met, including information necessity when
   layout/density or release readiness is in scope; calling a violation Moderate,
@@ -682,7 +688,12 @@ Call **current-render status** verified only when:
   “still usable” does not override a user's requirement;
 - remaining limitations are explicit.
 
-Call **fix-closure status** verified only after an authorized fix is rechecked against the same canonical target/state/viewport; otherwise use partial or blocked.
+Call **fix-closure status** verified only after an authorized fix is rechecked
+against the same canonical target/state/viewport. For a browser-automation
+lifecycle, launcher, or clone fix, this additionally requires **current-render
+status: verified** and the recorded complete active browser-launcher census
+described above; a target recheck alone cannot close that fix class. Otherwise
+use partial or blocked.
 
 Otherwise report **partial** or **blocked**. Never ask the user to perform a
 check the available agent tools can perform.

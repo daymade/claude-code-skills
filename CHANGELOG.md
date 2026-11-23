@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (v1.22.2 → v1.22.3): Require browser-lifecycle fixes to enumerate the full active launcher surface, including capture scripts and browser-backed tests, before fix closure.
+- **macos-cleaner** (`daymade-macos` v1.34.20 → v1.34.21): Add launcher-surface closure, shared non-cloning resolver, canonical default-path guard and static scan requirements to Chromium clone recurrence prevention; require an occupancy map before hotspot candidates.
+- **skill-creator** (`daymade-skill` v1.83.0 → v1.83.1): Add guard/validator bypass review axes and extend sanitization scope to tests, fixtures and private review archives.
+- **github-ops** (`github-ops` v1.20.1 → v1.20.2): Require reading the repository merge-method policy before selecting a PR merge strategy.
 - **local-codex** (`daymade-codex` v2.4.19 → v2.4.20): Point general Codex upgrades to the coordinated CLI and App Server procedure and clarify the role of each component's updater.
 - **claude-code-hooks** (`daymade-claude-code` v5.3.3 → v5.3.4): Replace historical loading-evidence workarounds with the current coverage and host receipt recovery guidance.
 - **local-codex** (`daymade-codex` v2.4.18 → v2.4.19): Remind controller hosts to roll out and verify worker-fleet CLI version and model parity after local Codex upgrades so config sync does not drift ahead of worker binaries.
