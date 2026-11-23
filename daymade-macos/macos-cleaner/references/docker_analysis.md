@@ -285,6 +285,13 @@ An approved one-time cleanup alone does not authorize future unattended deletion
 - For image retention, keep one `docker image rm --no-prune <FULL_IMAGE_ID>` per verified-safe image scoped to one repository. Immediately before deletion, repeat the image identity checks: full ID, allowed repository tags only, no registry digests, and unchanged creation/tag metadata. Fail closed on any change. Exact-record BuildKit eviction is a separate cache procedure above; its filters do not establish image-retention eligibility.
 - Give retention a machine-readable result and an explicit exit contract. Completed and dry-run return 0; partial returns nonzero while preserving the JSON list of completed removals and per-image failures; fatal inspection errors return nonzero. Validate configuration before the expensive build, expose a standalone retention retry target, and make post-build retention failure a warning rather than a reason to rebuild and repeat the same deletion loop.
 
+**Mutation-test the gate's safe fixture.** Keep one canonical safe command and
+prove that every safety-relevant mutation fails the full gate: remove
+`--no-prune`, shorten or duplicate the image ID, add `--force` or combined short
+flags such as `-ff`, replace the ID with a subshell, remove the target, or
+abbreviate a state-writing long option. A known-good fixture that still encodes
+the old unsafe command is not calibration; it is a regression lock.
+
 **Then clean the existing backlog** using the Step 2C workflow — the backlog is one-time debt, the source fix stops new debt from accumulating. Fix the source first if practical, then clear the backlog.
 
 ## Bonus: Dockerfile Optimization Discoveries

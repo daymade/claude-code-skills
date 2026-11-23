@@ -826,6 +826,45 @@ class DockerImageRemovalScopeTests(unittest.TestCase):
                 self.assertEqual(1, len(commands))
                 self.assertTrue(commands[0].category_wide)
 
+    def run_full_gate(self, command):
+        table_text = (
+            '| Target | Class | Verdict | Governing rule |\n'
+            '|---|---|---|---|\n'
+            f'| {self.image_id} | REBUILDABLE | in action set | "Use `--no-prune` when the authorized boundary is one repository tag or one full image ID." |\n')
+        with tempfile.TemporaryDirectory() as directory:
+            table = Path(directory) / 'table.md'
+            plan = Path(directory) / 'plan.md'
+            table.write_text(table_text)
+            plan.write_text(
+                '# Plan\n\n'
+                '## Tool verification\n'
+                'Docker CLI version 29.8.2; semantics: exact image removal, verified with `docker image rm --help`.\n\n'
+                '| Target | Command |\n|---|---|\n'
+                f'| {self.image_id} | `{command}` |\n')
+            output = io.StringIO()
+            with redirect_stdout(output):
+                code = CHECKER.main(['--table', str(table), '--plan', str(plan)])
+            return code, output.getvalue()
+
+    def test_safe_fixture_mutations_fail_the_full_gate(self):
+        safe_code, safe_output = self.run_full_gate(f'docker image rm --no-prune {self.image_id}')
+        self.assertEqual(0, safe_code, safe_output)
+        for command in (
+            f'docker image rm {self.image_id}',
+            f'docker image rm --no-prune {self.image_id[:19]}',
+            f'docker image rm --no-prune {self.image_id} {self.image_id}',
+            f'docker image rm --no-prune -ff {self.image_id}',
+            f'docker image rm --no-prune --force {self.image_id}',
+            f'docker image rm --no-pru {self.image_id}',
+            'docker image rm --no-prune $(docker images -q)',
+            'docker image rm --no-prune',
+            'docker image rm --no-prune --all',
+        ):
+            with self.subTest(command=command):
+                code, output = self.run_full_gate(command)
+                self.assertEqual(1, code, output)
+                self.assertIn('FAIL category_wide_exclusion', output)
+
     def test_rmi_alias_is_safe_only_with_no_prune_and_full_id(self):
         _, commands = self.commands(f'docker rmi --no-prune {self.image_id}')
         self.assertEqual(1, len(commands))

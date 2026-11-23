@@ -197,6 +197,41 @@ publishes it with a no-overwrite hard link only when no manifest exists. A
 concurrent writer wins and is preserved; setup never overwrites the user's
 current selection.
 
+### Adopt published content into a canonical checkout with WIP
+
+Use this procedure only when the installed alias already resolves to the declared
+canonical checkout and the authorized outcome requires that checkout to consume a
+published ref. A correct symlink, successful sync or visible catalog entry does not
+prove the consumed bytes match the publication.
+
+1. Freeze the intended published full commit and the checkout's current branch,
+   full HEAD, index fingerprint and working-tree status. Capture
+   `git status --ignored --untracked-files=all` before any merge. Compare the
+   complete affected Skill bundle, not only the files changed by the release.
+2. Classify every difference. A file that is merely behind the published ref can
+   be adopted with a three-way merge. A file with overlapping unique WIP, ignored
+   or untracked payload, unresolved index state, or unknown ownership stops the
+   adoption until its owner resolves it.
+3. Fetch the published base and record its full SHA. For each cleanly adoptable
+   file, compute the merge base and run a file-level three-way merge outside the
+   repository: current worktree as `ours`, merge-base blob as `base`, published
+   blob as `theirs`. Require merge exit code 0, zero conflict markers and inspect
+   the merged diff.
+4. Back up each current file outside the repository with its SHA-256. Copy only
+   the verified merged outputs over their exact canonical paths. Do not change
+   HEAD or the shared index; do not use reset, stash, restore, force, checkout or
+   alias redirection to manufacture a match.
+5. Re-run the complete bundle comparison. Every intended published file must
+   hash-match the published ref. Any remaining difference must be named,
+   preserved WIP with an identified owner or an explicit stop condition.
+6. Run the source-sync dry-run and apply, then validate the installed bundles and
+   fresh-host catalogs. Report publication, installed-content, discovery and task
+   behavior separately.
+
+If a merge conflicts, stop and coordinate with the WIP owner. A temporary review
+worktree is evidence, not an installation target; never redirect the live alias to
+it.
+
 ### Convert an installed single-Skill plugin to a personal source link
 
 For an explicitly authorized conversion, the executor uses the official Claude plugin CLI
