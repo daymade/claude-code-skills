@@ -66,6 +66,18 @@ class DispatchTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2, result.stderr)
         self.assertFalse(self.log.exists())
 
+    def test_missing_guard_fails_closed(self):
+        result = self.run_hook(GIT_PII_GUARD_DIR=str(self.root / 'missing-guard'))
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn('shared PII pre-push guard is unavailable', result.stderr)
+        self.assertFalse(self.log.exists())
+
+    def test_repository_dispatcher_cannot_masquerade_as_guard(self):
+        result = self.run_hook(GIT_PII_GUARD_DIR=str(HOOK.parent))
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn('resolves to the repository dispatcher itself', result.stderr)
+        self.assertFalse(self.log.exists())
+
     def test_mainline_refusal_remains_first(self):
         result = self.run_hook(MAINLINE_EXIT='1')
         self.assertEqual(result.returncode, 1)

@@ -5,7 +5,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 cd "$REPO_ROOT"
 
 HOOK_TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/claude-code-skills-pre-push.XXXXXX")"
@@ -16,19 +16,20 @@ cat >"$UPDATE_INPUT"
 node "$REPO_ROOT/scripts/git-mainline-guard.mjs" pre-push "$@" <"$UPDATE_INPUT"
 
 GLOBAL_GUARD_DIR="${GIT_PII_GUARD_DIR:-${HOME:-}/scripts/git-pii-guard}"
-if [ -x "$GLOBAL_GUARD_DIR/pre-push" ]; then
-  GLOBAL_HOOK_DIR="$(cd "$(dirname "$GLOBAL_GUARD_DIR/pre-push")" && pwd)"
-  if [ "$GLOBAL_HOOK_DIR" != "$HOOK_DIR" ]; then
-    PUBLICATION_PYTHON="${HOME:-}/.local/bin/python3.12"
-    PUBLICATION_RUNNER="$GLOBAL_GUARD_DIR/../claude-hooks/bounded-hook-runner.py"
-    if [ ! -x "$PUBLICATION_PYTHON" ] || [ ! -f "$PUBLICATION_RUNNER" ]; then
-      echo "pre-push blocked: publication budget runtime is unavailable." >&2
-      exit 2
-    fi
-    "$PUBLICATION_PYTHON" "$PUBLICATION_RUNNER" \
-      --pass-through --timeout "${PII_PRE_PUSH_TIMEOUT_SECONDS-300}" --max-timeout 300 \
-      --term-grace 3 -- "$GLOBAL_GUARD_DIR/pre-push" "$@" <"$UPDATE_INPUT"
-  fi
-else
-  echo "WARNING: shared PII pre-push guard is unavailable; only the repository mainline guard ran." >&2
+if [ ! -x "$GLOBAL_GUARD_DIR/pre-push" ]; then
+  echo "pre-push blocked: shared PII pre-push guard is unavailable; refusing an unscanned public push." >&2
+  exit 2
 fi
+if [ "$GLOBAL_GUARD_DIR/pre-push" -ef "$HOOK_DIR/pre-push" ]; then
+  echo "pre-push blocked: PII guard resolves to the repository dispatcher itself; configure an external executable guard." >&2
+  exit 2
+fi
+PUBLICATION_PYTHON="${HOME:-}/.local/bin/python3.12"
+PUBLICATION_RUNNER="$GLOBAL_GUARD_DIR/../claude-hooks/bounded-hook-runner.py"
+if [ ! -x "$PUBLICATION_PYTHON" ] || [ ! -f "$PUBLICATION_RUNNER" ]; then
+  echo "pre-push blocked: publication budget runtime is unavailable." >&2
+  exit 2
+fi
+"$PUBLICATION_PYTHON" "$PUBLICATION_RUNNER" \
+  --pass-through --timeout "${PII_PRE_PUSH_TIMEOUT_SECONDS-300}" --max-timeout 300 \
+  --term-grace 3 -- "$GLOBAL_GUARD_DIR/pre-push" "$@" <"$UPDATE_INPUT"

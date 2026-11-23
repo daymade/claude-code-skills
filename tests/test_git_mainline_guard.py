@@ -45,6 +45,26 @@ def init_repo(repo: Path, *, bare: bool = False) -> None:
     run(repo, "git", "config", "maintenance.auto", "false")
 
 
+def install_pii_guard(root: Path) -> tuple[Path, dict[str, str]]:
+    guard = root / "global-pii-guard"
+    guard.mkdir()
+    hook = guard / "pre-push"
+    hook.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    hook.chmod(0o755)
+    home = root / "guard-home"
+    python = home / ".local" / "bin" / "python3.12"
+    python.parent.mkdir(parents=True)
+    python.symlink_to(sys.executable)
+    runner = guard.parent / "claude-hooks" / "bounded-hook-runner.py"
+    runner.parent.mkdir()
+    runner.write_text(
+        "import subprocess,sys\n"
+        "raise SystemExit(subprocess.run(sys.argv[sys.argv.index('--')+1:]).returncode)\n",
+        encoding="utf-8",
+    )
+    return guard, {"GIT_PII_GUARD_DIR": str(guard), "HOME": str(home)}
+
+
 class MainlineGuardTests(unittest.TestCase):
     def setUp(self) -> None:
         if shutil.which("node") is None:
@@ -107,6 +127,8 @@ class MainlineGuardTests(unittest.TestCase):
         run(self.repo, "git", "push", "-qu", "origin", "main")
         self.env = os.environ.copy()
         self.env["GIT_MAINLINE_GUARD_TEST_CANONICAL"] = "1"
+        _, guard_env = install_pii_guard(self.root)
+        self.env.update(guard_env)
 
     def guard(
         self,
@@ -279,7 +301,7 @@ class MainlineGuardTests(unittest.TestCase):
         python.parent.mkdir(parents=True)
         python.symlink_to(sys.executable)
         runner = fake_guard.parent / "claude-hooks/bounded-hook-runner.py"
-        runner.parent.mkdir()
+        runner.parent.mkdir(exist_ok=True)
         runner.write_text(
             "import subprocess,sys\n"
             "raise SystemExit(subprocess.run(sys.argv[sys.argv.index('--')+1:]).returncode)\n",
@@ -291,7 +313,7 @@ class MainlineGuardTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(capture.read_text(encoding="utf-8"), line)
 
-    def test_pre_push_dispatcher_warns_when_shared_pii_guard_is_missing(self) -> None:
+    def test_pre_push_dispatcher_blocks_when_shared_pii_guard_is_missing(self) -> None:
         run(self.repo, "git", "switch", "-qc", "feature")
         (self.repo / "README.md").write_text("docs\n", encoding="utf-8")
         run(self.repo, "git", "add", "README.md")
@@ -302,8 +324,46 @@ class MainlineGuardTests(unittest.TestCase):
         env["GIT_PII_GUARD_DIR"] = str(self.root / "missing-global-guard")
 
         result = self.hook("pre-push", line, "origin", str(self.remote), env=env)
-        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn("pre-push blocked: shared PII pre-push guard is unavailable", result.stderr)
+
+    def test_pre_push_dispatcher_blocks_non_executable_pii_guard(self) -> None:
+        run(self.repo, "git", "switch", "-qc", "feature")
+        (self.repo / "README.md").write_text("docs\n", encoding="utf-8")
+        run(self.repo, "git", "add", "README.md")
+        run(self.repo, "git", "commit", "-qm", "docs")
+        sha = run(self.repo, "git", "rev-parse", "HEAD").stdout.strip()
+        line = f"refs/heads/feature {sha} refs/heads/feature {'0' * 40}\n"
+        guard_dir = self.root / "non-executable-guard"
+        guard_dir.mkdir()
+        (guard_dir / "pre-push").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        env = self.env.copy()
+        env["GIT_PII_GUARD_DIR"] = str(guard_dir)
+
+        result = self.hook("pre-push", line, "origin", str(self.remote), env=env)
+        self.assertEqual(result.returncode, 2, result.stderr)
         self.assertIn("shared PII pre-push guard is unavailable", result.stderr)
+
+    def test_pre_push_dispatcher_blocks_repository_dispatcher_as_pii_guard(self) -> None:
+        run(self.repo, "git", "switch", "-qc", "feature")
+        (self.repo / "README.md").write_text("docs\n", encoding="utf-8")
+        run(self.repo, "git", "add", "README.md")
+        run(self.repo, "git", "commit", "-qm", "docs")
+        sha = run(self.repo, "git", "rev-parse", "HEAD").stdout.strip()
+        line = f"refs/heads/feature {sha} refs/heads/feature {'0' * 40}\n"
+        alias = self.root / "dispatcher-alias"
+        alias.symlink_to(self.repo / ".githooks", target_is_directory=True)
+        file_alias_dir = self.root / "dispatcher-file-alias"
+        file_alias_dir.mkdir()
+        (file_alias_dir / "pre-push").symlink_to(self.repo / ".githooks/pre-push")
+        for guard_dir in (self.repo / ".githooks", alias, file_alias_dir):
+            with self.subTest(guard_dir=guard_dir):
+                env = self.env.copy()
+                env["GIT_PII_GUARD_DIR"] = str(guard_dir)
+
+                result = self.hook("pre-push", line, "origin", str(self.remote), env=env)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn("resolves to the repository dispatcher itself", result.stderr)
 
 
 if __name__ == "__main__":

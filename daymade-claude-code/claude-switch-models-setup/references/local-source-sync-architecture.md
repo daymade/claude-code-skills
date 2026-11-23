@@ -100,11 +100,15 @@ Rules:
 - When a selected marketplace declares suite plugins, expand each suite member
   to its final skill directory name before writing `active_skills`. The syncer
   treats suite entries as source routes, not as Codex-facing skill names.
-- If the syncer reports that a checkout is on a branch that predates the skill
-  links, switch that source repo to `main` before syncing. A feature branch
-  forked before a skill was merged does not register that skill, so the syncer
-  skips and warns instead of linking it. The warning is about branch state, not
-  manifest correctness.
+- When the syncer reports that a checkout is on a branch that predates the skill
+  links, first classify ownership and WIP. A clean checkout owned by the current
+  operator may return to `main` and fast-forward under its normal Git workflow. A
+  shared or dirty checkout must not be switched to silence the warning; use the
+  [published-content adoption procedure](#adopt-published-content-into-a-canonical-checkout-with-wip)
+  when only installed content is authorized, or wait for its owner when HEAD must
+  move. A feature branch forked before a skill was merged does not register that
+  skill, so the syncer skips and warns instead of linking it. The warning is about
+  branch state, not manifest correctness.
 - Missing manifest, unsupported schema, invalid source preferences, or an
   undeclared duplicate name abort before any affected root is changed. See
   “Explicit source preferences” below for intentionally distinct same-name bundles.
@@ -204,33 +208,94 @@ canonical checkout and the authorized outcome requires that checkout to consume 
 published ref. A correct symlink, successful sync or visible catalog entry does not
 prove the consumed bytes match the publication.
 
-1. Freeze the intended published full commit and the checkout's current branch,
-   full HEAD, index fingerprint and working-tree status. Capture
-   `git status --ignored --untracked-files=all` before any merge. Compare the
-   complete affected Skill bundle, not only the files changed by the release.
-2. Classify every difference. A file that is merely behind the published ref can
-   be adopted with a three-way merge. A file with overlapping unique WIP, ignored
-   or untracked payload, unresolved index state, or unknown ownership stops the
-   adoption until its owner resolves it.
-3. Fetch the published base and record its full SHA. For each cleanly adoptable
-   file, compute the merge base and run a file-level three-way merge outside the
-   repository: current worktree as `ours`, merge-base blob as `base`, published
-   blob as `theirs`. Require merge exit code 0, zero conflict markers and inspect
-   the merged diff.
-4. Back up each current file outside the repository with its SHA-256. Copy only
-   the verified merged outputs over their exact canonical paths. Do not change
-   HEAD or the shared index; do not use reset, stash, restore, force, checkout or
-   alias redirection to manufacture a match.
-5. Re-run the complete bundle comparison. Every intended published file must
-   hash-match the published ref. Any remaining difference must be named,
-   preserved WIP with an identified owner or an explicit stop condition.
-6. Run the source-sync dry-run and apply, then validate the installed bundles and
-   fresh-host catalogs. Report publication, installed-content, discovery and task
-   behavior separately.
+The adoption unit follows the consumed host route. For a Claude plugin, suite
+installation or any multi-host claim, it is the **whole owning plugin
+distribution**: the complete source tree, every suite member and plugin-level
+helper, plus that plugin's exact entry in `.claude-plugin/marketplace.json`. A
+single-Skill match is insufficient for that scope. For a Codex-only direct Skill
+link, with no Claude or suite consumption claimed, the individual Skill bundle
+and its registered identity may be the unit; label the result `Codex-only` and do
+not extend it to the plugin. If the installed route cannot be mapped to one of
+these scopes, report the identity as unknown and stop.
 
-If a merge conflicts, stop and coordinate with the WIP owner. A temporary review
-worktree is evidence, not an installation target; never redirect the live alias to
-it.
+Content-only adoption is not HEAD reconciliation. It never changes HEAD or the
+shared index. Exact published consumption and active WIP cannot occupy the same
+live paths at once, so any staged delta or novel/ambiguous unstaged, untracked or
+ignored content inside the adoption unit stops the operation until its owner
+resolves or explicitly hands it off. A worktree difference that exactly
+matches a recorded published ref, with no staged delta, is prior adoption residue
+rather than WIP; record that provenance and preserve the old-index state
+explicitly. WIP outside the unit remains untouched. Do not merge WIP into the
+adopted files and then claim an exact publication match.
+
+1. **Freeze identity and ownership.** Fetch and record the published full commit
+   and the host scope. From that immutable ref, record the owning plugin's name,
+   source path, version and exact marketplace entry; for a Codex-only unit, also
+   record the individual Skill root and registered identity. Materialize the
+   complete published path set for the selected scope. In the canonical
+   checkout record the current branch, full HEAD, a hash of
+   `git ls-files --stage -z`, and `git status --ignored --untracked-files=all`.
+   For every affected path record `lstat` type, mode, inode, size, mtime and either
+   its content hash or symlink target. Identify the writer and obtain explicit
+   handoff/quiescence for those paths through final readback. A snapshot alone is
+   not a lock; without writer handoff, stop.
+2. **Compare exact trees in both directions.** Enumerate the published plugin
+   tree, or the individual Skill bundle for an explicitly Codex-only unit, with
+   `git ls-tree -r -z <published-sha> -- <selected-source>` and the shared
+   packaging policy. Apply that policy's runtime-artifact exclusions before WIP
+   classification; excluded artifacts such as `.in_use` are not adoption content.
+   Compare added, deleted, renamed and changed paths, not only
+   files touched by the release. Bind each path's Git mode, object type and blob
+   identity; for mode `120000`, bind the link text and never follow the link.
+   Compare the target marketplace entry as a structured object. Bound
+   `git diff --cached`, `git diff`, untracked and ignored queries to the adoption
+   unit and classify every hit. Any staged delta stops. A worktree difference may
+   proceed only when its complete path/mode/type/blob identity exactly matches a
+   recorded published ref and no staged delta exists; record it as prior adoption
+   residue. Novel, ambiguous, untracked or ignored content stops adoption.
+3. **Prepare outputs outside the repository.** For a clean path that is merely
+   behind, materialize the published blob with its published type and mode in a
+   temporary staging directory. For an added path, first prove no untracked,
+   ignored or wrong-type local object occupies it. For a deletion or rename,
+   preserve the old object and treat the operation as delete plus add. A published
+   symlink may be staged as link text; a parent symlink, escaping path, dangling
+   target, submodule or unhandled type stops. Never run `git merge-file` against a
+   canonical path and never copy a mixed WIP/publication result.
+4. **Back up before the first canonical write.** Outside the repository, preserve
+   every current object that will be replaced, removed or renamed, including its
+   relative path, type, mode, hash or link target, plus the frozen index and status
+   fingerprints. Verify the backup by independent readback. A backup taken after
+   a canonical write does not protect that write.
+5. **Recheck drift and publish atomically.** Immediately before each write,
+   recompute the target's frozen `lstat` and content identity and recheck the
+   bounded index/worktree status. Any drift stops the adoption. Write a temporary
+   regular file or symlink in the same real parent directory, set the published
+   mode, fsync regular files, and atomically rename without following the target.
+   Remove a published-deleted path only after its backup is verified. Do not use
+   reset, stash, restore, force, checkout or alias redirection.
+6. **Verify the complete adoption unit.** Enumerate the worktree with the same
+   bidirectional path-set, mode, type and blob-identity rules. Require the target
+   marketplace entry to equal the published object and prove every non-target
+   entry remained unchanged; do not reformat unrelated WIP. Any mismatch stops
+   source-sync and restores only the paths changed by this adoption from the
+   verified backup, using the same atomic controls.
+7. **Keep index state explicit.** Because HEAD and index are unchanged, adopted
+   paths can appear as unstaged differences against the old index. Report that
+   state; it is not commit-ready. Before any later commit, the checkout owner must
+   deliberately stage the adopted paths or reconcile the index through their own
+   workflow. Never assume a plain `git commit` will preserve the adopted bytes.
+8. **Sync through one frozen deployed owner.** Run the source-sync owner from its
+   recorded deployment, never from a temporary review worktree. Freeze its script
+   hash and complete `--print-source-inventory` result. Use the same explicit
+   repeated `--repo` set for every managed marketplace required by the activation
+   policy, and the same environment, for dry-run and apply. Inspect every proposed
+   change; apply only the target-authorized adoption and stop on extra changes.
+   If the daemon uses a pinned runtime, advance the pin first or pass the actual
+   adopted owner path as `--source-sync-script` to the catalog audit.
+
+Finally read back publication, installed-content, fresh-host discovery and task
+behavior separately. A temporary review worktree is evidence, not an installation
+target; never redirect the live alias to it.
 
 ### Convert an installed single-Skill plugin to a personal source link
 
