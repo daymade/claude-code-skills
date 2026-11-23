@@ -309,11 +309,49 @@ Before any removal:
 
 Never delete every version except the numerically latest as routine hygiene.
 
+### Choose the installation source before repair
+
+A local Marketplace path is not automatically the published source. Before any
+install, update or Marketplace switch, resolve its `source` and compare the
+complete host-scoped distribution with the intended immutable published ref,
+using §5's installed-content readback checklist. Prefer the official GitHub
+Marketplace for durable use. A checkout with unrelated WIP, a feature branch,
+or a HEAD behind the published merge is not an installation source merely
+because it is convenient or already declared.
+
+`claude plugin marketplace add <owner/repo>` registers the repository's current
+default branch; it does not pin a commit. After registration or update, read the
+Marketplace checkout's full HEAD and compare the complete host-scoped
+distribution with the intended published commit. If the default branch has moved
+or the cache is stale, do not call the result an immutable-ref installation.
+When exact bytes are required, use a detached checkout or external artifact at
+that commit, record its full SHA, and keep the temporary path out of the final
+adoption claim.
+
+After temporary-source use, restore the durable official source through the
+current CLI's supported source migration. `marketplace add <owner/repo>` is not
+a replacement when a same-name directory source already exists. If no in-place
+replacement is available, use the controlled remove-and-restore procedure below;
+do not leave the task worktree registered as the user's Marketplace. Reinstall
+or update the affected plugins, then repeat the same complete host-scoped
+comparison and fresh-host catalog check.
+
 ### Marketplace source changes
 
 Do not blindly run remove-then-add. Removing a marketplace from its last scope
-can uninstall its plugins. For Daymade maintainer local-source switching, route
-to the current `claude-switch-models-setup` workflow. For any other marketplace:
+can uninstall its plugins, and adding a same-name GitHub source does not replace
+an existing directory source. Prefer an in-place source update when the current
+CLI supports it. Before any remove-and-restore migration, snapshot
+`claude plugin list --json` and the marketplace list, identify every affected
+plugin and scope, and prepare the exact reinstall commands. Remove only the
+named old source, add the official source, compare both inventories, and restore
+every unintentionally removed plugin before continuing. Prove the final
+Marketplace list contains the intended official source and no temporary alias.
+A successful source change does not prove that the previously enabled plugin set
+survived.
+
+For Daymade maintainer local-source switching, route to the current
+`claude-switch-models-setup` workflow. For any other marketplace:
 
 1. inventory installed plugins and scopes;
 2. freeze the intended replacement source identity;

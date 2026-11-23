@@ -131,6 +131,11 @@ targets, identical copies, real drift, and invalid state.
   grace for running sessions; manual cache removal is exceptional repair only.
 - Do not use blind marketplace remove-then-add. Removing the last scoped
   marketplace can uninstall its plugins.
+- Do not install from a stale, feature-branch or WIP source checkout. Prefer the
+  official GitHub Marketplace for durable use; verify its complete host-scoped
+  distribution against the intended published ref. If an exact temporary source
+  is required, restore the durable source through a controlled migration and
+  repeat the same complete readback before reporting adoption.
 - Read every candidate's unique instructions, scripts, references, and assets
   before calling it redundant. Old or short does not mean valueless.
 - Decide model-visible vs user-invocable-only per Skill from usage evidence
