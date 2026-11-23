@@ -79,6 +79,24 @@ The author performs these checks, and the required independent pass reviews thei
 evidence using [the public-distribution axes](independent-review-protocol.md#public-distribution-axes).
 Scanners and release receipts do not enforce these semantic judgments.
 
+### Include tests, fixtures, and private review artifacts
+
+The privacy scan scope is the complete public change, not only runtime Skill
+files. Include tests, fixtures, examples, changelog entries and generated command
+output. For a public Skill, use relative synthetic fixture paths such as
+`test-home/...`; a real user home path remains private even when it appears only
+in a test constant.
+
+Private review archives have a separate destination rule: team-readable private
+repositories still require redaction of personal absolute paths and operational
+identifiers. Preserve commit SHAs, failure shape and evidence coordinates, but
+replace machine-specific roots with role placeholders such as `$TASK_ROOT` or
+`$REPO`. Run the destination repository's real PII guard before committing the
+archive; a clean public-Skill scan does not cover the private review repository.
+[publishing-and-packaging.md](publishing-and-packaging.md#step-5-sanitization-review-mandatory-for-any-public-skill)
+carves this archive exception out of the general private-companion retention
+policy; other private companion documents remain owner-controlled.
+
 ## Quick Scan Commands
 
 Run these grep patterns to identify potential sensitive content:

@@ -468,8 +468,12 @@ Before a squash merge, follow the existing
 Before merging, observe the checks required by the task/repository at the exact
 candidate; use `gh pr checks NUMBER -R OWNER/REPO --watch` and inspect its exit
 status, then perform [fresh-base verification](#fresh-base-verification) and reread
-the exact PR head and mergeability. `--auto` follows the requirements actually
-configured on GitHub. If none
+the exact PR head and mergeability. Read the repository's current merge-method
+policy before choosing `--merge`, `--squash`, or `--rebase`; a locally clean
+three-way merge does not imply that GitHub permits merge commits. If the chosen
+strategy is rejected, diagnose the repository policy and reviewed-head contract
+instead of switching API or forcing a different strategy. `--auto` follows the
+requirements actually configured on GitHub. If none
 block the merge, it can merge immediately while other CI is still queued. It is
 not a replacement for this check or a way to satisfy a stricter task contract.
 
