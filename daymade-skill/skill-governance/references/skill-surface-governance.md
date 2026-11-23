@@ -183,9 +183,10 @@ has it on a feature branch. The branch name alone is neither success nor failure
 if the expected shipped bundle matches, retain that content evidence; if it differs,
 local adoption is still unverified even though publication succeeded. Identify the
 actual differing files and coordinate with the writer, preserving their work.
-Use the existing source-sync owner and approved activation policy for any needed
-reconciliation; do not switch their branch, copy a new cache or redirect the alias
-into a disposable review worktree to manufacture a match.
+When adoption is authorized, follow the source owner's
+[published-content adoption procedure](https://github.com/daymade/claude-code-skills/blob/main/daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md#adopt-published-content-into-a-canonical-checkout-with-wip);
+do not switch their branch, copy a new cache or redirect the alias into a
+disposable review worktree to manufacture a match.
 
 **Installed-content readback checklist.** Resolve the installed alias, then read
 the target checkout's current branch and full HEAD as diagnostic context. Compare
@@ -195,9 +196,10 @@ Content equality is the decision criterion: if every consumed path matches the
 published commit, report `installed-content=match` even when the shared checkout is
 on another branch or has unrelated dirty paths. If a consumed path differs, or the
 comparison cannot be completed, report `installed-content=stale|unknown`. In either
-case, do not switch the target branch or overwrite the worktree. A source merge,
-passing plugin catalog, or valid symlink alone is not evidence that the current host
-is consuming the new bytes.
+case, do not overwrite the worktree ad hoc. Use the source owner's authorized
+adoption procedure when the complete bundle can be merged without losing WIP.
+A source merge, passing plugin catalog, or valid symlink alone is not evidence that
+the current host is consuming the new bytes.
 
 Then run the requested fresh-host catalog check and, when task behavior is part
 of delivery, observe the host consume the Skill and check its result separately.

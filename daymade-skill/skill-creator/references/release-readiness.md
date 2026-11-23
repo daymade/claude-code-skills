@@ -135,6 +135,42 @@ shared `scripts/packaging_policy.py` for the distributed dependency set. Source 
 dependency observations belong in the review; a `passed` metadata field alone
 does not establish them.
 
+## Exact-head release preflight
+
+Complete this checklist before the first public push of a reviewed candidate. It
+binds the source review, private evidence, repository hook inputs and installed
+adoption to one immutable frame.
+
+| Check | Required evidence | Stop condition |
+|---|---|---|
+| Candidate and base | Full candidate SHA, full fetched base SHA, clean or declared WIP state | Base moved into a version collision or conflict |
+| Version progression | Repository checker passes for the exact index/commit and projected merge | Any regression, missing bump or stale suite version |
+| Review block | Private review contains `<!-- skill-release-review ... -->` with the exact candidate and every shipped Skill root | Missing, malformed, stale or narrowed block |
+| Review source | Review path is committed and unchanged at the recorded review commit; a temporary review worktree is clean | Dirty, replaced, uncommitted or ambiguous review path |
+| Receipt binding | `release_readiness.py attest` succeeds for the exact candidate and review commit | Missing receipt, wrong scope or candidate changed after attestation |
+| Sparse hook closure | Materialize every repository-managed pre-commit/pre-push dependency before invoking hooks | Missing module, validator or helper; never bypass the hook |
+| Publication audit | PII/sanitization and repository-required checks pass for the exact pushed range | New blocking finding or unavailable scanner evidence |
+| Installed adoption | Canonical source content, installed file hashes and fresh-host catalog are read back separately | Link/catalog passes while consumed bytes remain stale or unknown |
+
+For this marketplace's sparse publication worktree, the hook closure currently
+includes `$REPO_ROOT/scripts/git-mainline-guard.mjs`,
+`$REPO_ROOT/scripts/ci/check_version_progression.py`,
+`$REPO_ROOT/scripts/ci/git_projection.py`, and
+`$REPO_ROOT/scripts/ci/check_skill_release.py`, plus the repository's `.githooks`
+dispatcher and the Skill Creator scripts used by the release checker. Treat this
+list as a current observation, not a substitute for reading the live hook imports.
+
+When the private archive's maintained checkout has unrelated WIP, create a clean
+sparse review worktree at the exact review commit and use that as `--review-repo`.
+Unrelated archive WIP does not invalidate the helper's path check; the clean
+temporary worktree is an operator policy that keeps the evidence source
+unambiguous. Keep that worktree while any schema-1 or schema-2 receipt can reopen
+it. `rebind` does not release the original `review_repo` path: the verifier still
+opens the original receipt's archive. Retire the temporary checkout only after all
+dependent receipts are retired, or after the existing review-locator migration
+below has preserved every dependent proof. Re-attest after any candidate, version
+or review-evidence change.
+
 ## Commit the current review first
 
 Keep the review in the private knowledge repository's permitted directory. Preserve
