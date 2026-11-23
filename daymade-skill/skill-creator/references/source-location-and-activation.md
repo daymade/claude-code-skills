@@ -65,6 +65,13 @@ does not test entry-point detection or path resolution through the installed for
 Use a temporary representative entry before publication when the actual installation
 cannot yet contain the candidate; do not claim that probe proves installation.
 
+For local stdio MCP servers or executable entries that invoke external CLIs under a
+GUI host (which typically spawns with a minimal `PATH` such as `/usr/bin:/bin`), also
+run the configured command `argv` under `env -i HOME="$HOME" PATH="/usr/bin:/bin:/usr/sbin:/sbin"`
+and exercise a real protocol handshake plus one read-only tool or probe call. Passing
+only in an interactive login shell misses `exit 127` failures when tools installed in
+`~/.local/bin` or Homebrew paths are absent from the host's minimal `PATH`.
+
 After release and synchronization, run the applicable task smoke through the actual
 installed entry when local use is in scope. Keep source, distribution-form, installed
 identity and business-result evidence distinct. Reuse unchanged evidence; this recipe

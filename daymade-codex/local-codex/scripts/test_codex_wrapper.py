@@ -75,5 +75,67 @@ class StatusTest(unittest.TestCase):
         review.assert_not_called()
 
 
+class WrapperHardeningTest(unittest.TestCase):
+    def test_app_bundle_constant_matches_current_chatgpt_cli_layout(self):
+        self.assertEqual(
+            wrapper.CODEX_APP_BUNDLE,
+            "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex",
+        )
+
+    def test_oauth_env_strips_openai_and_codex_api_keys_for_status_exec_and_review(self):
+        fake_env = {
+            "PATH": "/usr/bin:/bin",
+            "OPENAI_API_KEY": "sk-synthetic-openai",
+            "CODEX_API_KEY": "sk-synthetic-codex",
+            "KEEP_ME": "yes",
+        }
+        completed = subprocess.CompletedProcess([], 0, "", "Logged in using ChatGPT\n")
+        with mock.patch.dict(wrapper.os.environ, fake_env, clear=True), \
+                mock.patch.object(wrapper.subprocess, "run", return_value=completed) as run:
+            wrapper.check_auth_status("/synthetic/codex")
+            wrapper.exec_codex("/synthetic/codex", "hi")
+            wrapper.review_codex("/synthetic/codex", workdir="/tmp")
+        self.assertEqual(run.call_count, 3)
+        for call in run.call_args_list:
+            passed_env = call.kwargs["env"]
+            self.assertNotIn("OPENAI_API_KEY", passed_env)
+            self.assertNotIn("CODEX_API_KEY", passed_env)
+            self.assertEqual(passed_env["KEEP_ME"], "yes")
+
+    def test_exec_and_review_default_to_cli_configured_model_when_omitted(self):
+        completed = subprocess.CompletedProcess([], 0, "", "")
+        with mock.patch.object(wrapper.subprocess, "run", return_value=completed) as run:
+            wrapper.exec_codex("/synthetic/codex", "ping")
+            wrapper.review_codex("/synthetic/codex", workdir="/tmp")
+            wrapper.exec_codex("/synthetic/codex", "ping", model="explicit-model")
+            wrapper.review_codex("/synthetic/codex", workdir="/tmp", model="explicit-model")
+        self.assertNotIn("-m", run.call_args_list[0].args[0])
+        self.assertNotIn("-m", run.call_args_list[1].args[0])
+        self.assertIn("-m", run.call_args_list[2].args[0])
+        self.assertIn("explicit-model", run.call_args_list[2].args[0])
+        self.assertIn("-m", run.call_args_list[3].args[0])
+        self.assertIn("explicit-model", run.call_args_list[3].args[0])
+
+    def test_exec_extracts_final_message_from_item_completed_and_legacy_item(self):
+        jsonl_current = "\n".join([
+            '"not-a-dict"',
+            json.dumps({"type": "item.completed", "item": {"type": "agent_message", "text": "first"}}),
+            json.dumps({"type": "item.completed", "item": {"type": "agent_message", "text": "final-v2"}}),
+        ])
+        jsonl_legacy = json.dumps({"type": "item", "item": {"type": "agent_message", "text": "legacy-v1"}})
+        with mock.patch.object(
+            wrapper.subprocess,
+            "run",
+            side_effect=[
+                subprocess.CompletedProcess([], 0, jsonl_current, ""),
+                subprocess.CompletedProcess([], 0, jsonl_legacy, ""),
+            ],
+        ):
+            r_cur = wrapper.exec_codex("/synthetic/codex", "p1")
+            r_leg = wrapper.exec_codex("/synthetic/codex", "p2")
+        self.assertEqual(r_cur["final_message"], "final-v2")
+        self.assertEqual(r_leg["final_message"], "legacy-v1")
+
+
 if __name__ == "__main__":
     unittest.main()
