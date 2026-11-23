@@ -111,10 +111,10 @@ Codex 独立 thread 的原生发送直接使用[返回值驱动入口](reference
    `git for-each-ref --format='%(refname)' refs/heads refs/remotes` 中 `<ref>:<path>` 的 blob；
    只保留精确同 blob 的 ref。
 3. 把命中的 branch 映射到 PR head（REST
-   `repos/<owner>/<repo>/pulls?state=all&head=<owner>:<branch>`），要求 staged blob、ref path blob、
-   PR head OID 与同仓同路径的 coordination 登记相互吻合，再用 PR 的 head OID、branch 和 session
-   登记交叉定位来源会话；PR author 不自动等于写者。暂存内容没有精确 ref/PR 映射时保留
-   `unknown`，改用现有 registry/mtime 证据，不把历史 PR 当成当前属主。
+   `repos/<owner>/<repo>/pulls?state=all&head=<owner>:<branch>`）。先要求 staged blob 与 ref path blob
+   精确一致，再用 PR head OID 定位提交，并用同仓同路径的 coordination 登记交叉印证来源会话；
+   blob、commit OID 与 session 是不同层级，不要求彼此相等。PR author 不自动等于写者。暂存内容
+   没有精确 ref/PR 映射时保留 `unknown`，改用现有 registry/mtime 证据，不把历史 PR 当成当前属主。
 4. 只联系交叉证据收窄后的 top-3。`verified_queued` 只证明入队，不证明已读；没有映射或无人
    回应都保留 owner `unknown`，不写成「无主」。
 
