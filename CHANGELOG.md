@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **claude-switch-models-setup** (`daymade-claude-code` v5.3.8 → v5.3.9): Route live canonical-checkout repair through the published-content adoption owner, distinguish content-only adoption from HEAD reconciliation, and align repository PII guidance with the fail-closed public pre-push gate.
+- **skill-governance** (`daymade-skill` v1.83.4 → v1.83.5): Put the published-content adoption handoff at the activation decision point and require complete host-scoped distribution equality rather than branch/HEAD or selected-path evidence.
+
 - **claude-switch-models-setup** (`daymade-claude-code` v5.3.7 → v5.3.8): Make published-content adoption exact-tree and writer-safe: compare the host-scoped distribution in both directions (whole owning plugin for Claude/suite, individual bundle for Codex-only), bind modes/types/blob identities and symlink targets, stop on in-scope WIP or drift, require backups and atomic no-follow writes, freeze the deployed source-sync owner, and distinguish content adoption from HEAD/index reconciliation.
 - **skill-governance / skill-creator** (`daymade-skill` v1.83.3 → v1.83.4): Require complete host-scoped installed-content readback, route live-source recovery through the adoption owner, move local adoption to an authorized post-publication gate, and fail closed when the public pre-push PII guard is missing, non-executable, repository-controlled or lacks its bounded runtime.
 - **claude-switch-models-setup** (`daymade-claude-code` v5.3.6 → v5.3.7): Add a WIP-safe published-content adoption procedure for canonical source checkouts, with complete-bundle comparison, file-level three-way merges, no reset/stash/force, and separate installed-content/catalog readback.

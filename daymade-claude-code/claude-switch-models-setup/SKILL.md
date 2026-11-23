@@ -246,6 +246,7 @@ When the user says something like "set up Claude Code profiles" or "I want to us
    - Skip this for normal students or users who do not edit the skill source repos
    - Read the [host-specific activation contract](references/local-source-sync-architecture.md#host-specific-user-skill-activation), then edit the machine's activation manifest for the requested hosts. Use its compatibility rules only for consumers that still retain a legacy path.
    - Preview with `python3 ~/.config/claude-switch-models-setup/sync-local-skill-sources.py`, read every affected path, then apply with `python3 ~/.config/claude-switch-models-setup/sync-local-skill-sources.py --apply`.
+   - If the target canonical checkout has in-scope WIP or must consume published bytes without changing HEAD/index, do not use that ordinary preview/apply pair as a substitute for adoption. Follow the [published-content adoption procedure](references/local-source-sync-architecture.md#adopt-published-content-into-a-canonical-checkout-with-wip), including host scope, writer handoff, exact-tree comparison, backup/atomic write, and the pre-apply owner/inventory recheck. If HEAD must advance instead, wait for the WIP owner and use a verified guarded synchronizer.
    - On a maintainer macOS machine, run `~/.config/claude-switch-models-setup/sync-local-skill-sources-daemon.sh --install`
    - This watches the activation manifest, default Claude install state, and local marketplace manifests, then repairs derived state after selection, install/uninstall, or plugin topology changes
 
@@ -298,7 +299,7 @@ python3 ~/.config/claude-switch-models-setup/sync-local-skill-sources.py --apply
                                # Maintainers: install automatic macOS watcher
 ```
 
-These are not day-to-day commands. Edits to activated canonical sources are live through symlinks. The one-shot commands are for repair, bootstrap, or non-macOS environments without the LaunchAgent watcher.
+These are not day-to-day commands. Edits to activated canonical sources are live through symlinks. The one-shot commands are for repair, bootstrap, or non-macOS environments without the LaunchAgent watcher. When a repair would adopt a published ref into a live canonical checkout, use the [published-content adoption procedure](references/local-source-sync-architecture.md#adopt-published-content-into-a-canonical-checkout-with-wip) instead of treating `--apply` as sufficient.
 
 ## Provider Templates
 
