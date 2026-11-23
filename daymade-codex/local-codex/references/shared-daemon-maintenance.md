@@ -1,17 +1,17 @@
 # Shared daemon maintenance and conversation recovery
 
-Use this for an already-authorized replacement or restart of a shared Codex
-backend. Routine inspection stays read-only. Reuse passed observations while
+Use this for local Codex upgrades and authorized replacements or restarts of
+the shared backend. Routine inspection stays read-only. Reuse passed observations while
 their inputs remain unchanged; do not restart a busy service to test this guide.
 Account adoption remains in [the OAuth guide](oauth-guide.md#existing-native-owner-recovery).
 
 ## Select native updating per component
 
-For an update or automatic-update request, identify each requested component:
-desktop application, ordinary CLI, and shared App Server. Bind its actual
-installation owner, selected release channel, pin and native updater eligibility
-separately. Updating the App Server does not update the invoking CLI or desktop
-application. Use each component's supported updater and accept them separately.
+Identify the actual installation owner, release channel, package pin and
+native updater eligibility for each requested component. Use the component's
+supported installer or updater. For a general local upgrade, follow the
+[coordinated upgrade](#upgrade-the-cli-and-shared-app-server-together) to
+determine the scope and when to close the operation.
 
 An official signed package can still be explicitly pinned. An enabled preference
 alone does not prove automatic updating: inspect channel-selection evidence,
@@ -59,8 +59,8 @@ checks even if the target version is already running.
    package and its running version with the target. For a fresh operation,
    finish with that readback if all match and package provenance is established.
    Before any change, trace the CLI entrypoint and reported `managedCodexPath`
-   to their package
-   selectors. A retained legacy daemon can share the standalone CLI selector.
+   to their package selectors. A retained legacy daemon can share the
+   standalone CLI selector.
    If the selection is shared, assess the daemon impact and follow the
    [work preservation procedure](#bind-the-service-and-preserve-affected-work)
    before changing that selection. Preserve the previous package and recovery
@@ -71,8 +71,8 @@ checks even if the target version is already running.
    exact release to the App Server through its supported lifecycle when needed.
    If a shared selector has already adopted the package, restart only when
    necessary for the running daemon to adopt it. When the selected release
-   supports `daemon update --from-cli` and the invoking
-   package passes the App Server's layout requirements, that route pins the
+   supports `daemon update --from-cli` and the invoking package passes the
+   App Server's layout requirements, that route pins the
    package and restarts a running daemon. For an authorized detached update,
    pass `--yes` if the selected release requires it for noninteractive use.
    For an in-service App Server, follow
@@ -83,8 +83,11 @@ checks even if the target version is already running.
    [adoption verification](#verify-adoption-then-each-requested-continuation).
    If the daemon was intentionally stopped, verify its selected package and
    report that the running version has yet to be checked. If the operation
-   cannot converge, use a supported recovery
-   path when safe and report the observed versions and remaining gap.
+   cannot converge, use a supported recovery path when safe and report the
+   observed versions and remaining gap.
+   When the local host also acts as controller for managed worker nodes, run
+   the fleet release rollout and verify CLI version and model parity across
+   workers so configuration sync does not drift ahead of worker binaries.
 
 ## Bind the service and preserve affected work
 

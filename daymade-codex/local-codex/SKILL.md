@@ -170,8 +170,6 @@ and recovery checks on the original SID.
 
 For a local Codex upgrade, follow
 [the coordinated CLI and App Server upgrade](references/shared-daemon-maintenance.md#upgrade-the-cli-and-shared-app-server-together).
-Select one release and verify the ordinary CLI and its shared App Server against
-that version before closing the upgrade.
 
 For native automatic-update eligibility, an authorized shared-daemon restart
 or package replacement, or fault recovery when Codex hooks or spawns fail with
