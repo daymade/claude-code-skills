@@ -294,11 +294,14 @@ adopted files and then claim an exact publication match.
    owner and every repository path, recompute the owner hash and regenerate the
    complete inventory with the same arguments and environment. Require the hash
    and inventory bytes to equal the dry-run snapshot; any drift stops before
-   writing and requires a new preview. Apply only the target-authorized adoption
-   through the verified resolved paths. Bind the catalog audit to that same
-   verified owner hash and inventory, or use an immutable owner copy under the
-   same lock; a mutable symlink retarget between preview and apply invalidates the
-   preview.
+   writing and requires a new preview. The recheck and apply must run under a
+   task-held coordination lock or explicit handoff from every managed-repo
+   writer; the source-sync host-state lock is not a repository-content lock.
+   Without that handoff, stop rather than claim the preview still applies. Apply
+   only the target-authorized adoption through the verified resolved paths. Bind
+   the catalog audit to that same verified owner hash and inventory, or use an
+   immutable owner copy under the same lock; a mutable symlink retarget between
+   preview and apply invalidates the preview.
 
 Finally read back publication, installed-content, fresh-host discovery and task
 behavior separately. A temporary review worktree is evidence, not an installation
