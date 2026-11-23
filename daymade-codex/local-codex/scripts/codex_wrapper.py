@@ -17,7 +17,31 @@ from typing import Optional
 # surrounding environment actually runs, and npm global installs (including under
 # nvm) live there. The app-bundled copy is a fallback only — its version tracks the
 # Desktop app and can diverge from the npm build.
-CODEX_APP_BUNDLE = "/Applications/ChatGPT.app/Contents/Resources/codex"
+CODEX_APP_BUNDLE = "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex"
+_STRIPPED_API_KEY_ENVS = ("OPENAI_API_KEY", "CODEX_API_KEY")
+
+
+def _oauth_child_env() -> dict:
+    """Return a child environment stripped of API-key overrides so ChatGPT OAuth is used."""
+    env = dict(os.environ)
+    for key in _STRIPPED_API_KEY_ENVS:
+        env.pop(key, None)
+    return env
+
+
+def _extract_final_message(parsed: list) -> Optional[str]:
+    """Extract the final agent_message text from Codex JSONL events (current and legacy shapes)."""
+    for event in reversed(parsed):
+        if not isinstance(event, dict):
+            continue
+        inner = event.get("item")
+        if (
+            event.get("type") in ("item.completed", "item")
+            and isinstance(inner, dict)
+            and inner.get("type") == "agent_message"
+        ):
+            return inner.get("text", "")
+    return None
 
 
 def find_codex_binary() -> Optional[str]:
@@ -63,6 +87,7 @@ def check_auth_status(codex_path: str) -> dict:
             capture_output=True,
             text=True,
             timeout=30,
+            env=_oauth_child_env(),
         )
         lines = (result.stdout + "\n" + result.stderr).splitlines()
         if result.returncode == 0 and "Logged in using ChatGPT" in lines:
@@ -86,7 +111,7 @@ def exec_codex(
     codex_path: str,
     prompt: str,
     workdir: Optional[str] = None,
-    model: str = "gpt-5.5",
+    model: Optional[str] = None,
     sandbox: str = "workspace-write",
     json_output: bool = True,
     ephemeral: bool = False,
@@ -118,6 +143,7 @@ def exec_codex(
             capture_output=True,
             text=True,
             timeout=timeout,
+            env=_oauth_child_env(),
         )
         elapsed = time.time() - start_time
 
@@ -141,11 +167,9 @@ def exec_codex(
                         pass
                 output["parsed_jsonl"] = parsed
 
-                # Extract final assistant message
-                for item in reversed(parsed):
-                    if item.get("type") == "item" and item.get("item", {}).get("type") == "agent_message":
-                        output["final_message"] = item["item"].get("text", "")
-                        break
+                final_message = _extract_final_message(parsed)
+                if final_message is not None:
+                    output["final_message"] = final_message
             except Exception as e:
                 output["parse_error"] = str(e)
 
@@ -168,12 +192,15 @@ def exec_codex(
 def review_codex(
     codex_path: str,
     workdir: Optional[str] = None,
-    model: str = "gpt-5.5",
+    model: Optional[str] = None,
     uncommitted: bool = False,
     timeout: int = 300,
 ) -> dict:
     """Run codex exec review."""
-    cmd = [codex_path, "exec", "-m", model, "--json", "review"]
+    cmd = [codex_path, "exec"]
+    if model:
+        cmd.extend(["-m", model])
+    cmd.extend(["--json", "review"])
     if uncommitted:
         cmd.append("--uncommitted")
     if workdir:
@@ -186,6 +213,7 @@ def review_codex(
             capture_output=True,
             text=True,
             timeout=timeout,
+            env=_oauth_child_env(),
         )
         elapsed = time.time() - start_time
 
@@ -207,6 +235,9 @@ def review_codex(
                     except json.JSONDecodeError:
                         pass
                 output["parsed_jsonl"] = parsed
+                final_message = _extract_final_message(parsed)
+                if final_message is not None:
+                    output["final_message"] = final_message
             except Exception:
                 pass
 
@@ -267,10 +298,10 @@ def main():
             sys.exit(1)
 
         prompt = sys.argv[2]
-        workdir = sys.argv[3] if len(sys.argv) > 3 else None
-        model = sys.argv[4] if len(sys.argv) > 4 else "gpt-5.5"
-        sandbox = sys.argv[5] if len(sys.argv) > 5 else "workspace-write"
-        timeout = int(sys.argv[6]) if len(sys.argv) > 6 else 300
+        workdir = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3] else None
+        model = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4] else None
+        sandbox = sys.argv[5] if len(sys.argv) > 5 and sys.argv[5] else "workspace-write"
+        timeout = int(sys.argv[6]) if len(sys.argv) > 6 and sys.argv[6] else 300
 
         result = exec_codex(
             codex_path=codex_path,
@@ -283,10 +314,10 @@ def main():
         print(json.dumps(result, ensure_ascii=False))
 
     elif command == "review":
-        workdir = sys.argv[2] if len(sys.argv) > 2 else None
-        model = sys.argv[3] if len(sys.argv) > 3 else "gpt-5.5"
+        workdir = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2] else None
+        model = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3] else None
         uncommitted = sys.argv[4] == "true" if len(sys.argv) > 4 else False
-        timeout = int(sys.argv[5]) if len(sys.argv) > 5 else 300
+        timeout = int(sys.argv[5]) if len(sys.argv) > 5 and sys.argv[5] else 300
 
         result = review_codex(
             codex_path=codex_path,

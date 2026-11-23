@@ -18,12 +18,12 @@ Delegate coding tasks to the local OpenAI Codex CLI agent using the authorized C
 
 - User wants to generate, refactor, or review code via Codex
 - User wants to run `codex exec` for non-interactive tasks
-- User wants to use Codex's GPT-5.5 agent capabilities
+- User wants to use Codex's non-interactive coding agent capabilities
 - User mentions "codex", "run codex", "delegate to codex"
 
 ## Authentication (ChatGPT OAuth)
 
-**CRITICAL**: Use ChatGPT OAuth through the selected credential store. **Do NOT set `OPENAI_API_KEY` or pass API keys** for this workflow. Keep the authentication route separate from the account's allowance and extra Credit policy; OAuth does not guarantee that long work cannot consume extra Credit.
+**CRITICAL**: Use ChatGPT OAuth through the selected credential store. **Do NOT set `OPENAI_API_KEY`, `CODEX_API_KEY`, or pass API keys** for this workflow (the bundled wrapper strips both environment variables before launching Codex). Keep the authentication route separate from the account's allowance and extra Credit policy; OAuth does not guarantee that long work cannot consume extra Credit.
 
 - Resolve the actual `CODEX_HOME` and store; the desktop app and CLI can share credentials.
 - For a session managed by a project's Account Manager, enter that project's routine-switch SOP first. Use its deployed operation with the explicit target SID or its documented current-session form; let that operation perform its own binding checks. Query and recover the original request ID. Missing deployed behavior goes to a separately scoped repair, not builds, upgrades or broad quota refreshes inside the routine switch. An unknown managed request stays with that manager; it does not authorize raw RPC or a new login.
@@ -40,7 +40,7 @@ The skill auto-detects Codex CLI in this order:
 2. `which codex` — the executable first on the wrapper process's PATH, including
    npm global installs under nvm (`~/.nvm/versions/node/*/bin/codex`). This lookup
    does not execute an interactive shell's alias or function.
-3. `/Applications/ChatGPT.app/Contents/Resources/codex` — the copy bundled inside
+3. `/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex` — the copy bundled inside
    ChatGPT.app, fallback only. Its version tracks the Desktop app and can diverge from
    the npm build, so it is deliberately last.
 
@@ -111,12 +111,12 @@ available, Minions' public session-bound diagnostic owns the mechanical gate.
 python3 scripts/codex_wrapper.py exec "<prompt>" [<workdir>] [<model>] [<sandbox>] [<timeout>]
 ```
 
-Example:
+Example (pass `""` or omit `<model>` to use Codex's configured default model):
 ```bash
 python3 scripts/codex_wrapper.py exec \
   "Write a Python function to calculate fibonacci" \
   /tmp \
-  gpt-5.5 \
+  "" \
   workspace-write \
   300
 ```
@@ -131,7 +131,7 @@ Example:
 ```bash
 python3 scripts/codex_wrapper.py review \
   /path/to/repo \
-  gpt-5.5 \
+  "" \
   true \
   300
 ```
