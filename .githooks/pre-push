@@ -9,29 +9,145 @@ REPO_ROOT="$(cd "$REPO_ROOT" && pwd -P)"
 COMMON_DIR="$(git rev-parse --path-format=absolute --git-common-dir)"
 COMMON_DIR="$(cd "$COMMON_DIR" && pwd -P)"
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+cd "$REPO_ROOT"
+
+HOOK_TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/claude-code-skills-pre-push.XXXXXX")"
+trap 'rm -rf -- "$HOOK_TMP_DIR"' EXIT
+UPDATE_INPUT="$HOOK_TMP_DIR/updates"
+
 REPOSITORY_PATHS=("$REPO_ROOT" "$COMMON_DIR")
-WORKTREE_LIST="$(git worktree list --porcelain)" || {
+WORKTREE_INVENTORY="$HOOK_TMP_DIR/worktrees.z"
+if ! git worktree list --porcelain -z >"$WORKTREE_INVENTORY"; then
   echo "pre-push blocked: could not enumerate repository worktrees for publication runtime containment." >&2
   exit 2
-}
-case "$WORKTREE_LIST" in
-  "worktree "*) ;;
-  *)
-    echo "pre-push blocked: repository worktree inventory is malformed." >&2
+fi
+
+record_active=0
+have_head=0
+have_ref=0
+saw_bare=0
+record_count=0
+current_seen=0
+worktree_path=""
+while IFS= read -r -d '' field; do
+  if [ -z "$field" ]; then
+    if [ "$record_active" -eq 0 ]; then
+      echo "pre-push blocked: repository worktree inventory is malformed." >&2
+      exit 2
+    fi
+    if [ "$saw_bare" -eq 0 ] && { [ "$have_head" -eq 0 ] || [ "$have_ref" -eq 0 ]; }; then
+      echo "pre-push blocked: repository worktree inventory is malformed." >&2
+      exit 2
+    fi
+    if [ -d "$worktree_path" ]; then
+      resolved_worktree="$(cd "$worktree_path" && pwd -P)" || exit 2
+      REPOSITORY_PATHS+=("$resolved_worktree")
+      [ "$resolved_worktree" = "$REPO_ROOT" ] && current_seen=1
+    fi
+    record_count=$((record_count + 1))
+    record_active=0
+    have_head=0
+    have_ref=0
+    saw_bare=0
+    worktree_path=""
+    continue
+  fi
+
+  if [ "$record_active" -eq 0 ]; then
+    case "$field" in
+      "worktree "*) worktree_path="${field#worktree }" ;;
+      *)
+        echo "pre-push blocked: repository worktree inventory is malformed." >&2
+        exit 2
+        ;;
+    esac
+    record_active=1
+  elif [ "$saw_bare" -eq 1 ]; then
+    case "$field" in
+      locked|locked\ *|prunable\ *) ;;
+      *)
+        echo "pre-push blocked: repository worktree inventory is malformed." >&2
+        exit 2
+        ;;
+    esac
+  elif [ "$have_head" -eq 0 ]; then
+    if [ "$field" = "bare" ]; then
+      saw_bare=1
+    elif [[ "$field" =~ ^HEAD\ ([0-9a-fA-F]{40}|[0-9a-fA-F]{64})$ ]]; then
+      have_head=1
+    else
+      echo "pre-push blocked: repository worktree inventory is malformed." >&2
+      exit 2
+    fi
+  elif [ "$have_ref" -eq 0 ]; then
+    case "$field" in
+      detached) have_ref=1 ;;
+      "branch "*)
+        [ "${field#branch }" != "" ] || {
+          echo "pre-push blocked: repository worktree inventory is malformed." >&2
+          exit 2
+        }
+        have_ref=1
+        ;;
+      *)
+        echo "pre-push blocked: repository worktree inventory is malformed." >&2
+        exit 2
+        ;;
+    esac
+  else
+    case "$field" in
+      locked|locked\ *|prunable\ *) ;;
+      *)
+        echo "pre-push blocked: repository worktree inventory is malformed." >&2
+        exit 2
+        ;;
+    esac
+  fi
+done <"$WORKTREE_INVENTORY"
+
+if [ "$record_active" -ne 0 ] || [ "$record_count" -eq 0 ] || [ "$current_seen" -ne 1 ]; then
+  echo "pre-push blocked: repository worktree inventory is malformed or truncated." >&2
+  exit 2
+fi
+
+# Cross-check Git's administrative linked-worktree records so a valid-looking
+# but incomplete porcelain inventory cannot omit a repository-controlled path.
+if [ -d "$COMMON_DIR/worktrees" ]; then
+  if [ ! -r "$COMMON_DIR/worktrees" ] || [ ! -x "$COMMON_DIR/worktrees" ]; then
+    echo "pre-push blocked: linked-worktree administrative records are unreadable." >&2
     exit 2
-    ;;
-esac
-while IFS= read -r worktree_line; do
-  case "$worktree_line" in
-    "worktree "*)
-      worktree_path="${worktree_line#worktree }"
-      if [ -d "$worktree_path" ]; then
-        REPOSITORY_PATHS+=("$(cd "$worktree_path" && pwd -P)")
-      fi
-      ;;
-  esac
-done <<< "$WORKTREE_LIST"
-cd "$REPO_ROOT"
+  fi
+  shopt -s nullglob
+  for gitdir_file in "$COMMON_DIR"/worktrees/*/gitdir; do
+    [ -f "$gitdir_file" ] || continue
+    IFS= read -r gitdir_line <"$gitdir_file" || {
+      echo "pre-push blocked: linked-worktree gitdir record is unreadable." >&2
+      exit 2
+    }
+    case "$gitdir_line" in
+      "gitdir: "*) linked_git_path="${gitdir_line#gitdir: }" ;;
+      /*) linked_git_path="$gitdir_line" ;;
+      *)
+        echo "pre-push blocked: linked-worktree gitdir record is malformed." >&2
+        exit 2
+        ;;
+    esac
+    case "$linked_git_path" in
+      /*) ;;
+      *)
+        echo "pre-push blocked: linked-worktree gitdir record is malformed." >&2
+        exit 2
+        ;;
+    esac
+    [ -f "$linked_git_path" ] || continue
+    linked_root="$(cd -P "$(dirname "$linked_git_path")" && pwd)" || {
+      echo "pre-push blocked: linked-worktree path cannot be resolved." >&2
+      exit 2
+    }
+    REPOSITORY_PATHS+=("$linked_root")
+  done
+  shopt -u nullglob
+fi
 
 resolve_existing_path() {
   local value="$1" links=0 directory target
@@ -67,9 +183,6 @@ require_external_path() {
   done
 }
 
-HOOK_TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/claude-code-skills-pre-push.XXXXXX")"
-trap 'rm -rf -- "$HOOK_TMP_DIR"' EXIT
-UPDATE_INPUT="$HOOK_TMP_DIR/updates"
 cat >"$UPDATE_INPUT"
 
 node "$REPO_ROOT/scripts/git-mainline-guard.mjs" pre-push "$@" <"$UPDATE_INPUT"

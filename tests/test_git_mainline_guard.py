@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -405,6 +406,46 @@ class MainlineGuardTests(unittest.TestCase):
         runner.parent.mkdir(parents=True, exist_ok=True)
         runner.write_text("raise SystemExit(0)\n", encoding="utf-8")
         env = self.env.copy()
+        env["GIT_PII_GUARD_DIR"] = str(guard_dir)
+
+        result = self.hook("pre-push", line, "origin", str(self.remote), env=env)
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn("PII guard resolves inside the repository", result.stderr)
+
+    def test_pre_push_dispatcher_blocks_linked_worktree_when_porcelain_omits_it(self) -> None:
+        run(self.repo, "git", "switch", "-qc", "feature")
+        (self.repo / "README.md").write_text("docs\n", encoding="utf-8")
+        run(self.repo, "git", "add", "README.md")
+        run(self.repo, "git", "commit", "-qm", "docs")
+        sha = run(self.repo, "git", "rev-parse", "HEAD").stdout.strip()
+        line = f"refs/heads/feature {sha} refs/heads/feature {'0' * 40}\n"
+        linked = self.root / "linked-worktree"
+        run(self.repo, "git", "worktree", "add", "-q", "--detach", str(linked), "HEAD")
+        guard_dir = linked / "scripts" / "git-pii-guard"
+        guard_dir.mkdir(parents=True, exist_ok=True)
+        guard = guard_dir / "pre-push"
+        guard.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        guard.chmod(0o755)
+        runner = linked / "scripts" / "claude-hooks" / "bounded-hook-runner.py"
+        runner.parent.mkdir(parents=True, exist_ok=True)
+        runner.write_text("raise SystemExit(0)\n", encoding="utf-8")
+
+        wrapper_dir = self.root / "git-wrapper"
+        wrapper_dir.mkdir()
+        wrapper = wrapper_dir / "git"
+        real_git = shutil.which("git")
+        wrapper.write_text(
+            "#!/bin/sh\n"
+            "if [ \"$1\" = worktree ] && [ \"$2\" = list ]; then\n"
+            f"  printf 'worktree {self.repo}\\0HEAD {sha}\\0branch refs/heads/feature\\0\\0'\n"
+            "  exit 0\n"
+            "fi\n"
+            f"exec {shlex.quote(real_git)} \"$@\"\n",
+            encoding="utf-8",
+        )
+        wrapper.chmod(0o755)
+        env = self.env.copy()
+        env["PATH"] = str(wrapper_dir) + os.pathsep + env["PATH"]
         env["GIT_PII_GUARD_DIR"] = str(guard_dir)
 
         result = self.hook("pre-push", line, "origin", str(self.remote), env=env)

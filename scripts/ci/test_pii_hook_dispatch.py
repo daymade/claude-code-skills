@@ -32,8 +32,9 @@ class DispatchTests(unittest.TestCase):
                     '#!/bin/sh\n'
                     'if [ "$1" = worktree ] && [ "$2" = list ]; then\n'
                     '  [ "${TEST_WORKTREE_EXIT:-0}" = 0 ] || exit "$TEST_WORKTREE_EXIT"\n'
-                    '  if [ "${TEST_WORKTREE_MALFORMED:-0}" = 1 ]; then printf "malformed\\n"; '
-                    'else printf "worktree %s\\n" "$TEST_REPO"; fi\n'
+                    '  if [ "${TEST_WORKTREE_MALFORMED:-0}" = 1 ]; then printf "malformed\\0";\n'
+                    '  elif [ "${TEST_WORKTREE_TRUNCATED:-0}" = 1 ]; then printf "worktree %s\\0" "$TEST_REPO";\n'
+                    '  else printf "worktree %s\\0HEAD 0000000000000000000000000000000000000000\\0branch refs/heads/topic\\0\\0" "$TEST_REPO"; fi\n'
                     '  exit 0\n'
                     'fi\n'
                     'printf "%s\\n" "$TEST_REPO"\n')
@@ -110,6 +111,12 @@ class DispatchTests(unittest.TestCase):
         result = self.run_hook(TEST_WORKTREE_MALFORMED='1')
         self.assertEqual(result.returncode, 2, result.stderr)
         self.assertIn('repository worktree inventory is malformed', result.stderr)
+        self.assertFalse(self.log.exists())
+
+    def test_truncated_worktree_inventory_fails_closed(self):
+        result = self.run_hook(TEST_WORKTREE_TRUNCATED='1')
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn('malformed or truncated', result.stderr)
         self.assertFalse(self.log.exists())
 
     def test_mainline_refusal_remains_first(self):
