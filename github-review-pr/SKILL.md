@@ -516,6 +516,14 @@ needed, query check-runs and legacy commit statuses for `HEAD_SHA` so a green re
 bound to the reviewed commit rather than an older run. Distinguish "no checks reported"
 from a failed check; the former is absence of CI evidence, not a red build.
 
+When a required job fails, inspect its job steps and check-run annotations before
+classifying the result. A zero-step job whose annotation reports failed account payments
+or a spending limit is **hosted CI not started**, not a test failure; load the `github-ops`
+Skill and follow its CI demand and notification diagnosis. Compare the same check on
+the current base and run the repository's complete CI definition locally on the exact
+prospective tree under the applicable budget exception. Report hosted and local evidence
+separately: a local pass never converts the hosted check to green.
+
 After inspecting untrusted changes, run the current-base repository's prescribed tests
 in the isolated clone. For a clean merge, validate the prospective merged state when
 integration with the current base matters; testing the head alone is insufficient after
