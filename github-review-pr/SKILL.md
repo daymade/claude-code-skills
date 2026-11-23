@@ -296,6 +296,50 @@ Treat conflicts as evidence, not as a reason to update or rebase the branch
 automatically. Report the conflicting paths and determine whether base drift, the PR,
 or both own the required resolution.
 
+#### Base advanced since the prior review — narrow merge-delta recheck
+
+When only the base moved, re-read the live base and head before reusing any prior review. Read
+`REVIEWED_HEAD_SHA`, `OLD_BASE_SHA`, and `PRIOR_MERGE_TREE` from the prior snapshot ledger. Require
+the live head to equal `REVIEWED_HEAD_SHA`, the old base to be an ancestor of the new base, and a
+nonempty recorded tree OID; otherwise review the changed head or history discontinuity under the
+full workflow. If the prior Git/attribute/merge-driver environment is unknown or changed, do not
+narrow the review.
+
+Recompute both immutable prospective merge results and require the old result to equal the tree
+actually reviewed before inspecting only the new merge increment and changed interaction surface:
+
+```bash
+if old_output=$(git merge-tree --write-tree --messages "$OLD_BASE_SHA" "$HEAD_SHA"); then
+  old_rc=0
+else
+  old_rc=$?
+fi
+if new_output=$(git merge-tree --write-tree --messages "$CURRENT_BASE_SHA" "$HEAD_SHA"); then
+  new_rc=0
+else
+  new_rc=$?
+fi
+if [ "$old_rc" -ne 0 ] || [ "$new_rc" -ne 0 ]; then
+  echo "merge-tree failed; return to full landing/conflict review" >&2
+  exit 1
+fi
+OLD_MERGE_TREE=${old_output%%$'\n'*}
+NEW_MERGE_TREE=${new_output%%$'\n'*}
+test "$OLD_MERGE_TREE" = "$PRIOR_MERGE_TREE" || {
+  echo "recomputed old merge tree differs from the reviewed tree; full re-review required" >&2
+  exit 1
+}
+git diff "$OLD_MERGE_TREE" "$NEW_MERGE_TREE"
+git diff "$CURRENT_BASE_SHA" "$NEW_MERGE_TREE"
+```
+
+Review paths and hunks changed by the base advance, new conflicts, and consumers or checks whose
+inputs changed; reuse prior evidence only for contribution code and behavior proved unchanged. If
+either merge conflicts, the old tree does not match the prior ledger, or the compared inputs cannot
+be stabilized, return to the full landing/conflict review. Bind the final verdict and snapshot
+ledger to the new `HEAD_SHA`, `CURRENT_BASE_SHA`, and `NEW_MERGE_TREE`; never carry the old verdict
+forward under the old base.
+
 #### When local and hosted merge results disagree
 
 The reviewing agent runs this diagnostic when local three-way analysis is clean but

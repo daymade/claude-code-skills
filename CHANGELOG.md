@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **git-safety-net** (`git-safety-net` v1.30.2 → v1.30.3): Add a concise Mixed WIP convergence recipe for per-path landed residue, superseded source, runtime logs, and unknown handling, with unique-byte preservation, guarded sync, clean-main verification, and task-owned worktree retirement.
+- **peer-message** (`peer-message` v1.28.2 → v1.28.3): Add Git-first owner discovery from staged unique strings, staged blob-to-ref matches, and PR-head mapping before contacting a narrowed top-3; preserve queued-versus-read and unknown-versus-unowned boundaries.
+- **github-contributor** (`github-contributor` v1.3.3 → v1.3.4): Add a replacement-PR mode for publication-audit/base-evidence or history-rewrite blockers, preserving the verified old head without force-push and closing the old PR only after the replacement lands.
+- **github-review-pr** (`github-review-pr` v1.4.7 → v1.4.8): Add a narrow merge-delta recheck when only the base advances, reusing unchanged evidence while binding the final verdict to the new head/base and merge tree.
+- **docs-cleaner** (`daymade-docs` v1.29.8 → v1.29.9): Add a Mode 1 release-boundary check requiring published commit/version evidence or conditional wording for external installer/runtime behavior; local WIP no longer counts as shipped behavior.
 - **frontend-visual-qa** (v1.22.2 → v1.22.3): Require browser-lifecycle fixes to enumerate the full active launcher surface, including capture scripts and browser-backed tests, before fix closure.
 - **macos-cleaner** (`daymade-macos` v1.34.20 → v1.34.21): Add launcher-surface closure, shared non-cloning resolver, canonical default-path guard and static scan requirements to Chromium clone recurrence prevention; require an occupancy map before hotspot candidates.
 - **skill-creator** (`daymade-skill` v1.83.0 → v1.83.1): Add guard/validator bypass review axes and extend sanitization scope to tests, fixtures and private review archives.
