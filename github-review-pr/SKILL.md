@@ -207,6 +207,15 @@ requirements. A matching remote URL alone does not establish those identities.
 - For read-only object inspection, prefer an independent temporary clone. Reuse
   the current clone only when its remote matches the base repository, its worktree
   is safe, and namespaced review refs cannot interfere with ongoing work.
+- Prevent LFS media hydration and leftover temp clones on disk. For every
+  temporary review clone or read-only checkout, set `GIT_LFS_SKIP_SMUDGE=1` and
+  prefer `--no-checkout` (or sparse checkout / `--filter=blob:none` when full
+  working-tree blobs are unneeded); fetch specific LFS objects with
+  `git lfs pull --include=<exact-path>` only when the PR diff actually touches an
+  LFS-tracked file. Bind teardown to the review lifecycle (for example,
+  `trap 'rm -rf "$REVIEW_TMP"' EXIT` for disposable clones, or explicit
+  `git worktree remove` for linked worktrees) and verify the temporary carrier is
+  absent before reporting the verdict.
 - Before an authorized repair, run the repository's actual source-owner check.
   For Skill edits, load `skill-creator` and follow its source-location procedure.
   Use a linked worktree of the registered source or an explicitly approved,
