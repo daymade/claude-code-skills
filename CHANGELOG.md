@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **claude-switch-models-setup** (`daymade-claude-code` v5.3.5 → v5.3.6): Remove derived layer count wording in the sibling provider profile upgrade checklist.
+- **claude-switch-models-setup** (`daymade-claude-code` v5.3.4 → v5.3.5): Add a 4-layer parity checklist when upgrading or cloning a sibling provider profile (`settings/<new>.json` permissions/flags, `~/.claude-profiles/<new>/CLAUDE.md`, shell aliases, and managed fleet model policy).
+- **local-codex** (`daymade-codex` v2.4.20 → v2.4.21): Add model-entitlement verification (`models_cache.json`) before model tier upgrades and serialize remote `127.0.0.1:1455` browser-OAuth SSH tunnels with ControlSocket teardown and SSO redirect settle wait in `references/oauth-guide.md`.
+- **macos-watchdog** (`daymade-macos` v1.34.21 → v1.34.22): Require business-receipt freshness (`last-run.json`, trailing `round_failure` logs, calibrated HTTP probe timeouts) beyond live PID checks, and note `os.replace()` or BSD `mv -fh` over plain `mv -f` / non-atomic `ln -sfn` for atomic directory symlink flips on macOS.
 - **git-safety-net** (`git-safety-net` v1.30.2 → v1.30.3): Add a concise Mixed WIP convergence recipe for per-path landed residue, superseded source, runtime logs, and unknown handling, with unique-byte preservation, guarded sync, clean-main verification, and task-owned worktree retirement.
 - **peer-message** (`peer-message` v1.28.2 → v1.28.3): Add Git-first owner discovery from staged unique strings, staged blob-to-ref matches, and PR-head mapping before contacting a narrowed top-3; preserve queued-versus-read and unknown-versus-unowned boundaries.
 - **github-contributor** (`github-contributor` v1.3.3 → v1.3.4): Add a replacement-PR mode for publication-audit/base-evidence or history-rewrite blockers, preserving the verified old head without force-push and closing the old PR only after the replacement lands.
