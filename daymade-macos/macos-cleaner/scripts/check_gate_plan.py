@@ -346,7 +346,7 @@ DESTRUCTIVE_PATTERNS = (
     (('uv',), re.compile(r'\buv\s+cache\s+(?:clean|prune)\b'), True, True),
     (('docker', 'OrbStack'), re.compile(
         r'\bdocker\s+(?:rmi|rm|prune|system\s+prune|builder\s+prune|'
-        r'buildx\s+prune|image\s+prune|volume\s+prune|container\s+prune)\b'), True, True),
+        r'buildx\s+prune|image\s+(?:rm|remove|prune)|volume\s+prune|container\s+prune)\b'), True, True),
     (('defaults', 'AssetCache'), re.compile(r'\bdefaults\s+write\b'), False, False),
     (('AssetCacheManagerUtil',), re.compile(r'\bAssetCacheManagerUtil\b'), False, False),
     (('tmutil',), re.compile(r'\btmutil\s+deletelocalsnapshots\b'), False, False),
@@ -393,11 +393,52 @@ HELP_INVOCATION_RE = re.compile(r'(?:^|\s)(?:--help\b|-h\b)|\bhelp\b')
 # An explicit object argument narrows it, so these are the exclusions.
 EXPLICIT_OBJECT_RES = (
     re.compile(r'\buv\s+cache\s+clean\s+(\S+)'),
-    # `docker rmi <id>` names one object, so it is not prune-family. A subshell or
-    # a give-me-everything flag puts it back in the category-wide class.
-    re.compile(r'\bdocker\s+(?:rmi|rm)\s+(?![^(|]*\$\()(?![^(|]*(?:-q\b|--all\b|'
-               r'-a\b))[\w:.@/-]+'),
 )
+
+
+def exact_docker_object_removal(command_text):
+    """Recognize one explicit Docker object removal without widening flags.
+
+    Image removal requires `--no-prune` and exactly one full sha256 image ID.
+    Container removal accepts explicit names/IDs but no force/all flags.
+    """
+    cleaned = command_text.strip()
+    if cleaned.startswith('`') and cleaned.endswith('`') and cleaned.count('`') == 2:
+        cleaned = cleaned[1:-1].strip()
+    if '$(' in cleaned or '`' in cleaned:
+        return False
+    try:
+        words = shlex.split(cleaned)
+    except ValueError:
+        return False
+    if len(words) < 3 or words[0] != 'docker':
+        return False
+    if words[1] == 'rm':
+        if any(word.startswith('-') for word in words[2:]):
+            return False
+        return all(re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]*', word) for word in words[2:])
+    image_removal = words[1] == 'rmi' or (
+        words[1] == 'image' and len(words) >= 4 and words[2] in ('rm', 'remove'))
+    if not image_removal:
+        return False
+    args = words[2:] if words[1] == 'rmi' else words[3:]
+    targets = []
+    no_prune = False
+    index = 0
+    while index < len(args):
+        word = args[index]
+        if word == '--no-prune' and not no_prune:
+            no_prune = True
+        elif word == '--platform':
+            index += 1
+            if index >= len(args) or not re.fullmatch(r'[\w./-]+', args[index]):
+                return False
+        elif word.startswith('-'):
+            return False
+        else:
+            targets.append(word)
+        index += 1
+    return no_prune and len(targets) == 1 and bool(re.fullmatch(r'sha256:[0-9a-f]{64}', targets[0]))
 
 
 def exact_buildkit_record(command_text):
@@ -1182,7 +1223,7 @@ def find_destructive_commands(plan_text):
             if ('--help' in helper_words and
                     '--' not in helper_words[:helper_words.index('--help')]):
                 continue
-        elif rm_match:
+        elif rm_match and argv0(chunk) != 'docker':
             # Help/version flags are read-only only before an end-of-options
             # marker and without any deletion operands. Filename text is data.
             try:
@@ -1219,6 +1260,8 @@ def find_destructive_commands(plan_text):
                 continue  # a filename citation, not an executable invocation
             if match.group(0) == 'docker buildx prune':
                 category_wide = not exact_buildkit_record(chunk)
+            elif tools == ('docker', 'OrbStack') and category_wide:
+                category_wide = not exact_docker_object_removal(chunk)
             elif category_wide:
                 # An explicit object argument narrows the scope.
                 if any(narrow.search(chunk) for narrow in EXPLICIT_OBJECT_RES):
@@ -1629,6 +1672,8 @@ def unrecognized_command_lines(plan_text, commands):
             continue
         if READ_ONLY_PROBE_RE.match(chunk.strip('` ')):
             continue
+        if read_only_clone_analyzer(chunk):
+            continue
         if READ_ONLY_SUBCOMMAND_RE.match(chunk.strip('` ')):
             continue
         if re.fullmatch(r'[\w./+-]+\s+--(?:version|help)', chunk.strip('` ')):
@@ -1639,6 +1684,23 @@ def unrecognized_command_lines(plan_text, commands):
             continue
         missed.append((lineno, chunk))
     return missed
+
+
+def read_only_clone_analyzer(command_text):
+    """Accept the clone analyzer only when no argparse prefix can write a manifest."""
+    try:
+        words = shlex.split(command_text.strip().strip('`'))
+    except ValueError:
+        return False
+    if not any(word.rsplit('/', 1)[-1] == 'analyze_code_sign_clones.py' for word in words):
+        return False
+    for word in words:
+        if not word.startswith('--'):
+            continue
+        option = word.split('=', 1)[0]
+        if '--write-manifest'.startswith(option):
+            return False
+    return True
 
 
 # Read-only invocations whose program name is itself mutating elsewhere

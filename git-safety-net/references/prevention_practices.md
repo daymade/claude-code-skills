@@ -48,6 +48,14 @@ baseline and the working files independently. A path-limited checkout alone
 can leave an incomplete index and stage every unselected baseline file as a
 deletion. Sparse configuration success does not prove files were materialized.
 
+New files authored inside an owned directory are not automatically added to a
+literal sparse-checkout definition. Ordinary `git add -- <new-file>` can refuse
+them with “matched paths ... outside of your sparse-checkout definition.” For
+those exact task-owned new files, use `git add --sparse -- <new-file>`; this
+updates the index without widening the working-tree selection. Then run the same
+complete-index and scope verification below. Do not disable sparse checkout or
+restage unselected baseline paths to work around the refusal.
+
 After staging explicit owned paths, run the read-only scope check before the
 repository's normal staged-diff inspection and commit:
 
