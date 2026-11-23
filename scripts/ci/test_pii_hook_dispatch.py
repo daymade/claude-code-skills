@@ -28,7 +28,15 @@ class DispatchTests(unittest.TestCase):
                         TEST_REPO=str(self.repo), TEST_LOG=str(self.log), TEST_EXIT='0', MAINLINE_EXIT='0')
         self.env.pop('PII_PRE_PUSH_TIMEOUT_SECONDS', None)
         self.env.pop('GIT_PII_GUARD_DIR', None)
-        self.script(self.bin / 'git', '#!/bin/sh\nprintf "%s\\n" "$TEST_REPO"\n')
+        self.script(self.bin / 'git',
+                    '#!/bin/sh\n'
+                    'if [ "$1" = worktree ] && [ "$2" = list ]; then\n'
+                    '  [ "${TEST_WORKTREE_EXIT:-0}" = 0 ] || exit "$TEST_WORKTREE_EXIT"\n'
+                    '  if [ "${TEST_WORKTREE_MALFORMED:-0}" = 1 ]; then printf "malformed\\n"; '
+                    'else printf "worktree %s\\n" "$TEST_REPO"; fi\n'
+                    '  exit 0\n'
+                    'fi\n'
+                    'printf "%s\\n" "$TEST_REPO"\n')
         self.script(self.bin / 'node', '#!/bin/sh\nexit "$MAINLINE_EXIT"\n')
         self.script(self.guard / 'pre-push', '#!/bin/sh\nexit "$TEST_EXIT"\n')
         python = self.root / '.local' / 'bin' / 'python3.12'
@@ -90,6 +98,18 @@ class DispatchTests(unittest.TestCase):
         result = self.run_hook(GIT_PII_GUARD_DIR=str(guard_dir))
         self.assertEqual(result.returncode, 2, result.stderr)
         self.assertIn('PII guard resolves inside the repository', result.stderr)
+        self.assertFalse(self.log.exists())
+
+    def test_worktree_inventory_failure_fails_closed(self):
+        result = self.run_hook(TEST_WORKTREE_EXIT='1')
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn('could not enumerate repository worktrees', result.stderr)
+        self.assertFalse(self.log.exists())
+
+    def test_malformed_worktree_inventory_fails_closed(self):
+        result = self.run_hook(TEST_WORKTREE_MALFORMED='1')
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn('repository worktree inventory is malformed', result.stderr)
         self.assertFalse(self.log.exists())
 
     def test_mainline_refusal_remains_first(self):

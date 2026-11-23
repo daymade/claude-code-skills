@@ -10,6 +10,17 @@ COMMON_DIR="$(git rev-parse --path-format=absolute --git-common-dir)"
 COMMON_DIR="$(cd "$COMMON_DIR" && pwd -P)"
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 REPOSITORY_PATHS=("$REPO_ROOT" "$COMMON_DIR")
+WORKTREE_LIST="$(git worktree list --porcelain)" || {
+  echo "pre-push blocked: could not enumerate repository worktrees for publication runtime containment." >&2
+  exit 2
+}
+case "$WORKTREE_LIST" in
+  "worktree "*) ;;
+  *)
+    echo "pre-push blocked: repository worktree inventory is malformed." >&2
+    exit 2
+    ;;
+esac
 while IFS= read -r worktree_line; do
   case "$worktree_line" in
     "worktree "*)
@@ -19,7 +30,7 @@ while IFS= read -r worktree_line; do
       fi
       ;;
   esac
-done < <(git worktree list --porcelain)
+done <<< "$WORKTREE_LIST"
 cd "$REPO_ROOT"
 
 resolve_existing_path() {
