@@ -151,6 +151,17 @@ required only when local availability is part of the authorized delivery.
 | Receipt binding | `release_readiness.py attest` succeeds for the exact candidate and review commit | Missing receipt, wrong scope or candidate changed after attestation |
 | Sparse hook closure | Materialize every repository-managed pre-commit/pre-push dependency before invoking hooks | Missing module, validator or helper; never bypass the hook |
 | Publication audit | PII/sanitization and repository-required checks pass for the exact pushed range | New blocking finding, missing required scanner or unavailable evidence |
+| LFS audit context | For an LFS-bearing repository, the publication worktree uses the registered source's LFS storage and the exact base evidence is prepared there | Independent clone has an empty/different LFS store, required objects are absent, or `GIT_LFS_SKIP_SMUDGE` would be needed to make the audit run |
+
+For an LFS-bearing repository, prefer a sparse linked worktree of the registered source over an ordinary independent clone for publication. Linked worktrees share the repository's LFS object storage; clones do not. Do not bulk-copy `.git/lfs/objects`, disable smudge with `GIT_LFS_SKIP_SMUDGE`, or treat an empty clone store as acceptable audit evidence. Check free space before any explicit object materialization.
+
+When the normal push reports `rebuild-required` with `base_evidence_unavailable`, prepare the exact full base OID through the guard's existing background entry from the registered publication worktree, then retry the same normal push:
+
+```bash
+python3 <git-pii-guard>/prepare-base.py --repo <registered-publication-worktree> --ref <full-base-oid>
+```
+
+A completed `base-prepared:` receipt may exit nonzero for inherited findings; inspect it and let the normal push compare inherited versus new findings. Missing objects, unsupported LFS environment, disk exhaustion or an incomplete preparation are not permission to bypass the audit.
 
 For this marketplace's sparse publication worktree, the hook closure currently
 includes `$REPO_ROOT/scripts/git-mainline-guard.mjs`,

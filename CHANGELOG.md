@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-creator** (`daymade-skill` v1.83.6 → v1.83.7): Require registered linked worktrees for managed-source authoring and LFS-bearing publication, reuse the registered LFS store, and prepare missing exact-base audit evidence without disabling smudge or bulk-copying objects.
+- **github-ops** (`github-ops` v1.20.2 → v1.20.3): Require merge-method selection from the intersection of repository settings and active branch rulesets rather than repository flags alone.
+- **git-safety-net** (`git-safety-net` v1.30.5 → v1.30.6): Document linked-worktree LFS storage sharing and the disk/audit boundary for independent clones.
+
 - **local-codex** (`daymade-codex` v2.4.22 → v2.4.23): Place `-C <workdir>` before the `review` subcommand in `review_codex()` so live Codex CLI accepts it, pass `exec_codex()` prompts over stdin (`-`) to prevent flag injection on dash-prefixed prompts, honor `skip_git_check=False`, and emit JSON errors for invalid CLI timeout arguments.
 - **claude-switch-models-setup** (`daymade-claude-code` v5.3.8 → v5.3.9): Route live canonical-checkout repair through the published-content adoption owner, distinguish content-only adoption from HEAD reconciliation, and align repository PII guidance with the fail-closed public pre-push gate.
 - **skill-governance** (`daymade-skill` v1.83.5 → v1.83.6): Advance the release identity after integrating the concurrent `skill-creator` minimal-`PATH` MCP verification change, while preserving the documentation-alignment handoff and complete host-scoped readback contract.
