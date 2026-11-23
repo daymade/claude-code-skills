@@ -71,6 +71,14 @@ For each branch, the script returns one of these outcomes:
   content the base does not already have (a genuinely new/edited/reverted/deleted file). Review
   the listed contribution before deleting.
 
+For a long-lived automation branch, distinguish **ref synchronization** from **content
+synchronization**. After its PR lands, the branch tip can differ from main only by the merge
+commit while both resolve to the same tree. Verify `git diff --quiet <branch-tip> <main-tip>`
+(exit `0`) and compare the operational files or blobs that the automation actually consumes.
+Equal trees prove there is no content gap; do not force-push the branch merely to make its
+SHA equal the merge commit. A nonzero tree diff, a different consumed blob, or an unmerged
+open PR remains a real synchronization gap and follows the normal review/landing path.
+
 ## Pick the diff FORM from the question you're asking (two-dot vs three-dot)
 
 `git diff base...ref` and `git diff base ref` answer **different questions**, and reaching for the
