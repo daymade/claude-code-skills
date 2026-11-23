@@ -189,7 +189,7 @@ if the expected distribution matches, retain that content evidence; if it differ
 local adoption is still unverified even though publication succeeded. Identify the
 actual differing paths and coordinate with the writer, preserving their work.
 When adoption is authorized, follow the source owner's
-[published-content adoption procedure](https://github.com/daymade/claude-code-skills/blob/922f0a8e1d0beb387fc9a1d2411fe6fe5c96f071/daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md#adopt-published-content-into-a-canonical-checkout-with-wip);
+[published-content adoption procedure](https://github.com/daymade/claude-code-skills/blob/a5dc7829ef3222e1234df08bbbc5de5cbccb48ad/daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md#adopt-published-content-into-a-canonical-checkout-with-wip);
 do not switch their branch, copy a new cache or redirect the alias into a
 disposable review worktree to manufacture a match.
 
