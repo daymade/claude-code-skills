@@ -118,8 +118,16 @@ if [ -d "$COMMON_DIR/worktrees" ]; then
     exit 2
   fi
   shopt -s nullglob
-  for gitdir_file in "$COMMON_DIR"/worktrees/*/gitdir; do
-    [ -f "$gitdir_file" ] || continue
+  for admin_dir in "$COMMON_DIR"/worktrees/*; do
+    if [ ! -d "$admin_dir" ] || [ -L "$admin_dir" ]; then
+      echo "pre-push blocked: linked-worktree administrative record is malformed." >&2
+      exit 2
+    fi
+    gitdir_file="$admin_dir/gitdir"
+    if [ ! -f "$gitdir_file" ] || [ -L "$gitdir_file" ] || [ ! -r "$gitdir_file" ]; then
+      echo "pre-push blocked: linked-worktree gitdir record is missing or unreadable." >&2
+      exit 2
+    fi
     IFS= read -r gitdir_line <"$gitdir_file" || {
       echo "pre-push blocked: linked-worktree gitdir record is unreadable." >&2
       exit 2
@@ -139,12 +147,18 @@ if [ -d "$COMMON_DIR/worktrees" ]; then
         exit 2
         ;;
     esac
-    [ -f "$linked_git_path" ] || continue
-    linked_root="$(cd -P "$(dirname "$linked_git_path")" && pwd)" || {
-      echo "pre-push blocked: linked-worktree path cannot be resolved." >&2
+    if [ "$(basename "$linked_git_path")" != ".git" ]; then
+      echo "pre-push blocked: linked-worktree gitdir record is malformed." >&2
       exit 2
-    }
-    REPOSITORY_PATHS+=("$linked_root")
+    fi
+    linked_root_candidate="$(dirname "$linked_git_path")"
+    if [ -d "$linked_root_candidate" ]; then
+      linked_root="$(cd -P "$linked_root_candidate" && pwd)" || {
+        echo "pre-push blocked: linked-worktree path cannot be resolved." >&2
+        exit 2
+      }
+      REPOSITORY_PATHS+=("$linked_root")
+    fi
   done
   shopt -u nullglob
 fi
