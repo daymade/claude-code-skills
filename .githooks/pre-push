@@ -9,6 +9,17 @@ REPO_ROOT="$(cd "$REPO_ROOT" && pwd -P)"
 COMMON_DIR="$(git rev-parse --path-format=absolute --git-common-dir)"
 COMMON_DIR="$(cd "$COMMON_DIR" && pwd -P)"
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+REPOSITORY_PATHS=("$REPO_ROOT" "$COMMON_DIR")
+while IFS= read -r worktree_line; do
+  case "$worktree_line" in
+    "worktree "*)
+      worktree_path="${worktree_line#worktree }"
+      if [ -d "$worktree_path" ]; then
+        REPOSITORY_PATHS+=("$(cd "$worktree_path" && pwd -P)")
+      fi
+      ;;
+  esac
+done < <(git worktree list --porcelain)
 cd "$REPO_ROOT"
 
 resolve_existing_path() {
@@ -36,11 +47,13 @@ path_is_within() {
 }
 
 require_external_path() {
-  local label="$1" resolved="$2"
-  if path_is_within "$resolved" "$REPO_ROOT" || path_is_within "$resolved" "$COMMON_DIR"; then
-    echo "pre-push blocked: $label resolves inside the repository; configure an external executable guard/runtime." >&2
-    exit 2
-  fi
+  local label="$1" resolved="$2" repository_path
+  for repository_path in "${REPOSITORY_PATHS[@]}"; do
+    if path_is_within "$resolved" "$repository_path"; then
+      echo "pre-push blocked: $label resolves inside the repository; configure an external executable guard/runtime." >&2
+      exit 2
+    fi
+  done
 }
 
 HOOK_TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/claude-code-skills-pre-push.XXXXXX")"
