@@ -136,6 +136,45 @@ class WrapperHardeningTest(unittest.TestCase):
         self.assertEqual(r_cur["final_message"], "final-v2")
         self.assertEqual(r_leg["final_message"], "legacy-v1")
 
+    def test_review_places_cd_flag_before_review_subcommand(self):
+        completed = subprocess.CompletedProcess([], 0, "", "")
+        with mock.patch.object(wrapper.subprocess, "run", return_value=completed) as run:
+            wrapper.review_codex("/synthetic/codex", workdir="/tmp/repo", model="m1", uncommitted=True)
+        cmd = run.call_args.args[0]
+        self.assertIn("-C", cmd)
+        self.assertIn("review", cmd)
+        self.assertLess(cmd.index("-C"), cmd.index("review"))
+        self.assertEqual(cmd[cmd.index("-C") + 1], "/tmp/repo")
+        self.assertIn("--uncommitted", cmd)
+
+    def test_exec_passes_dash_prefixed_prompt_via_stdin_and_honors_skip_git_check(self):
+        completed = subprocess.CompletedProcess([], 0, "", "")
+        with mock.patch.object(wrapper.subprocess, "run", return_value=completed) as run:
+            wrapper.exec_codex("/synthetic/codex", "- fix the parser\n--help", skip_git_check=False)
+        cmd = run.call_args.args[0]
+        self.assertEqual(cmd[-1], "-")
+        self.assertNotIn("--skip-git-repo-check", cmd)
+        self.assertEqual(run.call_args.kwargs["input"], "- fix the parser\n--help")
+
+    def test_main_rejects_bad_timeout_with_json_and_handles_case_insensitive_uncommitted(self):
+        out_bad = io.StringIO()
+        with mock.patch.object(wrapper, "find_codex_binary", return_value="/synthetic/codex"), \
+                mock.patch.object(sys, "argv", ["codex_wrapper.py", "exec", "hi", "", "", "", "not-an-int"]), \
+                contextlib.redirect_stdout(out_bad):
+            with self.assertRaises(SystemExit) as cm:
+                wrapper.main()
+        self.assertEqual(cm.exception.code, 1)
+        self.assertIn("Invalid timeout", json.loads(out_bad.getvalue())["error"])
+
+        out_rev = io.StringIO()
+        with mock.patch.object(wrapper, "find_codex_binary", return_value="/synthetic/codex"), \
+                mock.patch.object(sys, "argv", ["codex_wrapper.py", "review", "/tmp/r", "", "True", "60"]), \
+                mock.patch.object(wrapper, "review_codex", return_value={"success": True}) as rev, \
+                contextlib.redirect_stdout(out_rev):
+            wrapper.main()
+        self.assertTrue(rev.call_args.kwargs["uncommitted"])
+        self.assertEqual(rev.call_args.kwargs["timeout"], 60)
+
 
 if __name__ == "__main__":
     unittest.main()
