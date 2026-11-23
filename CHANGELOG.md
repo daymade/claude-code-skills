@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **claude-switch-models-setup** (`daymade-claude-code` v5.3.5 → v5.3.6): Remove derived layer count wording in the sibling provider profile upgrade checklist.
 - **claude-switch-models-setup** (`daymade-claude-code` v5.3.4 → v5.3.5): Add a 4-layer parity checklist when upgrading or cloning a sibling provider profile (`settings/<new>.json` permissions/flags, `~/.claude-profiles/<new>/CLAUDE.md`, shell aliases, and managed fleet model policy).
 - **local-codex** (`daymade-codex` v2.4.20 → v2.4.21): Add model-entitlement verification (`models_cache.json`) before model tier upgrades and serialize remote `127.0.0.1:1455` browser-OAuth SSH tunnels with ControlSocket teardown and SSO redirect settle wait in `references/oauth-guide.md`.
 - **macos-watchdog** (`daymade-macos` v1.34.21 → v1.34.22): Require business-receipt freshness (`last-run.json`, trailing `round_failure` logs, calibrated HTTP probe timeouts) beyond live PID checks, and note `os.replace()` or BSD `mv -fh` over plain `mv -f` / non-atomic `ln -sfn` for atomic directory symlink flips on macOS.
