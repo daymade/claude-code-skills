@@ -5,8 +5,43 @@
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+REPO_ROOT="$(cd "$REPO_ROOT" && pwd -P)"
+COMMON_DIR="$(git rev-parse --path-format=absolute --git-common-dir)"
+COMMON_DIR="$(cd "$COMMON_DIR" && pwd -P)"
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 cd "$REPO_ROOT"
+
+resolve_existing_path() {
+  local value="$1" links=0 directory target
+  while [ -L "$value" ]; do
+    links=$((links + 1))
+    if [ "$links" -gt 40 ]; then
+      echo "pre-push blocked: too many symlinks while resolving publication runtime." >&2
+      return 2
+    fi
+    directory="$(cd -P "$(dirname "$value")" && pwd)"
+    target="$(readlink "$value")"
+    case "$target" in
+      /*) value="$target" ;;
+      *) value="$directory/$target" ;;
+    esac
+  done
+  directory="$(cd -P "$(dirname "$value")" && pwd)"
+  printf '%s/%s\n' "$directory" "$(basename "$value")"
+}
+
+path_is_within() {
+  local candidate="$1" root="$2"
+  [ "$candidate" = "$root" ] || [[ "$candidate" == "$root/"* ]]
+}
+
+require_external_path() {
+  local label="$1" resolved="$2"
+  if path_is_within "$resolved" "$REPO_ROOT" || path_is_within "$resolved" "$COMMON_DIR"; then
+    echo "pre-push blocked: $label resolves inside the repository; configure an external executable guard/runtime." >&2
+    exit 2
+  fi
+}
 
 HOOK_TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/claude-code-skills-pre-push.XXXXXX")"
 trap 'rm -rf -- "$HOOK_TMP_DIR"' EXIT
@@ -24,12 +59,20 @@ if [ "$GLOBAL_GUARD_DIR/pre-push" -ef "$HOOK_DIR/pre-push" ]; then
   echo "pre-push blocked: PII guard resolves to the repository dispatcher itself; configure an external executable guard." >&2
   exit 2
 fi
+GLOBAL_GUARD_PATH="$(resolve_existing_path "$GLOBAL_GUARD_DIR/pre-push")" || exit 2
+require_external_path "PII guard" "$GLOBAL_GUARD_PATH"
+
 PUBLICATION_PYTHON="${HOME:-}/.local/bin/python3.12"
 PUBLICATION_RUNNER="$GLOBAL_GUARD_DIR/../claude-hooks/bounded-hook-runner.py"
 if [ ! -x "$PUBLICATION_PYTHON" ] || [ ! -f "$PUBLICATION_RUNNER" ]; then
   echo "pre-push blocked: publication budget runtime is unavailable." >&2
   exit 2
 fi
-"$PUBLICATION_PYTHON" "$PUBLICATION_RUNNER" \
+PUBLICATION_PYTHON_PATH="$(resolve_existing_path "$PUBLICATION_PYTHON")" || exit 2
+PUBLICATION_RUNNER_PATH="$(resolve_existing_path "$PUBLICATION_RUNNER")" || exit 2
+require_external_path "publication Python" "$PUBLICATION_PYTHON_PATH"
+require_external_path "publication runner" "$PUBLICATION_RUNNER_PATH"
+
+"$PUBLICATION_PYTHON_PATH" "$PUBLICATION_RUNNER_PATH" \
   --pass-through --timeout "${PII_PRE_PUSH_TIMEOUT_SECONDS-300}" --max-timeout 300 \
-  --term-grace 3 -- "$GLOBAL_GUARD_DIR/pre-push" "$@" <"$UPDATE_INPUT"
+  --term-grace 3 -- "$GLOBAL_GUARD_PATH" "$@" <"$UPDATE_INPUT"

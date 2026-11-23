@@ -17,16 +17,18 @@ class DispatchTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
+        self.repo = self.root / 'repo'
+        self.repo.mkdir()
         self.bin = self.root / 'bin'
         self.bin.mkdir()
         self.guard = self.root / 'scripts' / 'git-pii-guard'
         self.guard.mkdir(parents=True)
         self.log = self.root / 'receipt.json'
         self.env = dict(os.environ, HOME=str(self.root), PATH=str(self.bin) + ':' + os.environ['PATH'],
-                        TEST_ROOT=str(self.root), TEST_LOG=str(self.log), TEST_EXIT='0', MAINLINE_EXIT='0')
+                        TEST_REPO=str(self.repo), TEST_LOG=str(self.log), TEST_EXIT='0', MAINLINE_EXIT='0')
         self.env.pop('PII_PRE_PUSH_TIMEOUT_SECONDS', None)
         self.env.pop('GIT_PII_GUARD_DIR', None)
-        self.script(self.bin / 'git', '#!/bin/sh\nprintf "%s\\n" "$TEST_ROOT"\n')
+        self.script(self.bin / 'git', '#!/bin/sh\nprintf "%s\\n" "$TEST_REPO"\n')
         self.script(self.bin / 'node', '#!/bin/sh\nexit "$MAINLINE_EXIT"\n')
         self.script(self.guard / 'pre-push', '#!/bin/sh\nexit "$TEST_EXIT"\n')
         python = self.root / '.local' / 'bin' / 'python3.12'
@@ -58,7 +60,7 @@ class DispatchTests(unittest.TestCase):
                 self.assertEqual(receipt['stdin'], 'refs/heads/topic abc refs/heads/topic def\n')
                 self.assertEqual(receipt['args'], ['--pass-through', '--timeout', '300',
                                  '--max-timeout', '300', '--term-grace', '3', '--',
-                                 str(self.guard / 'pre-push'), 'origin', 'synthetic-remote'])
+                                 str((self.guard / 'pre-push').resolve()), 'origin', 'synthetic-remote'])
 
     def test_missing_runtime_fails_before_guard(self):
         self.runner.unlink()
@@ -76,6 +78,18 @@ class DispatchTests(unittest.TestCase):
         result = self.run_hook(GIT_PII_GUARD_DIR=str(HOOK.parent))
         self.assertEqual(result.returncode, 2, result.stderr)
         self.assertIn('resolves to the repository dispatcher itself', result.stderr)
+        self.assertFalse(self.log.exists())
+
+    def test_repository_owned_guard_in_another_directory_is_rejected(self):
+        guard_dir = self.repo / 'scripts' / 'git-pii-guard'
+        guard_dir.mkdir(parents=True)
+        self.script(guard_dir / 'pre-push', '#!/bin/sh\nexit 0\n')
+        runner = self.repo / 'scripts' / 'claude-hooks' / 'bounded-hook-runner.py'
+        runner.parent.mkdir(parents=True)
+        runner.write_text('raise SystemExit(0)\n')
+        result = self.run_hook(GIT_PII_GUARD_DIR=str(guard_dir))
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn('PII guard resolves inside the repository', result.stderr)
         self.assertFalse(self.log.exists())
 
     def test_mainline_refusal_remains_first(self):

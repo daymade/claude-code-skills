@@ -250,9 +250,10 @@ adopted files and then claim an exact publication match.
    Compare the target marketplace entry as a structured object. Bound
    `git diff --cached`, `git diff`, untracked and ignored queries to the adoption
    unit and classify every hit. Any staged delta stops. A worktree difference may
-   proceed only when its complete path/mode/type/blob identity exactly matches a
-   recorded published ref and no staged delta exists; record it as prior adoption
-   residue. Novel, ambiguous, untracked or ignored content stops adoption.
+   proceed only when the complete adoption unit's identity against the same
+   recorded published ref matches exactly and no staged delta exists; record it
+   as prior adoption residue. Novel, ambiguous, untracked or ignored content stops
+   adoption.
 3. **Prepare outputs outside the repository.** For a clean path that is merely
    behind, materialize the published blob with its published type and mode in a
    temporary staging directory. For an added path, first prove no untracked,
@@ -285,13 +286,19 @@ adopted files and then claim an exact publication match.
    deliberately stage the adopted paths or reconcile the index through their own
    workflow. Never assume a plain `git commit` will preserve the adopted bytes.
 8. **Sync through one frozen deployed owner.** Run the source-sync owner from its
-   recorded deployment, never from a temporary review worktree. Freeze its script
-   hash and complete `--print-source-inventory` result. Use the same explicit
-   repeated `--repo` set for every managed marketplace required by the activation
-   policy, and the same environment, for dry-run and apply. Inspect every proposed
-   change; apply only the target-authorized adoption and stop on extra changes.
-   If the daemon uses a pinned runtime, advance the pin first or pass the actual
-   adopted owner path as `--source-sync-script` to the catalog audit.
+   recorded deployment, never from a temporary review worktree. Freeze the
+   resolved owner path, script hash and complete `--print-source-inventory` result.
+   Use the same explicit repeated `--repo` set for every managed marketplace
+   required by the activation policy, and the same environment, for dry-run and
+   apply. Inspect every proposed change. Immediately before apply, re-resolve the
+   owner and every repository path, recompute the owner hash and regenerate the
+   complete inventory with the same arguments and environment. Require the hash
+   and inventory bytes to equal the dry-run snapshot; any drift stops before
+   writing and requires a new preview. Apply only the target-authorized adoption
+   through the verified resolved paths. Bind the catalog audit to that same
+   verified owner hash and inventory, or use an immutable owner copy under the
+   same lock; a mutable symlink retarget between preview and apply invalidates the
+   preview.
 
 Finally read back publication, installed-content, fresh-host discovery and task
 behavior separately. A temporary review worktree is evidence, not an installation
