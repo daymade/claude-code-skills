@@ -206,8 +206,16 @@ Before deleting ANY Docker object, perform independent verification.
 # Verify no container (running or stopped) references the image
 docker ps -a --filter "ancestor=<IMAGE_ID>" --format "{{.Names}}\t{{.Status}}"
 
-# If empty → eligible for an explicit user decision; exact command: docker rmi <IMAGE_ID>
+# If empty → eligible for an explicit user decision; exact command:
+# docker image rm --no-prune <FULL_IMAGE_ID>
 ```
+
+`docker rmi` is an alias for image removal, but its default behavior may also
+delete untagged parent images. Use `--no-prune` when the authorized boundary is
+one repository tag or one full image ID. For automated retention, do not treat
+`docker ps --format '{{.Image}}'` as authoritative: it may return a short ID or a
+tag that has moved. Enumerate container IDs and read each container's actual
+`.Image` ImageID with `docker container inspect --format '{{.Image}}'`.
 
 **For Containers**:
 
@@ -273,9 +281,9 @@ An approved one-time cleanup alone does not authorize future unattended deletion
 **Once approved, this is still precision deletion — just automated and scoped to one repository:**
 - Add retention logic that runs **after** the new build succeeds and any health check passes — never before. A failed new build shouldn't cost the last-known-good image.
 - Preserve the project's explicit in-use and supported rollback set. When that policy uses recency, use **verified creation time** (`docker image inspect --format '{{.Created}}'`), not the human-readable `CreatedSince` string (imprecise, not sortable) or raw `docker image ls` ordering (not guaranteed time-sorted). **Caveat**: reproducible-build tooling (Bazel, Nix, some BuildKit configs) can pin `.Created` to a fixed value like `SOURCE_DATE_EPOCH` instead of the real build time, so a fresh image can sort as "older" than genuinely older ones. If the project's tooling does this, cross-check against the next bullet before trusting the sort.
-- Before removing each candidate, verify no container — including stopped ones — references it (`docker ps -a --filter "ancestor=<IMAGE_ID>"`), the same Step 2C protocol running inside the application's automation. This also covers the reproducible-build caveat: exclude whatever image the just-started container is using, independent of its timestamp.
-- For image retention, keep one `docker rmi <ID>` per verified-safe image scoped to one repository. Exact-record BuildKit eviction is a separate cache procedure above; its filters do not establish image-retention eligibility.
-- Wrap the retention step so its own failure doesn't fail the surrounding build/deploy. Verify the exact failure signal your subprocess-execution mechanism actually returns rather than assuming a field name — a wrong assumption there silently turns the failure branch into a no-op.
+- Before removing each candidate, resolve every running or stopped container to its actual ImageID and verify that none references the candidate. Re-run this check immediately before each deletion; a planning-time `ancestor` filter is not enough for a long-running retention loop.
+- For image retention, keep one `docker image rm --no-prune <FULL_IMAGE_ID>` per verified-safe image scoped to one repository. Immediately before deletion, repeat the image identity checks: full ID, allowed repository tags only, no registry digests, and unchanged creation/tag metadata. Fail closed on any change. Exact-record BuildKit eviction is a separate cache procedure above; its filters do not establish image-retention eligibility.
+- Give retention a machine-readable result and an explicit exit contract. Completed and dry-run return 0; partial returns nonzero while preserving the JSON list of completed removals and per-image failures; fatal inspection errors return nonzero. Validate configuration before the expensive build, expose a standalone retention retry target, and make post-build retention failure a warning rather than a reason to rebuild and repeat the same deletion loop.
 
 **Then clean the existing backlog** using the Step 2C workflow — the backlog is one-time debt, the source fix stops new debt from accumulating. Fix the source first if practical, then clear the backlog.
 

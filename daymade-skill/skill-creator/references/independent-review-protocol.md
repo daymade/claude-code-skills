@@ -331,6 +331,28 @@ A guard that protects only the first reproduced path is not closed. Report any
 unexamined surface as `Not checked`; do not infer coverage from the changed file
 list.
 
+### Destructive automation and retention loops
+
+When the change deletes, retires, prunes or retains objects automatically, review
+the command's full effect rather than only the selected happy-path ID. Record
+observations for:
+
+- default side effects beyond the named object, such as parent-image cleanup or
+  implicit cache eviction, and the flag that disables them;
+- the authoritative object identity used by the automation, including short
+  IDs, tags, digests, symlinks and values that may drift after planning;
+- the immediate pre-delete revalidation that closes planning-to-action races;
+- the machine-readable partial/fatal result and actual process exit code;
+- whether retrying cleanup can repeat an expensive build, deploy or other
+  out-of-scope action;
+- postconditions that detect collateral deletion, not only absence of the
+  intended candidate.
+
+Tests must lock the safe command shape and include negative probes for the
+unsafe default, force/all/subshell forms, identity drift, mid-loop inspection
+failure and retry behavior. A green unit test that asserts the unsafe command as
+the expected call does not establish safety.
+
 Triage each finding by causal relationship to the current change:
 
 | Finding relationship | Current-release disposition |

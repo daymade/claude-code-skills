@@ -4,10 +4,10 @@
 
 | 优先级 | 候选 | 精确命令 | 预期物理释放 | 影响 | 恢复 | 后置条件 |
 |---|---|---|---|---|---|---|
-| 1 | Docker dangling 镜像 `c5810ff4b86a` | `docker rmi c5810ff4b86a` | 1.976 kB | 需重新 build | 可重建 | `docker images` 中无该 ID |
+| 1 | Docker dangling 镜像 `sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc` | `docker image rm --no-prune sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc` | 1.976 kB | 需重新 build | 可重建 | `docker images` 中无该 ID |
 
-先 `docker ps -a --filter "ancestor=c5810ff4b86a" --format "{{.Names}}"` 确认无容器引用。
+先 `docker ps -a --filter "ancestor=sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" --format "{{.Names}}"` 确认无容器引用。
 
 ## 工具验证（版本与语义来源）
 
-- Docker 29.4.0（`docker --version` 实测）。语义来源：`docker rmi --help` 原文，已用活工具核对（system df 实测）。
+- Docker 29.4.0（`docker --version`）。语义来源：`docker image rm --help`；`docker system df` 为引擎口径。
