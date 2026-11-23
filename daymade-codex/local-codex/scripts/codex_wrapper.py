@@ -115,7 +115,7 @@ def exec_codex(
     sandbox: str = "workspace-write",
     json_output: bool = True,
     ephemeral: bool = False,
-    skip_git_check: bool = False,
+    skip_git_check: bool = True,
     timeout: int = 300,
 ) -> dict:
     """Execute codex exec with given parameters."""
@@ -129,17 +129,19 @@ def exec_codex(
         cmd.append("--json")
     if ephemeral:
         cmd.append("--ephemeral")
-    # Default to skip git check for OpenClaw integration (often not in git repo)
-    cmd.append("--skip-git-repo-check")
+    if skip_git_check:
+        cmd.append("--skip-git-repo-check")
     if workdir:
         cmd.extend(["-C", workdir])
 
-    cmd.append(prompt)
+    # Pass prompt via stdin ('-') so dash-prefixed prompts cannot be misparsed as CLI flags
+    cmd.append("-")
 
     start_time = time.time()
     try:
         result = subprocess.run(
             cmd,
+            input=prompt,
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -200,11 +202,11 @@ def review_codex(
     cmd = [codex_path, "exec"]
     if model:
         cmd.extend(["-m", model])
+    if workdir:
+        cmd.extend(["-C", workdir])
     cmd.extend(["--json", "review"])
     if uncommitted:
         cmd.append("--uncommitted")
-    if workdir:
-        cmd.extend(["-C", workdir])
 
     start_time = time.time()
     try:
@@ -301,7 +303,11 @@ def main():
         workdir = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3] else None
         model = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4] else None
         sandbox = sys.argv[5] if len(sys.argv) > 5 and sys.argv[5] else "workspace-write"
-        timeout = int(sys.argv[6]) if len(sys.argv) > 6 and sys.argv[6] else 300
+        try:
+            timeout = int(sys.argv[6]) if len(sys.argv) > 6 and sys.argv[6] else 300
+        except ValueError:
+            print(json.dumps({"error": f"Invalid timeout value: {sys.argv[6]!r}"}))
+            sys.exit(1)
 
         result = exec_codex(
             codex_path=codex_path,
@@ -316,8 +322,12 @@ def main():
     elif command == "review":
         workdir = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2] else None
         model = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3] else None
-        uncommitted = sys.argv[4] == "true" if len(sys.argv) > 4 else False
-        timeout = int(sys.argv[5]) if len(sys.argv) > 5 and sys.argv[5] else 300
+        uncommitted = sys.argv[4].lower() == "true" if len(sys.argv) > 4 else False
+        try:
+            timeout = int(sys.argv[5]) if len(sys.argv) > 5 and sys.argv[5] else 300
+        except ValueError:
+            print(json.dumps({"error": f"Invalid timeout value: {sys.argv[5]!r}"}))
+            sys.exit(1)
 
         result = review_codex(
             codex_path=codex_path,
