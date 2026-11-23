@@ -328,36 +328,75 @@ When exact bytes are required, use a detached checkout or external artifact at
 that commit, record its full SHA, and keep the temporary path out of the final
 adoption claim.
 
-After temporary-source use, restore the durable official source through the
-current CLI's supported source migration. `marketplace add <owner/repo>` is not
-a replacement when a same-name directory source already exists. If no in-place
-replacement is available, use the controlled remove-and-restore procedure below;
-do not leave the task worktree registered as the user's Marketplace. Reinstall
-or update the affected plugins, then repeat the same complete host-scoped
-comparison and fresh-host catalog check.
+After temporary-source use, restore the durable official source with the current
+CLI's in-place source replacement when it supports the same Marketplace name.
+Do not assume a bare `add` refuses a collision: current Claude Code can replace a
+same-name directory source in place. Determine the installed version's behavior
+from its help, release notes or an isolated disposable-profile probe before
+migrating. Prefer in-place `add`/update because it retains installed-plugin
+records, options and persistent data; never use remove-and-restore merely because
+the old and new source paths differ.
+
+When the installed CLI does not support in-place replacement, or managed policy
+blocks it, stop at a reversible plan. `marketplace remove` from the last relevant
+scope can uninstall its plugins and delete saved options, secrets and data. That
+path is a destructive exception, not an ordinary source switch. It requires
+explicit authorization for the affected data plus a verified backup and restore
+path for every affected plugin's options, secrets, persistent data and user
+configuration. If any state cannot be preserved and restored, retain the current
+source and report the blocker; do not proceed on the strength of reinstall
+commands alone.
+
+After either supported path, update or reinstall the affected plugins, repeat the
+same complete host-scoped comparison and fresh-host catalog check, and verify the
+plugin-state layers below.
 
 ### Marketplace source changes
 
-Do not blindly run remove-then-add. Removing a marketplace from its last scope
-can uninstall its plugins, and adding a same-name GitHub source does not replace
-an existing directory source. Prefer an in-place source update when the current
-CLI supports it. Before any remove-and-restore migration, snapshot
-`claude plugin list --json` and the marketplace list, identify every affected
-plugin and scope, and prepare the exact reinstall commands. Remove only the
-named old source, add the official source, compare both inventories, and restore
-every unintentionally removed plugin before continuing. Prove the final
-Marketplace list contains the intended official source and no temporary alias.
-A successful source change does not prove that the previously enabled plugin set
+Do not blindly run remove-then-add. First capture a migration receipt that binds
+all of these layers, not only the two CLI inventories:
+
+- `claude plugin list --json` and `claude plugin marketplace list --json`;
+- the read-only install ledger (`installed_plugins.json`) for each affected
+  plugin's `gitCommitSha`, scope, projectPath, version and installPath;
+- the Marketplace declarations in `extraKnownMarketplaces` and `enabledPlugins`
+  across user, project and local settings, so declaration scopes and effective
+  enablement remain visible;
+- each affected plugin's ordinary options and userConfig; sensitive options
+  require the CLI's supported secure backup/restore path, never plaintext export;
+- the exact persistent-data directories and other plugin-owned state, with a
+  recoverable copy or move and a post-migration existence/content check.
+
+The current CLI list outputs alone are insufficient: Marketplace JSON omits
+declaration scope and plugin JSON omits the install ledger's `gitCommitSha`.
+Keep registry reads read-only; do not hand-edit install records to simulate a
+successful migration. Record the old source, intended source identity, published
+commit, affected plugin/scope set and rollback command before changing anything.
+
+For an in-place migration, add the intended source with the current CLI, update
+or reinstall affected plugins, then compare the complete before/after receipt:
+source and Marketplace entry, exact install commit and host-scoped distribution,
+all declaration scopes, enabled state, options/userConfig, and persistent data.
+Prove the final Marketplace list contains the intended durable source and no
+temporary alias. A successful source-change message does not prove plugin state
 survived.
+
+Only use remove-and-restore when in-place migration is unavailable and the
+separate destructive authorization and complete state-restore path above are
+satisfied. After restoring, run the same complete receipt comparison and restore
+every unintentionally removed plugin. Missing state evidence keeps adoption
+unverified.
 
 For Daymade maintainer local-source switching, route to the current
 `claude-switch-models-setup` workflow. For any other marketplace:
 
-1. inventory installed plugins and scopes;
+1. inventory installed plugins, declaration scopes and plugin-owned state;
 2. freeze the intended replacement source identity;
-3. define how installs survive or are restored;
+3. select in-place migration, or document why the destructive exception is
+   unavoidable and authorized;
 4. perform the source change with current official commands;
-5. verify marketplace source, plugin installs, scopes, and a fresh session.
+5. verify Marketplace source, exact install identity, plugin state, scopes, and a
+   fresh session.
 
 ## 8. Reconcile a suite migration
 
