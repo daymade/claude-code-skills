@@ -105,13 +105,16 @@ Codex 独立 thread 的原生发送直接使用[返回值驱动入口](reference
 **Git-first owner discovery.** 在扩大 peer 搜索前，先让暂存内容自己指路：
 
 1. 从 `git diff --cached -- <path>` 选一条独有新增字符串，用
-   `git log --branches --remotes -S'<unique-string>' --format='%H %D' -- <path>` 找引入它的 commit/ref。
+   `git log --branches --remotes -S'<unique-string>' --format='%H %D' -- <path>` 找 occurrence
+   count 发生变化的候选 commit/ref；历史命中不等于当前写者。
 2. 取 stage-0 staged blob（`git rev-parse ":0:<path>"`），再逐个比对
    `git for-each-ref --format='%(refname)' refs/heads refs/remotes` 中 `<ref>:<path>` 的 blob；
    只保留精确同 blob 的 ref。
 3. 把命中的 branch 映射到 PR head（REST
-   `repos/<owner>/<repo>/pulls?state=all&head=<owner>:<branch>`），用 PR 的 head OID、branch
-   和 session 登记交叉定位来源会话；PR author 不自动等于写者。
+   `repos/<owner>/<repo>/pulls?state=all&head=<owner>:<branch>`），要求 staged blob、ref path blob、
+   PR head OID 与同仓同路径的 coordination 登记相互吻合，再用 PR 的 head OID、branch 和 session
+   登记交叉定位来源会话；PR author 不自动等于写者。暂存内容没有精确 ref/PR 映射时保留
+   `unknown`，改用现有 registry/mtime 证据，不把历史 PR 当成当前属主。
 4. 只联系交叉证据收窄后的 top-3。`verified_queued` 只证明入队，不证明已读；没有映射或无人
    回应都保留 owner `unknown`，不写成「无主」。
 
