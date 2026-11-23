@@ -470,8 +470,13 @@ candidate; use `gh pr checks NUMBER -R OWNER/REPO --watch` and inspect its exit
 status, then perform [fresh-base verification](#fresh-base-verification) and reread
 the exact PR head and mergeability. Read the repository's current merge-method
 policy before choosing `--merge`, `--squash`, or `--rebase`; a locally clean
-three-way merge does not imply that GitHub permits merge commits. If the chosen
-strategy is rejected, diagnose the repository policy and reviewed-head contract
+three-way merge does not imply that GitHub permits merge commits. Repository-level
+`mergeCommitAllowed`, `squashMergeAllowed` and `rebaseMergeAllowed` values are not
+sufficient: the target branch's `pull_request.parameters.allowed_merge_methods` can
+impose a narrower list. Read the repository settings, active rulesets and the effective
+target-branch rule through the [branch protection owner](branch_protection.md),
+and select a method permitted by their intersection. If the chosen strategy is
+rejected, diagnose the repository policy and reviewed-head contract
 instead of switching API or forcing a different strategy. `--auto` follows the
 requirements actually configured on GitHub. If none
 block the merge, it can merge immediately while other CI is still queued. It is

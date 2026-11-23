@@ -48,6 +48,8 @@ baseline and the working files independently. A path-limited checkout alone
 can leave an incomplete index and stage every unselected baseline file as a
 deletion. Sparse configuration success does not prove files were materialized.
 
+For an LFS-bearing repository, a linked worktree shares the registered repository's common Git directory and LFS object storage; an independent clone has a separate store. Prefer the linked worktree when publication or verification requires existing LFS objects. Do not bulk-copy a large `.git/lfs/objects` tree as a setup shortcut: check `df` first and preserve the existing store identity. Missing LFS objects remain an environment gap, not permission to disable smudge or bypass the owning audit.
+
 New files authored inside an owned directory are not automatically added to a
 literal sparse-checkout definition. Ordinary `git add -- <new-file>` can refuse
 them with “matched paths ... outside of your sparse-checkout definition.” For
