@@ -173,33 +173,47 @@ third-party cold bundles merely to explain why they exist on disk.
 ### Case: the source alias resolves into concurrent work
 
 The delivery executor resolves the installed alias at readback time and compares
-the files the host will consume with the intended immutable published bundle.
-A merged PR, a matching plugin version or a valid source link cannot establish
-that content match. Compare the shipped entry, references and required helpers;
-checking only the file changed in this release can miss a different dependency.
+the complete distribution the host will consume with the intended immutable
+published bundle. For a Claude plugin, suite installation or multi-host claim,
+that means the whole owning plugin source tree, every suite member and plugin
+helper, plus the plugin's exact marketplace entry. A single-Skill comparison
+cannot establish that scope. For a Codex-only direct Skill link with no Claude or
+suite claim, the individual Skill bundle and registered identity may be compared;
+label the verdict `Codex-only` and do not extend it to the plugin. A merged PR,
+matching plugin version, valid source link or partial comparison cannot establish
+the claimed scope.
 
 For example, an alias may point into the canonical checkout while another session
 has it on a feature branch. The branch name alone is neither success nor failure:
-if the expected shipped bundle matches, retain that content evidence; if it differs,
+if the expected distribution matches, retain that content evidence; if it differs,
 local adoption is still unverified even though publication succeeded. Identify the
-actual differing files and coordinate with the writer, preserving their work.
+actual differing paths and coordinate with the writer, preserving their work.
 When adoption is authorized, follow the source owner's
-[published-content adoption procedure](https://github.com/daymade/claude-code-skills/blob/main/daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md#adopt-published-content-into-a-canonical-checkout-with-wip);
+[published-content adoption procedure](https://github.com/daymade/claude-code-skills/blob/a5dc7829ef3222e1234df08bbbc5de5cbccb48ad/daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md#adopt-published-content-into-a-canonical-checkout-with-wip);
 do not switch their branch, copy a new cache or redirect the alias into a
 disposable review worktree to manufacture a match.
 
 **Installed-content readback checklist.** Resolve the installed alias, then read
-the target checkout's current branch and full HEAD as diagnostic context. Compare
-the consumed `SKILL.md`, changed references and required helpers with the intended
-published commit, using at least one version-specific marker from this release.
-Content equality is the decision criterion: if every consumed path matches the
-published commit, report `installed-content=match` even when the shared checkout is
-on another branch or has unrelated dirty paths. If a consumed path differs, or the
-comparison cannot be completed, report `installed-content=stale|unknown`. In either
-case, do not overwrite the worktree ad hoc. Use the source owner's authorized
-adoption procedure when the complete bundle can be merged without losing WIP.
-A source merge, passing plugin catalog, or valid symlink alone is not evidence that
-the current host is consuming the new bytes.
+the target checkout's current branch, full HEAD, index fingerprint and bounded
+working-tree status as diagnostic context. Enumerate the published tree for the
+claimed host scope and the current tree in both directions. Bind every path's
+mode, object type
+and Git blob identity; for symlinks bind the link text without following it. Check
+added, deleted, renamed and unchanged paths, and compare the target marketplace
+entry with the published object. At least one version-specific marker is useful
+for human orientation, but it is not a substitute for complete identity.
+
+Report `installed-content=match` only when that complete distribution matches.
+Any consumed-path difference, incomplete enumeration or unknown identity is
+`installed-content=stale|unknown`. Within the packaging-policy distribution, a
+staged delta or novel/ambiguous unstaged, untracked or ignored content inside the
+adoption unit blocks content-only adoption. Excluded runtime artifacts do not
+enter this comparison. A worktree difference that exactly matches a recorded
+published ref, with no staged delta, is prior adoption residue: record its
+provenance and the old-index state. Unrelated WIP outside the unit may remain. After an authorized
+adoption, an old index can intentionally leave adopted paths unstaged: report
+that state and require owner reconciliation before any commit. Do not overwrite
+the worktree ad hoc.
 
 Then run the requested fresh-host catalog check and, when task behavior is part
 of delivery, observe the host consume the Skill and check its result separately.

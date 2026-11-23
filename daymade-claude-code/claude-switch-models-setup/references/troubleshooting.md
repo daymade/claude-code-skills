@@ -437,14 +437,21 @@ Restart affected existing sessions after repairing metadata discovery.
 
 If the registered canonical checkout has unrelated WIP and is behind `origin/main`, source sync
 will keep serving the old bytes. Do not hand-redirect `~/.agents/skills` or Claude links to a
-temporary worktree/clone. Wait for the WIP owner, then fast-forward the canonical checkout and
-rerun the dry-run/apply pair. If a verified guarded synchronizer is available, it must preserve
-staged, unstaged, untracked and ignored content while reconciling HEAD, index and working tree;
-an ad hoc patch/hold fast-forward is not a substitute.
+temporary worktree/clone. Separate the two possible outcomes:
 
-After alignment, verify the canonical HEAD, restored WIP hashes/untracked count, actual linked
-file bytes, and one representative route or Skill load. Report publication, installed-content
-match and runtime behavior separately.
+- **Only installed content must consume a published ref:** use the source architecture's
+  [published-content adoption procedure](local-source-sync-architecture.md#adopt-published-content-into-a-canonical-checkout-with-wip).
+  It compares the whole owning plugin distribution, stops on WIP inside that unit, requires
+  writer handoff, preserves backups, and leaves HEAD/index unchanged. It does not make the
+  checkout commit-ready.
+- **HEAD itself must advance:** wait for the WIP owner, then use a verified guarded synchronizer
+  that preserves staged, unstaged, untracked and ignored content while reconciling HEAD, index
+  and working tree. An ad hoc patch/hold fast-forward is not a substitute.
+
+After content adoption, verify the complete published path set, modes/types/blob identities,
+target marketplace entry, actual linked bytes, and one representative route or Skill load.
+Report publication, installed-content match and runtime behavior separately. Before any later
+commit, the checkout owner must deliberately reconcile the adopted paths with the index.
 
 ## Claude-side skills never update while Codex-side sync looks perfectly healthy
 

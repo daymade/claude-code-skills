@@ -138,8 +138,9 @@ does not establish them.
 ## Exact-head release preflight
 
 Complete this checklist before the first public push of a reviewed candidate. It
-binds the source review, private evidence, repository hook inputs and installed
-adoption to one immutable frame.
+binds the source review, private evidence and repository hook inputs to one
+immutable frame. Local installation is a separate post-publication gate and is
+required only when local availability is part of the authorized delivery.
 
 | Check | Required evidence | Stop condition |
 |---|---|---|
@@ -149,8 +150,7 @@ adoption to one immutable frame.
 | Review source | Review path is committed and unchanged at the recorded review commit; a temporary review worktree is clean | Dirty, replaced, uncommitted or ambiguous review path |
 | Receipt binding | `release_readiness.py attest` succeeds for the exact candidate and review commit | Missing receipt, wrong scope or candidate changed after attestation |
 | Sparse hook closure | Materialize every repository-managed pre-commit/pre-push dependency before invoking hooks | Missing module, validator or helper; never bypass the hook |
-| Publication audit | PII/sanitization and repository-required checks pass for the exact pushed range | New blocking finding or unavailable scanner evidence |
-| Installed adoption | Canonical source content, installed file hashes and fresh-host catalog are read back separately | Link/catalog passes while consumed bytes remain stale or unknown |
+| Publication audit | PII/sanitization and repository-required checks pass for the exact pushed range | New blocking finding, missing required scanner or unavailable evidence |
 
 For this marketplace's sparse publication worktree, the hook closure currently
 includes `$REPO_ROOT/scripts/git-mainline-guard.mjs`,
@@ -159,6 +159,28 @@ includes `$REPO_ROOT/scripts/git-mainline-guard.mjs`,
 `$REPO_ROOT/scripts/ci/check_skill_release.py`, plus the repository's `.githooks`
 dispatcher and the Skill Creator scripts used by the release checker. Treat this
 list as a current observation, not a substitute for reading the live hook imports.
+
+### Post-publication local adoption
+
+Run this gate only after the reviewed candidate is reachable at the published ref
+and the user authorized local availability. A source-only or package-only release
+stops at publication; it must not modify activation state merely to satisfy a
+pre-push checklist.
+
+When local adoption is authorized, invoke `skill-governance` and the
+`claude-switch-models-setup` source owner. Require separate readback of:
+
+- the complete distribution for the authorized host scope against the published
+  commit — whole owning plugin for Claude, suite or multi-host delivery; individual
+  Skill bundle for an explicitly Codex-only direct link — including bidirectional
+  paths, modes, types, blob identities and symlink targets;
+- the actual installed file or source-backed alias;
+- the requested fresh-host catalog under the existing host policy;
+- task behavior only when it is part of the delivery.
+
+A valid link or visible catalog entry with stale or unknown consumed bytes is not
+complete. Preserve host disables and unrelated WIP, and report publication,
+installed-content, discovery and behavior as separate observations.
 
 When the private archive's maintained checkout has unrelated WIP, create a clean
 sparse review worktree at the exact review commit and use that as `--review-repo`.
