@@ -899,6 +899,8 @@ For installed-Skill and fresh-host acceptance, enter
 For maintainer source-backed activation, source-watcher deployment, or authorized plugin-to-personal
 Skill conversion, follow
 [Local Source Sync Architecture](daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md).
+For published-content adoption into a live canonical checkout with WIP, use its
+[adoption procedure](daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md#adopt-published-content-into-a-canonical-checkout-with-wip); ordinary dry-run/apply does not replace host-scoped identity, writer handoff, backup/atomic-write or pre-apply drift controls. If HEAD must advance, use the guarded reconciliation route instead.
 For shared-helper or required-launch preparation changes, use its
 [fixture verification route](daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md#verification-checklist).
 Intentional same-name source variants follow that owner's
@@ -1050,12 +1052,16 @@ local `main` guarantees divergence the moment its PR merges. These rules keep
 Before pushing shipped Skill changes, follow
 [skill release readiness](daymade-skill/skill-creator/references/release-readiness.md).
 The existing pre-push entry checks committed current-review evidence for the exact head.
+Local installed-content adoption is a post-publication gate only when local availability
+is authorized; do not make it a pre-push prerequisite or claim parity from publication alone.
 
 `.githooks/pre-commit` and `.githooks/pre-push` dispatch to
 `scripts/git-mainline-guard.mjs`, which rejects direct local-main work and stale
 marketplace manifests or reused plugin versions against current main. The
 shared PII delegate's runtime, deadline and recovery procedure live in
-[repository PII dispatch](references/ci-operations.md#repository-pii-dispatch). Activate this
+[repository PII dispatch](references/ci-operations.md#repository-pii-dispatch).
+The public PII stage is fail-closed: missing guard/runtime, repository-controlled
+runtime paths or incomplete worktree evidence block the push. Activate this
 repository **from the canonical primary main checkout** with
 `git config core.hooksPath "$(pwd -P)/.githooks"`. The absolute path matters:
 `core.hooksPath` is shared by linked worktrees, so a relative path would let a
@@ -1154,7 +1160,7 @@ Skills for public distribution must NOT contain:
 4. **gitleaks** (`.gitleaks.toml`) — deep scan with custom rules for this repo
 5. **AI semantic read-through** — pattern-based scans only match patterns someone listed, and are blind to private content with **no keyword** — a real name in another language (gitleaks doesn't cover CJK), a verbatim line from a real transcript, a real example dropped into an illustration. Before publishing, **read the whole skill yourself and judge each concrete name/example/snippet semantically** ("generic placeholder / public entity, or lifted from a real project / person / transcript?"). A green scan is **not** a clean bill of health; "grep found nothing" only means your word list didn't fire. Method: [`daymade-skill/skill-creator/references/sanitization_checklist.md`](./daymade-skill/skill-creator/references/sanitization_checklist.md).
 
-Most repositories enable PII Guard via `~/scripts/git-pii-guard/manage.sh enable <repo-path>`. This repository instead points `core.hooksPath` at the canonical primary checkout's absolute `.githooks` directory: its versioned dispatchers run the repository mainline guard and then delegate to the same shared PII guard when installed.
+Most repositories enable PII Guard via `~/scripts/git-pii-guard/manage.sh enable <repo-path>`. This repository instead points `core.hooksPath` at the canonical primary checkout's absolute `.githooks` directory: its versioned dispatchers run the repository mainline guard and then require an external shared PII guard and publication runtime. Missing dependencies block the push; they do not degrade to a mainline-only success.
 For repo-specific additions:
 - `.pii-patterns` — extra content regexes
 - `.pii-path-patterns` — extra forbidden path regexes

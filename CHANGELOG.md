@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **claude-switch-models-setup** (`daymade-claude-code` v5.3.8 → v5.3.9): Route live canonical-checkout repair through the published-content adoption owner, distinguish content-only adoption from HEAD reconciliation, and align repository PII guidance with the fail-closed public pre-push gate.
+- **skill-governance** (`daymade-skill` v1.83.5 → v1.83.6): Advance the release identity after integrating the concurrent `skill-creator` minimal-`PATH` MCP verification change, while preserving the documentation-alignment handoff and complete host-scoped readback contract.
+- **skill-governance** (`daymade-skill` v1.83.4 → v1.83.5): Put the published-content adoption handoff at the activation decision point and require complete host-scoped distribution equality rather than branch/HEAD or selected-path evidence.
 - **kimi-use** (`kimi-use` v1.8.6 → v1.8.7): Document classifying disabled CodeAct runtime surfaces (`runtimeSocket: disabled`) separately from permission denials with surface-handshake verification (`--surface legacy`), and require readback of dialog dismissal and app transfer state before retrying timed-out macOS file-chooser confirmations.
 - **github-review-pr** (`github-review-pr` v1.4.8 → v1.4.9): Route zero-step payment/spending-limit failures through the Actions diagnosis owner, require base comparison plus exact-tree local CI under the budget exception, and keep hosted-not-started separate from local-pass evidence.
 - **git-safety-net** (`git-safety-net` v1.30.4 → v1.30.5): Distinguish long-lived automation ref synchronization from content synchronization; equal trees and consumed blobs remove the need for a merge-SHA force-push while real tree or open-PR gaps remain blocking.

@@ -148,6 +148,10 @@ For Daymade source-backed Codex activation, route to the current
 `claude-switch-models-setup` dry-run/apply workflow. Its explicit
 `codex-active-skills.json` owns only links created from declared source
 marketplaces. Do not reimplement its collision, symlink, or pruning logic here.
+When the requested outcome is published-content adoption into a live canonical
+checkout with WIP, use the source owner's
+[published-content adoption procedure](https://github.com/daymade/claude-code-skills/blob/a5dc7829ef3222e1234df08bbbc5de5cbccb48ad/daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md#adopt-published-content-into-a-canonical-checkout-with-wip)
+instead of switching branches, copying a cache, or applying an ordinary sync.
 
 For Claude plugins, inspect current marketplace and install JSON, update or
 reinstall through the official CLI at the original scope, and independently
@@ -171,9 +175,9 @@ All applicable claims must be proven independently:
 - entries intended cold are absent from that catalog;
 - one representative cold capability still resolves and works;
 - source-backed links or Claude installs read back with the intended identity,
-  source/version, and scope; for a link into a shared checkout, use branch/HEAD as
-  context but decide on consumed-path equality with the published commit, reporting
-  stale/unknown only on difference or an incomplete comparison rather than switching
+  source/version, scope, and complete host-scoped distribution against the published
+  commit; use branch/HEAD as context, not as a substitute for consumed-path equality.
+  Report stale/unknown on any difference or incomplete comparison rather than switching
   the target branch;
 - any retired bundle and its recovery manifest still exist;
 - unresolved ownership, host-version behavior, or deliberately retained
