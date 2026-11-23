@@ -521,8 +521,9 @@ classifying the result. A zero-step job whose annotation reports failed account 
 or a spending limit is **hosted CI not started**, not a test failure; load the `github-ops`
 Skill and follow its CI demand and notification diagnosis. Compare the same check on
 the current base and run the repository's complete CI definition locally on the exact
-prospective tree under the applicable budget exception. Report hosted and local evidence
-separately: a local pass never converts the hosted check to green.
+prospective tree under the applicable budget exception, and record the tested tree OID.
+Report hosted and local evidence separately: a local pass never converts the hosted check
+to green.
 
 After inspecting untrusted changes, run the current-base repository's prescribed tests
 in the isolated clone. For a clean merge, validate the prospective merged state when
