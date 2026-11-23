@@ -108,13 +108,14 @@ Codex 独立 thread 的原生发送直接使用[返回值驱动入口](reference
    `git log --branches --remotes -S'<unique-string>' --format='%H %D' -- <path>` 找 occurrence
    count 发生变化的候选 commit/ref；历史命中不等于当前写者。
 2. 取 stage-0 staged blob（`git rev-parse ":0:<path>"`），再逐个比对
-   `git for-each-ref --format='%(refname)' refs/heads refs/remotes` 中 `<ref>:<path>` 的 blob；
-   只保留精确同 blob 的 ref。
+   `git for-each-ref --format='%(refname)' refs/heads refs/remotes` 中 `<ref>:<path>` 的 blob。
+   精确同 blob 是强证据，但未提交的后续暂存编辑正常会使整文件 blob 不同；此时保留第 1 步的
+   commit/ref 候选，不用全文件相等淘汰它们。
 3. 把命中的 branch 映射到 PR head（REST
-   `repos/<owner>/<repo>/pulls?state=all&head=<owner>:<branch>`）。先要求 staged blob 与 ref path blob
-   精确一致，再用 PR head OID 定位提交，并用同仓同路径的 coordination 登记交叉印证来源会话；
-   blob、commit OID 与 session 是不同层级，不要求彼此相等。PR author 不自动等于写者。暂存内容
-   没有精确 ref/PR 映射时保留 `unknown`，改用现有 registry/mtime 证据，不把历史 PR 当成当前属主。
+   `repos/<owner>/<repo>/pulls?state=all&head=<owner>:<branch>`）。用 pickaxe 候选、路径与 PR head
+   先缩小范围，再以 staged/ref blob 是否一致、同仓同路径 coordination 登记、mtime 或定向确认
+   交叉印证来源会话；blob、commit OID 与 session 是不同层级，不要求彼此相等。PR author 不自动
+   等于写者。没有足够交叉证据时保留 `unknown`，不把历史 PR 当成当前属主。
 4. 只联系交叉证据收窄后的 top-3。`verified_queued` 只证明入队，不证明已读；没有映射或无人
    回应都保留 owner `unknown`，不写成「无主」。
 

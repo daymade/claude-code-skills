@@ -263,10 +263,12 @@ unauthorized history rewrite:
 
 1. Freeze the old PR number, exact verified head SHA, intended delta, and applicable check
    evidence. Keep the old branch and PR intact.
-2. Create a new branch from that verified head (`git switch -c replacement/pr-<n>-<topic>
-   "$OLD_HEAD_SHA"`) and push the new ref normally. If current-base evidence requires a fresh
-   projection, transplant only the verified delta onto that base in an isolated worktree; do not
-   rewrite the old head.
+2. Choose the replacement base by blocker type. If the old head and its reachable history have not
+   passed publication audit, create the replacement from the audited base and transplant only the
+   verified, publishable delta in an isolated worktree; rerun audit over the replacement's full
+   reachable history. Only when the old head itself is verified safe and the blocker is limited to
+   the update path or history-rewrite authority may the replacement branch start at `OLD_HEAD_SHA`.
+   Never publish a new ref that merely re-exposes blocked ancestry.
 3. Open a new PR that links the old one and records the replacement reason, old/new head SHAs,
    and reused versus rerun checks. Do not force-push either branch to make the old PR look current.
 4. After the replacement merges, verify the landed diff, then close the old PR as superseded and
