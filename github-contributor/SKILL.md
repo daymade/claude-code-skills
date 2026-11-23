@@ -257,6 +257,22 @@ Use `--force-with-lease`, never plain `--force`. The `lease` variant aborts if s
 
 If you applied a small post-review cleanup (a `--fixup` commit), squash it into the relevant commit with autosquash so the merged history stays clean. See [`references/phase2_implementation.md`](references/phase2_implementation.md) for the full sequence.
 
+**Replacement PR mode — preserve the old head when it cannot be updated safely.** Use this when
+publication-audit or base evidence blocks the existing PR, or updating it would require an
+unauthorized history rewrite:
+
+1. Freeze the old PR number, exact verified head SHA, intended delta, and applicable check
+   evidence. Keep the old branch and PR intact.
+2. Create a new branch from that verified head (`git switch -c replacement/pr-<n>-<topic>
+   "$OLD_HEAD_SHA"`) and push the new ref normally. If current-base evidence requires a fresh
+   projection, transplant only the verified delta onto that base in an isolated worktree; do not
+   rewrite the old head.
+3. Open a new PR that links the old one and records the replacement reason, old/new head SHAs,
+   and reused versus rerun checks. Do not force-push either branch to make the old PR look current.
+4. After the replacement merges, verify the landed diff, then close the old PR as superseded and
+   retire its head only under the project's branch-retirement rules. A replacement PR is not
+   permission to delete the old evidence before closure is read back.
+
 ### Step 5.3 — When sub-agent / counter-review surfaces "findings", filter before responding
 
 If you run a counter-review agent (or a maintainer's bot floods you with 20+ findings), don't paste them all into the PR. For each finding ask three questions:

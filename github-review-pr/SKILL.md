@@ -296,6 +296,29 @@ Treat conflicts as evidence, not as a reason to update or rebase the branch
 automatically. Report the conflicting paths and determine whether base drift, the PR,
 or both own the required resolution.
 
+#### Base advanced since the prior review — narrow merge-delta recheck
+
+When only the base moved, re-read the live base and head before reusing any prior review. Require
+the same `HEAD_SHA` and verify the old base is an ancestor of the new base; otherwise review the
+changed head or history discontinuity under the full workflow.
+
+Recompute both immutable prospective merge results, then inspect only the new merge increment and
+any changed interaction surface:
+
+```bash
+git merge-tree --write-tree --messages "$OLD_BASE_SHA" "$HEAD_SHA"
+git merge-tree --write-tree --messages "$CURRENT_BASE_SHA" "$HEAD_SHA"
+git diff "$OLD_MERGE_TREE" "$NEW_MERGE_TREE"
+git diff "$CURRENT_BASE_SHA" "$NEW_MERGE_TREE"
+```
+
+Use the tree OIDs only when both merge commands exit 0. Review paths and hunks changed by the base
+advance, new conflicts, and consumers or checks whose inputs changed; reuse prior evidence only for
+contribution code and behavior proved unchanged. If either merge conflicts or the compared inputs
+cannot be stabilized, return to the full landing/conflict review. Bind the final verdict and
+snapshot ledger to the new `HEAD_SHA`, `CURRENT_BASE_SHA`, and `NEW_MERGE_TREE`; never carry the old
+verdict forward under the old base.
+
 #### When local and hosted merge results disagree
 
 The reviewing agent runs this diagnostic when local three-way analysis is clean but

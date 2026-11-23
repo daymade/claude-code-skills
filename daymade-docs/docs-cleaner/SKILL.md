@@ -189,6 +189,13 @@ report the disagreement and obtain the missing decision or authority before edit
 Do not make the documentation describe wished-for behavior, and do not silently turn a
 documentation pass into an implementation project.
 
+**Release-boundary check for external behavior.** When an affected doc describes what an external
+installer or runtime does, bind each claim to an observed published commit, tag, or version, or
+write it conditionally ("when installed from `<version>`…"). A local WIP branch, source checkout,
+or passing local test proves only candidate behavior; it cannot establish released behavior. If the
+published identity is unavailable, keep the claim `unknown` or conditional instead of documenting
+WIP behavior as already shipped.
+
 **4. Decide each affected doc's disposition before editing it.**
 
 | The document is… | Do |

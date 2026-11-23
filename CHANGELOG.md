@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **git-safety-net** (`git-safety-net` v1.30.2 → v1.30.3): Add a concise Mixed WIP convergence recipe for per-path landed residue, superseded source, runtime logs, and unknown handling, with unique-byte preservation, guarded sync, clean-main verification, and task-owned worktree retirement.
+- **peer-message** (`peer-message` v1.28.2 → v1.28.3): Add Git-first owner discovery from staged unique strings, staged blob-to-ref matches, and PR-head mapping before contacting a narrowed top-3; preserve queued-versus-read and unknown-versus-unowned boundaries.
+- **github-contributor** (`github-contributor` v1.3.3 → v1.3.4): Add a replacement-PR mode for publication-audit/base-evidence or history-rewrite blockers, preserving the verified old head without force-push and closing the old PR only after the replacement lands.
+- **github-review-pr** (`github-review-pr` v1.4.7 → v1.4.8): Add a narrow merge-delta recheck when only the base advances, reusing unchanged evidence while binding the final verdict to the new head/base and merge tree.
+- **docs-cleaner** (`daymade-docs` v1.29.8 → v1.29.9): Add a Mode 1 release-boundary check requiring published commit/version evidence or conditional wording for external installer/runtime behavior; local WIP no longer counts as shipped behavior.
 - **local-codex** (`daymade-codex` v2.4.17 → v2.4.18) Coordinates ordinary CLI and shared App Server upgrades on one exact release, with official prerelease selection and post-restart version verification.
 - **frontend-visual-qa** (v1.22.1 → v1.22.2): Prefer Chrome for Testing or Playwright's bundled Chromium for macOS one-shot sweeps, block implicit regular-Chrome fallback, and require a documented double override for cloning browsers; apply the same resolver to the route census and clarify the Playwright-versus-direct-CLI flag boundary.
 - **local-codex** (`daymade-codex` v2.4.16 → v2.4.17): Document fault-driven restart recovery in `references/shared-daemon-maintenance.md` when macOS `/private/tmp` cleanup unlinks the live shared Codex daemon control socket (`ENOENT`) while the daemon PID stays alive.

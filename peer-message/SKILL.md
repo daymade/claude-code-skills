@@ -102,6 +102,19 @@ Codex 独立 thread 的原生发送直接使用[返回值驱动入口](reference
 
 你要动的共享产物——checkout、分支、文件、锁——上有别人的痕迹，而且它挡住了你。「这是别人的 WIP」既不是停止条件，也不是默默绕开的理由：停在它面前和绕开它一样，都把一条消息就能解决的冲突留给了用户。
 
+**Git-first owner discovery.** 在扩大 peer 搜索前，先让暂存内容自己指路：
+
+1. 从 `git diff --cached -- <path>` 选一条独有新增字符串，用
+   `git log --branches --remotes -S'<unique-string>' --format='%H %D' -- <path>` 找引入它的 commit/ref。
+2. 取 stage-0 staged blob（`git rev-parse ":0:<path>"`），再逐个比对
+   `git for-each-ref --format='%(refname)' refs/heads refs/remotes` 中 `<ref>:<path>` 的 blob；
+   只保留精确同 blob 的 ref。
+3. 把命中的 branch 映射到 PR head（REST
+   `repos/<owner>/<repo>/pulls?state=all&head=<owner>:<branch>`），用 PR 的 head OID、branch
+   和 session 登记交叉定位来源会话；PR author 不自动等于写者。
+4. 只联系交叉证据收窄后的 top-3。`verified_queued` 只证明入队，不证明已读；没有映射或无人
+   回应都保留 owner `unknown`，不写成「无主」。
+
 连续发版或共享仓库冲突在 coord/list 里找不到 owner 时，不要停在“top-3 都否认”。按 `references/coordination-and-learning-loop.md` §5.1 的“release 进程反查”：先只枚举 `pid/ppid/comm`，在 shell 变量内用 cwd/remote 与 argv 过滤目标仓，未命中不输出；命中只打印脱敏后的 PID、关系、cwd 与动作类型。再经 `claude-pid:<PID>` typed address 交给 `peer.py send` 解析真实 session/socket 后投递，不硬编码 socket 路径、不输出完整 argv 或环境凭据、不终止进程。
 
 先用产物自己的权威源核实它是不是真在飞：tracked 路径用 `git diff <已合入的 main 的 SHA> -- <路径>`，**untracked（`??`）路径** `git diff` 读不到，须用 `git hash-object <路径>` 与 `git rev-parse <已合入的 main 的 SHA>:<路径>` 做逐字节比对——两者全一致（且路径存在于该 main）才是已落地的残影，**没有人在改它，它不构成协调事项，按你原本的计划推进**（清掉它归 §5.1 末段那条，通常不归你）；锁要看它自己的形态——有的写了持有者 pid，git 自己的 `.git/index.lock` 是 0 字节、读不出属主，读不出就直接去问。非空或 `??` 与 main 不一致只说明它没落地，不等于此刻有人在改——别自己归类。发问之前先核对归属证据，把候选收窄：① `git log` / 三点 diff 看这条路径最近落在谁的分支上；② 涉及文件的 mtime 判断写入是否还在推进；③ 历史索引反查（哪个 session 写过它）；④ 本机 codex fork 任务的分支名后缀即 fork 会话 ID 前缀（`fix/<task>-<id>` ↔ `ps` 里的 `codex fork <id>-…`），活跃的 `git push` 进程行可把变更直接定位到写者会话。这些证据能直接答的就不问；答不了，只问收窄后的 top-3 候选——用已选通道的原生发现或脚本 `list` 找到它们，说清你要做什么、看到了什么，问清——是不是你的、什么时候落、要我等还是你先收尾——然后等一个有界窗口，窗口到期就往下走，不轮询、不重发。窗口内无人认领：在从不可变 ref 建的独立副本上继续、不碰它的文件，报告里写明问过谁、谁没回、等了多久、基线是哪个 ref；归属仍是 `unknown`，不是「可处置」。属主说「别动 / 等我」就停在它划的线外；要覆盖别人未提交的改动，先回下面的信任边界向当前用户确认。阻塞性协调请求在正文里带一句「若 <时间> 前不回，我将 <推进方式>」；被问的一方到点答不完，回一行 ETA。同宿主 Claude 的等待优先用原生 idle 订阅，不拿轮询代替。**按实际回传能力决定谁发问和等待**：原生 subagent 可按宿主契约使用自己的通信与结果通道；只有脚本借用父 session 地址、回复会落父对话，或当前工具不支持所需等待时，才把已核实的读回和该问的问题交回父 session，由它协调，别自己发完就当没人回。归属核对的索引侧命令与覆盖边界、正文怎么写、窗口怎么定、报告口径按你用的哪个 `list` 怎么换算，以及你自己落地后清残影的动作，见 `references/coordination-and-learning-loop.md` §5.1。

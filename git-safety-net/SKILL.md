@@ -632,6 +632,25 @@ coordination to prove quiescence and transfer exclusive ownership through final 
 reference adds the moving-ref inventory, dirty-WIP preservation, immutable-candidate, duplicate-PR,
 and final branch-count gates that a single-branch retirement does not need.
 
+**Mixed WIP convergence — one shared checkout, several residue types.** Use this recipe only
+after [Mode E](#mode-e--retire-worktrees-stashes-and-branches-safely) authority and per-path
+evidence are satisfied:
+
+1. Pin a fresh `origin/main` SHA and classify every dirty or untracked path as `landed residue`,
+   `superseded source`, `runtime logs`, or `unknown` against that SHA. Back up only bytes not
+   already recoverable from a ref or history; do not create a blanket stash or bundle.
+2. Restore landed or superseded source from the pinned ref, remove only logs proven reproducible,
+   and leave `unknown` paths untouched and blocking.
+3. Run the task environment's existing `sync-main-to-origin.sh <repo> <pinned-origin/main>`; it is
+   an external helper, not bundled here. Inspect its plan and exit code. For content-only checkout
+   alignment, use [git_align_checkout.sh](scripts/git_align_checkout.sh) under its own contract,
+   not as a substitute for ref synchronization.
+4. Verify local `main` equals a freshly read remote SHA and
+   `git status --porcelain=v1 --untracked-files=all` is empty.
+5. Retire only task-owned temporary resources through the
+   [worktree retirement helper](references/worktree-retirement-helper.md); retain unknown or
+   collaborator-owned resources.
+
 **Step 3 — destroy, in the safe order:**
 
 - Stashes: drop from the **highest index down** (`drop stash@{2}` before `stash@{1}`) — indices
