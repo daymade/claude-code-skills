@@ -829,9 +829,15 @@ The executor uses the repository's existing synchronization and ownership contra
    from these immutable commits; a stale status snapshot cannot classify a deletion.
    Coordinate any active writer before changing this checkout.
 2. Preserve unique staged, working-tree, untracked and ignored content before alignment.
-   Compare each affected path's real index entry and disk state with `OLD`, `TIP` and
-   retained landed versions. An unfamiliar staged entry, unexplained delta or branch
-   drift stops the in-place write path until ownership and preservation are resolved.
+   Compare each affected path's real index entry and disk state (via blob hash and patch
+   equivalence, not `git status` count alone) against `OLD`, `TIP`, retained landed versions,
+   and other local/remote branches or open PR heads. Dirty paths disjoint from the `OLD..TIP`
+   diff do not block a path-scoped guarded synchronizer; overlapping paths whose entire delta
+   is proven already committed on another branch or open PR can be backed up outside the repo
+   and aligned after verifying no active writer is mutating them (notifying the peer owner if
+   a session is live). An unfamiliar staged entry, unexplained uncommitted delta overlapping
+   `OLD..TIP`, or unverified branch drift stops the in-place write path until ownership and
+   preservation are resolved.
 3. Locate the project's verified guarded synchronization entry and read its actual
    preview/apply and recovery contract. It must check the affected path set before
    writes, preserve unrelated WIP, and reconcile the intended branch, real index and
