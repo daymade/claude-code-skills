@@ -254,9 +254,11 @@ authorization boundary, not merely an unmatched label or another repository's ru
 For an agent-owned change, the executing agent reads the exact checks before
 declaring delivery. It resolves authorized defects or reports a concrete blocker
 with the next executor and recovery condition. Do not hand the user dozens of raw
-failure emails as the work queue. A supported local CI entry can verify a budget-
-blocked job, but preserve the distinction between local evidence and GitHub's
-observed status; follow the repository's existing merge and reporting contract.
+failure emails as the work queue. For a zero-step spending-limit or billing block
+before an authorized bypass merge, follow
+[pre-merge local CI equivalence](workflow_operations.md#pre-merge-local-ci-equivalence-for-zero-step-budget-blocks);
+preserve the distinction between local evidence and GitHub's observed status, and
+follow the repository's existing merge and reporting contract.
 
 Before reducing notification delivery, verify how failure handling remains
 available: the active task's executor, an existing maintenance process or an
