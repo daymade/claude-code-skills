@@ -207,15 +207,17 @@ def read_body(response, max_bytes):
     return body
 
 
-def fetch(opener, url, allowed, timeout, max_bytes):
-    request = Request(url, method='GET', headers={'Accept-Encoding': 'identity', 'Cache-Control': 'no-cache'})
+def fetch(opener, url, allowed, timeout, max_bytes, user_agent):
+    request = Request(url, method='GET', headers={
+        'Accept-Encoding': 'identity', 'Cache-Control': 'no-cache',
+        'User-Agent': user_agent})
     with opener.open(request, timeout=timeout) as response:
         if origin(response.geturl()) != allowed or response.status != 200:
             raise ValueError('unexpected HTTP response')
         return read_body(response, max_bytes)
 
 
-def verify_handoff(manifest, report, timeout, max_bytes):
+def verify_handoff(manifest, report, timeout, max_bytes, user_agent):
     handoff = manifest['handoff']
     current = request_url(handoff['current_url'])
     report['checked_entrypoints'] = 0
@@ -232,7 +234,8 @@ def verify_handoff(manifest, report, timeout, max_bytes):
         try:
             opener = build_opener(redirect)
             request = Request(requested, method='GET', headers={
-                'Accept-Encoding': 'identity', 'Cache-Control': 'no-cache'})
+                'Accept-Encoding': 'identity', 'Cache-Control': 'no-cache',
+                'User-Agent': user_agent})
             with opener.open(request, timeout=timeout) as response:
                 if response.status != 200:
                     raise ValueError('unexpected HTTP response')
@@ -255,10 +258,14 @@ def verify_handoff(manifest, report, timeout, max_bytes):
             report['unknown'].append({**ref, 'reason': type(error).__name__})
 
 
-def verify(manifest, timeout=5, max_bytes=16 * 1024 * 1024):
+def verify(manifest, timeout=5, max_bytes=16 * 1024 * 1024,
+           user_agent='waytorsi-delivery-verifier/1'):
     validate_manifest(manifest)
     if not math.isfinite(timeout) or timeout <= 0 or type(max_bytes) is not int or max_bytes <= 0:
         raise InvalidManifest('timeout and max_bytes must be positive finite values')
+    if not isinstance(user_agent, str) or not user_agent.strip() or any(c in user_agent for c in '\r\n'):
+        raise InvalidManifest('user_agent must be a nonempty single-line string')
+    user_agent = user_agent.strip()
     allowed = origin(manifest['base_url'])
     parts = urlsplit(manifest['base_url'])
     prefix = parts.scheme + '://' + parts.netloc
@@ -267,12 +274,12 @@ def verify(manifest, timeout=5, max_bytes=16 * 1024 * 1024):
     report = {'status': 'matched', identity_key: manifest[identity_key],
               'target_fingerprint': fingerprint(manifest['base_url']),
               'checked_resources': 0, 'checked_json_fields': 0,
-              'mismatches': [], 'unknown': [],
+              'mismatches': [], 'unknown': [], 'userAgent': user_agent,
               'boundary': 'Only supplied byte digests and JSON fields; no source-authenticity, atomic snapshot or visual acceptance proof.'}
     for item in manifest['resources']:
         ref = fingerprint(item['path'])
         try:
-            body = fetch(opener, prefix + item['path'], allowed, timeout, max_bytes)
+            body = fetch(opener, prefix + item['path'], allowed, timeout, max_bytes, user_agent)
             report['checked_resources'] += 1
             if 'sha256' in item:
                 observed = hashlib.sha256(body).hexdigest()
@@ -296,7 +303,7 @@ def verify(manifest, timeout=5, max_bytes=16 * 1024 * 1024):
                 error.close()
             report['unknown'].append({'resource_fingerprint': ref, 'reason': type(error).__name__})
     if manifest['schema_version'] == 2:
-        verify_handoff(manifest, report, timeout, max_bytes)
+        verify_handoff(manifest, report, timeout, max_bytes, user_agent)
     if report['mismatches']:
         report['status'] = 'mismatched'
         return report, 1
@@ -311,10 +318,12 @@ def main(argv=None):
     parser.add_argument('--manifest', required=True, type=Path)
     parser.add_argument('--timeout', type=float, default=5, help='timeout per blocking HTTP operation; not a total deadline')
     parser.add_argument('--max-bytes', type=int, default=16 * 1024 * 1024)
+    parser.add_argument('--user-agent', default='waytorsi-delivery-verifier/1',
+                        help='exact User-Agent recorded in the report; provider rewrites may vary by request profile')
     args = parser.parse_args(argv)
     try:
         manifest = decode_json(args.manifest.read_bytes())
-        report, code = verify(manifest, args.timeout, args.max_bytes)
+        report, code = verify(manifest, args.timeout, args.max_bytes, args.user_agent)
     except InvalidManifest as error:
         report, code = {'status': 'invalid', 'reason': str(error)}, 2
     except (OSError, ValueError, OverflowError) as error:

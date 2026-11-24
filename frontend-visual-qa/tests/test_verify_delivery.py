@@ -41,7 +41,8 @@ class FixtureTransport(HTTPSHandler):
     def https_open(self, request):
         parts = probe.urlsplit(request.full_url)
         fixture = Server.registry[parts.scheme+'://'+parts.netloc]
-        fixture.requests.append((request.get_method(), parts.path))
+        fixture.requests.append((request.get_method(), parts.path,
+                                 request.get_header('User-agent')))
         response = fixture.responses.get(parts.path, (404, {}, b''))
         status, headers, body = response() if callable(response) else response
         message = Message()
@@ -82,7 +83,51 @@ class DeliveryTests(unittest.TestCase):
         report, code = probe.verify(self.manifest())
         self.assertEqual((report['status'], code), ('matched', 0))
         self.assertEqual((report['checked_resources'], report['checked_json_fields']), (2, 2))
-        self.assertEqual([method for method, _ in self.server.requests], ['GET', 'GET'])
+        self.assertEqual([request[0] for request in self.server.requests], ['GET', 'GET'])
+        self.assertTrue(all(request[2] == 'waytorsi-delivery-verifier/1' for request in self.server.requests))
+
+    def test_user_agent_is_explicit_recorded_and_can_change_the_response(self):
+        def profile_response():
+            agent = self.server.requests[-1][2]
+            body = ASSET if agent == 'browser-like/1' else b'provider variant'
+            return 200, {}, body
+        self.server.responses['/app.js'] = profile_response
+        browser_report, browser_code = probe.verify(self.manifest(), user_agent='browser-like/1')
+        self.assertEqual((browser_report['status'], browser_code), ('matched', 0))
+        self.assertEqual(browser_report['userAgent'], 'browser-like/1')
+        self.assertEqual([request[2] for request in self.server.requests],
+                         ['browser-like/1', 'browser-like/1'])
+        provider_report, provider_code = probe.verify(self.manifest(), user_agent='provider/1')
+        self.assertEqual((provider_report['status'], provider_code), ('mismatched', 1))
+        self.assertEqual(provider_report['userAgent'], 'provider/1')
+
+    def test_invalid_user_agent_fails_before_request(self):
+        for value in ('', '   ', 'bad\nagent', 'bad\ragent', None):
+            with self.subTest(value=value):
+                with self.assertRaises(probe.InvalidManifest):
+                    probe.verify(self.manifest(), user_agent=value)
+        self.assertEqual(self.server.requests, [])
+
+    def test_cli_accepts_and_reports_user_agent(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary)/'manifest.json'
+            manifest = self.manifest()
+            manifest['base_url'] = 'https://fixture-1.example.test'
+            path.write_text(json.dumps(manifest))
+            runner = Path(temporary)/'runner.py'
+            runner.write_text('''import importlib.util, sys
+spec=importlib.util.spec_from_file_location('fixture_tests',sys.argv[1])
+fixture=importlib.util.module_from_spec(spec);spec.loader.exec_module(fixture)
+server=fixture.Server();server.responses['/app.js']=(200,{},b'provider variant')
+fixture.probe.build_opener=fixture.fixture_opener
+sys.exit(fixture.probe.main(['--manifest',sys.argv[2],'--user-agent','browser-like/1']))
+''')
+            result = subprocess.run([sys.executable, str(runner), str(Path(__file__)), str(path)],
+                                    capture_output=True, text=True, check=False)
+        report = json.loads(result.stdout)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(report['userAgent'], 'browser-like/1')
+        self.assertTrue(report['mismatches'])
 
     def test_stale_component_is_caught_even_when_parent_assets_and_http_200_match(self):
         self.server.responses['/component/status'] = (200, {}, b'{"available":true,"version":"old"}')
@@ -302,7 +347,7 @@ class HandoffTests(unittest.TestCase):
                 self.assertEqual(code, 1)
                 self.assertTrue(any(r['kind'] == 'entrypoint_redirect' for r in report['mismatches']))
                 self.assertEqual(other.requests, [])
-                self.assertNotIn(('GET', '/login'), self.server.requests)
+                self.assertNotIn(('GET', '/login'), [request[:2] for request in self.server.requests])
                 self.assertNotIn(destination, json.dumps(report))
 
     def test_canonical_redirect_and_alias_loop_cannot_pass(self):
