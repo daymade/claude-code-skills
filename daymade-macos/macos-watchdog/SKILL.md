@@ -153,14 +153,16 @@ For a persistent Python job, separate dependency preparation from normal startup
 - **Install/upgrade:** use the owning installer's explicit prepare action to
   create a persistent environment outside uv's cache from retained locked inputs.
   Bind the selected Python series, complete frozen distribution set and base
-  interpreter to that installation. Pin the venv's `bin/python*` symlinks and
-  `pyvenv.cfg` `home` to the resolved immutable patch directory (`readlink -f`,
-  e.g., `cpython-3.12.13-.../bin/python3.12`) instead of a mutable minor-series
-  alias (`cpython-3.12-...`): an in-place toolchain upgrade that repoints the
-  mutable alias silently changes the executable's CDHash/code signature under
-  bootstrapped LaunchAgents, breaking Keychain ACLs or triggering immediate
-  `OS_REASON_CODESIGNING` kills (`LastExitStatus=-9`, empty stderr). Keep
-  dependency changes in this phase.
+  interpreter to that installation. Pin the venv's `bin/python*` symlinks to the
+  resolved immutable patch executable (`readlink -f`, e.g.,
+  `cpython-3.12.13-.../bin/python3.12`) and `pyvenv.cfg` `home` to that
+  executable's parent `bin` directory (`cpython-3.12.13-.../bin`), instead of a
+  mutable minor-series alias (`cpython-3.12-...`): an in-place toolchain upgrade
+  that repoints the mutable alias silently changes the executable's CDHash/code
+  signature under bootstrapped LaunchAgents, breaking Keychain ACLs or
+  triggering immediate `OS_REASON_CODESIGNING` kills (`launchctl list` status
+  `-9` / `"LastExitStatus" = 9` `SIGKILL`, empty stderr). Keep dependency
+  changes in this phase.
 - **Reuse:** execute the environment's actual Python to compare its series and
   complete installed distribution names/versions with those frozen inputs, verify
   its resolved base Python still exists and runs, and flag (or reject under
@@ -306,8 +308,8 @@ nothing but failure logs for six days.
 | "log mtime is fresh" but the job is actually failing | out.log all-green is **not** health — a failed pass may write nothing (`set -e` + prints-verified-only-on-success), so the last-success timestamp stays fresh forever. Judge the **failure** path (err.log / last-exit status), not success-side freshness (Pattern 7) |
 | After `bootout`+`bootstrap`, "the data file has a recent row" is not proof the new job works | The OLD job's final row can land inside your freshness window (real case 2026-10-20: a probe conversion passed a 75 s freshness check while the new job's every iteration was rejected by its identity guard for 75 min). Anchor verification to the NEW job: rows timestamped after the new PID's start, or per-iteration status rows; `state=running` never proves the collector writes |
 | Works interactively, fails under launchd | TCC/FDA on the wrong interpreter; PATH assumptions in `ProgramArguments` |
-| LaunchAgent exits immediately with `LastExitStatus = -9` (`SIGKILL`) and empty stderr | Check `log show --predicate 'eventMessage CONTAINS "CODESIGNING" OR process == "amfid"' --last 15m` and `codesign -dv --verbose=2 "$(readlink -f <env>/bin/python)"`. If the venv traverses a mutable minor-series alias (e.g., `cpython-3.12-...`) updated by a toolchain upgrade, repin `bin/python*` and `pyvenv.cfg` to a verified immutable patch directory (`cpython-3.12.X-.../bin/python3.12`) and reload via `bootout` → `bootstrap` |
-| Keychain read fails or prompts repeatedly after a `uv` / toolchain upgrade | Check whether `readlink -f <env>/bin/python` shifted to a newer patch binary with a different CDHash. Pin the venv and `pyvenv.cfg` to the immutable patch directory whose CDHash holds the Keychain ACL (or intentionally re-grant ACLs for the newly pinned patch binary) |
+| LaunchAgent exits immediately with `launchctl list` status `-9` (`"LastExitStatus" = 9`, `SIGKILL`) and empty stderr | Inspect `last exit reason` in `launchctl print gui/$(id -u)/<label>`, check `log show --predicate 'eventMessage CONTAINS "CODESIGNING" OR process == "amfid"' --last 15m`, verify the signature with `codesign --verify --verbose=2 "$(readlink -f <env>/bin/python)"`, and inspect `CDHash` with `codesign -dv --verbose=4 "$(readlink -f <env>/bin/python)"`. If the venv traverses a mutable minor-series alias (e.g., `cpython-3.12-...`) updated by a toolchain upgrade, repin `bin/python*` to a verified immutable patch executable (`cpython-3.12.X-.../bin/python3.12`) and `pyvenv.cfg` `home` to its parent directory (`cpython-3.12.X-.../bin`), then reload via `bootout` → `bootstrap` |
+| Keychain read fails or prompts repeatedly after a `uv` / toolchain upgrade | Check whether `readlink -f <env>/bin/python` shifted to a newer patch binary and compare `CDHash` via `codesign -dv --verbose=4 "$(readlink -f <env>/bin/python)"`. Pin `bin/python*` to the immutable patch executable (and `pyvenv.cfg` `home` to its parent `bin` directory) whose `CDHash` holds the Keychain ACL, or intentionally re-grant ACLs for the newly pinned patch binary |
 | Observation becomes slower as history grows | Audit cold, warm and delta work using `references/probe-cost.md`; caching bytes does not bound parsing or queries |
 
 Details and the sanitized war stories behind each clause: `references/quiet-watchdog-patterns.md`.

@@ -3544,21 +3544,22 @@ action, and a nonblocking fault must not be reported as a healthy no-match.
 ## 71. Raw-JSON fast-path regexes miss JSON-escaped whitespace and subshell prefixes
 
 - **Failure:** a shell PreToolUse guard avoids spawning Python on every command
-  by screening raw hook JSON with a regex such as
+  by screening raw hook JSON with a boundary regex such as
   `grep -E '(^|[[:space:];|&])(cp|rsync|git)[[:space:]]'`. Inside a serialized
   JSON string (`tool_input.command`), newlines and tabs arrive as two-character
-  escape sequences (`\n`, `\t`, `\r`) rather than literal whitespace, and
-  subshells or command substitutions prefix the command with `(` or `$(`.
-  Neither satisfies `[[:space:];|&]`, so the fast path exits 0 (allow) before
-  the JSON decoder ever runs — silently bypassing the guard on multi-line
-  commands (`echo ok\ncp -R ...`), tabbed commands, or subshell wrappers
-  (`(cp -R ...)`).
+  escape sequences (`\n`, `\t`, `\r`) rather than literal whitespace; top-level
+  commands are preceded by `"`; nested invocations (`bash -c 'cp ...'`,
+  `/bin/cp`, `\cp`, `{ cp ...; }`) or subshells (`(cp ...)`, `$(cp ...)`) begin
+  with quotes, slashes, braces, or parentheses. None satisfy `[[:space:];|&]`
+  on the leading or trailing side, so the fast path exits 0 (allow) before the
+  JSON decoder ever runs — silently bypassing the guard.
 - **Fix:** treat any raw-JSON fast path strictly as an over-approximating
-  trigger, never a precise shell tokenizer. Match bare command words without
-  assuming literal-whitespace boundaries (or explicitly include JSON escape
-  markers `\\n`/`\\t`/`\\r` and grouping prefixes `(` / `` ` ``), and hand every
-  candidate straight to the JSON-decoding parser so `json.loads` decodes escapes
-  before shell tokenization.
+  trigger, never a shell tokenizer or boundary-regex filter. Match bare command
+  substrings using a 0-fork shell builtin (`case` / `[[ == ]]`, e.g.,
+  `*cp*|*rsync*|*git*`) without assuming literal-whitespace boundaries, and hand
+  every candidate straight to the JSON-decoding parser so `json.loads` decodes
+  escapes before shell tokenization. Follow Pitfall #22 for the fail-closed
+  malformed-JSON gate and `\uXXXX` unicode-escape blind spot.
 - **Bidirectional calibration:** pair single-line dangerous probes with
   JSON-escaped newline (`"echo ok\n<cmd> ..."`), tab (`"<cmd>\t..."`), subshell
   (`"(<cmd> ...)"`), command-substitution (`"$(<cmd> ...)"`), and `bash -c`
@@ -3575,17 +3576,20 @@ action, and a nonblocking fault must not be reported as a healthy no-match.
   working-tree state is currently checked out there. Switching branches,
   rebasing, or editing the wrapper mid-task immediately alters or breaks the
   live command (`ENOENT`, syntax errors, or unreviewed behavior) for unrelated
-  sessions.
+  sessions (see also Pitfall #6 for the analogous hook-symlink hazard).
 - **Fix:** install OS-level command wrappers into an immutable,
-  checkout-independent runtime directory (such as
-  `~/.local/libexec/<tool>/<wrapper>`) using atomic file replacement
-  (`mktemp` + `chmod` + `mv`), and point `~/.local/bin/<cmd>` at that installed
-  copy (or install directly there). Update the runtime copy only through an
-  explicit install/publish step from a verified commit, never by symlinking into
-  an active working tree.
+  checkout-independent runtime path (for example,
+  `~/.local/libexec/<tool>/<wrapper>` symlinked from `~/.local/bin/<cmd>`, or a
+  direct installed copy at `~/.local/bin/<cmd>`) using same-directory atomic
+  replacement (`mktemp "<target-dir>/.tmp.XXXXXX"` + `chmod` + `mv`, keeping
+  temp file and destination on the same filesystem). Update the runtime copy
+  only through an explicit install/publish step from a verified commit, never by
+  symlinking into an active working tree.
 - **Bidirectional calibration:** assert `readlink -f "$(command -v <cmd>)"`
-  resolves inside `~/.local/libexec/` rather than any Git working tree; test
-  that switching branches or deleting a feature branch in the source checkout
-  leaves the live wrapper's SHA-256 and exit status unchanged; and verify an
-  explicit reinstall from a verified ref atomically updates the runtime copy and
-  passes readback.
+  resolves inside the checkout-independent install root (`~/.local/libexec/` or
+  `~/.local/bin/`) and outside any Git working tree (`git -C "$(dirname
+  "$(readlink -f "$(command -v <cmd>)")")" rev-parse --is-inside-work-tree`
+  fails); test that switching branches or deleting a feature branch in the
+  source checkout leaves the live wrapper's SHA-256 and exit status unchanged;
+  and verify an explicit reinstall from a verified ref atomically updates the
+  runtime copy and passes readback.
