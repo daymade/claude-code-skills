@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **skill-creator** (`daymade-skill` v1.83.10 → v1.83.11): Require independent-review reports to bind the exact artifact/input hashes and include a verdict, blocking gaps, evidence and limits; a chat-only pass remains `pending-artifact` until the persisted report matches the current object.
+- **skill-creator** (`daymade-skill` v1.83.10 → v1.83.12): Require independent-review reports to bind exact artifact/input identities and return the final file digest as an external receipt; a chat-only pass remains `pending-artifact` until the persisted report matches.
+- **frontend-visual-qa** (v1.22.3 → v1.22.5): Record an explicit delivery-verification User-Agent, distinguish provider raw bytes from custom-domain HTML rewrites, and reject all non-printable or non-ASCII User-Agent characters before any request.
+
 - **macos-cleaner** (`daymade-macos` v1.34.24 → v1.34.25): Route any cleanup target containing Git metadata through `git-safety-net` Mode E before classifying rebuildable dependencies or build output.
 - **frontend-visual-qa** (v1.22.3 → v1.22.4): Add an explicit recorded User-Agent to delivery-byte verification and require provider raw-byte checks to be distinguished from custom-domain HTML rewrites; keep static assets exact.
 

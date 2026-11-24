@@ -263,8 +263,9 @@ def verify(manifest, timeout=5, max_bytes=16 * 1024 * 1024,
     validate_manifest(manifest)
     if not math.isfinite(timeout) or timeout <= 0 or type(max_bytes) is not int or max_bytes <= 0:
         raise InvalidManifest('timeout and max_bytes must be positive finite values')
-    if not isinstance(user_agent, str) or not user_agent.strip() or any(c in user_agent for c in '\r\n'):
-        raise InvalidManifest('user_agent must be a nonempty single-line string')
+    if (not isinstance(user_agent, str) or not user_agent.strip()
+            or any(ord(c) < 0x21 or ord(c) > 0x7e for c in user_agent)):
+        raise InvalidManifest('user_agent must be a nonempty printable single-line ASCII string')
     user_agent = user_agent.strip()
     allowed = origin(manifest['base_url'])
     parts = urlsplit(manifest['base_url'])

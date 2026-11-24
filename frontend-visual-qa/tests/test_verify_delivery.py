@@ -102,7 +102,7 @@ class DeliveryTests(unittest.TestCase):
         self.assertEqual(provider_report['userAgent'], 'provider/1')
 
     def test_invalid_user_agent_fails_before_request(self):
-        for value in ('', '   ', 'bad\nagent', 'bad\ragent', None):
+        for value in ('', '   ', 'bad\nagent', 'bad\ragent', 'bad\x00agent', 'bad\x01agent', 'bad\x7fagent', 'bad\u0080agent', None):
             with self.subTest(value=value):
                 with self.assertRaises(probe.InvalidManifest):
                     probe.verify(self.manifest(), user_agent=value)

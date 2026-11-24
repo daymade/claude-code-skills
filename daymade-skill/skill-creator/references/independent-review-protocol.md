@@ -134,7 +134,8 @@ delivered report. So name the single delivery target in the prompt itself:
 - The prompt must freeze the artifact's identity: exact commit/ref or immutable file path,
   SHA-256 of every evidence-bearing input, reader specification and failure axes. The report
   must repeat those identities and include `verdict`, `blockingGaps` (empty for a pass),
-  `evidence`, `notChecked`, and the report's own SHA-256 after it is written. A chat-only
+  `evidence`, and `notChecked`. After writing, the reviewer returns the final file's SHA-256
+  as a one-line receipt; the caller records that digest beside the report path. A chat-only
   `pass` is `pending-artifact`, not acceptance; a late report can close that state only when
   its bound input hashes match the current artifact.
 - If a reviewer goes unresponsive, **read whether it already wrote a partial artifact before
