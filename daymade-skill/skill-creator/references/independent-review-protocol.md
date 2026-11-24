@@ -131,6 +131,13 @@ delivered report. So name the single delivery target in the prompt itself:
   review file from *The review file* below), plus a one-line receipt pointing at that path.
   Tell it not to carry the conclusion in a chat message and not to treat the idle
   notification as the delivery.
+- The prompt must freeze the artifact's identity: exact commit/ref or immutable file path,
+  SHA-256 of every evidence-bearing input, reader specification and failure axes. The report
+  must repeat those identities and include `verdict`, `blockingGaps` (empty for a pass),
+  `evidence`, and `notChecked`. After writing, the reviewer returns the final file's SHA-256
+  as a one-line receipt; the caller records that digest beside the report path. A chat-only
+  `pass` is `pending-artifact`, not acceptance; a late report can close that state only when
+  its bound input hashes match the current artifact.
 - If a reviewer goes unresponsive, **read whether it already wrote a partial artifact before
   re-dispatching** — stopping and re-spawning on the assumption of zero output can discard a
   finished report that was merely delivered late. Interrupting a reviewer teammate pauses

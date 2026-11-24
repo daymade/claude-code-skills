@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-creator** (`daymade-skill` v1.83.10 → v1.83.12): Require independent-review reports to bind exact artifact/input identities and return the final file digest as an external receipt; a chat-only pass remains `pending-artifact` until the persisted report matches.
+- **frontend-visual-qa** (v1.22.3 → v1.22.5): Record an explicit delivery-verification User-Agent, distinguish provider raw bytes from custom-domain HTML rewrites, and reject all non-printable or non-ASCII User-Agent characters before any request.
+
+- **macos-cleaner** (`daymade-macos` v1.34.24 → v1.34.25): Route any cleanup target containing Git metadata through `git-safety-net` Mode E before classifying rebuildable dependencies or build output.
+- **frontend-visual-qa** (v1.22.3 → v1.22.4): Add an explicit recorded User-Agent to delivery-byte verification and require provider raw-byte checks to be distinguished from custom-domain HTML rewrites; keep static assets exact.
+
 - **skill-creator** (`daymade-skill` v1.83.9 → v1.83.10): Distinguish receipt locator migration from new independent review, reject renamed temporary checkouts as durable closeout, and require zero live receipt consumers before retiring the final review worktree.
 
 - **github-review-pr** (`github-review-pr` v1.4.9 → v1.4.10): Require `GIT_LFS_SKIP_SMUDGE=1` (with on-demand per-path LFS pull only when touched by the PR diff) and mandatory exit teardown + absence verification for temporary review clones and worktrees.
