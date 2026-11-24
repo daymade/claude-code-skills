@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-watchdog** (`daymade-macos` v1.34.25 → v1.34.26): Require pinning persistent LaunchAgent Python venv `bin/python*` symlinks to the resolved immutable patch executable (`readlink -f`) and `pyvenv.cfg` `home` to its parent `bin` directory rather than mutable minor-series aliases, and add `OS_REASON_CODESIGNING` (`launchctl list` status `-9` / `"LastExitStatus" = 9`) and post-upgrade Keychain/`CDHash` drift entries to the Troubleshooting quick map.
+- **claude-code-hooks** (`daymade-claude-code` v5.3.9 → v5.3.10): Add Pitfalls 71 and 72 covering raw-JSON fast-path regex bypasses on JSON-escaped whitespace (`\n`/`\t`/`\r`) and subshell/nested-command prefixes (recommending 0-fork builtin substring filters per Pitfall #22), and decoupling `PATH`-preceding OS command wrappers from shared Git checkouts via same-directory atomic installation outside Git working trees.
 - **skill-creator** (`daymade-skill` v1.83.10 → v1.83.12): Require independent-review reports to bind exact artifact/input identities and return the final file digest as an external receipt; a chat-only pass remains `pending-artifact` until the persisted report matches.
 - **frontend-visual-qa** (v1.22.3 → v1.22.5): Record an explicit delivery-verification User-Agent, distinguish provider raw bytes from custom-domain HTML rewrites, and reject all non-printable or non-ASCII User-Agent characters before any request.
 
