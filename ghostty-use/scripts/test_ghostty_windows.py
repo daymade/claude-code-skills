@@ -71,6 +71,52 @@ class JoinWindowsToSessionsTests(unittest.TestCase):
         self.assertEqual(joined["coverage"]["sessions_matched"], 0)
 
 
+class TargetedInputTests(unittest.TestCase):
+    def test_terminal_input_uses_argv_and_preserves_surface_metadata(self):
+        terminal_id = 'surface-"quoted"'
+        command = 'say "quoted" \\ literal'
+        fields = [terminal_id, "/dev/ttys007", "80", "before, tab\tline\n",
+                  "/dev/ttys007", "80", "after\n"]
+        completed = subprocess.CompletedProcess([], 0, stdout="\x1e".join(fields) + "\n", stderr="")
+        with mock.patch.object(gw.subprocess, "run", return_value=completed) as run:
+            result = gw.send_terminal_command(terminal_id, command, expected_tty="/dev/ttys007",
+                                              expected_pid=80)
+        argv = run.call_args.args[0]
+        self.assertEqual(argv[:2], [gw.OSASCRIPT, "-e"])
+        self.assertEqual(argv[3:], ["--", terminal_id, command, "2", "250", "350", "/dev/ttys007", "80"])
+        script = argv[2]
+        self.assertIn("on run argv", script)
+        self.assertIn("every terminal whose id is targetID", script)
+        self.assertIn("input text (item 2 of argv) to t", script)
+        self.assertIn('send key "enter" to t', script)
+        self.assertLess(script.index("Terminal binding changed"), script.index("input text (item"))
+        for forbidden in (terminal_id, command, "activate", "select tab", "clipboard", "System Events"):
+            self.assertNotIn(forbidden, script)
+        self.assertEqual(result["before"], {"tty": "/dev/ttys007", "pid": 80, "title": fields[3]})
+        self.assertEqual(result["after"], {"tty": "/dev/ttys007", "pid": 80, "title": fields[6]})
+        self.assertEqual(result["returncode"], 0)
+        self.assertIsNone(result["reason"])
+
+    def test_input_denial_and_timeout_are_distinct_receipts(self):
+        denied = subprocess.CompletedProcess([], 1, stdout="", stderr="Not authorized (-1743)\n")
+        timeout = subprocess.TimeoutExpired("osascript", 15)
+        with mock.patch.object(gw.subprocess, "run", side_effect=[denied, timeout]):
+            failure = gw.send_terminal_command("surface-a", "/compact")
+            unknown = gw.send_terminal_command("surface-a", "/compact")
+        self.assertEqual(failure["returncode"], 1)
+        self.assertIn("-1743", failure["reason"])
+        self.assertIsNone(unknown["returncode"])
+        self.assertIn("partially delivered", unknown["reason"])
+
+    def test_capture_running_only_does_not_open_ghostty_to_discover_targets(self):
+        completed = subprocess.CompletedProcess([], 0, stdout=SAMPLE, stderr="")
+        with mock.patch.object(gw.subprocess, "run", return_value=completed) as run:
+            self.assertTrue(gw.capture_window_structure(running_only=True)["captured"])
+        script = run.call_args.args[0][2]
+        self.assertLess(script.index("is not running"), script.index('tell application "Ghostty"'))
+        self.assertNotIn("input text", script)
+
+
 class LayoutProjectionTests(unittest.TestCase):
     def test_projection_ignores_ephemeral_metadata_but_detects_title_and_order(self):
         block = joined_layout()

@@ -37,7 +37,11 @@ import argparse
 import glob
 import json
 import importlib.util
+import math
 import shlex
+import stat
+from collections import Counter, defaultdict
+from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
 import os
@@ -84,7 +88,7 @@ class SessionList(list):
         self.observation = observation or {}
 
 
-def list_sessions(resolve_uuidless=True, *, deadline=None, scope='ghostty'):
+def list_sessions(resolve_uuidless=True, *, deadline=None, scope='ghostty', preserve_duplicates=False):
     """One entry per live claude/codex session.
 
     Anchor is a parsed resume UUID. A fork's argv UUID belongs to its parent.
@@ -101,14 +105,20 @@ def list_sessions(resolve_uuidless=True, *, deadline=None, scope='ghostty'):
     from ghostty_watch import observe, cli_identity, OPAQUE_REASON
     try:
         options = {'scope': scope} if scope != 'ghostty' else {}
+        if preserve_duplicates:
+            options['preserve_duplicates'] = True
         observed = observe(include_terminals=True, **options, **({'deadline': deadline} if deadline is not None else {}))
     except subprocess.TimeoutExpired as error:
         raise RecoveryError('observation deadline expired during live inventory: ' + str(error)) from error
     except (ValueError, OSError) as error:
         raise RecoveryError("live CLI inventory failed: " + str(error)) from error
-    seen = {}
+    seen, duplicates = {}, []
     for row in observed['sessions']:
-        seen[row['sid']] = dict(row, anchor='argv', transcript=None)
+        entry = dict(row, anchor='argv', transcript=None)
+        if preserve_duplicates and row['sid'] in seen:
+            duplicates.append(entry)
+        else:
+            seen[row['sid']] = entry
     fresh, unresolved = [], []
     for row in observed['unresolved']:
         proc = dict(row, cmd=row['cmdline'])
@@ -135,6 +145,8 @@ def list_sessions(resolve_uuidless=True, *, deadline=None, scope='ghostty'):
                 "profile": _detect_profile(proc["cmd"]),
                 "anchor": "transcript", "transcript": proc["transcript"],
             }
+            if preserve_duplicates:
+                seen[proc['sid']].update(pid=proc['pid'], process_started_epoch=proc['started'])
             if scope == 'all-cli':
                 seen[proc['sid']].update(pid=proc['pid'], ppid=proc.get('ppid'),
                                         process_started_epoch=proc['started'],
@@ -142,7 +154,7 @@ def list_sessions(resolve_uuidless=True, *, deadline=None, scope='ghostty'):
                                         terminal_owner=proc.get('terminal_owner', 'unknown'))
         else:
             unresolved.append({k: v for k, v in proc.items() if k != 'started'})
-    return SessionList(sorted(seen.values(), key=lambda e: e["tty"]), unresolved=unresolved,
+    return SessionList(sorted([*seen.values(), *duplicates], key=lambda e: e["tty"]), unresolved=unresolved,
                        terminal_inventory=observed['terminal_inventory'],
                        other_terminals=observed['other_terminals'], observation=observed)
 
@@ -256,6 +268,19 @@ def _claude_project_dir(cwd):
     return None
 
 
+@contextmanager
+def _read_regular_file(path):
+    fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+    try:
+        file_stat = os.fstat(fd)
+        if not stat.S_ISREG(file_stat.st_mode):
+            raise OSError(f"not a regular file: {path}")
+        with os.fdopen(fd, "rb", closefd=False) as handle:
+            yield handle, file_stat
+    finally:
+        os.close(fd)
+
+
 def _head_cwd(path, max_lines=40, *, expected_sid=None):
     """First cwd recorded in a transcript, None when not visible in the head.
 
@@ -266,36 +291,45 @@ def _head_cwd(path, max_lines=40, *, expected_sid=None):
     invalid sessionId in the bounded head, including records after the first cwd.
     """
     try:
-        with open(path, errors="replace") as fh:
-            remaining = MAX_IDENTITY_HEAD_BYTES
-            head_cwd, verified_sid = None, False
-            for _ in range(max_lines):
-                line = fh.readline(remaining + 1)
-                remaining -= len(line.encode('utf-8'))
-                if remaining < 0:
-                    return None
-                if not line:
-                    break
-                try:
-                    rec = json.loads(line)
-                except Exception:
-                    continue
-                if not isinstance(rec, dict):
-                    continue
-                if expected_sid is not None and 'sessionId' in rec:
-                    internal_sid = rec['sessionId']
-                    if (not isinstance(internal_sid, str) or not UUID_RE.fullmatch(internal_sid)
-                            or internal_sid != expected_sid):
-                        return None
-                    verified_sid = True
-                if head_cwd is None and isinstance(rec.get('cwd'), str) and rec['cwd']:
-                    head_cwd = rec['cwd']
-                if expected_sid is None and head_cwd is not None:
-                    return head_cwd
-            return head_cwd if expected_sid is None or verified_sid else None
+        with _read_regular_file(path) as (handle, file_stat):
+            return _head_cwd_from_handle(handle, file_stat.st_size, max_lines, expected_sid=expected_sid)
     except OSError:
-        pass
-    return None
+        return None
+
+
+def _head_cwd_from_handle(handle, size, max_lines=40, *, expected_sid=None):
+    handle.seek(0)
+    remaining = min(size, MAX_IDENTITY_HEAD_BYTES)
+    limited = size > MAX_IDENTITY_HEAD_BYTES
+    head_cwd, verified_sid = None, False
+    for _ in range(max_lines):
+        if not remaining:
+            if limited:
+                return None
+            break
+        line = handle.readline(remaining)
+        if not line:
+            break
+        remaining -= len(line)
+        if not remaining and limited and not line.endswith(b"\n"):
+            return None
+        try:
+            rec = json.loads(line.decode("utf-8", errors="replace"))
+        except (ValueError, RecursionError):
+            continue
+        if not isinstance(rec, dict):
+            continue
+        if expected_sid is not None and "sessionId" in rec:
+            internal_sid = rec["sessionId"]
+            if (not isinstance(internal_sid, str) or not UUID_RE.fullmatch(internal_sid)
+                    or internal_sid != expected_sid):
+                return None
+            verified_sid = True
+        if head_cwd is None and isinstance(rec.get("cwd"), str) and rec["cwd"]:
+            head_cwd = rec["cwd"]
+        if expected_sid is None and head_cwd is not None:
+            return head_cwd
+    return head_cwd if expected_sid is None or verified_sid else None
 
 
 def _claude_candidates(cwd, started):
@@ -1168,6 +1202,359 @@ def _paste_tab(cmd, *, layout="tabs"):
     return r.returncode == 0
 
 
+# ---------- background compaction ----------
+
+COMPACT_TAIL_BYTES = 2 * 1024 * 1024
+COMPACT_POLL_SECONDS = 0.5
+COMPACT_PLAN_VERSION = 1
+COMPACT_BINDING_FIELDS = ("terminal_id", "surface_tty", "sid", "pid", "started", "foreground_pid")
+COMPACT_REPORT_FIELDS = ("window_id", "tab_id", "tab_index", "terminal_id", "tty", "sid", "title", "anchor")
+COMPACT_PLAN_FIELDS = (*COMPACT_REPORT_FIELDS, "surface_tty", "pid", "started", "foreground_pid")
+
+
+def _tty_key(tty):
+    return (tty or "").strip().removeprefix("/dev/")
+
+
+def _caller_ttys():
+    """Include inherited TTYs when the invoking agent redirects stdio."""
+    from ghostty_watch import parse_processes, run_bounded
+
+    ttys = set()
+    for fd in (0, 1, 2):
+        try:
+            ttys.add(_tty_key(os.ttyname(fd)))
+        except OSError:
+            pass  # this descriptor might be a pipe
+    output = run_bounded(["/bin/ps", "-axo", "pid=,ppid=,tty=,comm="],
+                         time.monotonic() + 10, {"commands": 0})
+    graph = parse_processes(output)
+    pid, visited = os.getpid(), set()
+    while pid > 1:
+        if pid in visited or pid not in graph:
+            raise RecoveryError("caller TTY ancestry could not be established")
+        visited.add(pid)
+        ttys.add(_tty_key(graph[pid]["tty"]))
+        pid = graph[pid]["ppid"]
+    return ttys - {"", "-", "?", "??"}
+
+
+def _compact_targets(args, caller_ttys):
+    """Resolve the entire selector set before allowing any input."""
+    from ghostty_watch import DEADLINE_SECONDS
+    from ghostty_windows import capture_window_structure
+
+    deadline = time.monotonic() + DEADLINE_SECONDS
+    live = list_sessions(preserve_duplicates=True, deadline=deadline)
+    sessions = [s for s in live if s["tool"] == "claude"]
+    by_tty = defaultdict(list)
+    for row in [*live, *live.unresolved]:
+        by_tty[_tty_key(row.get("tty"))].append(row)
+    if args.all_claude and any(s["tool"] == "claude" for s in live.unresolved):
+        raise RecoveryError("--all-claude includes a live Claude TUI with unresolved identity")
+
+    selected = list(sessions) if args.all_claude else []
+    for tty in args.tty:
+        key = _tty_key(tty)
+        if key in caller_ttys:
+            raise RecoveryError(f"refusing caller's own TTY {key}")
+        matches = by_tty[key]
+        if len(matches) != 1 or matches[0]["tool"] != "claude" or not matches[0].get("sid"):
+            raise RecoveryError(f"--tty {tty!r} has no unique resolved live Claude session")
+        selected.append(matches[0])
+    for prefix in args.sid:
+        matches = [s for s in sessions if s["sid"].startswith(prefix.lower())]
+        if len(matches) != 1:
+            raise RecoveryError(f"--sid {prefix!r} matched {len(matches)} live Claude sessions")
+        selected.append(matches[0])
+    if not selected:
+        raise RecoveryError("no live Claude sessions matched")
+
+    capture = capture_window_structure(running_only=True)
+    if not capture["captured"]:
+        raise RecoveryError(f"Ghostty window capture failed: {capture['reason']}")
+    surfaces = defaultdict(list)
+    ids = Counter()
+    for window in capture["windows"]:
+        for tab in window["tabs"]:
+            for terminal in tab["terminals"]:
+                surfaces[_tty_key(terminal.get("tty"))].append((window, tab, terminal))
+                ids[terminal.get("terminal_id")] += 1
+
+    sid_counts = Counter(s["sid"] for s in sessions)
+    targets = []
+    for tty, session in dict((_tty_key(s.get("tty")), s) for s in selected).items():
+        sid = session["sid"]
+        if tty in caller_ttys:
+            raise RecoveryError(f"refusing caller's own TTY {tty}")
+        if not tty or sid_counts[sid] != 1 or len(by_tty[tty]) != 1:
+            raise RecoveryError(f"ambiguous live Claude TTY/SID binding: {tty} / {sid}")
+        if len(surfaces[tty]) != 1:
+            raise RecoveryError(f"expected one Ghostty surface for {tty}; found {len(surfaces[tty])}")
+        window, tab, terminal = surfaces[tty][0]
+        terminal_id = terminal.get("terminal_id")
+        if not terminal_id or not terminal_id.strip() or ids[terminal_id] != 1:
+            raise RecoveryError(f"missing or ambiguous terminal ID for {tty}")
+
+        pid = session.get("pid")
+        foreground_pid = terminal.get("pid")
+        # Ghostty's native pid property reports the TTY's foreground process group.
+        if not pid or not foreground_pid or str(os.getpgid(pid)) != str(foreground_pid):
+            raise RecoveryError(f"Claude does not own the foreground process group on {tty}")
+        started = _proc_start(pid, deadline=time.monotonic() + 10)
+        if started is None or session.get("process_started_epoch", started) != started:
+            raise RecoveryError(f"Claude process generation could not be established on {tty}")
+
+        targets.append({
+            "window_id": window["id"], "tab_id": tab["tab_id"], "tab_index": tab["index"],
+            "terminal_id": terminal_id, "tty": tty, "sid": sid,
+            "anchor": session.get("anchor", "unknown"),
+            "title": tab.get("title_override") or tab.get("title") or terminal.get("title", ""),
+            "surface_tty": terminal["tty"], "foreground_pid": int(foreground_pid),
+            "pid": pid, "started": started, "session": session,
+        })
+    return targets
+
+
+def _validate_compact_plan(plan):
+    if (not isinstance(plan, dict) or plan.keys() != {"schema_version", "targets"}
+            or type(plan["schema_version"]) is not int or plan["schema_version"] != COMPACT_PLAN_VERSION
+            or not isinstance(plan["targets"], list) or not plan["targets"]):
+        raise RecoveryError("compact plan requires a supported schema version and a nonempty target list")
+    seen = set()
+    for index, row in enumerate(plan["targets"], 1):
+        if not isinstance(row, dict) or row.keys() != set(COMPACT_PLAN_FIELDS):
+            raise RecoveryError(f"compact plan target {index} has missing or unexpected fields")
+        required_text = ("window_id", "tab_id", "terminal_id", "tty", "surface_tty", "sid", "anchor")
+        if any(not isinstance(row[k], str) or not row[k].strip()
+               or any(c in row[k] for c in "\x00\r\n") for k in required_text):
+            raise RecoveryError(f"compact plan target {index} has invalid text fields")
+        if (not isinstance(row["title"], str) or row["anchor"] not in {"argv", "transcript", "unknown"}
+                or row["tty"] != _tty_key(row["surface_tty"]) or not UUID_RE.fullmatch(row["sid"])):
+            raise RecoveryError(f"compact plan target {index} has invalid TTY, SID, anchor or title")
+        if (any(type(row[k]) is not int or row[k] < 1 for k in ("tab_index", "pid", "foreground_pid"))
+                or type(row["started"]) not in (float, int) or not 0 < row["started"] < math.inf):
+            raise RecoveryError(f"compact plan target {index} has invalid tab index or process identity")
+        identities = {(k, row[k]) for k in ("tty", "sid", "terminal_id")}
+        if seen & identities:
+            raise RecoveryError(f"compact plan target {index} repeats a TTY, SID or terminal ID")
+        seen.update(identities)
+    return plan["targets"]
+
+
+def _load_compact_plan(path):
+    from ghostty_storage import MAX_MANIFEST_BYTES
+
+    def unique_keys(pairs):
+        item = dict(pairs)
+        if len(item) != len(pairs):
+            raise RecoveryError("compact plan has duplicate JSON keys")
+        return item
+
+    with _read_regular_file(path) as (handle, _):
+        raw = handle.read(MAX_MANIFEST_BYTES + 1)
+    if len(raw) > MAX_MANIFEST_BYTES:
+        raise RecoveryError("compact plan exceeds the manifest byte limit")
+    try:
+        plan = json.loads(raw, object_pairs_hook=unique_keys)
+    except RecursionError as error:
+        raise RecoveryError("compact plan JSON is nested too deeply") from error
+    return _validate_compact_plan(plan)
+
+
+def _observe_compact_bindings(targets, caller_ttys):
+    ttys = [target["tty"] for target in targets]
+    for tty in ttys:
+        if tty in caller_ttys:
+            raise RecoveryError(f"refusing caller's own TTY {tty}")
+    selector = SimpleNamespace(tty=ttys, sid=[], all_claude=False)
+    current = _compact_targets(selector, caller_ttys)
+    if len(targets) != len(current):
+        raise RecoveryError("live Claude target count changed since selection")
+    for expected, observed in zip(targets, current):
+        if any(expected[key] != observed[key] for key in COMPACT_BINDING_FIELDS):
+            raise RecoveryError(f"live Claude surface binding changed since selection on {expected['tty']}")
+    return current
+
+
+def _compact_transcript(session):
+    """Use the resolver's verified transcript or the exact current project bucket."""
+    if session.get("transcript"):
+        return Path(session["transcript"])
+    bucket = _claude_project_dir(session["cwd"]) if session.get("cwd") else None
+    return Path(bucket, f"{session['sid']}.jsonl") if bucket else None
+
+
+def _transcript_position(file_stat):
+    return file_stat.st_dev, file_stat.st_ino, file_stat.st_size
+
+
+def _compact_boundary(path, sid, since, position):
+    """Read only the bounded tail and accept a new timestamped boundary."""
+    with _read_regular_file(path) as (handle, file_stat):
+        size = file_stat.st_size
+        start = max(0, size - COMPACT_TAIL_BYTES)
+        read_from = max(0, start - 1)
+        handle.seek(read_from)
+        tail = handle.read(size - read_from)
+        # A newline immediately before the window means its first record is complete.
+        if start:
+            first_newline = tail.find(b"\n")
+            if first_newline < 0:
+                return None
+            start = read_from + first_newline + 1
+            tail = tail[first_newline + 1:]
+        minimum = 0
+        if position and position[:2] == _transcript_position(file_stat)[:2]:
+            minimum = position[2]
+        head_verified = None
+        for line in tail.split(b"\n")[:-1]:  # Skip a final record still being written.
+            offset, start = start, start + len(line) + 1
+            if offset < minimum or b'"compact_boundary"' not in line:
+                continue
+            try:
+                record = json.loads(line)
+                if not isinstance(record, dict) or record.get("subtype") != "compact_boundary":
+                    continue
+                timestamp = record.get("timestamp")
+                observed_at = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+            except (ValueError, TypeError, AttributeError, RecursionError):
+                continue
+            if observed_at.tzinfo is None or observed_at < since:
+                continue
+            if "sessionId" in record:
+                if record["sessionId"] != sid:
+                    continue
+            else:
+                if head_verified is None:
+                    head_verified = _head_cwd_from_handle(handle, size, expected_sid=sid) is not None
+                if not head_verified:
+                    continue
+            metadata = record.get("compactMetadata")
+            metadata = metadata if isinstance(metadata, dict) else {}
+            return {"timestamp": timestamp, **{key: metadata.get(key) for key in
+                    ("preTokens", "postTokens", "trigger", "durationMs")}}
+    return None
+
+
+def _poll_compact_boundaries(pending, timeout):
+    deadline = time.monotonic() + timeout
+    while pending:
+        for path, position, since, result in pending[:]:
+            try:
+                boundary = _compact_boundary(path, result["sid"], since, position)
+            except FileNotFoundError:
+                continue
+            except OSError as error:
+                result["verification_error"] = str(error)
+                pending.remove((path, position, since, result))
+                continue
+            if boundary is not None:
+                result.update(status="verified_compacted", compact_boundary=boundary)
+                pending.remove((path, position, since, result))
+        remaining = deadline - time.monotonic()
+        if not pending or remaining <= 0:
+            break
+        time.sleep(min(COMPACT_POLL_SECONDS, remaining))
+    for _, _, _, result in pending:
+        result["verification_error"] = "no fresh compact_boundary observed before the verification deadline"
+
+
+def _compact_report(args, results, error=None):
+    if args.json:
+        print(json.dumps({"dry_run": args.dry_run, "targets": results, "error": error}))
+        return
+    if error:
+        print(f"ERROR: {error}", file=sys.stderr)
+    for result in results:
+        print(f"{result['status']} tab={result['tab_index']} terminal_id={result['terminal_id']} "
+              f"tty={result['tty']} sid={result['sid']} anchor={result['anchor']} title={result['title']!r}")
+        for detail in ("dispatch_error", "verification_error", "compact_boundary"):
+            if detail in result:
+                print(f"  {detail} = {result[detail]}")
+
+
+def cmd_compact(args):
+    from ghostty_windows import send_terminal_command
+
+    has_selectors = bool(args.tty or args.sid or args.all_claude)
+    try:
+        if args.from_plan and (has_selectors or args.dry_run):
+            raise RecoveryError("--from-plan cannot be combined with --tty, --sid, --all-claude or --dry-run")
+        if args.write_plan and not args.dry_run:
+            raise RecoveryError("--write-plan requires --dry-run")
+        if not (has_selectors or args.from_plan):
+            raise RecoveryError("compact requires --tty, --sid, --all-claude or --from-plan")
+        frozen = _load_compact_plan(args.from_plan) if args.from_plan else None
+        caller_ttys = _caller_ttys()
+        if frozen:
+            _observe_compact_bindings(frozen, caller_ttys)
+            targets = frozen
+        else:
+            targets = _compact_targets(args, caller_ttys)
+        if args.write_plan:
+            from ghostty_storage import atomic_manifest
+
+            plan = {"schema_version": COMPACT_PLAN_VERSION,
+                    "targets": [{key: t[key] for key in COMPACT_PLAN_FIELDS} for t in targets]}
+            _validate_compact_plan(plan)
+            atomic_manifest(args.write_plan, plan, replace=False)
+    except (ValueError, OSError, subprocess.SubprocessError) as error:
+        _compact_report(args, [], str(error))
+        return 2
+    results = [{key: t[key] for key in COMPACT_REPORT_FIELDS} for t in targets]
+    for result in results:
+        result["status"] = "dry_run" if args.dry_run else "not_attempted"
+    if args.dry_run:
+        _compact_report(args, results)
+        return 0
+
+    pending = []
+    for index, (target, result) in enumerate(zip(targets, results)):
+        if index and args.stagger:
+            time.sleep(args.stagger)
+        try:
+            if frozen:
+                current = _observe_compact_bindings(frozen, caller_ttys)[index]
+            else:
+                current, = _observe_compact_bindings([target], caller_ttys)
+        except (ValueError, OSError, subprocess.SubprocessError) as error:
+            result.update(status="not_dispatched", dispatch_error=str(error))
+            break
+
+        result.update({key: current[key] for key in ("window_id", "tab_id", "tab_index", "title", "anchor")})
+        path, position = None, None
+        if args.verify_timeout:
+            path = _compact_transcript(current["session"])
+            if path is not None:
+                try:
+                    position = _transcript_position(path.stat())
+                except FileNotFoundError:
+                    pass  # the exact transcript may be created by Claude
+                except OSError as error:
+                    result["verification_error"] = str(error)
+                    path = None
+            else:
+                result["verification_error"] = "no transcript path for the bound Claude project"
+        dispatched_at = datetime.now(timezone.utc)
+        receipt = send_terminal_command(current["terminal_id"], "/compact",
+                                        expected_tty=current["surface_tty"],
+                                        expected_pid=current["foreground_pid"])
+        result.update(dispatch=receipt, dispatched_at=dispatched_at.isoformat())
+        if receipt["returncode"] != 0:
+            result.update(status="dispatch_failed", dispatch_error=receipt["reason"])
+            break
+        result["status"] = "dispatched_unverified"
+        if path is not None:
+            pending.append((path, position, dispatched_at, result))
+
+    if pending:
+        _poll_compact_boundaries(pending, args.verify_timeout)
+    _compact_report(args, results)
+    accepted = {"verified_compacted"} if args.verify_timeout else {"dispatched_unverified"}
+    return 0 if all(r["status"] in accepted for r in results) else 1
+
+
 # ---------- entry ----------
 
 def nonempty(value):
@@ -1183,6 +1570,13 @@ def bounded_seconds(value):
     return number
 
 
+def nonnegative_seconds(value):
+    number = float(value)
+    if not math.isfinite(number) or number < 0:
+        raise argparse.ArgumentTypeError("must be a finite, nonnegative number of seconds")
+    return number
+
+
 def positive(value):
     number = int(value)
     if number < 1:
@@ -1192,7 +1586,7 @@ def positive(value):
 
 def main(argv=None):
     global HISTORY_READER, CODEX_HOME_OVERRIDE
-    ap = argparse.ArgumentParser(description="Ghostty session snapshot/reconstruct/restore/check")
+    ap = argparse.ArgumentParser(description="Ghostty session snapshot/reconstruct/restore/check/compact")
     sub = ap.add_subparsers(dest="cmd", required=True)
     p1 = sub.add_parser("snapshot")
     p1.add_argument('--scope', choices=('all-cli', 'ghostty'), default='all-cli',
@@ -1248,6 +1642,20 @@ def main(argv=None):
     p8.add_argument("--out", required=True, type=nonempty, help="new private handoff path outside the exiting terminal")
     p9 = sub.add_parser("switch-handoff-check", help="read-only executor/account/manifest check and original recovery command")
     p9.add_argument("--handoff", required=True, type=nonempty)
+    compact = sub.add_parser("compact", help="send /compact to explicitly selected background Claude Code terminals")
+    compact.add_argument("--tty", nargs="+", action="extend", type=nonempty, default=[], metavar="TTY")
+    compact.add_argument("--sid", nargs="+", action="extend", type=nonempty, default=[], metavar="SID_PREFIX")
+    compact.add_argument("--all-claude", action="store_true", help="select every live Ghostty Claude TUI")
+    compact.add_argument("--dry-run", action="store_true", help="resolve targets without sending input")
+    compact.add_argument("--write-plan", type=nonempty, metavar="PATH",
+                         help="freeze dry-run target bindings in a new plan file")
+    compact.add_argument("--from-plan", type=nonempty, metavar="PATH",
+                         help="dispatch only the exact targets frozen in this plan")
+    compact.add_argument("--stagger", type=nonnegative_seconds, default=1.5,
+                         help="seconds between dispatches (default: 1.5)")
+    compact.add_argument("--verify-timeout", type=nonnegative_seconds, default=0,
+                         help="seconds to poll transcripts after dispatches (default: 0, no polling)")
+    compact.add_argument("--json", action="store_true", help="emit a single JSON result")
     for parser in (p1, p4, p5):
         parser.add_argument("--history-reader", type=nonempty, help="installed read-codex-history Skill directory")
         parser.add_argument("--codex-home", type=nonempty)
@@ -1261,7 +1669,7 @@ def main(argv=None):
             import ghostty_switch
             return ghostty_switch.run(args, sys.modules[__name__])
         return {"snapshot": cmd_snapshot, "check": cmd_check, "restore": cmd_restore,
-                "reconstruct": cmd_reconstruct}[args.cmd](args)
+                "reconstruct": cmd_reconstruct, "compact": cmd_compact}[args.cmd](args)
     except (RecoveryError, ValueError, OSError, RuntimeError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 2

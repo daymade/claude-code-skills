@@ -12,11 +12,13 @@ described in references/session_liveness.md and references/restore_mechanics.md.
 """
 import json
 import argparse
+import copy
+import errno
 import io
 import sqlite3
 import subprocess
 from pathlib import Path
-from contextlib import redirect_stdout, redirect_stderr
+from contextlib import ExitStack, redirect_stdout, redirect_stderr
 import os
 import sys
 import tempfile
@@ -26,6 +28,7 @@ from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ghostty_session as gs
+import ghostty_windows as gw
 
 NOW = datetime.now(timezone.utc)
 
@@ -45,7 +48,7 @@ def iso(hours_ago):
 
 
 def make_claude_file(home, sid, lines):
-    d = os.path.join(home, ".claude", "projects", "-Users-x-demo")
+    d = os.path.join(home, ".claude", "projects", "-fixture-x-demo")
     os.makedirs(d, exist_ok=True)
     path = os.path.join(d, sid + ".jsonl")
     with open(path, "w") as fh:
@@ -102,8 +105,8 @@ class UuidAnchoringTest(unittest.TestCase):
         sid = "aaaaaaaa-0000-0000-0000-000000000001"
         for cmdline in [
             "claude --dangerously-skip-permissions -r " + sid,
-            "/Users/x/.nvm/versions/node/v24/bin/codex resume " + sid,
-            "node /Users/x/.nvm/bin/codex resume " + sid,
+            "/fixture/x/.nvm/versions/node/v24/bin/codex resume " + sid,
+            "node /fixture/x/.nvm/bin/codex resume " + sid,
         ]:
             m = gs.UUID_RE.search(cmdline)
             self.assertIsNotNone(m, cmdline)
@@ -878,9 +881,9 @@ class TranscriptAnchorTest(unittest.TestCase):
 
     def setUp(self):
         self.home = fresh_home()
-        self.cwd = "/Users/x/demo"
+        self.cwd = "/fixture/x/demo"
         self.started = datetime(2026, 10, 6, 12, 0, 0).timestamp()
-        self.bucket = os.path.join(self.home, ".claude", "projects", "-Users-x-demo")
+        self.bucket = os.path.join(self.home, ".claude", "projects", "-fixture-x-demo")
         os.makedirs(self.bucket, exist_ok=True)
 
     def _claude(self, sid, cwd=...):
@@ -954,7 +957,7 @@ class TranscriptAnchorTest(unittest.TestCase):
         self.assertEqual(self._cands("claude", {corpse: (self.started - 3, self.started - 3)}), [])
 
     def test_claude_rejects_cwd_mismatch(self):
-        other = self._claude(S_DEAD, cwd="/Users/x/other")
+        other = self._claude(S_DEAD, cwd="/fixture/x/other")
         self.assertEqual(self._cands("claude", {other: (self.started + 20, self.started + 25)}), [])
 
     def test_claude_rejects_unverifiable_head(self):
@@ -973,8 +976,8 @@ class TranscriptAnchorTest(unittest.TestCase):
         self.assertEqual(cands, [(20.0, S_HEALTHY, path)])
 
     def test_claude_bucket_encoding_dots_underscores_spaces(self):
-        cwd = "/Users/x/.worktrees/repo wt_1"
-        bucket = os.path.join(self.home, ".claude", "projects", "-Users-x--worktrees-repo-wt-1")
+        cwd = "/fixture/x/.worktrees/repo wt_1"
+        bucket = os.path.join(self.home, ".claude", "projects", "-fixture-x--worktrees-repo-wt-1")
         os.makedirs(bucket, exist_ok=True)
         path = os.path.join(bucket, S_HEALTHY + ".jsonl")
         with open(path, "w") as fh:
@@ -995,11 +998,11 @@ class TranscriptAnchorTest(unittest.TestCase):
         self.assertEqual(self._cands("codex", {}), [])
 
     def test_codex_rejects_cwd_mismatch(self):
-        self._codex("2026-10-06T12-00-20", S_DEAD, cwd="/Users/x/other")
+        self._codex("2026-10-06T12-00-20", S_DEAD, cwd="/fixture/x/other")
         self.assertEqual(self._cands("codex", {}), [])
 
 
-def _proc(pid, tty, tool="claude", cwd="/Users/x/demo", started=1000.0):
+def _proc(pid, tty, tool="claude", cwd="/fixture/x/demo", started=1000.0):
     return {"pid": pid, "tty": tty, "cmd": tool + " --x", "tool": tool, "cwd": cwd, "started": started}
 
 
@@ -1057,7 +1060,7 @@ class AssignTranscriptsTest(unittest.TestCase):
 class ListSessionsAnchorTest(unittest.TestCase):
     PS_HEADER = "  PID TTY      COMMAND\n"
 
-    def _run_list(self, ps_rows, resolve, *, resolve_uuidless=True, cwds=None):
+    def _run_list(self, ps_rows, resolve, *, resolve_uuidless=True, cwds=None, preserve_duplicates=False):
         import ghostty_watch as watch
         graph = ['1 0 ?? /Applications/Ghostty.app/Contents/MacOS/ghostty',
                  '2 1 ?? /bin/zsh']
@@ -1073,13 +1076,22 @@ class ListSessionsAnchorTest(unittest.TestCase):
             if args[0] == '/bin/ps':
                 return '\n'.join(graph)
             if args[0] == '/usr/sbin/lsof':
-                return ''.join('p' + pid + '\nn' + (cwds or {}).get(int(pid), '/Users/x/demo') + '\n'
+                return ''.join('p' + pid + '\nn' + (cwds or {}).get(int(pid), '/fixture/x/demo') + '\n'
                                for pid in args[3].split(','))
             raise AssertionError(f'unexpected subprocess call: {args}')
         with mock.patch.object(watch, 'run_bounded', side_effect=fake_run), \
              mock.patch.object(gs, "_proc_start", return_value=1000.0), \
              mock.patch.object(gs, "_transcript_candidates", side_effect=resolve):
-            return gs.list_sessions(resolve_uuidless=resolve_uuidless)
+            return gs.list_sessions(resolve_uuidless=resolve_uuidless,
+                                    preserve_duplicates=preserve_duplicates)
+
+    def test_compact_inventory_retains_duplicate_sid_across_ttys(self):
+        rows = f"500 ttys042 claude --resume {S_HEALTHY}\n501 ttys043 claude --resume {S_HEALTHY}\n"
+        normal = self._run_list(rows, lambda *args: [])
+        strict = self._run_list(rows, lambda *args: [], preserve_duplicates=True)
+        self.assertEqual(len(normal), 1)
+        self.assertEqual([(s["sid"], s["tty"], s["pid"]) for s in strict],
+                         [(S_HEALTHY, "ttys042", 500), (S_HEALTHY, "ttys043", 501)])
 
     def test_no_daemon_and_daemon_option_values_remain_live(self):
         for command in (
@@ -1168,9 +1180,9 @@ class ListSessionsAnchorTest(unittest.TestCase):
                 "  501 ttys042 /x/vendor/codex\n"
                 "  502 ttys043 node /x/bin/codex\n"
                 "  503 ttys043 /x/vendor/codex\n")
-        offers = {"/Users/x/demo": [(1.0, S_HEALTHY, "/a"), (90.0, S_DEAD, "/b")],
-                  "/Users/x/other": [(1.0, S_PROSE, "/c")]}
-        cwds = {500: "/Users/x/demo", 501: "/Users/x/demo", 502: "/Users/x/other", 503: "/Users/x/other"}
+        offers = {"/fixture/x/demo": [(1.0, S_HEALTHY, "/a"), (90.0, S_DEAD, "/b")],
+                  "/fixture/x/other": [(1.0, S_PROSE, "/c")]}
+        cwds = {500: "/fixture/x/demo", 501: "/fixture/x/demo", 502: "/fixture/x/other", 503: "/fixture/x/other"}
         sessions = self._run_list(rows, lambda tool, cwd, started: offers[cwd], cwds=cwds)
         by_tty = {s["tty"]: s["sid"] for s in sessions}
         self.assertEqual(by_tty, {"ttys042": S_HEALTHY, "ttys043": S_PROSE})
@@ -1279,6 +1291,511 @@ class ListSessionsAnchorTest(unittest.TestCase):
                 'id': S_CODEX, 'cwd': '/tmp/demo', 'padding': 'x' * gs.MAX_IDENTITY_HEAD_BYTES}}) + '\n')
             self.assertIsNone(gs._codex_first_meta(path))
             self.assertIsNone(gs._head_cwd(path))
+
+
+class CompactCommandTest(unittest.TestCase):
+    def setUp(self):
+        stack = ExitStack()
+        self.addCleanup(stack.close)
+        self.home = Path(stack.enter_context(tempfile.TemporaryDirectory(prefix="ghostty-compact-test-")))
+        self.sessions = gs.SessionList([
+            dict(tool="claude", sid=S_HEALTHY, tty="ttys010", pid=510, anchor="argv"),
+            dict(tool="claude", sid=S_DEAD, tty="ttys011", pid=511, anchor="transcript"),
+            dict(tool="codex", sid=S_CODEX, tty="ttys012", pid=512),
+        ])
+        self.terminals = [
+            dict(terminal_id=f"surface-{row['pid']}", tty="/dev/" + row["tty"], pid=str(row["pid"]))
+            for row in self.sessions
+        ]
+        self.layout = {"captured": True, "windows": [{"id": "window-fixture", "tabs": [
+            {"tab_id": "tab-fixture", "index": 8, "title": "Demo", "terminals": self.terminals}
+        ]}]}
+        self.caller = stack.enter_context(mock.patch.object(gs, "_caller_ttys", return_value=set()))
+        self.inventory = stack.enter_context(mock.patch.object(gs, "list_sessions", return_value=self.sessions))
+        self.capture = stack.enter_context(mock.patch.object(gw, "capture_window_structure", return_value=self.layout))
+        self.send = stack.enter_context(mock.patch.object(gw, "send_terminal_command",
+                                                          return_value={"returncode": 0, "reason": None}))
+        stack.enter_context(mock.patch.object(gs.os, "getpgid", side_effect=lambda pid: pid))
+        stack.enter_context(mock.patch.object(gs, "_proc_start", return_value=1000.0))
+
+    def compact(self, *args):
+        with redirect_stdout(io.StringIO()) as output, redirect_stderr(io.StringIO()) as err:
+            rc = gs.main(["compact", "--json", *args])
+        self.assertEqual(err.getvalue(), "")
+        return rc, json.loads(output.getvalue())
+
+    def write_plan(self, *selectors):
+        path = self.home / "compact-plan.json"
+        rc, report = self.compact(*selectors, "--dry-run", "--write-plan", str(path))
+        self.assertEqual(rc, 0, report)
+        return path
+
+    def test_dry_run_joins_tty_and_sid_as_a_union_without_input(self):
+        rc, report = self.compact("--tty", "/dev/ttys010", "--sid", S_HEALTHY[:8], S_DEAD[:8], "--dry-run")
+        self.assertEqual(rc, 0)
+        self.assertTrue(report["dry_run"])
+        self.assertEqual(report["targets"][0], dict(window_id="window-fixture", tab_id="tab-fixture",
+                         tab_index=8, terminal_id="surface-510", tty="ttys010", sid=S_HEALTHY,
+                         title="Demo", anchor="argv", status="dry_run"))
+        self.assertEqual([t["sid"] for t in report["targets"]], [S_HEALTHY, S_DEAD])
+        self.assertEqual([t["anchor"] for t in report["targets"]], ["argv", "transcript"])
+        self.capture.assert_called_once_with(running_only=True)
+        self.assertTrue(self.inventory.call_args.kwargs["preserve_duplicates"])
+        self.send.assert_not_called()
+
+    def test_all_claude_excludes_codex_and_requires_explicit_selector(self):
+        rc, report = self.compact("--dry-run")
+        self.assertEqual(rc, 2)
+        self.assertIn("requires", report["error"])
+        self.inventory.assert_not_called()
+        rc, report = self.compact("--all-claude", "--dry-run")
+        self.assertEqual(rc, 0)
+        self.assertEqual([t["sid"] for t in report["targets"]], [S_HEALTHY, S_DEAD])
+        self.send.assert_not_called()
+
+    def test_write_plan_freezes_all_fields_and_refuses_overwrite(self):
+        path = self.write_plan("--tty", "/dev/ttys010")
+        saved = path.read_bytes()
+        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(json.loads(saved), {"schema_version": 1, "targets": [
+            dict(window_id="window-fixture", tab_id="tab-fixture", tab_index=8,
+                 terminal_id="surface-510", tty="ttys010", surface_tty="/dev/ttys010",
+                 sid=S_HEALTHY, anchor="argv", pid=510, started=1000.0,
+                 foreground_pid=510, title="Demo")
+        ]})
+        rc, report = self.compact("--tty", "ttys011", "--dry-run", "--write-plan", str(path))
+        self.assertEqual(rc, 2)
+        self.assertIn("File exists", report["error"])
+        self.assertEqual(path.read_bytes(), saved)
+        self.send.assert_not_called()
+
+    def test_plan_flags_are_exclusive_and_write_requires_dry_run(self):
+        path = str(self.home / "absent.json")
+        for selectors in (("--tty", "ttys010"), ("--sid", S_HEALTHY[:8]),
+                          ("--all-claude",), ("--dry-run",)):
+            with self.subTest(selectors=selectors):
+                rc, report = self.compact("--from-plan", path, *selectors)
+                self.assertEqual(rc, 2)
+                self.assertIn("cannot be combined", report["error"])
+        rc, report = self.compact("--tty", "ttys010", "--write-plan", path)
+        self.assertEqual(rc, 2)
+        self.assertIn("requires --dry-run", report["error"])
+        self.assertFalse(Path(path).exists())
+        self.caller.assert_not_called()
+        self.send.assert_not_called()
+
+    def test_from_plan_rejects_malformed_fields_before_observing(self):
+        path = self.write_plan("--tty", "ttys010")
+        row = json.loads(path.read_bytes())["targets"][0]
+        self.caller.reset_mock()
+        for payload in ("{invalid json", '{"schema_version":1,"schema_version":1,"targets":[]}',
+                        json.dumps({"schema_version": 2, "targets": [row]}),
+                        json.dumps({"schema_version": 1, "targets": []}),
+                        json.dumps({"schema_version": 1, "targets": [row, row]}),
+                        json.dumps({"schema_version": 1, "targets": [dict(row, pid=True)]}),
+                        json.dumps({"schema_version": 1, "targets": [dict(row, started=float("nan"))]}),
+                        json.dumps({"schema_version": 1, "targets": [dict(row, surface_tty="/dev/ttys999")]}),
+                        json.dumps({"schema_version": 1, "targets": [{"tty": row["tty"]}]})):
+            with self.subTest(payload=payload):
+                path.write_text(payload)
+                rc, report = self.compact("--from-plan", str(path))
+                self.assertEqual(rc, 2)
+                self.assertEqual(report["targets"], [])
+                self.assertTrue(report["error"])
+        self.caller.assert_not_called()
+        self.send.assert_not_called()
+
+    def test_from_plan_rejects_previewed_tty_reused_by_replacement(self):
+        path = self.write_plan("--tty", "ttys010")
+        self.sessions[0].update(sid=S_DEAD, pid=610)
+        self.sessions[1]["sid"] = S_PROSE
+        self.terminals[0].update(terminal_id="surface-610", pid="610")
+        rc, report = self.compact("--from-plan", str(path))
+        self.assertEqual(rc, 2)
+        self.assertIn("binding changed", report["error"])
+        self.assertEqual(report["targets"], [])
+        self.send.assert_not_called()
+
+    def test_from_plan_compares_each_frozen_binding_field(self):
+        path = self.write_plan("--tty", "ttys010")
+        plan = json.loads(path.read_bytes())
+        changes = {"terminal_id": "replacement-surface", "surface_tty": "ttys010",
+                   "sid": S_PROSE, "pid": 610, "started": 1001.0, "foreground_pid": 610}
+        for key, value in changes.items():
+            with self.subTest(field=key):
+                changed = dict(plan, targets=[dict(plan["targets"][0], **{key: value})])
+                path.write_text(json.dumps(changed))
+                rc, report = self.compact("--from-plan", str(path))
+                self.assertEqual(rc, 2)
+                self.assertIn("binding changed", report["error"])
+        self.send.assert_not_called()
+
+    def test_from_plan_refuses_changed_target_count(self):
+        path = self.write_plan("--all-claude")
+        with mock.patch.object(gs, "_compact_targets", return_value=[]):
+            rc, report = self.compact("--from-plan", str(path))
+        self.assertEqual(rc, 2)
+        self.assertIn("target count changed", report["error"])
+        self.send.assert_not_called()
+
+    def test_from_plan_sends_to_matching_preview_and_ignores_new_tab(self):
+        path = self.write_plan("--tty", "ttys010")
+        self.sessions.append(dict(tool="claude", sid=S_PROSE, tty="ttys013", pid=513))
+        self.layout["windows"][0]["tabs"].append(
+            dict(tab_id="new-tab", index=9, title="New tab",
+                 terminals=[dict(terminal_id="surface-513", pid="513", tty="/dev/ttys013")]))
+        rc, report = self.compact("--from-plan", str(path))
+        self.assertEqual(rc, 0)
+        self.assertEqual([(row["sid"], row["anchor"], row["status"]) for row in report["targets"]],
+                         [(S_HEALTHY, "argv", "dispatched_unverified")])
+        self.send.assert_called_once_with("surface-510", "/compact", expected_tty="/dev/ttys010",
+                                          expected_pid=510)
+
+    def test_from_plan_rejects_self_tty_or_missing_later_surface_before_any_send(self):
+        path = self.write_plan("--all-claude")
+        self.caller.return_value = {"ttys011"}
+        rc, report = self.compact("--from-plan", str(path))
+        self.assertEqual(rc, 2)
+        self.assertIn("caller's own TTY ttys011", report["error"])
+        self.caller.return_value = set()
+        self.terminals.pop(1)
+        rc, report = self.compact("--from-plan", str(path))
+        self.assertEqual(rc, 2)
+        self.assertIn("expected one Ghostty surface for ttys011", report["error"])
+        self.send.assert_not_called()
+
+    def test_from_plan_rechecks_other_targets_immediately_before_first_send(self):
+        path = self.write_plan("--all-claude")
+        changed = copy.deepcopy(self.layout)
+        changed["windows"][0]["tabs"][0]["terminals"][1]["terminal_id"] = "new-surface-511"
+        self.capture.side_effect = [self.layout, changed]
+        rc, report = self.compact("--from-plan", str(path))
+        self.assertEqual(rc, 1)
+        self.assertEqual([row["status"] for row in report["targets"]], ["not_dispatched", "not_attempted"])
+        self.assertIn("ttys011", report["targets"][0]["dispatch_error"])
+        self.send.assert_not_called()
+
+    def test_from_plan_rechecks_already_sent_target_before_later_send(self):
+        path = self.write_plan("--all-claude")
+        changed = copy.deepcopy(self.layout)
+        changed["windows"][0]["tabs"][0]["terminals"][0]["terminal_id"] = "new-surface-510"
+        self.capture.side_effect = [self.layout, self.layout, changed]
+        rc, report = self.compact("--from-plan", str(path), "--stagger", "0")
+        self.assertEqual(rc, 1)
+        self.assertEqual([row["status"] for row in report["targets"]],
+                         ["dispatched_unverified", "not_dispatched"])
+        self.assertIn("ttys010", report["targets"][1]["dispatch_error"])
+        self.send.assert_called_once()
+
+    def test_setup_documentation_starts_with_read_only_discovery(self):
+        reference = Path(gs.__file__).resolve().parents[1] / "references" / "targeted-input.md"
+        setup = reference.read_text().split("## Freeze, review, and send", 1)[0]
+        self.assertIn("Ghostty 1.4 or later", setup)
+        self.assertIn("macos-applescript = true", setup)
+        self.assertIn("**Automation** permission", setup)
+        self.assertIn("**Accessibility** permission", setup)
+        command = setup.split("```bash\n", 1)[1].split("\n```", 1)[0]
+        arguments = command.split(" compact ", 1)[1].split()
+        self.assertEqual(arguments, ["--all-claude", "--dry-run", "--json"])
+        with redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(gs.main(["compact", *arguments]), 0)
+        self.assertEqual([row["sid"] for row in json.loads(output.getvalue())["targets"]], [S_HEALTHY, S_DEAD])
+        self.assertEqual(list(self.home.iterdir()), [])
+        self.send.assert_not_called()
+
+    def test_discovery_probe_fallback_lists_resolved_and_unresolved_ttys(self):
+        import ghostty_watch as watch
+
+        self.sessions.observation["counters"] = {}
+        self.sessions.unresolved = [dict(tool="claude", tty="ttys099")]
+        rc, report = self.compact("--all-claude", "--dry-run")
+        self.assertEqual(rc, 2)
+        self.assertIn("unresolved identity", report["error"])
+        state = self.home / "observer-state"
+        with redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(watch.main(["probe", "--state-dir", str(state)]), 1)
+        inventory = json.loads(output.getvalue())
+        self.assertIn("ttys010", [row["tty"] for row in inventory["sessions"]])
+        self.assertEqual([row["tty"] for row in inventory["unresolved"]], ["ttys099"])
+        self.assertFalse(state.exists())
+        plan = json.loads(self.write_plan("--tty", "ttys010").read_text())
+        self.assertEqual([row["tty"] for row in plan["targets"]], ["ttys010"])
+        self.send.assert_not_called()
+
+    def test_refuses_caller_tty_for_every_selector(self):
+        self.caller.return_value = {"ttys011"}
+        for args in (("--tty", "ttys010", "/dev/ttys011"), ("--sid", S_DEAD[:4]), ("--all-claude",)):
+            with self.subTest(args=args):
+                rc, report = self.compact(*args)
+                self.assertEqual(rc, 2)
+                self.assertIn("caller's own TTY ttys011", report["error"])
+                self.assertEqual(report["targets"], [])
+        self.send.assert_not_called()
+
+    def test_refuses_selector_matching_no_session(self):
+        for args in (("--tty", "ttys099"), ("--sid", "0000")):
+            with self.subTest(args=args):
+                self.assertEqual(self.compact(*args)[0], 2)
+        self.send.assert_not_called()
+
+    def test_refuses_duplicate_sid_across_surfaces_even_when_tty_explicit(self):
+        self.sessions[1]["sid"] = S_HEALTHY
+        for args in (("--tty", "ttys010"), ("--sid", S_HEALTHY[:8]), ("--all-claude",)):
+            with self.subTest(args=args):
+                rc, report = self.compact(*args)
+                self.assertEqual(rc, 2)
+                self.assertEqual(report["targets"], [])
+                self.assertRegex(report["error"], r"ambiguous|matched 2")
+        self.send.assert_not_called()
+
+    def test_refuses_ambiguous_prefix_of_distinct_session_ids(self):
+        self.sessions[1]["sid"] = S_HEALTHY[:-1] + "9"
+        rc, report = self.compact("--sid", S_HEALTHY[:8])
+        self.assertEqual(rc, 2)
+        self.assertIn("matched 2", report["error"])
+        self.send.assert_not_called()
+
+    def test_refuses_missing_or_duplicate_terminal_identity(self):
+        for terminal_id, expected in (("", "terminal ID"), ("surface-511", "terminal ID")):
+            with self.subTest(terminal_id=terminal_id):
+                self.terminals[0]["terminal_id"] = terminal_id
+                rc, report = self.compact("--tty", "ttys010")
+                self.assertEqual(rc, 2)
+                self.assertIn(expected, report["error"])
+        self.terminals[0]["terminal_id"] = "surface-510"
+        self.terminals[1]["tty"] = "/dev/ttys010"
+        rc, report = self.compact("--tty", "ttys010")
+        self.assertEqual(rc, 2)
+        self.assertIn("found 2", report["error"])
+        self.send.assert_not_called()
+
+    def test_all_claude_refuses_unresolved_session_and_foreground_mismatch(self):
+        self.sessions.unresolved = [dict(tool="claude", tty="ttys013", pid=513)]
+        rc, report = self.compact("--all-claude")
+        self.assertEqual(rc, 2)
+        self.assertIn("unresolved identity", report["error"])
+        self.terminals[0]["pid"] = "999"
+        rc, report = self.compact("--sid", S_HEALTHY[:8])
+        self.assertEqual(rc, 2)
+        self.assertIn("foreground process group", report["error"])
+        self.send.assert_not_called()
+
+    def test_stagger_orders_dispatches_and_default_skips_polling(self):
+        tracker = mock.Mock()
+        tracker.attach_mock(self.send, "send")
+        with mock.patch.object(gs.time, "sleep") as sleep, \
+             mock.patch.object(gs, "_compact_boundary") as poll:
+            tracker.attach_mock(sleep, "sleep")
+            rc, report = self.compact("--all-claude", "--stagger", "2.5")
+        self.assertEqual(rc, 0)
+        self.assertEqual([t["status"] for t in report["targets"]], ["dispatched_unverified"] * 2)
+        self.assertEqual(tracker.mock_calls, [
+            mock.call.send("surface-510", "/compact", expected_tty="/dev/ttys010", expected_pid=510),
+            mock.call.sleep(2.5),
+            mock.call.send("surface-511", "/compact", expected_tty="/dev/ttys011", expected_pid=511),
+        ])
+        self.assertEqual(self.capture.call_count, 3)
+        poll.assert_not_called()
+
+    def test_changed_surface_aborts_later_sends(self):
+        self.capture.side_effect = [
+            self.layout, {"captured": True, "windows": []},
+        ]
+        rc, report = self.compact("--all-claude")
+        self.assertEqual(rc, 1)
+        self.assertEqual([t["status"] for t in report["targets"]], ["not_dispatched", "not_attempted"])
+        self.send.assert_not_called()
+
+    def test_host_denial_stops_batch(self):
+        self.send.return_value = {"returncode": 1, "reason": "Not authorized (-1743)"}
+        rc, report = self.compact("--all-claude")
+        self.assertEqual(rc, 1)
+        self.assertEqual([t["status"] for t in report["targets"]], ["dispatch_failed", "not_attempted"])
+        self.assertIn("-1743", report["targets"][0]["dispatch_error"])
+        self.send.assert_called_once()
+
+    def test_verify_timeout_keeps_unconfirmed_send_and_honors_deadline(self):
+        path = self.home / "test.jsonl"
+        path.write_bytes(b"")
+        self.sessions[0]["transcript"] = path
+        with mock.patch.object(gs.time, "sleep") as sleep, \
+             mock.patch.object(gs.time, "monotonic", side_effect=[0, 0, 0, 0, 10, 10, 10.5, 11]):
+            rc, report = self.compact("--sid", S_HEALTHY[:8], "--verify-timeout", "1")
+        self.assertEqual(rc, 1)
+        self.assertEqual(report["targets"][0]["status"], "dispatched_unverified")
+        self.assertIn("deadline", report["targets"][0]["verification_error"])
+        self.assertEqual(sleep.call_args_list, [mock.call(0.5), mock.call(0.5)])
+
+    def test_argv_anchor_does_not_verify_compaction_in_switched_conversation(self):
+        launch = self.home / f"{S_HEALTHY}.jsonl"
+        launch.write_text("")
+        self.sessions[0]["cwd"] = "/fixture/project"
+
+        def compact_active_conversation(*args, **kwargs):
+            active = self.home / f"{S_PROSE}.jsonl"
+            active.write_text(json.dumps({"subtype": "compact_boundary", "sessionId": S_PROSE,
+                                          "timestamp": datetime.now(timezone.utc).isoformat()}) + "\n")
+            return {"returncode": 0, "reason": None}
+
+        self.send.side_effect = compact_active_conversation
+        with mock.patch.object(gs, "_claude_project_dir", return_value=self.home), \
+             mock.patch.object(gs.time, "sleep"), \
+             mock.patch.object(gs.time, "monotonic", side_effect=[0, 0, 0, 0, 10, 11]):
+            rc, report = self.compact("--tty", "ttys010", "--verify-timeout", "1")
+        self.assertEqual(rc, 1)
+        row, = report["targets"]
+        self.assertEqual((row["sid"], row["anchor"], row["status"]),
+                         (S_HEALTHY, "argv", "dispatched_unverified"))
+        self.assertNotIn("compact_boundary", row)
+
+    def test_readback_past_large_post_compact_attachment_verifies_the_send(self):
+        path = self.home / "test.jsonl"
+        self.sessions[0]["transcript"] = path
+        path.write_text(json.dumps({"type": "attachment", "body": "x" * (2 * 1024 * 1024)}) + "\n")
+        metadata = {"preTokens": 750000, "postTokens": 80000, "trigger": "manual", "durationMs": 1420}
+        timestamp = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+        with path.open("a") as handle:
+            handle.write(json.dumps({"subtype": "compact_boundary", "sessionId": S_HEALTHY,
+                                      "timestamp": timestamp, "compactMetadata": {"preTokens": 3}}) + "\n")
+
+        def append_boundary(*args, **kwargs):
+            with path.open("a") as handle:
+                for row in (
+                    {"subtype": "compact_boundary", "timestamp": datetime.now(timezone.utc).isoformat(),
+                     "sessionId": S_HEALTHY, "compactMetadata": metadata},
+                    {"type": "attachment", "body": "x" * (350 * 1024)},
+                ):
+                    handle.write(json.dumps(row) + "\n")
+            return {"returncode": 0, "reason": None}
+
+        self.send.side_effect = append_boundary
+        rc, report = self.compact("--sid", S_HEALTHY[:8], "--verify-timeout", "1")
+        self.assertEqual(rc, 0)
+        result = report["targets"][0]
+        self.assertEqual(result["status"], "verified_compacted")
+        self.assertEqual({k: result["compact_boundary"][k] for k in metadata}, metadata)
+        self.assertGreaterEqual(result["compact_boundary"]["timestamp"], result["dispatched_at"])
+
+    def test_boundary_outside_two_mib_is_not_observed(self):
+        path = self.home / "test.jsonl"
+        boundary = dict(subtype="compact_boundary", sessionId=S_HEALTHY, timestamp=NOW.isoformat())
+        path.write_text(json.dumps(boundary) + "\n" + json.dumps(
+            {"type": "attachment", "body": "x" * (2 * 1024 * 1024)}) + "\n")
+        self.assertIsNone(gs._compact_boundary(path, S_HEALTHY, NOW, None))
+
+    def test_boundary_at_exact_start_of_tail_is_observed(self):
+        path = self.home / "test.jsonl"
+        prefix = b'{"type":"user"}\n'
+        boundary = (json.dumps(dict(subtype="compact_boundary", sessionId=S_HEALTHY,
+                                    timestamp=NOW.isoformat())) + "\n").encode()
+        attachment_start, attachment_end = b'{"type":"attachment","body":"', b'"}\n'
+        padding = gs.COMPACT_TAIL_BYTES - len(boundary) - len(attachment_start) - len(attachment_end)
+        path.write_bytes(prefix + boundary + attachment_start + b"x" * padding + attachment_end)
+        self.assertEqual(path.stat().st_size - gs.COMPACT_TAIL_BYTES, len(prefix))
+        self.assertEqual(gs._compact_boundary(path, S_HEALTHY, NOW, None)["timestamp"], NOW.isoformat())
+
+    def test_missing_boundary_sid_checks_head_of_original_descriptor_after_path_swap(self):
+        path = self.home / "test.jsonl"
+        replacement = self.home / "replacement.jsonl"
+        boundary = dict(subtype="compact_boundary", timestamp=NOW.isoformat())
+        real_fstat = os.fstat
+
+        def transcript(sid):
+            return "\n".join((json.dumps(dict(sessionId=sid, cwd="/fixture/project")),
+                              json.dumps(boundary), ""))
+
+        for opened, swapped_in in ((S_HEALTHY, S_DEAD), (S_DEAD, S_HEALTHY)):
+            with self.subTest(opened=opened):
+                path.write_text(transcript(opened))
+                replacement.write_text(transcript(swapped_in))
+
+                def replace_after_open(fd):
+                    file_stat = real_fstat(fd)
+                    if replacement.exists():
+                        replacement.replace(path)
+                    return file_stat
+
+                with mock.patch.object(gs.os, "fstat", side_effect=replace_after_open):
+                    evidence = gs._compact_boundary(path, S_HEALTHY, NOW, None)
+                self.assertFalse(replacement.exists())
+                self.assertEqual(evidence is not None, opened == S_HEALTHY)
+
+    def test_transcript_probes_close_directory_descriptors_before_wrapping(self):
+        with mock.patch.object(gs.os, "fstat", wraps=os.fstat) as inspect_fd, \
+             mock.patch.object(gs.os, "close", wraps=os.close) as close_fd, \
+             mock.patch.object(gs.os, "fdopen", wraps=os.fdopen) as wrap_fd:
+            self.assertIsNone(gs._head_cwd(self.home))
+            with self.assertRaisesRegex(OSError, "not a regular file"):
+                gs._compact_boundary(self.home, S_HEALTHY, NOW, None)
+        wrap_fd.assert_not_called()
+        self.assertEqual(inspect_fd.call_count, 2)
+        self.assertEqual(close_fd.call_args_list, inspect_fd.call_args_list)
+        with self.assertRaises(OSError) as closed:
+            os.fstat(close_fd.call_args.args[0])
+        self.assertEqual(closed.exception.errno, errno.EBADF)
+
+    def test_regular_file_probe_closes_raw_descriptor_if_fdopen_fails(self):
+        path = self.home / "test.jsonl"
+        path.touch()
+        with mock.patch.object(gs.os, "fdopen", side_effect=OSError("wrap failed")) as wrap_fd, \
+             mock.patch.object(gs.os, "close", wraps=os.close) as close_fd:
+            with self.assertRaisesRegex(OSError, "wrap failed"):
+                gs._compact_boundary(path, S_HEALTHY, NOW, None)
+        fd = wrap_fd.call_args.args[0]
+        close_fd.assert_called_once_with(fd)
+        with self.assertRaises(OSError) as closed:
+            os.fstat(fd)
+        self.assertEqual(closed.exception.errno, errno.EBADF)
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "requires POSIX FIFO support")
+    def test_transcript_probes_refuse_real_fifo_without_a_writer(self):
+        path = self.home / "not-a-transcript.jsonl"
+        os.mkfifo(path)
+        # Run in a subprocess so a regression to blocking open fails within the test timeout.
+        probe = """\
+import sys
+from datetime import datetime, timezone
+sys.path.insert(0, sys.argv[1])
+import ghostty_session as gs
+path = sys.argv[2]
+assert gs._head_cwd(path) is None
+try:
+    gs._compact_boundary(path, "unused", datetime.now(timezone.utc), None)
+except OSError as error:
+    assert "not a regular file" in str(error)
+else:
+    raise AssertionError("FIFO was treated as a readable transcript")
+print("both probes rejected FIFO")
+"""
+        completed = subprocess.run([sys.executable, "-B", "-c", probe,
+                                    str(Path(gs.__file__).resolve().parent), str(path)],
+                                   capture_output=True, text=True, timeout=5)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(completed.stdout.strip(), "both probes rejected FIFO")
+
+    def test_ignores_stale_foreign_and_incomplete_markers(self):
+        path = self.home / "test.jsonl"
+        boundary = dict(subtype="compact_boundary", sessionId=S_HEALTHY, timestamp=NOW.isoformat())
+        path.write_text("\n".join(json.dumps(row) for row in (
+            dict(boundary, timestamp=iso(2)), dict(boundary, sessionId=S_DEAD),
+            dict(boundary, timestamp="invalid"), boundary,
+        )))
+        self.assertIsNone(gs._compact_boundary(path, S_HEALTHY, NOW, None))
+        with path.open("a") as handle:
+            handle.write("\n")
+        self.assertEqual(gs._compact_boundary(path, S_HEALTHY, NOW, None), {
+            "timestamp": NOW.isoformat(), "preTokens": None, "postTokens": None,
+            "trigger": None, "durationMs": None,
+        })
+
+
+class CallerTtyTest(unittest.TestCase):
+    def test_checks_redirected_invoker_ancestors_and_available_descriptors(self):
+        graph = "1 0 ?? launchd\n2 1 ttys018 claude\n3 2 ?? agent\n4 3 ?? python3\n"
+        with mock.patch("ghostty_watch.run_bounded", return_value=graph), \
+             mock.patch.object(gs.os, "getpid", return_value=4), \
+             mock.patch.object(gs.os, "ttyname", side_effect=[OSError(), "/dev/ttys019", OSError()]):
+            self.assertEqual(gs._caller_ttys(), {"ttys018", "ttys019"})
 
 
 if __name__ == "__main__":
