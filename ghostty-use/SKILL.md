@@ -55,7 +55,7 @@ For missing Codex terminals without confirmed Ghostty ownership, load the instal
 | "Was anything lost?" / suspicion after restore | `check`; when coverage is partial, follow [candidate selection](references/session_liveness.md#select-recovery-candidates-by-a-time-window) before claiming the set is complete |
 | Snapshot looks too large, or "which sessions were active after <time>?" | Follow [time-window selection](references/session_liveness.md#select-recovery-candidates-by-a-time-window) before choosing a restore set |
 | One specific session to bring back | `restore --only <id-prefix>` |
-| Compact specific Claude Code sessions in the background (批量压缩 Ghostty 会话) | Follow [targeted input](references/targeted-input.md), starting with `compact --dry-run` and an explicit selector |
+| Compact specific Claude Code sessions in the background (批量压缩 Ghostty 会话) | Follow [targeted input](references/targeted-input.md) to discover sessions, preview and freeze the chosen targets, then run `compact --from-plan` |
 | Minions `native_runtime` session or managed account-adoption error | Follow [account-owner selection](references/codex-account-switch.md#choose-the-account-owner-first) |
 | An existing Account Manager selects a legacy Ghostty terminal through its configured bridge | Follow [the legacy terminal port](references/account-manager-terminal-port.md); retain that caller's original operation |
 | Unmanaged/legacy Codex quota running out; manually switching account, keeping all Codex work | Start with [account-owner selection](references/codex-account-switch.md#choose-the-account-owner-first) |
@@ -136,11 +136,12 @@ before claiming that the selected conversations are ready to read.
 
 ## Background targeted `/compact`
 
-Use [targeted input](references/targeted-input.md) to preview a live Claude Code
-TTY, session ID, and native terminal ID before sending `/compact`. Stagger
-multiple targets when they share provider throughput. To verify completion, use
-`--verify-timeout` and read the independent `compact_boundary` result for each
-target.
+Use [targeted input](references/targeted-input.md) to discover live Claude Code
+sessions with `compact --all-claude --dry-run --json`. Freeze the chosen targets
+with `--dry-run --write-plan`, inspect their TTYs, session IDs, anchors, titles,
+and native terminal IDs, then dispatch with `--from-plan`. Stagger multiple
+targets when they share provider throughput. Use `--verify-timeout` to read the
+independent `compact_boundary` result for each target.
 
 ## Automatic change-only backups
 

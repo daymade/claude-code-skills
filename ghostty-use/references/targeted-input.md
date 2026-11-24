@@ -7,25 +7,52 @@ session and spend another large cache read before it can compact. Send the local
 `/compact` command directly to the bound surface. Compaction itself can still
 require provider capacity.
 
-## Preview and send
+## Set up and discover sessions
 
-Use a running Ghostty on macOS with scripting enabled and with `tty`, `pid`,
-`input text`, and `send key` available in its native AppleScript dictionary.
-Run from a separate terminal or controller. Confirm the selection with a dry run,
-then repeat the same selectors without `--dry-run`. Replace the illustrative TTY
-and prefix below with the intended values.
+Use Ghostty 1.4 or later on macOS for the native AppleScript `tty`, `pid`,
+`input text`, and `send key` interfaces. Keep `macos-applescript = true` in
+Ghostty's configuration. Grant the invoking app macOS **Automation** permission
+to control Ghostty. The foreground `restore` workflow uses System Events
+**Accessibility** permission for keystrokes. [Ghostty AppleScript setup](https://ghostty.org/docs/features/applescript)
+
+Run discovery from a separate terminal or controller outside the Claude target
+set. This command reads live bindings without sending terminal input or writing a
+plan.
+
+```bash
+python3 "<skill-dir>/scripts/ghostty_session.py" compact --all-claude --dry-run --json
+```
+
+## Freeze, review, and send
+
+Replace the illustrative TTY and prefix with the intended selections. Freeze
+them in a new plan and inspect the target rows before executing that file.
 
 ```bash
 python3 "<skill-dir>/scripts/ghostty_session.py" compact \
-  --tty /dev/ttys012 --sid 00000000 --dry-run --json
+  --tty /dev/ttys012 --sid 00000000 --dry-run --write-plan compact-plan.json --json
 
 python3 "<skill-dir>/scripts/ghostty_session.py" compact \
-  --tty /dev/ttys012 --sid 00000000 --stagger 1.5 --verify-timeout 60 --json
+  --from-plan compact-plan.json --stagger 1.5 --verify-timeout 60 --json
 ```
 
+- Review each target's tab index, terminal ID, TTY, SID, anchor, and title.
+  An `argv` anchor identifies the launch SID. A conversation switch inside
+  Claude Code, such as `/resume`, can change the active transcript and title
+  while process arguments still report the launch SID. Check the dry-run
+  title against the intended conversation before sending. If the conversation
+  switched in place, treat transcript readback for the launch SID as unverified
+  for the active conversation.
+- Use `--write-plan` only with `--dry-run`. An existing plan file is preserved.
+  Use `--from-plan` on its own with respect to selectors and dry-run flags.
+  The script checks every frozen binding before the first send and again before
+  each send. A vanished or replaced binding stops further input. Newly opened
+  tabs are outside the plan.
 - Supply one or more `--tty` values (with or without `/dev/`), one or more
-  `--sid` prefixes, or explicit `--all-claude`. Combined selectors form a union.
-  Review each dry-run row's tab index, terminal ID, TTY, SID, and current title.
+  `--sid` prefixes, or explicit `--all-claude` for discovery, plan creation, or
+  direct dispatch. When used directly without `--from-plan`, combined
+  `--tty` and `--sid` selectors form a union and re-resolve live targets at send
+  time.
 - Use `--all-claude` from outside the target set. A selected self-TTY, unresolved
   or ambiguous binding, missing terminal ID, or Claude process outside the
   surface's foreground process group stops the batch before input.
@@ -49,8 +76,9 @@ compaction in that window as evidence of compaction in the session, with
 
 With `--verify-timeout 0` (default), return after the sends and defer transcript
 readback. With a positive timeout, poll the selected transcripts after dispatch.
-Read up to 2 MiB per transcript tail per poll. Claude Code can append large
-attachments or metadata after the boundary and push it outside that window.
+Read up to 2 MiB per transcript tail per poll, plus one preceding byte to detect
+a complete first record. Claude Code can append large attachments or metadata
+after the boundary and push it outside that window.
 Read `preTokens`, `postTokens`, `trigger`, and `durationMs` from the boundary's
 `compactMetadata`. Absent values appear as JSON null. The script polls the
 live resolver's anchored file or the exact SID file in the current project's
@@ -59,12 +87,12 @@ send unverified.
 
 Exit 0 means a valid dry run, all sends acknowledged when polling is off, or all
 compactions verified when polling is requested. Exit 1 means a partial send,
-a changed target, or missing requested verification. Exit 2 means invalid
-selection or unavailable preflight evidence. Read the per-target statuses after
-a partial batch. An input failure or timeout can follow partial delivery, so
-check the target before sending again.
+a target that changed after preflight, or missing requested verification. Exit
+2 means invalid selection, invalid or stale plan, or unavailable preflight
+evidence. Read the per-target statuses after a partial batch. An input failure or
+timeout can follow partial delivery, so check the target before sending again.
 
 If Ghostty or the host denies scripting, stop input and report the reason. Use
-the same route only after the ordinary host authorization is available and a
-fresh dry run resolves the intended targets. Keep foreground input, clipboard
-automation, and peer messaging out of this workflow.
+the same route after the ordinary host authorization is available. Create and
+review a fresh plan before retrying. Keep foreground input, clipboard automation,
+and peer messaging out of this workflow.

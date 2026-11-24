@@ -12,6 +12,7 @@ described in references/session_liveness.md and references/restore_mechanics.md.
 """
 import json
 import argparse
+import copy
 import io
 import sqlite3
 import subprocess
@@ -1297,8 +1298,8 @@ class CompactCommandTest(unittest.TestCase):
         self.addCleanup(stack.close)
         self.home = Path(stack.enter_context(tempfile.TemporaryDirectory(prefix="ghostty-compact-test-")))
         self.sessions = gs.SessionList([
-            dict(tool="claude", sid=S_HEALTHY, tty="ttys010", pid=510),
-            dict(tool="claude", sid=S_DEAD, tty="ttys011", pid=511),
+            dict(tool="claude", sid=S_HEALTHY, tty="ttys010", pid=510, anchor="argv"),
+            dict(tool="claude", sid=S_DEAD, tty="ttys011", pid=511, anchor="transcript"),
             dict(tool="codex", sid=S_CODEX, tty="ttys012", pid=512),
         ])
         self.terminals = [
@@ -1322,14 +1323,21 @@ class CompactCommandTest(unittest.TestCase):
         self.assertEqual(err.getvalue(), "")
         return rc, json.loads(output.getvalue())
 
+    def write_plan(self, *selectors):
+        path = self.home / "compact-plan.json"
+        rc, report = self.compact(*selectors, "--dry-run", "--write-plan", str(path))
+        self.assertEqual(rc, 0, report)
+        return path
+
     def test_dry_run_joins_tty_and_sid_as_a_union_without_input(self):
         rc, report = self.compact("--tty", "/dev/ttys010", "--sid", S_HEALTHY[:8], S_DEAD[:8], "--dry-run")
         self.assertEqual(rc, 0)
         self.assertTrue(report["dry_run"])
         self.assertEqual(report["targets"][0], dict(window_id="window-fixture", tab_id="tab-fixture",
                          tab_index=8, terminal_id="surface-510", tty="ttys010", sid=S_HEALTHY,
-                         title="Demo", status="dry_run"))
+                         title="Demo", anchor="argv", status="dry_run"))
         self.assertEqual([t["sid"] for t in report["targets"]], [S_HEALTHY, S_DEAD])
+        self.assertEqual([t["anchor"] for t in report["targets"]], ["argv", "transcript"])
         self.capture.assert_called_once_with(running_only=True)
         self.assertTrue(self.inventory.call_args.kwargs["preserve_duplicates"])
         self.send.assert_not_called()
@@ -1342,6 +1350,148 @@ class CompactCommandTest(unittest.TestCase):
         rc, report = self.compact("--all-claude", "--dry-run")
         self.assertEqual(rc, 0)
         self.assertEqual([t["sid"] for t in report["targets"]], [S_HEALTHY, S_DEAD])
+        self.send.assert_not_called()
+
+    def test_write_plan_freezes_all_fields_and_refuses_overwrite(self):
+        path = self.write_plan("--tty", "/dev/ttys010")
+        saved = path.read_bytes()
+        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(json.loads(saved), {"schema_version": 1, "targets": [
+            dict(window_id="window-fixture", tab_id="tab-fixture", tab_index=8,
+                 terminal_id="surface-510", tty="ttys010", surface_tty="/dev/ttys010",
+                 sid=S_HEALTHY, anchor="argv", pid=510, started=1000.0,
+                 foreground_pid=510, title="Demo")
+        ]})
+        rc, report = self.compact("--tty", "ttys011", "--dry-run", "--write-plan", str(path))
+        self.assertEqual(rc, 2)
+        self.assertIn("File exists", report["error"])
+        self.assertEqual(path.read_bytes(), saved)
+        self.send.assert_not_called()
+
+    def test_plan_flags_are_exclusive_and_write_requires_dry_run(self):
+        path = str(self.home / "absent.json")
+        for selectors in (("--tty", "ttys010"), ("--sid", S_HEALTHY[:8]),
+                          ("--all-claude",), ("--dry-run",)):
+            with self.subTest(selectors=selectors):
+                rc, report = self.compact("--from-plan", path, *selectors)
+                self.assertEqual(rc, 2)
+                self.assertIn("cannot be combined", report["error"])
+        rc, report = self.compact("--tty", "ttys010", "--write-plan", path)
+        self.assertEqual(rc, 2)
+        self.assertIn("requires --dry-run", report["error"])
+        self.assertFalse(Path(path).exists())
+        self.caller.assert_not_called()
+        self.send.assert_not_called()
+
+    def test_from_plan_rejects_malformed_fields_before_observing(self):
+        path = self.write_plan("--tty", "ttys010")
+        row = json.loads(path.read_bytes())["targets"][0]
+        self.caller.reset_mock()
+        for payload in ("{invalid json", '{"schema_version":1,"schema_version":1,"targets":[]}',
+                        json.dumps({"schema_version": 2, "targets": [row]}),
+                        json.dumps({"schema_version": 1, "targets": []}),
+                        json.dumps({"schema_version": 1, "targets": [row, row]}),
+                        json.dumps({"schema_version": 1, "targets": [dict(row, pid=True)]}),
+                        json.dumps({"schema_version": 1, "targets": [dict(row, started=float("nan"))]}),
+                        json.dumps({"schema_version": 1, "targets": [dict(row, surface_tty="/dev/ttys999")]}),
+                        json.dumps({"schema_version": 1, "targets": [{"tty": row["tty"]}]})):
+            with self.subTest(payload=payload):
+                path.write_text(payload)
+                rc, report = self.compact("--from-plan", str(path))
+                self.assertEqual(rc, 2)
+                self.assertEqual(report["targets"], [])
+                self.assertTrue(report["error"])
+        self.caller.assert_not_called()
+        self.send.assert_not_called()
+
+    def test_from_plan_rejects_previewed_tty_reused_by_replacement(self):
+        path = self.write_plan("--tty", "ttys010")
+        self.sessions[0].update(sid=S_DEAD, pid=610)
+        self.sessions[1]["sid"] = S_PROSE
+        self.terminals[0].update(terminal_id="surface-610", pid="610")
+        rc, report = self.compact("--from-plan", str(path))
+        self.assertEqual(rc, 2)
+        self.assertIn("binding changed", report["error"])
+        self.assertEqual(report["targets"], [])
+        self.send.assert_not_called()
+
+    def test_from_plan_compares_each_frozen_binding_field(self):
+        path = self.write_plan("--tty", "ttys010")
+        plan = json.loads(path.read_bytes())
+        changes = {"terminal_id": "replacement-surface", "surface_tty": "ttys010",
+                   "sid": S_PROSE, "pid": 610, "started": 1001.0, "foreground_pid": 610}
+        for key, value in changes.items():
+            with self.subTest(field=key):
+                changed = dict(plan, targets=[dict(plan["targets"][0], **{key: value})])
+                path.write_text(json.dumps(changed))
+                rc, report = self.compact("--from-plan", str(path))
+                self.assertEqual(rc, 2)
+                self.assertIn("binding changed", report["error"])
+        self.send.assert_not_called()
+
+    def test_from_plan_sends_to_matching_preview_and_ignores_new_tab(self):
+        path = self.write_plan("--tty", "ttys010")
+        self.sessions.append(dict(tool="claude", sid=S_PROSE, tty="ttys013", pid=513))
+        self.layout["windows"][0]["tabs"].append(
+            dict(tab_id="new-tab", index=9, title="New tab",
+                 terminals=[dict(terminal_id="surface-513", pid="513", tty="/dev/ttys013")]))
+        rc, report = self.compact("--from-plan", str(path))
+        self.assertEqual(rc, 0)
+        self.assertEqual([(row["sid"], row["anchor"], row["status"]) for row in report["targets"]],
+                         [(S_HEALTHY, "argv", "dispatched_unverified")])
+        self.send.assert_called_once_with("surface-510", "/compact", expected_tty="/dev/ttys010",
+                                          expected_pid=510)
+
+    def test_from_plan_rejects_self_tty_or_missing_later_surface_before_any_send(self):
+        path = self.write_plan("--all-claude")
+        self.caller.return_value = {"ttys011"}
+        rc, report = self.compact("--from-plan", str(path))
+        self.assertEqual(rc, 2)
+        self.assertIn("caller's own TTY ttys011", report["error"])
+        self.caller.return_value = set()
+        self.terminals.pop(1)
+        rc, report = self.compact("--from-plan", str(path))
+        self.assertEqual(rc, 2)
+        self.assertIn("expected one Ghostty surface for ttys011", report["error"])
+        self.send.assert_not_called()
+
+    def test_from_plan_rechecks_other_targets_immediately_before_first_send(self):
+        path = self.write_plan("--all-claude")
+        changed = copy.deepcopy(self.layout)
+        changed["windows"][0]["tabs"][0]["terminals"][1]["terminal_id"] = "new-surface-511"
+        self.capture.side_effect = [self.layout, changed]
+        rc, report = self.compact("--from-plan", str(path))
+        self.assertEqual(rc, 1)
+        self.assertEqual([row["status"] for row in report["targets"]], ["not_dispatched", "not_attempted"])
+        self.assertIn("ttys011", report["targets"][0]["dispatch_error"])
+        self.send.assert_not_called()
+
+    def test_from_plan_rechecks_already_sent_target_before_later_send(self):
+        path = self.write_plan("--all-claude")
+        changed = copy.deepcopy(self.layout)
+        changed["windows"][0]["tabs"][0]["terminals"][0]["terminal_id"] = "new-surface-510"
+        self.capture.side_effect = [self.layout, self.layout, changed]
+        rc, report = self.compact("--from-plan", str(path), "--stagger", "0")
+        self.assertEqual(rc, 1)
+        self.assertEqual([row["status"] for row in report["targets"]],
+                         ["dispatched_unverified", "not_dispatched"])
+        self.assertIn("ttys010", report["targets"][1]["dispatch_error"])
+        self.send.assert_called_once()
+
+    def test_setup_documentation_starts_with_read_only_discovery(self):
+        reference = Path(gs.__file__).resolve().parents[1] / "references" / "targeted-input.md"
+        setup = reference.read_text().split("## Freeze, review, and send", 1)[0]
+        self.assertIn("Ghostty 1.4 or later", setup)
+        self.assertIn("macos-applescript = true", setup)
+        self.assertIn("**Automation** permission", setup)
+        self.assertIn("**Accessibility** permission", setup)
+        command = setup.split("```bash\n", 1)[1].split("\n```", 1)[0]
+        arguments = command.split(" compact ", 1)[1].split()
+        self.assertEqual(arguments, ["--all-claude", "--dry-run", "--json"])
+        with redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(gs.main(["compact", *arguments]), 0)
+        self.assertEqual([row["sid"] for row in json.loads(output.getvalue())["targets"]], [S_HEALTHY, S_DEAD])
+        self.assertEqual(list(self.home.iterdir()), [])
         self.send.assert_not_called()
 
     def test_refuses_caller_tty_for_every_selector(self):
@@ -1448,6 +1598,28 @@ class CompactCommandTest(unittest.TestCase):
         self.assertIn("deadline", report["targets"][0]["verification_error"])
         self.assertEqual(sleep.call_args_list, [mock.call(0.5), mock.call(0.5)])
 
+    def test_argv_anchor_does_not_verify_compaction_in_switched_conversation(self):
+        launch = self.home / f"{S_HEALTHY}.jsonl"
+        launch.write_text("")
+        self.sessions[0]["cwd"] = "/fixture/project"
+
+        def compact_active_conversation(*args, **kwargs):
+            active = self.home / f"{S_PROSE}.jsonl"
+            active.write_text(json.dumps({"subtype": "compact_boundary", "sessionId": S_PROSE,
+                                          "timestamp": datetime.now(timezone.utc).isoformat()}) + "\n")
+            return {"returncode": 0, "reason": None}
+
+        self.send.side_effect = compact_active_conversation
+        with mock.patch.object(gs, "_claude_project_dir", return_value=self.home), \
+             mock.patch.object(gs.time, "sleep"), \
+             mock.patch.object(gs.time, "monotonic", side_effect=[0, 0, 0, 0, 10, 11]):
+            rc, report = self.compact("--tty", "ttys010", "--verify-timeout", "1")
+        self.assertEqual(rc, 1)
+        row, = report["targets"]
+        self.assertEqual((row["sid"], row["anchor"], row["status"]),
+                         (S_HEALTHY, "argv", "dispatched_unverified"))
+        self.assertNotIn("compact_boundary", row)
+
     def test_readback_past_large_post_compact_attachment_verifies_the_send(self):
         path = self.home / "test.jsonl"
         self.sessions[0]["transcript"] = path
@@ -1482,6 +1654,69 @@ class CompactCommandTest(unittest.TestCase):
         path.write_text(json.dumps(boundary) + "\n" + json.dumps(
             {"type": "attachment", "body": "x" * (2 * 1024 * 1024)}) + "\n")
         self.assertIsNone(gs._compact_boundary(path, S_HEALTHY, NOW, None))
+
+    def test_boundary_at_exact_start_of_tail_is_observed(self):
+        path = self.home / "test.jsonl"
+        prefix = b'{"type":"user"}\n'
+        boundary = (json.dumps(dict(subtype="compact_boundary", sessionId=S_HEALTHY,
+                                    timestamp=NOW.isoformat())) + "\n").encode()
+        attachment_start, attachment_end = b'{"type":"attachment","body":"', b'"}\n'
+        padding = gs.COMPACT_TAIL_BYTES - len(boundary) - len(attachment_start) - len(attachment_end)
+        path.write_bytes(prefix + boundary + attachment_start + b"x" * padding + attachment_end)
+        self.assertEqual(path.stat().st_size - gs.COMPACT_TAIL_BYTES, len(prefix))
+        self.assertEqual(gs._compact_boundary(path, S_HEALTHY, NOW, None)["timestamp"], NOW.isoformat())
+
+    def test_missing_boundary_sid_checks_head_of_original_descriptor_after_path_swap(self):
+        path = self.home / "test.jsonl"
+        replacement = self.home / "replacement.jsonl"
+        boundary = dict(subtype="compact_boundary", timestamp=NOW.isoformat())
+        real_fstat = os.fstat
+
+        def transcript(sid):
+            return "\n".join((json.dumps(dict(sessionId=sid, cwd="/fixture/project")),
+                              json.dumps(boundary), ""))
+
+        for opened, swapped_in in ((S_HEALTHY, S_DEAD), (S_DEAD, S_HEALTHY)):
+            with self.subTest(opened=opened):
+                path.write_text(transcript(opened))
+                replacement.write_text(transcript(swapped_in))
+
+                def replace_after_open(fd):
+                    file_stat = real_fstat(fd)
+                    if replacement.exists():
+                        replacement.replace(path)
+                    return file_stat
+
+                with mock.patch.object(gs.os, "fstat", side_effect=replace_after_open):
+                    evidence = gs._compact_boundary(path, S_HEALTHY, NOW, None)
+                self.assertFalse(replacement.exists())
+                self.assertEqual(evidence is not None, opened == S_HEALTHY)
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "requires POSIX FIFO support")
+    def test_transcript_probes_refuse_real_fifo_without_a_writer(self):
+        path = self.home / "not-a-transcript.jsonl"
+        os.mkfifo(path)
+        # Run in a subprocess so a regression to blocking open fails within the test timeout.
+        probe = """\
+import sys
+from datetime import datetime, timezone
+sys.path.insert(0, sys.argv[1])
+import ghostty_session as gs
+path = sys.argv[2]
+assert gs._head_cwd(path) is None
+try:
+    gs._compact_boundary(path, "unused", datetime.now(timezone.utc), None)
+except OSError as error:
+    assert "not a regular file" in str(error)
+else:
+    raise AssertionError("FIFO was treated as a readable transcript")
+print("both probes rejected FIFO")
+"""
+        completed = subprocess.run([sys.executable, "-B", "-c", probe,
+                                    str(Path(gs.__file__).resolve().parent), str(path)],
+                                   capture_output=True, text=True, timeout=5)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(completed.stdout.strip(), "both probes rejected FIFO")
 
     def test_ignores_stale_foreign_and_incomplete_markers(self):
         path = self.home / "test.jsonl"

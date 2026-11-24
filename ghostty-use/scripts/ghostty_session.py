@@ -41,6 +41,7 @@ import math
 import shlex
 import stat
 from collections import Counter, defaultdict
+from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
 import os
@@ -267,6 +268,15 @@ def _claude_project_dir(cwd):
     return None
 
 
+@contextmanager
+def _read_regular_file(path):
+    with os.fdopen(os.open(path, os.O_RDONLY | os.O_NONBLOCK), "rb") as handle:
+        file_stat = os.fstat(handle.fileno())
+        if not stat.S_ISREG(file_stat.st_mode):
+            raise OSError(f"not a regular file: {path}")
+        yield handle, file_stat
+
+
 def _head_cwd(path, max_lines=40, *, expected_sid=None):
     """First cwd recorded in a transcript, None when not visible in the head.
 
@@ -277,36 +287,45 @@ def _head_cwd(path, max_lines=40, *, expected_sid=None):
     invalid sessionId in the bounded head, including records after the first cwd.
     """
     try:
-        with open(path, errors="replace") as fh:
-            remaining = MAX_IDENTITY_HEAD_BYTES
-            head_cwd, verified_sid = None, False
-            for _ in range(max_lines):
-                line = fh.readline(remaining + 1)
-                remaining -= len(line.encode('utf-8'))
-                if remaining < 0:
-                    return None
-                if not line:
-                    break
-                try:
-                    rec = json.loads(line)
-                except Exception:
-                    continue
-                if not isinstance(rec, dict):
-                    continue
-                if expected_sid is not None and 'sessionId' in rec:
-                    internal_sid = rec['sessionId']
-                    if (not isinstance(internal_sid, str) or not UUID_RE.fullmatch(internal_sid)
-                            or internal_sid != expected_sid):
-                        return None
-                    verified_sid = True
-                if head_cwd is None and isinstance(rec.get('cwd'), str) and rec['cwd']:
-                    head_cwd = rec['cwd']
-                if expected_sid is None and head_cwd is not None:
-                    return head_cwd
-            return head_cwd if expected_sid is None or verified_sid else None
+        with _read_regular_file(path) as (handle, file_stat):
+            return _head_cwd_from_handle(handle, file_stat.st_size, max_lines, expected_sid=expected_sid)
     except OSError:
-        pass
-    return None
+        return None
+
+
+def _head_cwd_from_handle(handle, size, max_lines=40, *, expected_sid=None):
+    handle.seek(0)
+    remaining = min(size, MAX_IDENTITY_HEAD_BYTES)
+    limited = size > MAX_IDENTITY_HEAD_BYTES
+    head_cwd, verified_sid = None, False
+    for _ in range(max_lines):
+        if not remaining:
+            if limited:
+                return None
+            break
+        line = handle.readline(remaining)
+        if not line:
+            break
+        remaining -= len(line)
+        if not remaining and limited and not line.endswith(b"\n"):
+            return None
+        try:
+            rec = json.loads(line.decode("utf-8", errors="replace"))
+        except (ValueError, RecursionError):
+            continue
+        if not isinstance(rec, dict):
+            continue
+        if expected_sid is not None and "sessionId" in rec:
+            internal_sid = rec["sessionId"]
+            if (not isinstance(internal_sid, str) or not UUID_RE.fullmatch(internal_sid)
+                    or internal_sid != expected_sid):
+                return None
+            verified_sid = True
+        if head_cwd is None and isinstance(rec.get("cwd"), str) and rec["cwd"]:
+            head_cwd = rec["cwd"]
+        if expected_sid is None and head_cwd is not None:
+            return head_cwd
+    return head_cwd if expected_sid is None or verified_sid else None
 
 
 def _claude_candidates(cwd, started):
@@ -1183,6 +1202,10 @@ def _paste_tab(cmd, *, layout="tabs"):
 
 COMPACT_TAIL_BYTES = 2 * 1024 * 1024
 COMPACT_POLL_SECONDS = 0.5
+COMPACT_PLAN_VERSION = 1
+COMPACT_BINDING_FIELDS = ("terminal_id", "surface_tty", "sid", "pid", "started", "foreground_pid")
+COMPACT_REPORT_FIELDS = ("window_id", "tab_id", "tab_index", "terminal_id", "tty", "sid", "title", "anchor")
+COMPACT_PLAN_FIELDS = (*COMPACT_REPORT_FIELDS, "surface_tty", "pid", "started", "foreground_pid")
 
 
 def _tty_key(tty):
@@ -1281,11 +1304,71 @@ def _compact_targets(args, caller_ttys):
         targets.append({
             "window_id": window["id"], "tab_id": tab["tab_id"], "tab_index": tab["index"],
             "terminal_id": terminal_id, "tty": tty, "sid": sid,
+            "anchor": session.get("anchor", "unknown"),
             "title": tab.get("title_override") or tab.get("title") or terminal.get("title", ""),
             "surface_tty": terminal["tty"], "foreground_pid": int(foreground_pid),
             "pid": pid, "started": started, "session": session,
         })
     return targets
+
+
+def _validate_compact_plan(plan):
+    if (not isinstance(plan, dict) or plan.keys() != {"schema_version", "targets"}
+            or type(plan["schema_version"]) is not int or plan["schema_version"] != COMPACT_PLAN_VERSION
+            or not isinstance(plan["targets"], list) or not plan["targets"]):
+        raise RecoveryError("compact plan requires a supported schema version and a nonempty target list")
+    seen = set()
+    for index, row in enumerate(plan["targets"], 1):
+        if not isinstance(row, dict) or row.keys() != set(COMPACT_PLAN_FIELDS):
+            raise RecoveryError(f"compact plan target {index} has missing or unexpected fields")
+        required_text = ("window_id", "tab_id", "terminal_id", "tty", "surface_tty", "sid", "anchor")
+        if any(not isinstance(row[k], str) or not row[k].strip()
+               or any(c in row[k] for c in "\x00\r\n") for k in required_text):
+            raise RecoveryError(f"compact plan target {index} has invalid text fields")
+        if (not isinstance(row["title"], str) or row["anchor"] not in {"argv", "transcript", "unknown"}
+                or row["tty"] != _tty_key(row["surface_tty"]) or not UUID_RE.fullmatch(row["sid"])):
+            raise RecoveryError(f"compact plan target {index} has invalid TTY, SID, anchor or title")
+        if (any(type(row[k]) is not int or row[k] < 1 for k in ("tab_index", "pid", "foreground_pid"))
+                or type(row["started"]) not in (float, int) or not 0 < row["started"] < math.inf):
+            raise RecoveryError(f"compact plan target {index} has invalid tab index or process identity")
+        identities = {(k, row[k]) for k in ("tty", "sid", "terminal_id")}
+        if seen & identities:
+            raise RecoveryError(f"compact plan target {index} repeats a TTY, SID or terminal ID")
+        seen.update(identities)
+    return plan["targets"]
+
+
+def _load_compact_plan(path):
+    from ghostty_storage import MAX_MANIFEST_BYTES
+
+    def unique_keys(pairs):
+        item = dict(pairs)
+        if len(item) != len(pairs):
+            raise RecoveryError("compact plan has duplicate JSON keys")
+        return item
+
+    with _read_regular_file(path) as (handle, _):
+        raw = handle.read(MAX_MANIFEST_BYTES + 1)
+    if len(raw) > MAX_MANIFEST_BYTES:
+        raise RecoveryError("compact plan exceeds the manifest byte limit")
+    try:
+        plan = json.loads(raw, object_pairs_hook=unique_keys)
+    except RecursionError as error:
+        raise RecoveryError("compact plan JSON is nested too deeply") from error
+    return _validate_compact_plan(plan)
+
+
+def _observe_compact_bindings(targets, caller_ttys):
+    ttys = [target["tty"] for target in targets]
+    for tty in ttys:
+        if tty in caller_ttys:
+            raise RecoveryError(f"refusing caller's own TTY {tty}")
+    selector = SimpleNamespace(tty=ttys, sid=[], all_claude=False)
+    current = _compact_targets(selector, caller_ttys)
+    for expected, observed in zip(targets, current, strict=True):
+        if any(expected[key] != observed[key] for key in COMPACT_BINDING_FIELDS):
+            raise RecoveryError(f"live Claude surface binding changed since selection on {expected['tty']}")
+    return current
 
 
 def _compact_transcript(session):
@@ -1302,47 +1385,49 @@ def _transcript_position(file_stat):
 
 def _compact_boundary(path, sid, since, position):
     """Read only the bounded tail and accept a new timestamped boundary."""
-    with os.fdopen(os.open(path, os.O_RDONLY | os.O_NONBLOCK), "rb") as handle:
-        file_stat = os.fstat(handle.fileno())
-        if not stat.S_ISREG(file_stat.st_mode):
-            raise OSError("Claude transcript is not a regular file")
+    with _read_regular_file(path) as (handle, file_stat):
         size = file_stat.st_size
         start = max(0, size - COMPACT_TAIL_BYTES)
-        handle.seek(start)
-        tail = handle.read(size - start)
-    # Drop a possibly partial first record and any still-being-written final record.
-    if start:
-        first_newline = tail.find(b"\n")
-        if first_newline < 0:
-            return None
-        start += first_newline + 1
-        tail = tail[first_newline + 1:]
-    minimum = 0
-    if position and position[:2] == _transcript_position(file_stat)[:2]:
-        minimum = position[2]
-    for line in tail.split(b"\n")[:-1]:
-        offset, start = start, start + len(line) + 1
-        if offset < minimum or b'"compact_boundary"' not in line:
-            continue
-        try:
-            record = json.loads(line)
-            if not isinstance(record, dict) or record.get("subtype") != "compact_boundary":
+        read_from = max(0, start - 1)
+        handle.seek(read_from)
+        tail = handle.read(size - read_from)
+        # A newline immediately before the window means its first record is complete.
+        if start:
+            first_newline = tail.find(b"\n")
+            if first_newline < 0:
+                return None
+            start = read_from + first_newline + 1
+            tail = tail[first_newline + 1:]
+        minimum = 0
+        if position and position[:2] == _transcript_position(file_stat)[:2]:
+            minimum = position[2]
+        head_verified = None
+        for line in tail.split(b"\n")[:-1]:  # Skip a final record still being written.
+            offset, start = start, start + len(line) + 1
+            if offset < minimum or b'"compact_boundary"' not in line:
                 continue
-            timestamp = record.get("timestamp")
-            observed_at = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-        except (ValueError, TypeError, AttributeError):
-            continue
-        if observed_at.tzinfo is None or observed_at < since:
-            continue
-        if "sessionId" in record:
-            if record["sessionId"] != sid:
+            try:
+                record = json.loads(line)
+                if not isinstance(record, dict) or record.get("subtype") != "compact_boundary":
+                    continue
+                timestamp = record.get("timestamp")
+                observed_at = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+            except (ValueError, TypeError, AttributeError, RecursionError):
                 continue
-        elif _head_cwd(path, expected_sid=sid) is None:
-            continue
-        metadata = record.get("compactMetadata")
-        metadata = metadata if isinstance(metadata, dict) else {}
-        return {"timestamp": timestamp, **{key: metadata.get(key) for key in
-                ("preTokens", "postTokens", "trigger", "durationMs")}}
+            if observed_at.tzinfo is None or observed_at < since:
+                continue
+            if "sessionId" in record:
+                if record["sessionId"] != sid:
+                    continue
+            else:
+                if head_verified is None:
+                    head_verified = _head_cwd_from_handle(handle, size, expected_sid=sid) is not None
+                if not head_verified:
+                    continue
+            metadata = record.get("compactMetadata")
+            metadata = metadata if isinstance(metadata, dict) else {}
+            return {"timestamp": timestamp, **{key: metadata.get(key) for key in
+                    ("preTokens", "postTokens", "trigger", "durationMs")}}
     return None
 
 
@@ -1377,7 +1462,7 @@ def _compact_report(args, results, error=None):
         print(f"ERROR: {error}", file=sys.stderr)
     for result in results:
         print(f"{result['status']} tab={result['tab_index']} terminal_id={result['terminal_id']} "
-              f"tty={result['tty']} sid={result['sid']} title={result['title']!r}")
+              f"tty={result['tty']} sid={result['sid']} anchor={result['anchor']} title={result['title']!r}")
         for detail in ("dispatch_error", "verification_error", "compact_boundary"):
             if detail in result:
                 print(f"  {detail} = {result[detail]}")
@@ -1386,18 +1471,32 @@ def _compact_report(args, results, error=None):
 def cmd_compact(args):
     from ghostty_windows import send_terminal_command
 
-    if not (args.tty or args.sid or args.all_claude):
-        _compact_report(args, [], "compact requires --tty, --sid, or --all-claude")
-        return 2
+    has_selectors = bool(args.tty or args.sid or args.all_claude)
     try:
+        if args.from_plan and (has_selectors or args.dry_run):
+            raise RecoveryError("--from-plan cannot be combined with --tty, --sid, --all-claude or --dry-run")
+        if args.write_plan and not args.dry_run:
+            raise RecoveryError("--write-plan requires --dry-run")
+        if not (has_selectors or args.from_plan):
+            raise RecoveryError("compact requires --tty, --sid, --all-claude or --from-plan")
+        frozen = _load_compact_plan(args.from_plan) if args.from_plan else None
         caller_ttys = _caller_ttys()
-        targets = _compact_targets(args, caller_ttys)
+        if frozen:
+            _observe_compact_bindings(frozen, caller_ttys)
+            targets = frozen
+        else:
+            targets = _compact_targets(args, caller_ttys)
+        if args.write_plan:
+            from ghostty_storage import atomic_manifest
+
+            plan = {"schema_version": COMPACT_PLAN_VERSION,
+                    "targets": [{key: t[key] for key in COMPACT_PLAN_FIELDS} for t in targets]}
+            _validate_compact_plan(plan)
+            atomic_manifest(args.write_plan, plan, replace=False)
     except (ValueError, OSError, subprocess.SubprocessError) as error:
         _compact_report(args, [], str(error))
         return 2
-    results = [{key: t[key] for key in
-                ("window_id", "tab_id", "tab_index", "terminal_id", "tty", "sid", "title")}
-               for t in targets]
+    results = [{key: t[key] for key in COMPACT_REPORT_FIELDS} for t in targets]
     for result in results:
         result["status"] = "dry_run" if args.dry_run else "not_attempted"
     if args.dry_run:
@@ -1409,16 +1508,15 @@ def cmd_compact(args):
         if index and args.stagger:
             time.sleep(args.stagger)
         try:
-            selector = SimpleNamespace(tty=[target["tty"]], sid=[], all_claude=False)
-            current, = _compact_targets(selector, caller_ttys)
-            if any(current[key] != target[key] for key in
-                   ("terminal_id", "surface_tty", "sid", "pid", "started", "foreground_pid")):
-                raise RecoveryError("live Claude surface binding changed since selection")
+            if frozen:
+                current = _observe_compact_bindings(frozen, caller_ttys)[index]
+            else:
+                current, = _observe_compact_bindings([target], caller_ttys)
         except (ValueError, OSError, subprocess.SubprocessError) as error:
             result.update(status="not_dispatched", dispatch_error=str(error))
             break
 
-        result.update({key: current[key] for key in ("window_id", "tab_id", "tab_index", "title")})
+        result.update({key: current[key] for key in ("window_id", "tab_id", "tab_index", "title", "anchor")})
         path, position = None, None
         if args.verify_timeout:
             path = _compact_transcript(current["session"])
@@ -1543,6 +1641,10 @@ def main(argv=None):
     compact.add_argument("--sid", nargs="+", action="extend", type=nonempty, default=[], metavar="SID_PREFIX")
     compact.add_argument("--all-claude", action="store_true", help="select every live Ghostty Claude TUI")
     compact.add_argument("--dry-run", action="store_true", help="resolve targets without sending input")
+    compact.add_argument("--write-plan", type=nonempty, metavar="PATH",
+                         help="freeze dry-run target bindings in a new plan file")
+    compact.add_argument("--from-plan", type=nonempty, metavar="PATH",
+                         help="dispatch only the exact targets frozen in this plan")
     compact.add_argument("--stagger", type=nonnegative_seconds, default=1.5,
                          help="seconds between dispatches (default: 1.5)")
     compact.add_argument("--verify-timeout", type=nonnegative_seconds, default=0,
