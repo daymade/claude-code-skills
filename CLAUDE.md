@@ -519,6 +519,8 @@ For CI demand, notification overload, exhausted allowance or repeated validation
 enter [github-ops' CI demand workflow](github-ops/references/ci-demand-and-notifications.md).
 For missing PR checks or fork runs awaiting approval, follow
 [the run-state diagnosis](github-ops/references/workflow_operations.md#resolve-missing-checks-and-fork-approval).
+For zero-step spending-limit or billing blocks before an authorized bypass merge, follow
+[pre-merge local CI equivalence](github-ops/references/workflow_operations.md#pre-merge-local-ci-equivalence-for-zero-step-budget-blocks).
 For self-hosted routing, resource limits, checkout-dependent cache resolution or cache persistence, follow its
 [runner acceptance](github-ops/references/workflow_operations.md#self-hosted-runner-capacity-and-acceptance).
 For failed jobs whose workspace is cleaned, follow its
@@ -991,7 +993,7 @@ For stash export or independent recovery, follow the
 [stash recovery procedure](git-safety-net/references/recovery_playbook.md#export-and-recover-selected-stashes).
 For final resource readback against the original inventory, follow the
 [terminal-state procedure](git-safety-net/references/merge_verification.md#5-prove-the-user-visible-terminal-state).
-For a failed fast-forward or a partly synchronized checkout, use its
+For a failed fast-forward, a partly synchronized checkout, or a shared-checkout sync blocked by dirty or diverged state, use its
 [guarded checkout recovery procedure](git-safety-net/references/prevention_practices.md#guarded-checkout-recovery).
 For local snapshot failures involving an index lock or commit-hook refusal, use its
 [snapshot recovery procedure](git-safety-net/references/recovery_playbook.md#blocked-local-snapshots).
