@@ -408,6 +408,26 @@ Classify the observed run before taking action:
 | Queued or in progress | Observe the existing run; do not approve or rerun it to create another attempt. |
 | Failed or never started | Inspect jobs, steps and annotations. Distinguish a test failure from installation, budget or runner admission failures. |
 
+#### Pre-merge local CI equivalence for zero-step budget blocks
+
+When hosted checks fail in seconds with `steps: 0` due to an account spending-limit or
+billing block and an authorized maintainer-bypass merge (`--admin`) is permitted by the
+repository policy:
+
+1. **Enumerate every triggered workflow before merging.** Read `.github/workflows/*.yml`
+   at the exact PR head and match all `pull_request` / `push` `paths` filters against the
+   PR's changed files (`git diff --name-only <base>...<head>`). Do not check only the single
+   workflow you remember by name; path-scoped linters (for example, README or manifest
+   pattern checks) are easy to miss when hosted runs never start.
+2. **Run local equivalence before merge, never after.** Execute the exact commands of each
+   matched workflow locally against the exact immutable PR head SHA before calling
+   `gh pr merge`, and post the verified head SHA plus local pass evidence on the PR. Merging
+   first and running local equivalence afterward lets silent lint or contract failures land
+   on `main`.
+3. **Keep evidence layers separate.** Record hosted CI as `not started (budget-blocked, 0 steps)`
+   alongside the exact-head local equivalence pass; never describe a zero-step hosted run as
+   green.
+
 For a fork-contributor approval, bind the base repository, PR, current reviewed
 full head SHA, run ID and workflow path. Read that workflow and its invoked
 scripts and actions at the reviewed revision; inspect token permissions, secrets,

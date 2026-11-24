@@ -636,23 +636,34 @@ and final branch-count gates that a single-branch retirement does not need.
 after [Mode E](#mode-e--retire-worktrees-stashes-and-branches-safely) authority and per-path
 evidence are satisfied:
 
-1. Pin a fresh `origin/main` SHA. Inventory tracked/untracked paths with
-   `git status --porcelain=v1 --untracked-files=all` and ignored paths with
-   `git ls-files --others --ignored --exclude-standard -z`; classify every path as
-   `landed residue`, `superseded source`, `runtime logs`, `rebuildable dependency`, or `unknown`
-   against that SHA. Back up only bytes not already recoverable from a ref or history; do not
-   create a blanket stash or bundle.
-2. Restore landed or superseded source from the pinned ref, remove only logs proven reproducible,
-   and leave `unknown` paths untouched and blocking.
+1. Pin current `HEAD` (`OLD`) and a fresh `origin/main` SHA (`TIP`). Inventory
+   tracked/untracked paths with `git status --porcelain=v1 --untracked-files=all` and
+   ignored paths with `git ls-files --others --ignored --exclude-standard -z`. Do not
+   declare "blocked by collaborator WIP" from dirty line count or a diverged local `main`
+   alone: classify both **working-tree and index** blobs (`git hash-object` /
+   `git rev-parse <ref>:<path>`) against `TIP`, recent ancestor commits, and other
+   local/remote branches or open PR heads into `landed residue`, `superseded source`,
+   `disjoint from OLD..TIP`, `already committed on another branch/PR`, `runtime logs`,
+   `rebuildable dependency`, or `unknown` (truly uncommitted novel delta overlapping
+   `OLD..TIP`). Check whether any diverged local `main` commit is already superseded by a
+   merged PR on `origin/main`. Back up only bytes not already recoverable from a ref or
+   history (or keep a small patch backup when reconciling paths committed on another
+   branch/PR); do not create a blanket stash or bundle.
+2. Restore landed, superseded, or verified-committed-elsewhere overlapping source from the
+   pinned ref (preserving disjoint dirty paths untouched and notifying any active peer
+   owner), remove only logs proven reproducible, and leave `unknown` overlapping paths
+   untouched and blocking.
 3. Resolve the exact external `sync-main-to-origin.sh`, read its source/usage, and verify the
    `<repo> <pinned-origin/main>` interface plus plan/exit contract before running it; stop if the
    helper is absent or differs. It is not bundled here. For content-only checkout alignment, use
    [git_align_checkout.sh](scripts/git_align_checkout.sh) under its own contract, not as a substitute
    for ref synchronization.
 4. Verify local `main` equals a freshly read remote SHA,
-   `git status --porcelain=v1 --untracked-files=all` is empty, and the ignored inventory has no
-   unclassified path. Explicitly record any retained ignored dependency as rebuildable and outside
-   the residue set; otherwise it blocks completion.
+   `git status --porcelain=v1 --untracked-files=all` is empty — or, when Step 2 preserved
+   disjoint collaborator dirty paths, contains only those explicitly attributed disjoint
+   paths with zero remaining overlapping, residue, or unclassified entries — and the ignored
+   inventory has no unclassified path. Explicitly record any retained ignored dependency as
+   rebuildable and outside the residue set; otherwise it blocks completion.
 5. Retire only task-owned temporary resources through the
    [worktree retirement helper](references/worktree-retirement-helper.md); retain unknown or
    collaborator-owned resources.

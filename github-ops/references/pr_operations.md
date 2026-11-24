@@ -460,6 +460,11 @@ head, check or mergeability change invalidates the receipt.
 
 For missing checks or a fork run awaiting approval, first follow
 [the run-state diagnosis](workflow_operations.md#resolve-missing-checks-and-fork-approval).
+When a required or path-matched check fails with zero steps due to a spending-limit/budget
+block and an authorized bypass merge applies, complete
+[pre-merge local CI equivalence](workflow_operations.md#pre-merge-local-ci-equivalence-for-zero-step-budget-blocks)
+for every path-matched workflow at the exact head **before** merging rather than backfilling
+afterward.
 For a disclosed service-initialization failure followed by an explicit instruction
 to merge, follow the [task-level exception case](ci-demand-and-notifications.md#explicit-merge-after-a-service-initialization-failure).
 Before a squash merge, follow the existing
