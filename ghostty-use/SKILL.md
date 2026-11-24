@@ -4,7 +4,8 @@ description: >-
   Snapshots local Codex/Claude CLI sessions across terminals and restores IDs in Ghostty
   after reboot (保存会话/重启前备份/恢复窗口), audits survivors, and makes change-only
   automatic backups (定期增量快照). Handles unmanaged Codex account switches
-  (额度耗尽换号); Minions native_runtime uses Account Manager. Not --resume help,
+  (额度耗尽换号); Minions native_runtime uses Account Manager. Supports background
+  /compact and targeted Ghostty terminal input (批量压缩 Ghostty 会话). Not --resume help,
   screenshots or tmux.
 ---
 
@@ -36,6 +37,10 @@ externally overwritten state, stop input and yield; do not restore your old focu
 If foreground use is not authorized, continue preparation and read-only checks
 until the missing bounded authorization is supplied. Host denials remain binding.
 
+For an authorized background `compact` operation, use the bundled native Ghostty
+input route below. It addresses a bound terminal surface and leaves desktop
+focus, tab selection, and the clipboard alone.
+
 ## Entry decision tree
 
 For missing Codex terminals without confirmed Ghostty ownership, load the installed
@@ -50,6 +55,7 @@ For missing Codex terminals without confirmed Ghostty ownership, load the instal
 | "Was anything lost?" / suspicion after restore | `check`; when coverage is partial, follow [candidate selection](references/session_liveness.md#select-recovery-candidates-by-a-time-window) before claiming the set is complete |
 | Snapshot looks too large, or "which sessions were active after <time>?" | Follow [time-window selection](references/session_liveness.md#select-recovery-candidates-by-a-time-window) before choosing a restore set |
 | One specific session to bring back | `restore --only <id-prefix>` |
+| Compact specific Claude Code sessions in the background (批量压缩 Ghostty 会话) | Follow [targeted input](references/targeted-input.md), starting with `compact --dry-run` and an explicit selector |
 | Minions `native_runtime` session or managed account-adoption error | Follow [account-owner selection](references/codex-account-switch.md#choose-the-account-owner-first) |
 | An existing Account Manager selects a legacy Ghostty terminal through its configured bridge | Follow [the legacy terminal port](references/account-manager-terminal-port.md); retain that caller's original operation |
 | Unmanaged/legacy Codex quota running out; manually switching account, keeping all Codex work | Start with [account-owner selection](references/codex-account-switch.md#choose-the-account-owner-first) |
@@ -127,6 +133,14 @@ manifest opens only the IDs still missing. `--dry-run` prints commands without G
 Repeat current-set reconciliation after a manual handoff or any change in selection.
 After process reconciliation, follow [history-readiness acceptance](references/restore_mechanics.md#verify-history-readiness-after-process-reconciliation)
 before claiming that the selected conversations are ready to read.
+
+## Background targeted `/compact`
+
+Use [targeted input](references/targeted-input.md) to preview a live Claude Code
+TTY, session ID, and native terminal ID before sending `/compact`. Stagger
+multiple targets when they share provider throughput. To verify completion, use
+`--verify-timeout` and read the independent `compact_boundary` result for each
+target.
 
 ## Automatic change-only backups
 

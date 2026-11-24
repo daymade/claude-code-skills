@@ -1366,10 +1366,10 @@
     },
     {
       "name": "ghostty-use",
-      "description": "Snapshots local Codex/Claude CLI sessions across terminals and restores IDs in Ghostty after reboot (保存会话/重启前备份/恢复窗口), audits survivors, and makes change-only automatic backups (定期增量快照). Handles unmanaged Codex account switches (额度耗尽换号); Minions native_runtime uses Account Manager. Not --resume help, screenshots or tmux.",
+      "description": "Snapshots local Codex/Claude CLI sessions across terminals and restores IDs in Ghostty after reboot (保存会话/重启前备份/恢复窗口), audits survivors, and makes change-only automatic backups (定期增量快照). Handles unmanaged Codex account switches (额度耗尽换号); Minions native_runtime uses Account Manager. Supports background /compact and targeted Ghostty terminal input (批量压缩 Ghostty 会话). Not --resume help, screenshots or tmux.",
       "source": "./ghostty-use",
       "strict": false,
-      "version": "1.15.2",
+      "version": "1.16.0",
       "category": "developer-tools",
       "keywords": [
         "ghostty",
@@ -1381,7 +1381,10 @@
         "codex",
         "终端会话",
         "会话恢复",
-        "重启恢复"
+        "重启恢复",
+        "background /compact",
+        "targeted terminal input",
+        "批量压缩 Ghostty 会话"
       ]
     },
     {

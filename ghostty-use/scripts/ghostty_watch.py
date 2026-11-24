@@ -251,7 +251,7 @@ def parse_cwds(text, pids):
     return {pid: values[0] for pid, values in paths.items()}
 
 
-def observe(deadline=None, *, include_terminals=False, scope='ghostty'):
+def observe(deadline=None, *, include_terminals=False, scope='ghostty', preserve_duplicates=False):
     if scope not in ('ghostty', 'all-cli'):
         raise ValueError('scope must be ghostty or all-cli')
     deadline = deadline or time.monotonic() + DEADLINE_SECONDS
@@ -291,7 +291,7 @@ def observe(deadline=None, *, include_terminals=False, scope='ghostty'):
         if (wrapper and wrapper[0] == tool and wrapper[3] == 1
                 and parent['tty'] == row['tty'] and (sid is None or sid == wrapper[1])):
             continue  # native vendor child of the same Node TUI
-        if sid is not None and (tool, sid) in seen:
+        if not preserve_duplicates and sid is not None and (tool, sid) in seen:
             continue
         if sid is not None:
             seen.add((tool, sid))
@@ -323,6 +323,8 @@ def observe(deadline=None, *, include_terminals=False, scope='ghostty'):
             entry = {'tool': tool, 'cwd': cwds[row['pid']], 'cmdline': row['cmdline'],
                      'profile': 'unknown' if tokens is None else gs._detect_profile(row['cmdline']),
                      'tty': row['tty']}
+            if preserve_duplicates:
+                entry['pid'] = row['pid']
             if scope == 'all-cli':
                 ancestry, parent_pid = [], row['ppid']
                 while parent_pid in procs and parent_pid not in ancestry:
