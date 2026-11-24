@@ -262,6 +262,13 @@ consumer occupancy. After moving, prove old-path absence and new-path identity,
 then use that retained checkout for the same attestation below. Do not manufacture
 a fresh archive with missing refs or rewrite the review to match a different HEAD.
 
+A locator-only migration is **not a new review**. Reuse the original committed
+review metadata and candidate binding; never create a fresh reviewer, rewrite the
+review's candidate, or treat the migration as evidence that the changed Skill was
+independently reviewed again. The terminal closeout is zero task-owned temporary
+review worktrees and zero live receipts pointing to them. Renaming a temporary
+checkout `durable` does not remove its consumers and is not a closeout state.
+
 1. Record each affected receipt's candidate, exact Skill scope, review commit,
    path and blob, plus its current verification outcome. Separate a currently
    valid binding from an already stale or missing historical review. A pre-existing

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-creator** (`daymade-skill` v1.83.9 → v1.83.10): Distinguish receipt locator migration from new independent review, reject renamed temporary checkouts as durable closeout, and require zero live receipt consumers before retiring the final review worktree.
+
 - **skill-creator** (`daymade-skill` v1.83.6 → v1.83.7): Require registered linked worktrees for managed-source authoring and LFS-bearing publication, reuse the registered LFS store, and prepare missing exact-base audit evidence without disabling smudge or bulk-copying objects.
 - **github-ops** (`github-ops` v1.20.2 → v1.20.3): Require merge-method selection from the intersection of repository settings and active branch rulesets rather than repository flags alone.
 - **git-safety-net** (`git-safety-net` v1.30.5 → v1.30.6): Document linked-worktree LFS storage sharing and the disk/audit boundary for independent clones.
