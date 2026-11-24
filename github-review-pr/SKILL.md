@@ -204,9 +204,24 @@ Choose the isolated carrier before fetching. Read the current base's repository
 instructions for registered source ownership, hook installation and exposure-tier
 requirements. A matching remote URL alone does not establish those identities.
 
-- For read-only object inspection, prefer an independent temporary clone. Reuse
-  the current clone only when its remote matches the base repository, its worktree
-  is safe, and namespaced review refs cannot interfere with ongoing work.
+- For read-only object inspection, prefer zero-clone inspection via `git show`
+  and `git merge-tree --write-tree` in the existing repository when its remote
+  matches the base repository, its worktree is safe, and namespaced review refs
+  cannot interfere with ongoing work. Create an independent temporary clone only
+  when isolated test/check execution or an untrusted/conflicting carrier requires it.
+- Prevent LFS media hydration and leftover temp clones on disk. For every
+  temporary review clone or read-only checkout, set `GIT_LFS_SKIP_SMUDGE=1` and
+  prefer `--no-checkout` (or sparse checkout / `--filter=blob:none` when full
+  working-tree blobs are unneeded). When the PR diff touches an LFS-tracked file
+  or a required verification check reads that asset, fetch only the needed ref
+  and path with `git lfs fetch origin refs/review-pr/$PR_NUMBER/head --include="<exact-path>"`
+  (do not run bare `git lfs pull --include=...` in a `--no-checkout` or
+  base-checked-out clone: it silently no-ops or hydrates the base version instead
+  of the PR head); only materialize a working-tree file via sparse-checkout +
+  `git lfs checkout -- "<exact-path>"` when a check requires it on disk. Bind
+  teardown to the review lifecycle (for example, `trap 'rm -rf "$REVIEW_TMP"' EXIT`
+  for disposable clones, or explicit `git worktree remove` for linked worktrees)
+  and verify the temporary carrier is absent before reporting the verdict.
 - Before an authorized repair, run the repository's actual source-owner check.
   For Skill edits, load `skill-creator` and follow its source-location procedure.
   Use a linked worktree of the registered source or an explicitly approved,
