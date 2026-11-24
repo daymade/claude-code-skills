@@ -270,11 +270,15 @@ def _claude_project_dir(cwd):
 
 @contextmanager
 def _read_regular_file(path):
-    with os.fdopen(os.open(path, os.O_RDONLY | os.O_NONBLOCK), "rb") as handle:
-        file_stat = os.fstat(handle.fileno())
+    fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+    try:
+        file_stat = os.fstat(fd)
         if not stat.S_ISREG(file_stat.st_mode):
             raise OSError(f"not a regular file: {path}")
-        yield handle, file_stat
+        with os.fdopen(fd, "rb", closefd=False) as handle:
+            yield handle, file_stat
+    finally:
+        os.close(fd)
 
 
 def _head_cwd(path, max_lines=40, *, expected_sid=None):
@@ -1365,7 +1369,9 @@ def _observe_compact_bindings(targets, caller_ttys):
             raise RecoveryError(f"refusing caller's own TTY {tty}")
     selector = SimpleNamespace(tty=ttys, sid=[], all_claude=False)
     current = _compact_targets(selector, caller_ttys)
-    for expected, observed in zip(targets, current, strict=True):
+    if len(targets) != len(current):
+        raise RecoveryError("live Claude target count changed since selection")
+    for expected, observed in zip(targets, current):
         if any(expected[key] != observed[key] for key in COMPACT_BINDING_FIELDS):
             raise RecoveryError(f"live Claude surface binding changed since selection on {expected['tty']}")
     return current

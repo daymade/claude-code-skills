@@ -13,6 +13,7 @@ described in references/session_liveness.md and references/restore_mechanics.md.
 import json
 import argparse
 import copy
+import errno
 import io
 import sqlite3
 import subprocess
@@ -1429,6 +1430,14 @@ class CompactCommandTest(unittest.TestCase):
                 self.assertIn("binding changed", report["error"])
         self.send.assert_not_called()
 
+    def test_from_plan_refuses_changed_target_count(self):
+        path = self.write_plan("--all-claude")
+        with mock.patch.object(gs, "_compact_targets", return_value=[]):
+            rc, report = self.compact("--from-plan", str(path))
+        self.assertEqual(rc, 2)
+        self.assertIn("target count changed", report["error"])
+        self.send.assert_not_called()
+
     def test_from_plan_sends_to_matching_preview_and_ignores_new_tab(self):
         path = self.write_plan("--tty", "ttys010")
         self.sessions.append(dict(tool="claude", sid=S_PROSE, tty="ttys013", pid=513))
@@ -1492,6 +1501,25 @@ class CompactCommandTest(unittest.TestCase):
             self.assertEqual(gs.main(["compact", *arguments]), 0)
         self.assertEqual([row["sid"] for row in json.loads(output.getvalue())["targets"]], [S_HEALTHY, S_DEAD])
         self.assertEqual(list(self.home.iterdir()), [])
+        self.send.assert_not_called()
+
+    def test_discovery_probe_fallback_lists_resolved_and_unresolved_ttys(self):
+        import ghostty_watch as watch
+
+        self.sessions.observation["counters"] = {}
+        self.sessions.unresolved = [dict(tool="claude", tty="ttys099")]
+        rc, report = self.compact("--all-claude", "--dry-run")
+        self.assertEqual(rc, 2)
+        self.assertIn("unresolved identity", report["error"])
+        state = self.home / "observer-state"
+        with redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(watch.main(["probe", "--state-dir", str(state)]), 1)
+        inventory = json.loads(output.getvalue())
+        self.assertIn("ttys010", [row["tty"] for row in inventory["sessions"]])
+        self.assertEqual([row["tty"] for row in inventory["unresolved"]], ["ttys099"])
+        self.assertFalse(state.exists())
+        plan = json.loads(self.write_plan("--tty", "ttys010").read_text())
+        self.assertEqual([row["tty"] for row in plan["targets"]], ["ttys010"])
         self.send.assert_not_called()
 
     def test_refuses_caller_tty_for_every_selector(self):
@@ -1691,6 +1719,33 @@ class CompactCommandTest(unittest.TestCase):
                     evidence = gs._compact_boundary(path, S_HEALTHY, NOW, None)
                 self.assertFalse(replacement.exists())
                 self.assertEqual(evidence is not None, opened == S_HEALTHY)
+
+    def test_transcript_probes_close_directory_descriptors_before_wrapping(self):
+        with mock.patch.object(gs.os, "fstat", wraps=os.fstat) as inspect_fd, \
+             mock.patch.object(gs.os, "close", wraps=os.close) as close_fd, \
+             mock.patch.object(gs.os, "fdopen", wraps=os.fdopen) as wrap_fd:
+            self.assertIsNone(gs._head_cwd(self.home))
+            with self.assertRaisesRegex(OSError, "not a regular file"):
+                gs._compact_boundary(self.home, S_HEALTHY, NOW, None)
+        wrap_fd.assert_not_called()
+        self.assertEqual(inspect_fd.call_count, 2)
+        self.assertEqual(close_fd.call_args_list, inspect_fd.call_args_list)
+        with self.assertRaises(OSError) as closed:
+            os.fstat(close_fd.call_args.args[0])
+        self.assertEqual(closed.exception.errno, errno.EBADF)
+
+    def test_regular_file_probe_closes_raw_descriptor_if_fdopen_fails(self):
+        path = self.home / "test.jsonl"
+        path.touch()
+        with mock.patch.object(gs.os, "fdopen", side_effect=OSError("wrap failed")) as wrap_fd, \
+             mock.patch.object(gs.os, "close", wraps=os.close) as close_fd:
+            with self.assertRaisesRegex(OSError, "wrap failed"):
+                gs._compact_boundary(path, S_HEALTHY, NOW, None)
+        fd = wrap_fd.call_args.args[0]
+        close_fd.assert_called_once_with(fd)
+        with self.assertRaises(OSError) as closed:
+            os.fstat(fd)
+        self.assertEqual(closed.exception.errno, errno.EBADF)
 
     @unittest.skipUnless(hasattr(os, "mkfifo"), "requires POSIX FIFO support")
     def test_transcript_probes_refuse_real_fifo_without_a_writer(self):

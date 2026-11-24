@@ -23,6 +23,17 @@ plan.
 python3 "<skill-dir>/scripts/ghostty_session.py" compact --all-claude --dry-run --json
 ```
 
+If discovery exits 2 because an unrelated Claude TUI has unresolved identity
+or the batch includes your own TTY, run this read-only inventory command.
+
+```bash
+python3 "<skill-dir>/scripts/ghostty_watch.py" probe
+```
+
+Read the resolved TTYs in `sessions` alongside `unresolved`. The probe can print
+both lists and exit 1 when unresolved rows remain. Preview and freeze specific
+resolved Claude targets with `--tty` or `--sid`, excluding your own TTY.
+
 ## Freeze, review, and send
 
 Replace the illustrative TTY and prefix with the intended selections. Freeze
@@ -37,12 +48,12 @@ python3 "<skill-dir>/scripts/ghostty_session.py" compact \
 ```
 
 - Review each target's tab index, terminal ID, TTY, SID, anchor, and title.
-  An `argv` anchor identifies the launch SID. A conversation switch inside
-  Claude Code, such as `/resume`, can change the active transcript and title
-  while process arguments still report the launch SID. Check the dry-run
-  title against the intended conversation before sending. If the conversation
-  switched in place, treat transcript readback for the launch SID as unverified
-  for the active conversation.
+  An `argv` anchor identifies the launch SID. An in-place `/resume` can leave
+  all six frozen binding fields unchanged, and a custom tab title override can
+  hide the switch. `/compact` goes to whichever conversation is active in that
+  surface at send time. If the conversation may have changed, re-establish its
+  identity before sending. Transcript readback for the launch SID leaves the
+  switched conversation unverified.
 - Use `--write-plan` only with `--dry-run`. An existing plan file is preserved.
   Use `--from-plan` on its own with respect to selectors and dry-run flags.
   The script checks every frozen binding before the first send and again before
