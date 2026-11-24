@@ -1784,5 +1784,62 @@ class LiveSearchBoundaryTests(unittest.TestCase):
             self.assertNotIn("Searching ", result.stdout)
 
 
+class SessionStatsEncodingTests(unittest.TestCase):
+    """Session files are UTF-8; `stats` must not depend on the locale encoding."""
+
+    def test_stats_reads_utf8_session_under_non_utf8_locale(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            session = Path(tmp) / "session.jsonl"
+            write_jsonl(
+                session,
+                [
+                    {"type": "user", "message": {"role": "user", "content": "hi"}},
+                    {
+                        "type": "assistant",
+                        "message": {
+                            "role": "assistant",
+                            "content": [{"type": "text", "text": "修复 — done"}],
+                        },
+                    },
+                    {
+                        "type": "assistant",
+                        "message": {
+                            "role": "assistant",
+                            "content": [
+                                {
+                                    "type": "tool_use",
+                                    "name": "Write",
+                                    "input": {"file_path": "a.py"},
+                                }
+                            ],
+                        },
+                    },
+                    {"type": "user", "message": {"role": "user", "content": "thanks"}},
+                ],
+            )
+            env = os.environ.copy()
+            # A non-UTF-8 locale encoding, as on Windows (cp1252/cp936) or a
+            # POSIX C locale with UTF-8 mode and locale coercion disabled.
+            env.update(
+                {"LC_ALL": "C", "LANG": "C", "PYTHONUTF8": "0", "PYTHONCOERCECLOCALE": "0"}
+            )
+            result = subprocess.run(
+                [sys.executable, str(SCRIPT), "stats", str(session)],
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                env=env,
+                timeout=60,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("Error analyzing", result.stderr)
+        self.assertIn("Total lines: 4", result.stdout)
+        self.assertIn("User messages: 2", result.stdout)
+        self.assertIn("Assistant messages: 2", result.stdout)
+        self.assertIn("Write calls: 1", result.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()
