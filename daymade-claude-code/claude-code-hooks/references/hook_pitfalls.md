@@ -3540,3 +3540,52 @@ action, and a nonblocking fault must not be reported as a healthy no-match.
   unrelated empty repository. Require identical acceptance and downstream
   payloads. Keep the dangerous malformed-input controls as well, so isolating
   the environment cannot turn into unconditional approval.
+
+## 71. Raw-JSON fast-path regexes miss JSON-escaped whitespace and subshell prefixes
+
+- **Failure:** a shell PreToolUse guard avoids spawning Python on every command
+  by screening raw hook JSON with a regex such as
+  `grep -E '(^|[[:space:];|&])(cp|rsync|git)[[:space:]]'`. Inside a serialized
+  JSON string (`tool_input.command`), newlines and tabs arrive as two-character
+  escape sequences (`\n`, `\t`, `\r`) rather than literal whitespace, and
+  subshells or command substitutions prefix the command with `(` or `$(`.
+  Neither satisfies `[[:space:];|&]`, so the fast path exits 0 (allow) before
+  the JSON decoder ever runs — silently bypassing the guard on multi-line
+  commands (`echo ok\ncp -R ...`), tabbed commands, or subshell wrappers
+  (`(cp -R ...)`).
+- **Fix:** treat any raw-JSON fast path strictly as an over-approximating
+  trigger, never a precise shell tokenizer. Match bare command words without
+  assuming literal-whitespace boundaries (or explicitly include JSON escape
+  markers `\\n`/`\\t`/`\\r` and grouping prefixes `(` / `` ` ``), and hand every
+  candidate straight to the JSON-decoding parser so `json.loads` decodes escapes
+  before shell tokenization.
+- **Bidirectional calibration:** pair single-line dangerous probes with
+  JSON-escaped newline (`"echo ok\n<cmd> ..."`), tab (`"<cmd>\t..."`), subshell
+  (`"(<cmd> ...)"`), command-substitution (`"$(<cmd> ...)"`), and `bash -c`
+  variants, verifying each reaches the parser and blocks. Keep healthy controls
+  that mention the command word only inside comments, filenames, or echo
+  arguments so the wider fast-path trigger does not raise false positives.
+
+## 72. Symlinking OS-level command wrappers into a shared Git checkout couples every invocation to branch switches
+
+- **Failure:** installing a `PATH`-preceding command wrapper (for example, a
+  `~/.local/bin/git` or `~/.local/bin/cp` guard shim) as a symlink directly into
+  a shared working checkout (`~/repos/tooling/bin/git`) forces every shell,
+  cron/launchd job, and agent session on the host to execute whatever branch and
+  working-tree state is currently checked out there. Switching branches,
+  rebasing, or editing the wrapper mid-task immediately alters or breaks the
+  live command (`ENOENT`, syntax errors, or unreviewed behavior) for unrelated
+  sessions.
+- **Fix:** install OS-level command wrappers into an immutable,
+  checkout-independent runtime directory (such as
+  `~/.local/libexec/<tool>/<wrapper>`) using atomic file replacement
+  (`mktemp` + `chmod` + `mv`), and point `~/.local/bin/<cmd>` at that installed
+  copy (or install directly there). Update the runtime copy only through an
+  explicit install/publish step from a verified commit, never by symlinking into
+  an active working tree.
+- **Bidirectional calibration:** assert `readlink -f "$(command -v <cmd>)"`
+  resolves inside `~/.local/libexec/` rather than any Git working tree; test
+  that switching branches or deleting a feature branch in the source checkout
+  leaves the live wrapper's SHA-256 and exit status unchanged; and verify an
+  explicit reinstall from a verified ref atomically updates the runtime copy and
+  passes readback.

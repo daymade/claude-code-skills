@@ -153,13 +153,22 @@ For a persistent Python job, separate dependency preparation from normal startup
 - **Install/upgrade:** use the owning installer's explicit prepare action to
   create a persistent environment outside uv's cache from retained locked inputs.
   Bind the selected Python series, complete frozen distribution set and base
-  interpreter to that installation. Keep dependency changes in this phase.
+  interpreter to that installation. Pin the venv's `bin/python*` symlinks and
+  `pyvenv.cfg` `home` to the resolved immutable patch directory (`readlink -f`,
+  e.g., `cpython-3.12.13-.../bin/python3.12`) instead of a mutable minor-series
+  alias (`cpython-3.12-...`): an in-place toolchain upgrade that repoints the
+  mutable alias silently changes the executable's CDHash/code signature under
+  bootstrapped LaunchAgents, breaking Keychain ACLs or triggering immediate
+  `OS_REASON_CODESIGNING` kills (`LastExitStatus=-9`, empty stderr). Keep
+  dependency changes in this phase.
 - **Reuse:** execute the environment's actual Python to compare its series and
-  complete installed distribution names/versions with those frozen inputs, and
-  verify its resolved base Python still exists and runs. A ready marker or a
-  matching Python series alone does not validate the environment. Reject an empty,
-  mismatched or broken environment; resume the authorized prepare action rather
-  than silently accepting it.
+  complete installed distribution names/versions with those frozen inputs, verify
+  its resolved base Python still exists and runs, and flag (or reject under
+  strict pinning) any venv whose `bin/python` or `pyvenv.cfg` `home` still
+  traverses a mutable minor-series alias. A ready marker or a matching Python
+  series alone does not validate the environment. Reject an empty, mismatched or
+  broken environment; resume the authorized prepare action rather than silently
+  accepting it.
 - **Run:** register the absolute environment Python path in `ProgramArguments`
   and invoke the service entry directly. Fail visibly when that runtime is missing
   or invalid; do not silently fall back to `uv run`, another interpreter, or an
@@ -297,6 +306,8 @@ nothing but failure logs for six days.
 | "log mtime is fresh" but the job is actually failing | out.log all-green is **not** health — a failed pass may write nothing (`set -e` + prints-verified-only-on-success), so the last-success timestamp stays fresh forever. Judge the **failure** path (err.log / last-exit status), not success-side freshness (Pattern 7) |
 | After `bootout`+`bootstrap`, "the data file has a recent row" is not proof the new job works | The OLD job's final row can land inside your freshness window (real case 2026-10-20: a probe conversion passed a 75 s freshness check while the new job's every iteration was rejected by its identity guard for 75 min). Anchor verification to the NEW job: rows timestamped after the new PID's start, or per-iteration status rows; `state=running` never proves the collector writes |
 | Works interactively, fails under launchd | TCC/FDA on the wrong interpreter; PATH assumptions in `ProgramArguments` |
+| LaunchAgent exits immediately with `LastExitStatus = -9` (`SIGKILL`) and empty stderr | Check `log show --predicate 'eventMessage CONTAINS "CODESIGNING" OR process == "amfid"' --last 15m` and `codesign -dv --verbose=2 "$(readlink -f <env>/bin/python)"`. If the venv traverses a mutable minor-series alias (e.g., `cpython-3.12-...`) updated by a toolchain upgrade, repin `bin/python*` and `pyvenv.cfg` to a verified immutable patch directory (`cpython-3.12.X-.../bin/python3.12`) and reload via `bootout` → `bootstrap` |
+| Keychain read fails or prompts repeatedly after a `uv` / toolchain upgrade | Check whether `readlink -f <env>/bin/python` shifted to a newer patch binary with a different CDHash. Pin the venv and `pyvenv.cfg` to the immutable patch directory whose CDHash holds the Keychain ACL (or intentionally re-grant ACLs for the newly pinned patch binary) |
 | Observation becomes slower as history grows | Audit cold, warm and delta work using `references/probe-cost.md`; caching bytes does not bound parsing or queries |
 
 Details and the sanitized war stories behind each clause: `references/quiet-watchdog-patterns.md`.

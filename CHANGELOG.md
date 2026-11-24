@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-watchdog** (`daymade-macos` v1.34.24 → v1.34.25): Require pinning persistent LaunchAgent Python venvs and `pyvenv.cfg` `home` to resolved immutable patch directories (`readlink -f`) rather than mutable minor-series aliases, and add `OS_REASON_CODESIGNING` (`LastExitStatus=-9`) and post-upgrade Keychain/CDHash drift entries to the Troubleshooting quick map.
+- **claude-code-hooks** (`daymade-claude-code` v5.3.9 → v5.3.10): Add Pitfalls 71 and 72 covering raw-JSON fast-path regex bypasses on JSON-escaped whitespace (`\n`/`\t`/`\r`) and subshell prefixes (`(`), and decoupling `PATH`-preceding OS command wrappers from shared Git checkouts via atomic installation under `~/.local/libexec/`.
+
 - **skill-creator** (`daymade-skill` v1.83.9 → v1.83.10): Distinguish receipt locator migration from new independent review, reject renamed temporary checkouts as durable closeout, and require zero live receipt consumers before retiring the final review worktree.
 
 - **github-review-pr** (`github-review-pr` v1.4.9 → v1.4.10): Require `GIT_LFS_SKIP_SMUDGE=1` (with on-demand per-path LFS pull only when touched by the PR diff) and mandatory exit teardown + absence verification for temporary review clones and worktrees.
