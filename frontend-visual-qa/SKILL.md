@@ -494,7 +494,17 @@ node --test <skill-root>/tests/test_silent_degradation_probe.mjs
 node --test <skill-root>/tests/test_browser_runtime.mjs
 node --test <skill-root>/tests/route-census/test_route_census.mjs
 node --test <skill-root>/tests/route-census/test_visual_layout_audit_regressions.mjs
+python3 -m unittest discover -s <skill-root>/tests -p 'test_verify_delivery.py'
 ```
+
+For delivery-byte checks, record the exact request profile. `verify_delivery.py`
+accepts `--user-agent` and includes it in its JSON report. Provider/custom-domain
+middleware can inject or rewrite HTML by User-Agent or cookie state, so compare
+raw bytes only when the request profile and response transformations are the
+same. If a custom-domain HTML response differs from the frozen build, verify the
+release identity and source/research links in the real browser and byte-compare
+static assets; do not report custom-domain HTML as an exact-byte pass. Never
+patch the verifier in memory to hide the profile difference.
 
 ### 5. Exercise Journeys And Outputs
 

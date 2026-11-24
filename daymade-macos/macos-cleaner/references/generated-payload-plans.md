@@ -14,6 +14,15 @@ existing table. Conventional paths containing `releases`, `node_modules`, `.venv
 these facts even when the table was omitted. List unconventional generated paths
 explicitly; path recognition cannot discover every naming scheme.
 
+If the target is a Git checkout, worktree or contains repository metadata, do not
+use this file as the retirement authority. Follow `git-safety-net` Mode E first:
+enumerate refs, reflogs, stashes, tracked/untracked/ignored files and open users;
+preserve unique evidence; then retire the exact checkout. Only after that may the
+ordinary generated-payload facts classify rebuildable dependencies or build
+output inside the survivor. A clean `git status` is not proof that ignored files,
+screenshots or logs are disposable, and a rebuildable dependency tree does not
+make the repository itself a cache.
+
 | Column | Required value |
 |---|---|
 | Target | The exact classification target |
