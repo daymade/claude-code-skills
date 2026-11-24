@@ -336,6 +336,8 @@ Before accepting persisted evidence that releases a hook block, read
 [release-evidence failure handling](daymade-claude-code/claude-code-hooks/references/hook_pitfalls.md#68-invalid-release-evidence-can-escape-into-an-outer-fail-open-handler).
 For Git inspections whose stdout must not hide a nonzero exit, or dispatcher-owned
 environment state, read [hook_pitfalls.md #69/#70](daymade-claude-code/claude-code-hooks/references/hook_pitfalls.md).
+For raw-JSON fast-path filters or PATH-preceding OS command wrappers, read
+[hook_pitfalls.md #71/#72](daymade-claude-code/claude-code-hooks/references/hook_pitfalls.md).
 
 Python entry points registered as synchronous Claude Code/Codex lifecycle hooks or
 background services (LaunchAgents included) must call a fixed direct interpreter
