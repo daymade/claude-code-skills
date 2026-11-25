@@ -1036,6 +1036,115 @@ class TestReadAntigravitySession(unittest.TestCase):
         self.assertEqual(parsed["status"], "truncated")
         self.assertFalse(parsed["output_complete"])
 
+    def test_list_detects_stale_db_timestamp_and_sorts_by_activity(self) -> None:
+        import os
+
+        # Align alpha transcript mtime to its DB timestamp (healthy = not stale),
+        # while making older conv-beta-002's transcript mtime much newer (simulating a
+        # resumed older session whose SQLite last_modified_time lagged behind).
+        t_alpha = self.store / "brain" / "conv-alpha-001" / ".system_generated" / "logs" / "transcript.jsonl"
+        t_sub = self.store / "brain" / "conv-sub-001" / ".system_generated" / "logs" / "transcript.jsonl"
+        t_beta = self.store / "brain" / "conv-beta-002" / ".system_generated" / "logs" / "transcript.jsonl"
+        if not t_beta.is_file():
+            t_beta.parent.mkdir(parents=True, exist_ok=True)
+            t_beta.write_text('{"step_index": 0, "type": "USER_INPUT", "created_at": "2026-11-25T16:03:20Z"}\n')
+        alpha_epoch = ras._parse_iso_epoch("2026-11-20T05:00:00Z")
+        sub_epoch = ras._parse_iso_epoch("2026-11-20T04:58:00Z")
+        resumed_epoch = ras._parse_iso_epoch("2026-11-25T16:03:20Z")
+        assert alpha_epoch is not None and sub_epoch is not None and resumed_epoch is not None
+        os.utime(t_alpha, (alpha_epoch, alpha_epoch))
+        if t_sub.is_file():
+            os.utime(t_sub, (sub_epoch, sub_epoch))
+        os.utime(t_beta, (resumed_epoch, resumed_epoch))
+
+        # Default --list preserves DB order (alpha before beta) but surfaces stale_db_timestamp_count
+        rc_db, out_db, _ = self._run_cli(
+            ["--app-data-dir", str(self.store), "--list", "--format", "json"]
+        )
+        self.assertEqual(rc_db, 0)
+        data_db = json.loads(out_db)
+        self.assertEqual(data_db["sort_by"], "db")
+        self.assertEqual(data_db["coverage"]["stale_db_timestamp_count"], 1)
+        self.assertEqual([s["conversation_id"] for s in data_db["sessions"]], ["conv-alpha-001", "conv-beta-002"])
+        self.assertFalse(data_db["sessions"][0]["db_timestamp_stale"])
+        self.assertTrue(data_db["sessions"][1]["db_timestamp_stale"])
+        self.assertEqual(data_db["sessions"][1]["transcript_mtime"], "2026-11-25T16:03:20Z")
+
+        # Markdown default --list emits the actionable --sort activity hint
+        rc_md, out_md, _ = self._run_cli(["--app-data-dir", str(self.store), "--list"])
+        self.assertEqual(rc_md, 0)
+        self.assertIn("Stale DB timestamps: 1", out_md)
+        self.assertIn("--sort activity", out_md)
+
+        # --list --sort activity ranks resumed conv-beta-002 first even with --limit 1
+        rc_act, out_act, _ = self._run_cli(
+            ["--app-data-dir", str(self.store), "--list", "--sort", "activity", "--limit", "1", "--format", "json"]
+        )
+        self.assertEqual(rc_act, 0)
+        data_act = json.loads(out_act)
+        self.assertEqual(data_act["sort_by"], "activity")
+        self.assertEqual([s["conversation_id"] for s in data_act["sessions"]], ["conv-beta-002"])
+        self.assertTrue(data_act["sessions"][0]["db_timestamp_stale"])
+
+        # Markdown --sort activity shows Transcript Mtime column and stale badge
+        rc_act_md, out_act_md, _ = self._run_cli(
+            ["--app-data-dir", str(self.store), "--list", "--sort", "activity"]
+        )
+        self.assertEqual(rc_act_md, 0)
+        self.assertIn("Transcript Mtime", out_act_md)
+        self.assertIn("*(DB stale)*", out_act_md)
+
+        # Healthy control: once beta mtime aligns with DB, stale_db_timestamp_count drops to 0
+        beta_epoch = ras._parse_iso_epoch("2026-11-19T12:00:00Z")
+        assert beta_epoch is not None
+        os.utime(t_beta, (beta_epoch, beta_epoch))
+        rc_clean, out_clean, _ = self._run_cli(
+            ["--app-data-dir", str(self.store), "--list", "--format", "json"]
+        )
+        self.assertEqual(rc_clean, 0)
+        clean_data = json.loads(out_clean)
+        self.assertEqual(clean_data["coverage"]["stale_db_timestamp_count"], 0)
+        self.assertFalse(clean_data["sessions"][1]["db_timestamp_stale"])
+
+        # --sort without --list is rejected with argparse exit 2
+        rc_bad, _, err_bad = self._run_cli(
+            ["--app-data-dir", str(self.store), "--query", "audit", "--sort", "activity"]
+        )
+        self.assertEqual(rc_bad, 2)
+        self.assertIn("--sort requires --list", err_bad)
+
+    def test_parse_iso_epoch_rfc3339nano_lowercase_z_and_non_regular_stat(self) -> None:
+        import os
+
+        nano = ras._parse_iso_epoch("2026-11-25T16:03:20.123456789Z")
+        micro = ras._parse_iso_epoch("2026-11-25T16:03:20.123456Z")
+        self.assertIsNotNone(nano)
+        self.assertEqual(nano, micro)
+
+        short_lower_z = ras._parse_iso_epoch("2026-11-25T16:03:20.5z")
+        short_utc = ras._parse_iso_epoch("2026-11-25T16:03:20.500000+00:00")
+        self.assertIsNotNone(short_lower_z)
+        self.assertEqual(short_lower_z, short_utc)
+
+        five_digit_tz = ras._parse_iso_epoch("2026-11-25T16:03:20.12345+08:00")
+        six_digit_tz = ras._parse_iso_epoch("2026-11-25T16:03:20.123450+08:00")
+        self.assertIsNotNone(five_digit_tz)
+        self.assertEqual(five_digit_tz, six_digit_tz)
+
+        self.assertIsNone(ras._parse_iso_epoch("0001-01-01T00:00:00Z"))
+        self.assertIsNone(ras._parse_iso_epoch(""))
+
+        # Non-regular files (e.g. directories and POSIX FIFOs) and invalid IDs must return (False, None)
+        self.assertEqual(ras._transcript_stat_mtime(self.store, "../etc"), (False, None))
+        dir_tpath = self.store / "brain" / "conv-dir-test" / ".system_generated" / "logs" / "transcript.jsonl"
+        dir_tpath.mkdir(parents=True, exist_ok=True)
+        self.assertEqual(ras._transcript_stat_mtime(self.store, "conv-dir-test"), (False, None))
+        if hasattr(os, "mkfifo"):
+            fifo_tpath = self.store / "brain" / "conv-fifo-test" / ".system_generated" / "logs" / "transcript.jsonl"
+            fifo_tpath.parent.mkdir(parents=True, exist_ok=True)
+            os.mkfifo(fifo_tpath)
+            self.assertEqual(ras._transcript_stat_mtime(self.store, "conv-fifo-test"), (False, None))
+
 
 if __name__ == "__main__":
     unittest.main()
