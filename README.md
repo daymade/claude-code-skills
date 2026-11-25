@@ -558,6 +558,12 @@ Follow the [routing contract](agent-message/SKILL.md) for native communication a
 
 ---
 
+### **peer-message** - Compatibility Alias
+
+Deprecated compatibility alias and executable forwarder shim for **`agent-message`**; see [migration and compatibility notice](./peer-message/SKILL.md).
+
+---
+
 ### **repomix-unmixer** - Repository Extraction
 
 Extracts files from repomix-packed repositories and restores directory structures.

@@ -567,6 +567,12 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 ---
 
+### **peer-message** - 兼容别名
+
+**`agent-message`** 的兼容别名与可执行转发壳，迁移说明见[兼容通告](./peer-message/SKILL.md)。
+
+---
+
 ### **ghostty-use** - CLI 会话备份与 Ghostty 恢复
 
 会话备份、采集范围与恢复入口见[规范 Skill](ghostty-use/SKILL.md)。
