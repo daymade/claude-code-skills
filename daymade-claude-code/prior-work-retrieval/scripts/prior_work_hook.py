@@ -1177,6 +1177,57 @@ def _guidance(reason: str, session_id: Any = None) -> str:
     return text
 
 
+def _status_stop_marker(session_id: str) -> Path:
+    state_root = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state")
+    identity = str(prior_work.default_manifest_path().resolve()) + "\0" + session_id
+    return state_root / "prior-work-status-stop" / hashlib.sha256(identity.encode()).hexdigest()
+
+
+def _clear_status_stop_marker(session_id: str) -> None:
+    try:
+        _status_stop_marker(session_id).unlink()
+    except OSError:
+        pass
+
+
+def update_status_stop_scope(prompt: str, session_id: str) -> None:
+    """Let standalone status questions finish while retaining the write gate."""
+    if (GENERATED_PREFIX.match(prompt) or NON_USER_PROMPT.search(prompt)
+            or HOOK_GUIDANCE_MARKER in prompt):
+        return
+    status_only = re.fullmatch(
+        r"(?:检查|查看|核对|看看|看)(?:一下|下)?(?:当前)?(?:现状|进度|状态)[。？！?.!]*",
+        prompt.strip(),
+    ) is not None
+    marker = _status_stop_marker(session_id)
+    if not status_only and not marker.exists():
+        return
+    try:
+        manifest = _manifest()
+        current = prior_work.load_requirement(manifest, session_id)
+        if current is None or not current.get("required"):
+            _clear_status_stop_marker(session_id)
+            return
+        if status_only:
+            marker.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            marker.touch(mode=0o600, exist_ok=True)
+        if current.get("status_only_stop") is status_only:
+            if not status_only:
+                _clear_status_stop_marker(session_id)
+            return
+        prior_work.set_prompt_scope(
+            manifest, session_id,
+            active=current.get("active_for_prompt") is not False,
+            expected_requirement=current, status_only_stop=status_only,
+        )
+        if not status_only:
+            _clear_status_stop_marker(session_id)
+    except (prior_work.PriorWorkError, OSError):
+        if status_only:
+            _clear_status_stop_marker(session_id)
+        return
+
+
 def handle_user_prompt(event: dict[str, Any]) -> dict[str, Any] | None:
     prompt = event.get("prompt")
     session_id = event.get("session_id")
@@ -1187,6 +1238,8 @@ def handle_user_prompt(event: dict[str, Any]) -> dict[str, Any] | None:
     # an existing explicit-history requirement remains intact.
     initial = classify_prompt(prompt)
     if initial == "none":
+        if isinstance(session_id, str) and session_id:
+            update_status_stop_scope(prompt, session_id)
         return None
     if not isinstance(session_id, str) or not session_id:
         if initial == "required_prior_signal":
@@ -1257,6 +1310,13 @@ def handle_stop(event: dict[str, Any]) -> dict[str, Any] | None:
         requirement = prior_work.load_requirement(manifest, session_id)
         if (requirement is None or not requirement.get("required")
                 or requirement.get("active_for_prompt") is False):
+            return None
+        if requirement.get("status_only_stop") is True:
+            prior_work.set_prompt_scope(
+                manifest, session_id, active=True,
+                expected_requirement=requirement, status_only_stop=False,
+            )
+            _clear_status_stop_marker(session_id)
             return None
         error = _receipt_error(manifest, session_id)
     except prior_work.PriorWorkError as error:

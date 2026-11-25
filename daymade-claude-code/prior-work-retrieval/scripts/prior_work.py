@@ -1254,6 +1254,7 @@ def set_prompt_scope(
     manifest: dict[str, Any], session_id: str, *, active: bool,
     expected_requirement: dict[str, Any] | None = None,
     reclassification: dict[str, Any] | None = None,
+    status_only_stop: bool | None = None,
 ) -> None:
     """Change enforcement scope without invalidating the retrieval receipt."""
     requirement = load_requirement(manifest, session_id)
@@ -1262,6 +1263,8 @@ def set_prompt_scope(
     if requirement is None:
         return
     requirement["active_for_prompt"] = active
+    if status_only_stop is not None:
+        requirement["status_only_stop"] = status_only_stop
     if reclassification is not None:
         requirement["scope_reclassification"] = reclassification
     _atomic_json(requirement_path(manifest, session_id), requirement)

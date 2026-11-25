@@ -8,6 +8,8 @@ description: Check cold, warm and incremental work before deploying or integrati
 Apply when creating, changing or integrating a recurring health observer. Keep
 business backfills and historical audits under their own execution contracts;
 do not make them an implicit prerequisite of each short health observation.
+Queue, batch and sync workers must also apply their owning workflow's
+unit-economics gate before choosing a frequency.
 
 ## Choose frequency from the business window
 

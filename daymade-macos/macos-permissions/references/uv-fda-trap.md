@@ -52,6 +52,24 @@ If no usable grant exists, use that GUI route for the **absolute `uv` path from 
 Relaunch only when needed and within that process-ownership boundary.
 TCC stores the absolute path, not a literal `~`.
 
+## Intentional reuse is a valid user decision
+
+The owner may explicitly choose to reuse one uv binary's existing FDA grant for
+other programs launched by that same binary, so the same permission type does
+not prompt again. Record that as an **accepted exception**, not a defect to
+migrate away. Its scope is narrow:
+
+- the same absolute uv path;
+- the same TCC service, such as Full Disk Access;
+- a real protected read through the actual LaunchAgent that still succeeds.
+
+It is not a general inheritance guarantee. A uv upgrade or path swap voids the
+grant; a different permission service still needs its own grant; and a child
+that does not run under the verified responsibility chain may still fail. Pair
+this permission choice with cache isolation: a persistent job should use a
+private non-default `UV_CACHE_DIR`, not `--no-cache`, so reusing the permission
+subject does not also recreate temporary-cache leftovers.
+
 ## It recurs
 
 The grant is keyed to uv's **absolute path**. If uv is upgraded to a new path, or swapped for a

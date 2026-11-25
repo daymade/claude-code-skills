@@ -192,12 +192,28 @@ native executable needs an already authorized launcher's FDA identity, follow
 `macos-permissions` and its
 [measured uv attribution case](../macos-permissions/references/uv-fda-trap.md).
 If the real protected read proves that exact `uv` launcher is required, retain
-the verified responsibility chain. For a native executable, the installed uv's
-supported `uv run --no-project --offline --no-cache -- <absolute-binary> ...` form
-can avoid the shared main cache while preserving that launcher; verify the same
-protected operation from the real job before accepting it. Do not generalize this
-exception to Python dependency startup. `--no-cache` uses a temporary cache; it
-does not promise zero temporary disk use or, for other Python tasks, zero downloads.
+the verified responsibility chain. For a persistent native executable, prefer a
+service-owned, non-default `UV_CACHE_DIR` with
+`uv run --no-project --offline -- <absolute-binary> ...`: it avoids the shared
+main cache lock and does not create a new system temporary directory on every
+start. Keep that directory private and stable, then verify the job holds only
+`<private-cache>/.lock`, survives a restart without cache growth, and still
+passes the real protected read. The owning installer must generate the cache
+environment; do not hand-edit the plist into a second installation path.
+`--no-cache` is acceptable for a bounded one-shot, but it uses a per-invocation
+temporary cache; normal exit cleans it, while `SIGKILL`, panic or power loss can
+leave the temporary directory behind. Do not generalize either exception to
+Python dependency startup.
+
+When comparing direct execution with a uv launcher, give both alternatives the
+same maximum launchd retry windows and judge them with the same domain canary.
+Stopping a direct binary after two failed attempts while observing a uv wrapper
+succeed on its third is not a comparable A/B result. Process state, a listening
+port or HTTP 200 alone does not prove the protected database or business read
+works. If the user explicitly chooses to reuse one uv binary's existing
+permission subject to avoid repeated authorization, record that as an accepted
+exception rather than a pending migration; its scope remains the same absolute
+uv path and the same TCC service.
 
 Consult [uv's environment-use guidance](https://docs.astral.sh/uv/guides/integration/docker/#using-the-environment)
 for direct environment execution and its

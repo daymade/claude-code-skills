@@ -268,7 +268,8 @@ class PriorWorkHookTests(unittest.TestCase):
             encoding="utf-8",
         )
         self.env = mock.patch.dict(
-            os.environ, {"PRIOR_WORK_MANIFEST": str(self.manifest_path)}
+            os.environ, {"PRIOR_WORK_MANIFEST": str(self.manifest_path),
+                         "XDG_STATE_HOME": str(self.root / "xdg-state")}
         )
         self.env.start()
 
@@ -1326,6 +1327,31 @@ class PriorWorkHookTests(unittest.TestCase):
             prior_work.check_receipt(manifest, session_id, None)["status"],
             "valid",
         )
+
+    def test_status_only_stop_is_single_turn_and_keeps_write_gate(self):
+        session_id = "session-status-stop"
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的解析器"})
+        manifest = hook._manifest()
+        stop = {"session_id": session_id, "stop_hook_active": False}
+        write = {"session_id": session_id, "tool_name": "Write", "tool_input": {
+            "file_path": str(self.root / "status-write.py"), "content": "x" * 300}}
+
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "检查现状"})
+        self.assertIs(prior_work.load_requirement(manifest, session_id)["status_only_stop"], True)
+        self.assertTrue(hook._status_stop_marker(session_id).exists())
+        self.assertIsNotNone(hook.handle_pre_tool(write))
+        for followup in ("继续", "继续，先实现解析器", "接着写", "继续修改", "继续完成实现", "继续吧"):
+            hook.handle_user_prompt({"session_id": session_id, "prompt": "检查现状"})
+            hook.handle_user_prompt({"session_id": session_id, "prompt": followup})
+            self.assertIs(prior_work.load_requirement(manifest, session_id)["status_only_stop"], False)
+            self.assertFalse(hook._status_stop_marker(session_id).exists())
+            self.assertEqual(hook.handle_stop(stop)["decision"], "block")
+
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "检查现状"})
+        self.assertIsNone(hook.handle_stop(stop))
+        self.assertIs(prior_work.load_requirement(manifest, session_id)["status_only_stop"], False)
+        self.assertFalse(hook._status_stop_marker(session_id).exists())
+        self.assertEqual(hook.handle_stop(stop)["decision"], "block")
 
     def test_pending_requirement_is_not_released_by_ordinary_prompt(self) -> None:
         session_id = "session-current-status"
