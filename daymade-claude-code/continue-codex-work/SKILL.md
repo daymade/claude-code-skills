@@ -79,14 +79,14 @@ verified parent snapshot. A local cue is not a standalone goal.
    directly rather than assuming uncommitted working-tree state from the source machine
    exists in the target checkout.
 3. Before independent takeover edits, reruns or dispatch, execute this Skill's
-   `scripts/start_work.py` against the loaded `peer-message` Skill. Retain the
+   `scripts/start_work.py` against the loaded `agent-message` Skill. Retain the
    recovered stable task key and owned paths across Forks, but obtain the actor
    from the current host; never adopt a parent/history/context-pack ID. Native
    parent/worker work retains the host task tree and skips independent registration.
 
    ```bash
    python3 '<loaded-continue-codex-work>/scripts/start_work.py' \
-     --peer-skill '<absolute-loaded-peer-message>' -- \
+     --peer-skill '<absolute-loaded-agent-message>' -- \
      --repo '<absolute-target-checkout>' --path '<owned-repo-relative-file-or-directory>' \
      --task '<stable-issue-or-deliverable>' --actor '<exact-current-host-address>'
    ```
@@ -95,7 +95,7 @@ verified parent snapshot. A local cue is not a standalone goal.
    and exit code. On exit 3, use its existing owner/result lead before starting
    replacement work. An empty registry retains unknown occupancy. Resolve a
    missing dependency through the existing Skill owner; do not create a second
-   board. Follow peer-message's current work-entry/reconciliation contract for
+   board. Follow agent-message's current work-entry/reconciliation contract for
    non-Git resources, changed identities and released declarations. This checks
    the invoked entry; it does not enforce all host file writes.
 4. Verify that recorded patches, commits, pushes, downloads, jobs, or Agent outputs
