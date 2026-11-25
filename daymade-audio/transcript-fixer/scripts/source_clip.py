@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare a local/authorized SSH source and fetch identity-bound audio windows.
+"""Prepare a local/authorized SSH source and fetch identity-bound audio windows or video frames.
 
 SSH is opt-in through an exact host, hostname and account. Credentials and machine
 addresses belong in the caller's private source spec, never the shipped package.
@@ -20,6 +20,8 @@ import time
 
 SCHEMA = "transcript-source-v1"
 CLIP_SCHEMA = "transcript-source-clip-v1"
+FRAME_SCHEMA = "transcript-source-frame-v1"
+PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 MAX_WINDOW = 180.0
 
 # One implementation runs locally or over the existing SSH command plane.
@@ -47,6 +49,18 @@ def main(a):
         print(json.dumps({"fingerprint":before,"duration":duration,"hostname":socket.gethostname(),"user":getpass.getuser()}));return
     if a["action"]=="check":
         print(json.dumps({"fingerprint":before}));return
+    if a["action"]=="frame":
+        with tempfile.TemporaryDirectory(prefix="transcript-source-frame-") as td:
+            out=pathlib.Path(td)/"frame.png"
+            cp=subprocess.run([a.get("ffmpeg","ffmpeg"),"-nostdin","-hide_banner","-loglevel","error","-ss",str(a["timestamp"]),"-i",str(p),"-frames:v","1","-f","image2","-c:v","png",str(out)],capture_output=True,timeout=90)
+            if cp.returncode: raise ValueError("ffmpeg frame extraction failed: "+cp.stderr.decode(errors="replace")[-600:])
+            if not out.is_file(): raise ValueError("no video frame extracted at timestamp (source may lack a video stream)")
+            data=out.read_bytes()
+            if not data.startswith(b"\x89PNG\r\n\x1a\n"): raise ValueError("extracted frame is not a valid PNG")
+            if before!=fingerprint(p): raise ValueError("source changed during frame extraction")
+            print(json.dumps({"sha256":hashlib.sha256(data).hexdigest(),"size":len(data)}),flush=True)
+            sys.stdout.buffer.write(data);sys.stdout.buffer.flush()
+        return
     with tempfile.TemporaryDirectory(prefix="transcript-source-clip-") as td:
         out=pathlib.Path(td)/"clip.wav"
         cp=subprocess.run([a.get("ffmpeg","ffmpeg"),"-nostdin","-hide_banner","-loglevel","error","-ss",str(a["start"]),"-i",str(p),"-t",str(a["end"]-a["start"]),"-vn","-ac","1","-ar","16000","-c:a","pcm_s16le",str(out)],capture_output=True,timeout=90)
@@ -211,6 +225,68 @@ class SourceClips:
         finally:
             lock.unlink()
 
+    def fetch_frame(self, timestamp: float, output: str | Path) -> dict:
+        if not math.isfinite(timestamp) or timestamp < 0 or timestamp > self.duration + 0.001:
+            raise ValueError("invalid source-clock timestamp")
+        self.check()
+        identity = {"schema": FRAME_SCHEMA,
+                    "source": {k: v for k, v in self.spec.items() if k != "verified_at"},
+                    "timestamp": timestamp, "format": "png"}
+        target = Path(output).expanduser().absolute()
+        sidecar = Path(str(target)+".source.json")
+        reserved = {self.spec_path}
+        if self.spec["kind"] == "local":
+            reserved.add(Path(self.spec["path"]).resolve())
+        if any(p.is_symlink() or p.resolve() in reserved for p in (target, sidecar)):
+            raise ValueError("output conflicts with a source/spec or symlink")
+        if target.exists() or sidecar.exists():
+            try:
+                previous = json.loads(sidecar.read_text())
+                if not isinstance(previous, dict) or previous.get("identity") != identity or (target.exists() and sha256(target) != previous["frame_sha256"]):
+                    raise ValueError("unbound existing output")
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                raise ValueError("refusing to replace an existing output without its matching frame receipt") from exc
+        key = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
+        cached, metadata = self.cache / (key+".png"), self.cache / (key+".json")
+        lock = self.cache / (key+".lock")
+        if any(path.resolve() in reserved for path in (cached, metadata, lock)):
+            raise ValueError("cache path conflicts with the source/spec")
+        try:
+            fd = os.open(lock, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError as exc:
+            raise ValueError("frame key is in use; reuse the current writer's result after it finishes") from exc
+        os.close(fd)
+        try:
+            reused = False
+            if cached.is_file() and metadata.is_file() and not cached.is_symlink() and not metadata.is_symlink():
+                try:
+                    proof = json.loads(metadata.read_text())
+                    reused = isinstance(proof, dict) and proof.get("identity") == identity and sha256(cached) == proof.get("frame_sha256")
+                except (OSError, ValueError):
+                    reused = False
+            if not reused:
+                wire = run_worker(self.spec, {"action": "frame", "fingerprint": self.spec["fingerprint"],
+                                              "timestamp": timestamp})
+                header, data = wire.split(b"\n", 1)
+                info = json.loads(header)
+                if (len(data) != info["size"] or hashlib.sha256(data).hexdigest() != info["sha256"]
+                        or not data.startswith(PNG_MAGIC)):
+                    raise ValueError("frame transfer/format mismatch")
+                proof = {"identity": identity, "frame_sha256": info["sha256"], "frame_size": info["size"]}
+                atomic_write(cached, data)
+                atomic_write(metadata, (json.dumps(proof, ensure_ascii=False, indent=2)+"\n").encode())
+            self.check()
+            data = cached.read_bytes()
+            if hashlib.sha256(data).hexdigest() != proof["frame_sha256"]:
+                raise ValueError("cache changed before output publication")
+            atomic_write(target, data)
+            receipt = {**proof, "cache_reused": reused, "output": str(target),
+                       "source_sha256": self.spec["sha256"], "source_timestamp": timestamp}
+            atomic_write(sidecar, (json.dumps(receipt, ensure_ascii=False, indent=2)+"\n").encode())
+            return receipt
+        finally:
+            lock.unlink()
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -230,6 +306,11 @@ def main() -> int:
     p.add_argument("--start", type=float, required=True)
     p.add_argument("--end", type=float, required=True)
     p.add_argument("--output", required=True)
+    p = commands.add_parser("frame", help="Extract a single verified PNG frame at a calibrated source-clock timestamp")
+    p.add_argument("--source-spec", required=True)
+    p.add_argument("--cache-dir", required=True)
+    p.add_argument("--timestamp", type=float, required=True)
+    p.add_argument("--output", required=True)
     args = parser.parse_args()
     try:
         if args.command == "prepare":
@@ -241,6 +322,8 @@ def main() -> int:
                     spec[tool] = getattr(args, tool)
             result = prepare(spec)
             atomic_write(Path(args.output), (json.dumps(result, ensure_ascii=False, indent=2)+"\n").encode(), replace=False)
+        elif args.command == "frame":
+            result = SourceClips(args.source_spec, args.cache_dir).fetch_frame(args.timestamp, args.output)
         else:
             result = SourceClips(args.source_spec, args.cache_dir).fetch(args.start, args.end, args.output)
         print(json.dumps(result, ensure_ascii=False))
