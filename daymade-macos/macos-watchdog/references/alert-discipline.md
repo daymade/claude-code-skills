@@ -64,6 +64,13 @@ Rate pattern for repeated identical failures (from the published dynamic rate-li
 - **Lower severity**: initial 15-min delay, backoff capped at 2 h.
 - **Entering cool-down**: exactly one notification saying "standing down for X, will retry then, silence until then" — this single message is what makes the silence trustworthy rather than indistinguishable from a dead watchdog.
 
+### Channel isolation and fingerprint stability
+
+Two common causes of alert fatigue happen even when a cooldown or renotify timer exists:
+
+- **Isolate single-operator ops alerts from shared business channels.** Infrastructure and scheduler health alerts that only one maintainer acts on belong in a dedicated **bot direct message (1:1 P2P)**, not a shared collaboration or document-update group. Mixing periodic ops cards into a business channel drowns out high-signal team updates. Prefer an app/bot identity over a personal user OAuth token for unattended senders (avoids periodic user-token refresh outages and separates alert threads from personal chat), pin the resolved P2P `chat_id` in config so misrouted sends fail closed, and after switching channels verify **both sides** via read-only recipient-side readback when available (new DM shows the delivered card and the retired group has zero new ops alerts after cutover — do not stop at sender-side API acceptance alone).
+- **Exclude volatile metadata and transient `running` states from change fingerprints.** Incident fingerprints must capture the actionable failure class, never counters or totals that jitter across runs (for example, round counts, elapsed hours, or fluctuating `complete/total` tallies). Likewise, when a watched periodic job transiently overwrites its health file with a fresh `status="running"` (within its `running_stale_seconds` threshold) that omits terminal fields, suppress same-severity `changed_alert` transitions while `in_progress` is true; keep `new_alert`, severity escalations, stuck-running alerts (`age > running_stale_seconds`), and scheduled `renotify` active. Otherwise the fingerprint oscillates between in-progress and terminal shapes every poll interval and bypasses the renotify window.
+
 ## Queue throughput and issue cardinality
 
 A notifier has a measurable drain rate. Before enabling per-issue notifications, compare the number of distinct active issues with `backlog_horizon / send_interval`. In a hypothetical 42-issue burst with a 6-second send interval and a 180-second horizon, only 30 messages can leave the queue; 12 remain. With continued arrivals, the oldest still-pending item will exceed the threshold even when every send succeeds.
