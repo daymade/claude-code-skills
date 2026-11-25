@@ -52,13 +52,36 @@ transcript-to-source timing evidence; the adapter does not rescale the source
 clock or infer that mapping. Do not repair a timing mismatch by choosing a
 plausible nearby utterance.
 
-For a separately inspected window:
+For a separately inspected window or a single clock-calibrated video frame:
 
 ```bash
 python3 scripts/source_clip.py fetch \
   --source-spec /abs/runtime/source.json --cache-dir /abs/runtime/source-clips \
   --start 12 --end 16 --output /abs/runtime/check.wav
+
+python3 scripts/source_clip.py frame \
+  --source-spec /abs/runtime/source.json --cache-dir /abs/runtime/source-clips \
+  --timestamp 14.5 --output /abs/runtime/frame.png
 ```
+
+To compute exploratory tight and medium clip windows for a phrase inside a long
+speaker turn before calling `fetch` or `frame`, use the read-only `locate`
+subcommand (pass `--source-spec` or `--duration` to clamp to media length, and
+`--line` to disambiguate repeated phrases):
+
+```bash
+python3 scripts/source_clip.py locate \
+  --transcript /abs/transcript.md --needle '<disputed phrase>' \
+  --source-spec /abs/runtime/source.json
+```
+
+`frame` extracts a single verified PNG frame at a calibrated source-clock
+timestamp and writes its identity receipt to `<frame>.source.json` alongside
+cache reuse and source-change checks. `locate` reads only the transcript
+(skipping YAML frontmatter) and optionally the spec's duration; it never runs
+ffmpeg or modifies files, enforces `2 * medium_pad <= MAX_WINDOW`, and marks
+every returned window `"exploratory": true`: verify neighbouring words on the
+extracted clip before treating a mismatch as evidence.
 
 Windows are finite source-clock intervals within the prepared duration and the
 bound in `MAX_WINDOW` in `source_clip.py`. Remote extraction happens on that

@@ -200,6 +200,26 @@ task, or require someone to enable exports before other items can be adjudicated
   configured) and inspect the visible label. The frame is independent visual
   evidence for that screen-referenced occurrence only; do not generalize it into a
   dictionary rule.
+- **Triangulate dual-engine same-bias and OOV proper nouns.** Two text
+  recognizers can share the same homophone bias or both fail on an
+  out-of-vocabulary proper noun (an uncommon personal name, local site/project
+  name, or short English acronym). When neither engine outputs a clean written
+  form, combine direct multimodal listening of the extracted clip with an
+  authoritative project roster/glossary and, when screen-sharing video exists in
+  that meeting or a same-day sibling session, a single calibrated frame
+  (`source_clip.py frame`) showing the written spelling. Without a written or
+  authoritative anchor, keep the raw text pending rather than guessing a spelling
+  from sound alone.
+- **Record confirmed far-field / background-noise hallucinations explicitly.**
+  When direct listening on both tight and medium clips proves the active speaker
+  was silent and the disputed text was hallucinated from distant room chatter,
+  echo, or microphone noise rather than deliberate speech, preserve the original
+  verbatim body text (do not delete it or replace it with a guess), record
+  explicitly in the transcript's provenance note (`asr_note`) that the span is a
+  verified background-noise hallucination, and resolve any matching review-queue
+  row with `kept_original` citing the clip so `stats.pending_total == 0` holds.
+  That closes the item cleanly so future audits neither rewrite it nor re-flag
+  it as an unverified pending row.
 - **Resolve load-bearing pendings at rung 7 before parking when media is accessible.**
   Do not reflexively park high-impact unresolved items (decisions, action owners,
   dates/budgets, attrition/contract reasons, key proper nouns, or screen-shared UI
@@ -222,7 +242,8 @@ task, or require someone to enable exports before other items can be adjudicated
   - **Estimate the offset by position in the turn**, since speech rate within one
     turn is roughly constant: `token_start ≈ turn_start + (characters before the
     token ÷ characters in the turn) × turn_duration`, where `turn_duration` is the
-    next speaker timestamp minus this one. For the final timestamped turn (or a
+    next speaker timestamp minus this one. To compute this mechanically instead of
+    by hand, run `uv run scripts/source_clip.py locate --transcript <transcript.md> --needle '<phrase>' [--line N] [--source-spec <source.json>]`, which emits exploratory tight/medium windows directly from turn-start timestamps and character offsets (falling back to `--speech-rate` when no later turn exists). For the final timestamped turn (or a
     one-speaker file with no later timestamp), read the media duration and use
     `audio_duration - turn_start` instead:
 
