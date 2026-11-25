@@ -186,9 +186,9 @@ CLI；旧 CLI 能继续处理原 notice/request/reply，但不提供新状态模
 需要独立会话或跨产品协调时，才按现有身份协议绑定发送者和回信路线；普通父子 agent
 交办继续使用宿主身份，不为该例额外执行脚本身份探测、登记或发送。
 
-宿主同时继承 Claude 与 Codex 身份时，在每个写入型 `coord` 子命令后传
-`--actor codex:<完整 UUID>` 或 `--actor claude-session:<完整 UUID>`，明确当前宿主。
-它必须逐字匹配所选产品的环境身份；同产品身份冲突、缺失或空值仍拒绝。
+宿主同时继承 Claude、Codex 与 Antigravity 身份时，在每个写入型 `coord` 子命令后传
+`--actor codex:<完整 UUID>`、`--actor claude-session:<完整 UUID>` 或 `--actor antigravity:<完整 UUID>`，明确当前宿主。
+它必须逐字匹配所选产品的环境身份（Antigravity 校验 `ANTIGRAVITY_CONVERSATION_ID`）；同产品身份冲突、缺失或空值仍拒绝。
 `prepare` 的 `--from` 也受同一校验；后续 `commit/receive/finish/claim/release`
 继续传相同的 `--actor`。原生发送仍由宿主事件独立校验，不能用该参数选择另一会话。
 
@@ -594,6 +594,10 @@ ID 的 `[peer-coordination: {...}]`；若宿主额外写入 marker，marker 只�
 零命中、多条冲突、只有 remove、JSON 损坏或找不到精确会话事件时保留 unknown；能从当前会话事件直接确认的，
 不要另起历史全量扫描。领取成功后按正文分流处理，动作完成再 `coord finish`；接收成功只证明协调记录被领取，
 不证明业务完成或用户授权。
+
+### 从 Antigravity 入站原件接收
+
+Antigravity 经 `agy -p` 收到的信封在 `transcript.jsonl` 的 `USER_INPUT.content` 中会包一层 `<USER_REQUEST>\n...\n</USER_REQUEST>`，经可选收件箱 Hook 注入的信封在 `SYSTEM_MESSAGE.content`（或 `<state-dir>/antigravity-inbox/<uuid>.jsonl` 的 `envelope` 字段）中为原始 `<peer-message>` 字符串。保存原始字节后直接运行 `python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord receive "$RECEIVED_FILE" --actor "antigravity:$ANTIGRAVITY_CONVERSATION_ID"`：`coord receive` 会自动剥离单层 `<USER_REQUEST>` 包装并核对 prepared digest，无需手工删标签。
 
 ## 覆盖与验收
 

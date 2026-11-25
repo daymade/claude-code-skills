@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Bridge local Claude Code and Codex sessions not covered by native tools.
+"""Bridge local Claude Code, Codex, and Antigravity sessions not covered by native tools.
 
 Use the current host's native discovery, messaging, and return channel first.
 Use this CLI only for uncovered targets or script callers, never to bypass
 denied or Held messages. This script cannot inspect a model's available tools.
 
-Discovery targets use `claude-session:<uuid>` or `claude-pid:<pid>`.
+Discovery targets use `claude-session:<uuid>`, `claude-pid:<pid>`,
+`codex:<thread-id>`, or `antigravity:<conversation-id>` (alias `agy:<uuid>`).
 Legacy targets use `claude:<pid-or-name-or-session-id>` or
 `codex:<thread-id-or-exact-name>`. An unprefixed target preserves the original
 peer-message CLI and means Claude. The live Codex adapter uses uv/websockets.
@@ -46,6 +47,12 @@ _work_spec = importlib.util.spec_from_file_location(
 work_start = importlib.util.module_from_spec(_work_spec)
 _work_spec.loader.exec_module(work_start)
 
+_agy_spec = importlib.util.spec_from_file_location(
+    "peer_antigravity_transport", Path(__file__).with_name("antigravity_transport.py")
+)
+antigravity_transport = importlib.util.module_from_spec(_agy_spec)
+_agy_spec.loader.exec_module(antigravity_transport)
+
 
 EXIT_USAGE = 2
 EXIT_TARGET = 3
@@ -55,6 +62,7 @@ EXIT_UNVERIFIED = 10
 EXIT_NO_REPLIES = 11
 
 CODEX_DELIVERY_MODES = ("live", "live-steer", "queued")
+ANTIGRAVITY_DELIVERY_MODES = antigravity_transport.ANTIGRAVITY_DELIVERY_MODES
 
 MAX_REPLY_RESULTS = 100
 REPLY_TRUST_BOUNDARY = (
@@ -97,6 +105,19 @@ def default_claude_home() -> Path:
 
 def default_codex_home() -> Path:
     return Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")).expanduser()
+
+
+def default_antigravity_home() -> Path:
+    return antigravity_transport.default_antigravity_home()
+
+
+def _raise_antigravity_error(exc: antigravity_transport.AntigravityError) -> None:
+    raise PeerError(
+        str(exc),
+        EXIT_TARGET if exc.is_target_error else EXIT_TRANSPORT,
+        outcome=exc.outcome,
+        reason_code=exc.reason_code,
+    ) from exc
 
 
 def read_json(path: Path) -> dict[str, Any] | None:
@@ -493,7 +514,15 @@ def auto_sender() -> str:
     if claude_id:
         return f"claude-session:{claude_id}"
     claude_name = os.environ.get("CLAUDE_CODE_SESSION_NAME")
-    return f"claude:{claude_name}" if claude_name else "local-script"
+    if claude_name:
+        return f"claude:{claude_name}"
+    agy_id = os.environ.get("ANTIGRAVITY_CONVERSATION_ID")
+    if agy_id:
+        try:
+            return f"antigravity:{uuid.UUID(agy_id)}"
+        except ValueError:
+            return f"antigravity:{agy_id}"
+    return "local-script"
 
 
 def auto_reply_address(sender: str) -> str | None:
@@ -520,21 +549,38 @@ def auto_reply_address(sender: str) -> str | None:
         # Official Claude tools cannot reach a Codex thread by any address, so there
         # is no intersection to pick; peer.py is the only way back either way.
         return sender if sender != "local-script" else None
+    if antigravity_transport.is_antigravity_target(sender):
+        return sender
     socket_path = os.environ.get("CLAUDE_CODE_MESSAGING_SOCKET")
     if socket_path:
         return f"uds:{socket_path}"
     return sender if sender != "local-script" else None
 
 
-def current_address(claude_home: Path, codex_home: Path) -> str:
+def current_address(
+    claude_home: Path,
+    codex_home: Path,
+    antigravity_home: Path | None = None,
+) -> str:
     """Return an exact address for the current hosted session or fail loudly."""
+    del antigravity_home  # Antigravity self-identity comes from ANTIGRAVITY_CONVERSATION_ID
     codex_id = os.environ.get("CODEX_THREAD_ID") or os.environ.get("CODEX_SESSION_ID")
     claude_id = os.environ.get("CLAUDE_CODE_SESSION_ID")
     claude_name = os.environ.get("CLAUDE_CODE_SESSION_NAME")
-    if codex_id and (claude_id or claude_name):
+    agy_id = os.environ.get("ANTIGRAVITY_CONVERSATION_ID")
+    has_claude = bool(claude_id or claude_name)
+    has_codex = bool(codex_id)
+    has_agy = bool(agy_id)
+    if sum((has_codex, has_claude, has_agy)) > 1:
+        if has_codex and has_claude and not has_agy:
+            raise PeerError(
+                "both Claude and Codex session identities are present; pass an explicit "
+                "reply address instead of guessing the current host",
+                EXIT_TARGET,
+            )
         raise PeerError(
-            "both Claude and Codex session identities are present; pass an explicit "
-            "reply address instead of guessing the current host",
+            "multiple host session identities (Claude/Codex/Antigravity) are present; "
+            "pass an explicit reply address or --actor instead of guessing the current host",
             EXIT_TARGET,
         )
     if codex_id:
@@ -555,8 +601,17 @@ def current_address(claude_home: Path, codex_home: Path) -> str:
         entry = _select_claude(f"claude:{claude_name}", entries)
         return claude_discovery_address(entry, entries)
 
+    if agy_id:
+        try:
+            return f"antigravity:{uuid.UUID(agy_id)}"
+        except ValueError as exc:
+            raise PeerError(
+                "ANTIGRAVITY_CONVERSATION_ID is not a UUID; pass an explicit reply address",
+                EXIT_TARGET,
+            ) from exc
+
     raise PeerError(
-        "current host did not expose a Claude or Codex session identity; "
+        "current host did not expose a Claude, Codex, or Antigravity session identity; "
         "pass an explicit reply address",
         EXIT_TARGET,
     )
@@ -600,8 +655,13 @@ def claude_envelope(body: str, sender: str, reply_to: str | None, message_id: st
     canonical = os.environ.get("CLAUDE_CODE_SESSION_ID")
     if canonical and canonical not in f"{reply_to or ''}{sender}":
         hint = f" [from-session: {canonical}]"
-    # Typed Claude keys also need the script hint when no live socket normalized them.
-    if reply_to and reply_to.startswith(("codex:", "claude-session:", "claude-pid:")):
+    # Typed Claude keys and cross-product addresses also need the script hint.
+    if reply_to and antigravity_transport.is_antigravity_target(reply_to):
+        try:
+            reply_to = antigravity_transport.canonical_antigravity_address(reply_to)
+        except antigravity_transport.AntigravityError:
+            pass
+    if reply_to and reply_to.startswith(("codex:", "antigravity:", "claude-session:", "claude-pid:")):
         # `codex:<uuid>` is a working reply address -- `codex queue --thread` takes it,
         # and `resolve_codex` resolves it. What it is not is an address the official
         # Claude tools can reach, and only some recipients hold that limitation.
@@ -814,6 +874,128 @@ def send_codex(
     }
 
 
+def send_antigravity(
+    target: str,
+    body: str,
+    sender: str,
+    reply_to: str | None,
+    message_id: str,
+    antigravity_home: Path,
+    state_dir: Path,
+    *,
+    delivery: str = "auto",
+    timeout_seconds: float = antigravity_transport.DEFAULT_ANTIGRAVITY_TIMEOUT_SECONDS,
+) -> dict[str, Any]:
+    if delivery not in ANTIGRAVITY_DELIVERY_MODES:
+        raise PeerError(
+            f"Antigravity delivery must be one of {', '.join(ANTIGRAVITY_DELIVERY_MODES)}",
+            EXIT_USAGE,
+            outcome="not_sent",
+        )
+    if antigravity_transport.is_antigravity_target(sender):
+        try:
+            sender = antigravity_transport.canonical_antigravity_address(sender)
+        except antigravity_transport.AntigravityError as exc:
+            _raise_antigravity_error(exc)
+    if reply_to and antigravity_transport.is_antigravity_target(reply_to):
+        try:
+            reply_to = antigravity_transport.canonical_antigravity_address(reply_to)
+        except antigravity_transport.AntigravityError as exc:
+            _raise_antigravity_error(exc)
+    try:
+        entry = antigravity_transport.resolve_conversation(
+            target, antigravity_home, reject_unavailable=True, require_catalog=True
+        )
+    except antigravity_transport.AntigravityError as exc:
+        _raise_antigravity_error(exc)
+    conversation_id = entry["id"]
+    address = entry["address"]
+    state = entry["status"]
+    envelope = codex_envelope(body, sender, reply_to, message_id)
+    resolved = {
+        "address": address,
+        "id": conversation_id,
+        "title": entry.get("title"),
+        "cwd": entry.get("cwd"),
+        "status": state,
+        "alive": entry.get("alive"),
+        "lock_held": entry.get("lock_held"),
+    }
+
+    if delivery == "queued":
+        queue_reason = "explicit_queued_delivery"
+        use_queue = True
+    elif state == "idle":
+        queue_reason = None
+        use_queue = False
+    elif delivery == "auto":
+        queue_reason = (
+            "target_busy"
+            if state == "running"
+            else ("target_attached_tui" if state == "attached_tui" else f"target_{state}")
+        )
+        use_queue = True
+    else:
+        reason_code = "target_busy" if state == "running" else "target_attached_tui"
+        raise PeerError(
+            f"Antigravity target {address} is {state}; refusing direct `agy -p` resume "
+            "to prevent overwriting live conversation state (use --antigravity-delivery auto or queued)",
+            EXIT_TRANSPORT,
+            outcome="not_sent",
+            reason_code=reason_code,
+        )
+
+    if use_queue:
+        try:
+            queued = antigravity_transport.enqueue_inbox(
+                state_dir,
+                conversation_id,
+                message_id=message_id,
+                sender=sender,
+                reply_to=reply_to,
+                envelope=envelope,
+                queue_reason=queue_reason or "queued",
+            )
+        except (antigravity_transport.AntigravityError, OSError) as exc:
+            raise PeerError(
+                f"Antigravity inbox queue write failed: {exc}",
+                EXIT_TRANSPORT,
+                outcome="unknown",
+            ) from exc
+        return {
+            "provider": "antigravity",
+            "target": address,
+            "target_id": conversation_id,
+            "message_id": message_id,
+            "transport_status": "accepted",
+            "route": "antigravity_inbox_queue",
+            "queue_reason": queue_reason,
+            "inbox_path": queued["path"],
+            "provenance_boundary": "advisory_text_only",
+            "resolved": resolved,
+        }
+
+    try:
+        resumed = antigravity_transport.send_agy_resume(
+            conversation_id,
+            envelope,
+            antigravity_home,
+            timeout_seconds=timeout_seconds,
+        )
+    except antigravity_transport.AntigravityError as exc:
+        _raise_antigravity_error(exc)
+    return {
+        "provider": "antigravity",
+        "target": address,
+        "target_id": conversation_id,
+        "message_id": message_id,
+        "transport_status": "accepted",
+        "provenance_boundary": "advisory_text_only",
+        **resumed,
+        "resolved": resolved,
+    }
+
+
 def claude_homes(primary: Path) -> list[Path]:
     homes = {primary.resolve(), (Path.home() / ".claude").resolve()}
     profile_roots = {Path.home() / ".claude-profiles"}
@@ -935,7 +1117,90 @@ def verify_codex(target: str, message_id: str, codex_home: Path) -> dict[str, An
     return None
 
 
-def verify(target: str, message_id: str, claude_home: Path, codex_home: Path) -> dict[str, Any] | None:
+def verify_antigravity(
+    target: str,
+    message_id: str,
+    antigravity_home: Path,
+    state_dir: Path | None = None,
+) -> dict[str, Any] | None:
+    try:
+        conversation_id = antigravity_transport.parse_antigravity_id(target)
+    except antigravity_transport.AntigravityError as exc:
+        _raise_antigravity_error(exc)
+
+    read_errors: list[str] = []
+    try:
+        for source_path, line_number, record, content in antigravity_transport.iter_transcript_records(
+            antigravity_home, conversation_id
+        ):
+            if not content or message_id not in content:
+                continue
+            source = record.get("source")
+            rec_type = record.get("type")
+            if source == "USER_EXPLICIT" and rec_type == "USER_INPUT":
+                payload = antigravity_transport.unwrap_user_request(content)
+            elif source in ("SYSTEM", "SYSTEM_SDK") and rec_type == "SYSTEM_MESSAGE":
+                payload = antigravity_transport.extract_system_message_payload(content)
+            else:
+                continue
+            matched = False
+            for candidate_envelope in _extract_peer_envelopes(payload):
+                parsed = parse_codex_envelope(candidate_envelope)
+                if parsed is not None and parsed["message_id"] == message_id:
+                    matched = True
+                    break
+            if matched:
+                return {
+                    "provider": "antigravity",
+                    "delivery_status": "verified_in_transcript",
+                    "message_id": message_id,
+                    "evidence": str(source_path),
+                    "line": line_number,
+                    "step_index": record.get("step_index"),
+                    "source": source,
+                    "type": rec_type,
+                }
+    except (antigravity_transport.AntigravityError, OSError) as exc:
+        read_errors.append(str(exc))
+
+    if state_dir is not None:
+        try:
+            inbox = antigravity_transport.read_inbox(state_dir, conversation_id, include_drained=True)
+            for item in inbox["items"]:
+                if item.get("message_id") == message_id:
+                    return {
+                        "provider": "antigravity",
+                        "delivery_status": "verified_queued",
+                        "message_id": message_id,
+                        "evidence": inbox["path"],
+                        "line": item["line"],
+                        "drained": item["drained"],
+                    }
+        except (antigravity_transport.AntigravityError, OSError) as exc:
+            read_errors.append(str(exc))
+
+    if read_errors:
+        raise PeerError(
+            "Antigravity delivery evidence read/parse failure: " + "; ".join(read_errors)
+        )
+    return None
+
+
+def verify(
+    target: str,
+    message_id: str,
+    claude_home: Path,
+    codex_home: Path,
+    antigravity_home: Path | None = None,
+    state_dir: Path | None = None,
+) -> dict[str, Any] | None:
+    if antigravity_transport.is_antigravity_target(target):
+        return verify_antigravity(
+            target,
+            message_id,
+            antigravity_home or default_antigravity_home(),
+            state_dir=state_dir,
+        )
     if target.startswith("codex:"):
         return verify_codex(target, message_id, codex_home)
     return verify_claude(target, message_id, claude_home)
@@ -1360,13 +1625,138 @@ def claude_replies(
     return finalize_reply_result(canonical_target, message_id, limit, replies, stores)
 
 
+def _extract_peer_envelopes(text: str) -> list[str]:
+    """Return one full envelope or multiple peer-message envelopes joined by Stop hook."""
+    if parse_codex_envelope(text) is not None:
+        return [text]
+    blocks = re.findall(
+        r'<peer-message protocol="1" message-id="[^"\r\n]+" '
+        r'from="[^"\r\n]+"(?: reply-to="[^"\r\n]+")?>\r?\n'
+        r'.*?\r?\n</peer-message>',
+        text,
+        flags=re.DOTALL,
+    )
+    return blocks if blocks else [text]
+
+
+def antigravity_replies(
+    target: str,
+    message_id: str,
+    limit: int,
+    antigravity_home: Path,
+    state_dir: Path | None = None,
+) -> dict[str, Any]:
+    try:
+        conversation_id = antigravity_transport.parse_antigravity_id(target)
+    except antigravity_transport.AntigravityError as exc:
+        _raise_antigravity_error(exc)
+    canonical_target = f"antigravity:{conversation_id}"
+    found_replies: dict[str, dict[str, Any]] = {}
+    stores: list[dict[str, Any]] = []
+
+    if state_dir is not None:
+        inbox_file, _, _ = antigravity_transport.inbox_paths(state_dir, conversation_id)
+        if inbox_file.is_file():
+            try:
+                inbox = antigravity_transport.read_inbox(
+                    state_dir, conversation_id, include_drained=True
+                )
+            except (antigravity_transport.AntigravityError, OSError) as exc:
+                raise PeerError(f"Antigravity reply inbox read failure: {exc}") from exc
+            examined = 0
+            for item in inbox["items"]:
+                if message_id not in item["envelope"]:
+                    continue
+                examined += 1
+                parsed = parse_reply_envelope(item["envelope"])
+                add_reply_candidate(
+                    found_replies,
+                    parsed,
+                    message_id,
+                    {
+                        "kind": "antigravity_inbox_queue",
+                        "path": inbox["path"],
+                        "line": item["line"],
+                        "drained": item["drained"],
+                    },
+                    1,
+                    int(item.get("created_at_ms") or item["line"]),
+                )
+            stores.append(
+                {
+                    "kind": "antigravity_inbox_queue",
+                    "path": inbox["path"],
+                    "candidate_records_examined": examined,
+                }
+            )
+
+    compact_path, _ = antigravity_transport.transcript_paths(antigravity_home, conversation_id)
+    if compact_path.is_file():
+        examined = 0
+        try:
+            for source_path, line_number, record, content in antigravity_transport.iter_transcript_records(
+                antigravity_home, conversation_id
+            ):
+                source = record.get("source")
+                rec_type = record.get("type")
+                if not content or message_id not in content:
+                    continue
+                if source == "USER_EXPLICIT" and rec_type == "USER_INPUT":
+                    payload = antigravity_transport.unwrap_user_request(content)
+                elif source in ("SYSTEM", "SYSTEM_SDK") and rec_type == "SYSTEM_MESSAGE":
+                    payload = antigravity_transport.extract_system_message_payload(content)
+                else:
+                    continue
+                examined += 1
+                step_index = record.get("step_index")
+                order = int(step_index) if isinstance(step_index, int) else line_number
+                for candidate_envelope in _extract_peer_envelopes(payload):
+                    parsed = parse_reply_envelope(candidate_envelope)
+                    add_reply_candidate(
+                        found_replies,
+                        parsed,
+                        message_id,
+                        {
+                            "kind": "antigravity_transcript",
+                            "path": str(source_path),
+                            "line": line_number,
+                            "step_index": step_index,
+                            "source": source,
+                            "type": rec_type,
+                        },
+                        2,
+                        order,
+                    )
+        except (antigravity_transport.AntigravityError, OSError) as exc:
+            raise PeerError(f"Antigravity reply transcript read failure: {exc}") from exc
+        stores.append(
+            {
+                "kind": "antigravity_transcript",
+                "path": str(compact_path),
+                "candidate_records_examined": examined,
+            }
+        )
+
+    return finalize_reply_result(canonical_target, message_id, limit, found_replies, stores)
+
+
 def replies(
     target: str,
     message_id: str,
     limit: int,
     claude_home: Path,
     codex_home: Path,
+    antigravity_home: Path | None = None,
+    state_dir: Path | None = None,
 ) -> dict[str, Any]:
+    if antigravity_transport.is_antigravity_target(target):
+        return antigravity_replies(
+            target,
+            message_id,
+            limit,
+            antigravity_home or default_antigravity_home(),
+            state_dir=state_dir,
+        )
     if target.startswith("codex:"):
         return codex_replies(target, message_id, limit, codex_home)
     return claude_replies(target, message_id, limit, claude_home)
@@ -1378,10 +1768,19 @@ def wait_for_verification(
     wait_seconds: float,
     claude_home: Path,
     codex_home: Path,
+    antigravity_home: Path | None = None,
+    state_dir: Path | None = None,
 ) -> dict[str, Any] | None:
     deadline = time.monotonic() + max(wait_seconds, 0)
     while True:
-        result = verify(target, message_id, claude_home, codex_home)
+        result = verify(
+            target,
+            message_id,
+            claude_home,
+            codex_home,
+            antigravity_home=antigravity_home,
+            state_dir=state_dir,
+        )
         if result or time.monotonic() >= deadline:
             return result
         time.sleep(min(1.0, max(deadline - time.monotonic(), 0)))
@@ -1410,9 +1809,28 @@ def send_one(
     codex_home: Path,
     message_id: str | None = None,
     codex_delivery: str = "live",
+    antigravity_home: Path | None = None,
+    state_dir: Path | None = None,
+    antigravity_delivery: str = "auto",
+    antigravity_timeout: float = antigravity_transport.DEFAULT_ANTIGRAVITY_TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
     message_id = message_id or str(uuid.uuid4())
-    if target.startswith("codex:"):
+    effective_agy_home = antigravity_home or default_antigravity_home()
+    effective_state_dir = state_dir or coordination.default_root()
+    if antigravity_transport.is_antigravity_target(target):
+        receipt = send_antigravity(
+            target,
+            body,
+            sender,
+            reply_to,
+            message_id,
+            effective_agy_home,
+            effective_state_dir,
+            delivery=antigravity_delivery,
+            timeout_seconds=antigravity_timeout,
+        )
+        target = receipt["target"]
+    elif target.startswith("codex:"):
         receipt = send_codex(target, body, sender, reply_to, message_id, codex_home,
                              codex_delivery)
         target = receipt["target"]
@@ -1431,7 +1849,13 @@ def send_one(
         else:
             verification_target = f"claude-session:{receipt['target_id']}"
     evidence = wait_for_verification(
-        verification_target, message_id, wait_seconds, claude_home, codex_home
+        verification_target,
+        message_id,
+        wait_seconds,
+        claude_home,
+        codex_home,
+        antigravity_home=effective_agy_home,
+        state_dir=effective_state_dir,
     )
     if evidence:
         receipt.update(evidence)
@@ -1472,8 +1896,9 @@ def cmd_list(args: argparse.Namespace) -> int:
     output = getattr(args, "output", None)
     if full_titles and output is None:
         raise PeerError("--full-titles requires --output; do not dump full prompts into discovery")
+    provider = "antigravity" if args.provider == "agy" else args.provider
     rows = []
-    if args.provider in ("all", "claude"):
+    if provider in ("all", "claude"):
         entries = claude_registry(args.claude_home)
         for entry in entries:
             rows.append(
@@ -1489,7 +1914,7 @@ def cmd_list(args: argparse.Namespace) -> int:
                 }
             )
     codex_truncated = False
-    if args.provider in ("all", "codex"):
+    if provider in ("all", "codex"):
         # Probe one past the limit: a full page otherwise looks identical to a
         # complete catalog, and a silently truncated candidate list is how
         # fan-out broadcasts pick the wrong owner.
@@ -1513,9 +1938,43 @@ def cmd_list(args: argparse.Namespace) -> int:
                     "cwd": entry.get("cwd"),
                 }
             )
+    antigravity_truncated = False
+    if provider in ("all", "antigravity"):
+        try:
+            agy_entries, antigravity_truncated = antigravity_transport.list_conversations(
+                getattr(args, "antigravity_home", None) or default_antigravity_home(),
+                args.limit,
+            )
+        except antigravity_transport.AntigravityError as exc:
+            _raise_antigravity_error(exc)
+        for entry in agy_entries:
+            raw_title = entry.get("title")
+            rows.append(
+                {
+                    "provider": "antigravity",
+                    "address": entry["address"],
+                    "id": entry["id"],
+                    "title": raw_title if full_titles else (
+                        raw_title[:160] if isinstance(raw_title, str) else raw_title
+                    ),
+                    "title_chars": len(raw_title) if isinstance(raw_title, str) else 0,
+                    "title_truncated": not full_titles and isinstance(raw_title, str) and len(raw_title) > 160,
+                    "status": entry["status"],
+                    "alive": entry["alive"],
+                    "reachable": entry["reachable"],
+                    "delivery_hint": entry["delivery_hint"],
+                    "cwd": entry.get("cwd"),
+                }
+            )
     if codex_truncated:
         print(
             f"note: Codex thread list truncated at --limit {args.limit} "
+            "(Claude sessions are never truncated); raise --limit to see more",
+            file=sys.stderr,
+        )
+    if antigravity_truncated:
+        print(
+            f"note: Antigravity conversation list truncated at --limit {args.limit} "
             "(Claude sessions are never truncated); raise --limit to see more",
             file=sys.stderr,
         )
@@ -1530,6 +1989,13 @@ def cmd_list(args: argparse.Namespace) -> int:
                     f"name={row.get('name')!r} alive={row['alive']} "
                     f"reachable={row['reachable']} cwd={row['cwd']}"
                 )
+            elif row["provider"] == "antigravity":
+                lines.append(
+                    f"{row['address']:<49} status={str(row['status']):<12} "
+                    f"delivery={row['delivery_hint']:<6} alive={row['alive']} "
+                    f"title={row.get('title')!r} cwd={row['cwd']}"
+                    + (f" title_truncated=True title_chars={row['title_chars']}" if row["title_truncated"] else "")
+                )
             else:
                 lines.append(
                     f"{row['address']:<44} status=saved name={row.get('name')!r} "
@@ -1543,8 +2009,15 @@ def cmd_list(args: argparse.Namespace) -> int:
         fd = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as stream:
             stream.write(rendered)
-        print(json.dumps({"output": str(Path(output).resolve()), "bytes": size,
-                          "rows": len(rows), "codex_truncated": codex_truncated}))
+        receipt = {
+            "output": str(Path(output).resolve()),
+            "bytes": size,
+            "rows": len(rows),
+            "codex_truncated": codex_truncated,
+        }
+        if provider in ("all", "antigravity"):
+            receipt["antigravity_truncated"] = antigravity_truncated
+        print(json.dumps(receipt))
     elif size > 65536:
         raise PeerError("discovery exceeds 65536 UTF-8 bytes; narrow --provider/--limit or export with --output")
     else:
@@ -1553,7 +2026,11 @@ def cmd_list(args: argparse.Namespace) -> int:
 
 
 def cmd_whoami(args: argparse.Namespace) -> int:
-    address = current_address(args.claude_home, args.codex_home)
+    address = current_address(
+        args.claude_home,
+        args.codex_home,
+        getattr(args, "antigravity_home", None),
+    )
     if args.json:
         print(json.dumps({"address": address}, ensure_ascii=False, sort_keys=True))
     else:
@@ -1629,7 +2106,13 @@ def cmd_broadcast(args: argparse.Namespace) -> int:
 
 def cmd_verify(args: argparse.Namespace) -> int:
     result = wait_for_verification(
-        args.target, args.message_id, args.wait, args.claude_home, args.codex_home
+        args.target,
+        args.message_id,
+        args.wait,
+        args.claude_home,
+        args.codex_home,
+        antigravity_home=args.antigravity_home,
+        state_dir=args.state_dir,
     )
     if not result:
         result = {
@@ -1669,6 +2152,8 @@ def cmd_replies(args: argparse.Namespace) -> int:
         args.limit,
         args.claude_home,
         args.codex_home,
+        antigravity_home=args.antigravity_home,
+        state_dir=args.state_dir,
     )
     print_replies(result, args.json)
     if result["reply_status"] == "unknown_no_evidence_store":
@@ -1678,13 +2163,72 @@ def cmd_replies(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_inbox(args: argparse.Namespace) -> int:
+    target = args.target
+    if not target:
+        target = current_address(args.claude_home, args.codex_home, args.antigravity_home)
+    if not antigravity_transport.is_antigravity_target(target):
+        raise PeerError(
+            "inbox requires an antigravity:<uuid> (or agy:<uuid>) target, "
+            "or run inside an Antigravity session",
+            EXIT_TARGET,
+        )
+    try:
+        conversation_id = antigravity_transport.parse_antigravity_id(target)
+    except antigravity_transport.AntigravityError as exc:
+        _raise_antigravity_error(exc)
+    canonical = f"antigravity:{conversation_id}"
+    try:
+        if args.ack:
+            drained = antigravity_transport.drain_inbox(args.state_dir, conversation_id)
+            result: dict[str, Any] = {
+                "target": canonical,
+                "status": "acked",
+                "acked_count": len(drained),
+                "items": drained,
+                "trust_boundary": INBOUND_TRUST_BOUNDARY,
+            }
+        else:
+            snapshot = antigravity_transport.read_inbox(
+                args.state_dir, conversation_id, include_drained=args.all
+            )
+            result = {
+                "target": canonical,
+                "status": "ok",
+                **snapshot,
+                "trust_boundary": INBOUND_TRUST_BOUNDARY,
+            }
+    except (antigravity_transport.AntigravityError, OSError) as exc:
+        raise PeerError(f"Antigravity inbox read failure: {exc}", EXIT_TRANSPORT) from exc
+
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+    else:
+        if args.ack:
+            print(f"acked: {canonical} count={result['acked_count']}")
+        else:
+            print(
+                f"inbox: {canonical} unread={result['unread_count']} "
+                f"total={result['total_count']} path={result['path']}"
+            )
+        print(f"trust: {result['trust_boundary']}")
+        for item in result["items"]:
+            state_label = "drained" if item.get("drained") else "unread"
+            print(
+                f"--- message_id={item.get('message_id')} sender={item.get('sender')!r} "
+                f"state={state_label} ---"
+            )
+            print(item["envelope"])
+    return 0
+
+
 def common_message_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("message_file", nargs="?", help="UTF-8 message file")
     parser.add_argument("--message", help="inline message text")
     parser.add_argument(
         "--from", "--from-name", dest="sender",
-        help="sender address resolvable in Claude/Codex registries or 'local-script'; "
-        "non-Claude/Codex hosts sending a one-way --kind notice should omit --from "
+        help="sender address resolvable in Claude/Codex/Antigravity registries or 'local-script'; "
+        "non-Claude/Codex/Antigravity hosts sending a one-way --kind notice should omit --from "
         "(defaults to local-script) and identify themselves in the message body",
     )
     parser.add_argument("--reply-to", help="address the receiver should use to reply")
@@ -1696,6 +2240,22 @@ def common_message_arguments(parser: argparse.ArgumentParser) -> None:
                         "and keeps tool output for idle; notLoaded may queue automatically; "
                         "explicit queued is a delayed user-visible message, possibly after "
                         "expiry; never a workaround for live failure")
+    parser.add_argument(
+        "--antigravity-delivery",
+        choices=ANTIGRAVITY_DELIVERY_MODES,
+        default="auto",
+        help="auto resumes idle unlocked Antigravity conversations via `agy -p` and queues "
+        "attached_tui/running targets into the durable per-conversation inbox (default); "
+        "resume requires an idle unlocked target (fails closed otherwise); "
+        "queued writes directly to the inbox without starting `agy -p`",
+    )
+    parser.add_argument(
+        "--antigravity-timeout",
+        type=positive_seconds,
+        default=antigravity_transport.DEFAULT_ANTIGRAVITY_TIMEOUT_SECONDS,
+        metavar="SECONDS",
+        help="timeout for `agy -p` direct resume turns (default 120s)",
+    )
     parser.add_argument("--topic", help="stable coordination issue/resource key")
     parser.add_argument("--kind", choices=("request", "notice", "reply", "state"), default="notice")
     parser.add_argument("--expires-at", help="ISO timestamp with timezone; required for request/state")
@@ -1709,6 +2269,11 @@ def canonical_address(value: str, args) -> str:
     """Resolve the original typed/legacy input, then serialize a Board equality key."""
     if value == "local-script":
         return value
+    if antigravity_transport.is_antigravity_target(value):
+        try:
+            return antigravity_transport.canonical_antigravity_address(value)
+        except antigravity_transport.AntigravityError as exc:
+            _raise_antigravity_error(exc)
     if value.startswith("codex:"):
         return "codex:" + resolve_codex(value, args.codex_home)
     entry = resolve_claude(value, args.claude_home)
@@ -1732,10 +2297,13 @@ def coordination_current_address(args) -> str:
         raise PeerError("coord --actor and --from must identify the same current host", EXIT_TARGET)
     selected = explicit if explicit is not None else sender
     if selected is None:
-        return current_address(args.claude_home, args.codex_home)
-    match = re.fullmatch(r"(codex|claude-session):([0-9a-f-]{36})", selected)
+        return current_address(args.claude_home, args.codex_home, getattr(args, "antigravity_home", None))
+    match = re.fullmatch(r"(codex|claude-session|antigravity):([0-9a-f-]{36})", selected)
     if match is None:
-        raise PeerError("coord --actor requires an exact codex: or claude-session: UUID", EXIT_TARGET)
+        raise PeerError(
+            "coord --actor requires an exact codex:, claude-session:, or antigravity: UUID",
+            EXIT_TARGET,
+        )
     provider, session_id = match.groups()
     try:
         if str(uuid.UUID(session_id)) != session_id:
@@ -1747,6 +2315,11 @@ def coordination_current_address(args) -> str:
         observed = [os.environ[key] for key in keys if key in os.environ]
         if not observed or any(value != session_id for value in observed):
             raise PeerError("coord --actor differs from the current Codex host identity", EXIT_TARGET)
+    elif provider == "antigravity":
+        if os.environ.get("ANTIGRAVITY_CONVERSATION_ID") != session_id:
+            raise PeerError(
+                "coord --actor differs from the current Antigravity host identity", EXIT_TARGET
+            )
     else:
         if os.environ.get("CLAUDE_CODE_SESSION_ID") != session_id:
             raise PeerError("coord --actor differs from the current Claude host identity", EXIT_TARGET)
@@ -1773,8 +2346,8 @@ def prepare_coordination(board, args, target, body, sender):
     except PeerError as exc:
         if exc.exit_code == EXIT_TARGET and sender != "local-script":
             raise PeerError(
-                f"{exc}; --from must be a resolvable Claude/Codex address or 'local-script' "
-                "(omit --from for a one-way --kind notice from a non-Claude/Codex host and "
+                f"{exc}; --from must be a resolvable Claude/Codex/Antigravity address or 'local-script' "
+                "(omit --from for a one-way --kind notice from an unsupported host and "
                 "state sender identity in the message body)",
                 EXIT_TARGET,
                 outcome=exc.outcome,
@@ -1797,9 +2370,25 @@ def managed_send(args, target, body, sender, reply_to):
         message_id = prepared["message_id"]
         actor = prepared["metadata"]["sender"]
         try:
-            receipt = send_one(target, prepared["body"], sender, reply_to, args.wait,
-                               args.claude_home, args.codex_home, message_id=message_id,
-                               codex_delivery=args.codex_delivery)
+            receipt = send_one(
+                target,
+                prepared["body"],
+                sender,
+                reply_to,
+                args.wait,
+                args.claude_home,
+                args.codex_home,
+                message_id=message_id,
+                codex_delivery=args.codex_delivery,
+                antigravity_home=getattr(args, "antigravity_home", None) or default_antigravity_home(),
+                state_dir=args.state_dir,
+                antigravity_delivery=getattr(args, "antigravity_delivery", "auto"),
+                antigravity_timeout=getattr(
+                    args,
+                    "antigravity_timeout",
+                    antigravity_transport.DEFAULT_ANTIGRAVITY_TIMEOUT_SECONDS,
+                ),
+            )
         except PeerError as exc:
             # Resolution failures are known pre-send failures. Transport errors
             # can occur after bytes were accepted: retain unknown, never retry.
@@ -1998,6 +2587,16 @@ def wait_seconds(value: str) -> float:
     return seconds
 
 
+def positive_seconds(value: str) -> float:
+    try:
+        seconds = float(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("timeout must be a number of seconds") from exc
+    if not math.isfinite(seconds) or seconds <= 0:
+        raise argparse.ArgumentTypeError("timeout must be finite and positive")
+    return seconds
+
+
 def reply_message_id(value: str) -> str:
     if not value or any(character.isspace() for character in value):
         raise argparse.ArgumentTypeError("message-id must be nonempty and contain no whitespace")
@@ -2051,6 +2650,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="primary Claude config root; standard sibling profiles are scanned too",
     )
     parser.add_argument("--codex-home", type=Path, default=default_codex_home())
+    parser.add_argument(
+        "--antigravity-home",
+        type=Path,
+        default=default_antigravity_home(),
+        help="Antigravity CLI app data directory (default: $ANTIGRAVITY_APP_DATA_DIR or ~/.gemini/antigravity-cli)",
+    )
     parser.add_argument("--state-dir", type=Path, default=coordination.default_root(),
                         help="shared local coordination state, auto-initialized on use")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -2120,15 +2725,19 @@ def build_parser() -> argparse.ArgumentParser:
         entry.set_defaults(handler=cmd_coord)
 
     list_parser = subparsers.add_parser("list", help="list local peer targets")
-    list_parser.add_argument("--provider", choices=("all", "claude", "codex"), default="all")
+    list_parser.add_argument(
+        "--provider",
+        choices=("all", "claude", "codex", "antigravity", "agy"),
+        default="all",
+    )
     list_parser.add_argument(
         "--limit",
         type=list_limit,
         default=30,
-        help="max Codex threads to list (default 30); Claude sessions are never truncated",
+        help="max Codex/Antigravity conversations to list (default 30); Claude sessions are never truncated",
     )
     list_parser.add_argument("--json", action="store_true")
-    list_parser.add_argument("--full-titles", action="store_true", help="export complete Codex titles; requires --output")
+    list_parser.add_argument("--full-titles", action="store_true", help="export complete Codex/Antigravity titles; requires --output")
     list_parser.add_argument("--output", type=Path, help="write selected format to a new file; stdout returns a small receipt")
     list_parser.set_defaults(handler=cmd_list)
 
@@ -2185,6 +2794,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     inbound_parser.add_argument("--json", action="store_true")
     inbound_parser.set_defaults(handler=cmd_inspect_inbound)
+
+    inbox_parser = subparsers.add_parser(
+        "inbox", help="read (or explicitly --ack) queued Antigravity peer inbox messages"
+    )
+    inbox_parser.add_argument(
+        "target",
+        nargs="?",
+        help="antigravity:<uuid> (or agy:<uuid>); defaults to current Antigravity session",
+    )
+    inbox_parser.add_argument("--all", action="store_true", help="include already-drained messages")
+    inbox_parser.add_argument("--ack", action="store_true", help="atomically mark unread messages as drained")
+    inbox_parser.add_argument("--json", action="store_true")
+    inbox_parser.set_defaults(handler=cmd_inbox)
     return parser
 
 
@@ -2222,6 +2844,7 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     args.claude_home = args.claude_home.expanduser()
     args.codex_home = args.codex_home.expanduser()
+    args.antigravity_home = args.antigravity_home.expanduser()
     try:
         return int(args.handler(args))
     except PeerError as exc:

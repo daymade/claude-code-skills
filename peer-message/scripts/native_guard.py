@@ -106,14 +106,16 @@ def main():
         if isinstance(event, dict) and event.get("tool_name") == "SendMessage" \
                 and isinstance(event.get("tool_input"), dict):
             target = str(event["tool_input"].get("to") or event["tool_input"].get("recipient") or "")
-        if target.startswith("codex:"):
-            # SendMessage resolves Claude sessions only, so a codex: target has no
+        if target.startswith(("codex:", "antigravity:", "agy:")):
+            # SendMessage resolves Claude sessions only, so codex:/antigravity: targets have no
             # prepare-then-native-send path; preparing would only orphan a reserved row.
-            print("BLOCKED (PeerMessage): SendMessage resolves Claude sessions only; a codex: target "
+            prefix = "codex:" if target.startswith("codex:") else "antigravity:"
+            example = "'codex:<thread-id>'" if prefix == "codex:" else "'antigravity:<conversation-id>'"
+            print(f"BLOCKED (PeerMessage): SendMessage resolves Claude sessions only; a {prefix} target "
                   "is unreachable this way and has no prepare-then-native-send path. Do not run coord "
                   "prepare for it — the reserved row it creates would later suppress this Skill's "
-                  "scripts/peer.py send as suppressed_pending. Send directly: scripts/peer.py send "
-                  "'codex:<thread-id>' <body-file>. If coord prepare already ran for this target, "
+                  f"scripts/peer.py send as suppressed_pending. Send directly: scripts/peer.py send "
+                  f"{example} <body-file>. If coord prepare already ran for this target, "
                   "close the orphan row first: coord commit --message-id <id> --outcome not_sent.",
                   file=sys.stderr)
         else:

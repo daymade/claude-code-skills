@@ -265,7 +265,10 @@ def _prepared_core(envelope, metadata_start, message_id):
             attrs = dict(attr_items)
             hint = match.group("hint") or ""
             reply = html.unescape(attrs.get("from") or "")
-            reply_hint = reply.startswith("codex:") and hint == f" [reply: peer.py send {reply}]"
+            reply_hint = (
+                reply.startswith(("codex:", "antigravity:", "claude-session:", "claude-pid:"))
+                and hint == f" [reply: peer.py send {reply}]"
+            )
             session_hint = re.fullmatch(r" \[from-session: [^\s\[\]]+\]", hint)
             if hint and not (reply_hint or session_hint):
                 continue
@@ -746,6 +749,31 @@ class Board:
             if delegation is None:
                 raise CoordinationError("malformed or source-mismatched native delegation")
             envelope = delegation
+        # Antigravity USER_INPUT wraps raw prompts in one outer <USER_REQUEST>
+        # block (often followed by <ADDITIONAL_METADATA> / <USER_SETTINGS_CHANGE>),
+        # and SYSTEM_MESSAGE wraps hook-injected text in <SYSTEM_MESSAGE>.
+        # Unwrap only when the exact inner payload is a peer-message envelope.
+        if isinstance(envelope, str) and envelope.startswith("<USER_REQUEST>"):
+            wrapped = re.fullmatch(
+                r"<USER_REQUEST>\r?\n(<peer-message .*\r?\n</peer-message>)\r?\n</USER_REQUEST>"
+                r"(?:\s*<(?:ADDITIONAL_METADATA|USER_SETTINGS_CHANGE)>.*?"
+                r"</(?:ADDITIONAL_METADATA|USER_SETTINGS_CHANGE)>)*\s*",
+                envelope,
+                flags=re.DOTALL,
+            )
+            if wrapped is not None:
+                envelope = wrapped.group(1)
+        elif isinstance(envelope, str) and "<SYSTEM_MESSAGE>" in envelope:
+            sys_wrapped = re.search(
+                r"(?:\A|\r?\n)<SYSTEM_MESSAGE>\r?\n"
+                r"(?:The following system message was injected by a [A-Za-z0-9_]+ hook:\r?\n"
+                r"|Stop hook blocked termination: )?"
+                r"(<peer-message .*\r?\n</peer-message>)\r?\n</SYSTEM_MESSAGE>\s*\Z",
+                envelope,
+                flags=re.DOTALL,
+            )
+            if sys_wrapped is not None:
+                envelope = sys_wrapped.group(1)
         matches = list(re.finditer(r"^\[peer-coordination: (\{[^\n]*\})\]$", envelope, re.M))
         if not matches:
             return {"status": "legacy", "integrity": "legacy_no_metadata",

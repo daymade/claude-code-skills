@@ -123,6 +123,17 @@ codex queue --thread <THREAD> --message <TEXT>
 
 `codex agents` 是交互式 TUI，适合人浏览 shared app-server sessions；脚本化发现读取本地 thread catalog，但只把它叫 saved catalog，不据此判断活性。
 
+## 6.5 Antigravity（`agy`）：原生工具范围与脚本/Hook 补缺
+
+- **父子子代理与 Swarm 内部协作**：
+  - 顶层会话派出的 subagent 直接沿宿主原生 `send_message` 及自动结果回传，不走 `peer.py`。
+  - Swarm worker 使用宿主暴露的共享消息板工具（`post_message`、`read_board`、`swarm_wait`），不走 `peer.py`。
+- **独立顶层会话之间的原生 `send_message` 局限**：
+  - 实测 `send_message(Recipient=<另一顶层 UUID>, Message=...)` 仅持久化一条 `SYSTEM_MESSAGE`，既不会唤醒空闲的独立会话执行回合，也不会唤醒运行在另一 LS 进程中的独立 TUI。因此它不是跨独立 TUI 或跨产品的实时通道。
+- **跨产品与独立顶层会话补缺**：
+  - 使用 `scripts/peer.py` 的 `antigravity:<uuid>`（别名 `agy:<uuid>`）通道：空闲未锁定目标经文档化 `agy --conversation <uuid> --disable-slash-commands --output-format json -p` 续接；活跃 TUI（持有 `presence/<uuid>.lock` 排他锁）或运行中回合一律走每会话持久收件箱队列，配合 `peer.py inbox` 或用户显式授权安装的可选生命周期 Hook（`SessionStart`/`PreInvocation`/`Stop`）由所属活 LS 自身注入，绝不并发启动竞争 LS 覆盖 `.pb`。
+  - 信任边界：`agy -p` 始终传 `--disable-slash-commands`、绝不传 `--dangerously-skip-permissions`；`<peer-message>` 警示文本仍属 advisory，不授予用户权限。
+
 ## 7. 跨机器边界
 
 本 Skill 的脚本 transport 当前只承诺同机协调；原生通道遵循各自范围：
