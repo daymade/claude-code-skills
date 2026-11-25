@@ -183,13 +183,23 @@ def overlaps(left, right):
         a_base = _glob_dir_prefix(a) if a_is_glob else a
         b_base = _glob_dir_prefix(b) if b_is_glob else b
         if a_is_glob and not b_is_glob:
+            b_looks_like_dir = "." not in b.rsplit("/", 1)[-1]
             if not a_base:
-                return "**" in a or "/" not in b
-            return a_base == b or a_base.startswith(b + "/") or b.startswith(a_base + "/")
+                return "**" in a and b_looks_like_dir
+            return (
+                a_base == b
+                or a_base.startswith(b + "/")
+                or (b.startswith(a_base + "/") and b_looks_like_dir)
+            )
         if b_is_glob and not a_is_glob:
+            a_looks_like_dir = "." not in a.rsplit("/", 1)[-1]
             if not b_base:
-                return "**" in b or "/" not in a
-            return b_base == a or b_base.startswith(a + "/") or a.startswith(b_base + "/")
+                return "**" in b and a_looks_like_dir
+            return (
+                b_base == a
+                or b_base.startswith(a + "/")
+                or (a.startswith(b_base + "/") and a_looks_like_dir)
+            )
         # Both are globs: overlap if their base directories share ancestry (or either is root-level)
         if not a_base or not b_base:
             return True

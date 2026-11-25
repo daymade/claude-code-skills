@@ -639,6 +639,9 @@ class PeerEvolutionTests(unittest.TestCase):
         self.assertTrue(peer.work_start.overlaps("git-path:org/r#src/*.py", "git-path:org/r#src/sub"))
         self.assertTrue(peer.work_start.overlaps("git-path:org/r#src/a*", "git-path:org/r#src/*b.py"))
         self.assertFalse(peer.work_start.overlaps("git-path:org/r#src/*.py", "git-path:org/r#docs/*.py"))
+        self.assertFalse(peer.work_start.overlaps("git-path:org/r#src/*.py", "git-path:org/r#src/readme.md"))
+        self.assertFalse(peer.work_start.overlaps("git-path:org/r#src/*.py", "git-path:org/r#src/docs/readme.md"))
+        self.assertFalse(peer.work_start.overlaps("git-path:org/r#*.py", "git-path:org/r#readme.md"))
 
         # Board.claim() shares overlaps() and detects glob conflicts
         board = peer.coordination.Board(self.state_dir)
