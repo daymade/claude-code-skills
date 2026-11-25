@@ -185,6 +185,18 @@ task, or require someone to enable exports before other items can be adjudicated
   transcript timestamp, calibrate one timestamp whose neighbouring words you can
   hear; a trimmed recording or wall-clock timestamp uses a different clock and
   otherwise reproduces the same mis-cut failure this rung is meant to prevent.
+  When the owning meeting platform's API exposes only a playback page rather than
+  a direct audio download URL, use that platform's authorized recording-retrieval
+  workflow to obtain the verified source media before treating audio as unavailable.
+- **Verify screen-shared UI tokens with a same-timestamp video frame.** When a
+  disputed span refers to an on-screen artifact during a screen-shared meeting
+  (a spreadsheet column letter, menu label, or slide heading) and even two audio
+  recognizers fail to resolve a short spoken letter/code into intelligible text
+  (synthetic example: the speaker points at a sheet saying "widen column F" and
+  both audio engines render it as meaningless Chinese syllables), extract a single
+  frame from the clock-calibrated source video (`ffmpeg -ss <t> -i <video> -vframes 1`)
+  and inspect the visible label. The frame is independent visual evidence for that
+  screen-referenced occurrence only; do not generalize it into a dictionary rule.
 - **Cut two clips, not one.** A tight cut (~±5 s around the token) stops a
   second engine from being dragged by surrounding context into "repairing" the
   token into something fluent. A medium cut (~±20 s) keeps enough acoustic

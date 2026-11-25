@@ -112,10 +112,12 @@ The spelling control uses a fictional system, not a person-name exception.
 | Spoken mistake | Raw `八月三十二号，嗯，我日期可能记错了`; first pass changed `三十二号`→`三十一号` because August has 31 days. No source establishes the intended day. | Restore `三十二号` and preserve the speaker's doubt. Calendar knowledge establishes an impossible date, not an ASR mistake or the replacement day. |
 | Unknown token | Raw `这个 tavri 我还没弄懂`; the complete conversation and available local records supply no definition or canonical match. First pass replaced it with a familiar product solely because it fits the topic. | Restore `tavri`. Report an unresolved load-bearing token when needed; unfamiliarity alone supplies no correction. |
 | Supported same-sound spelling | Raw `名台系统，名字取明亮的明、平台的台`; the fictional system's written record is `明台系统`. First pass left `名台` unchanged. | Correct only `名台`→`明台`. The explicit spelling applies to this occurrence and the pronunciation is unchanged; do not generalize it into a person-name rule. |
+| Q&A echo near-homophone | Turn A asks `这个交付周期是长期的安排吗？`; Turn B immediately replies `很常见的安排，对，明年全年都按这个节奏走。` First pass skipped `很常见` without enqueueing because it is an intelligible common word. | Cold review flags `很常见`→`嗯，长期` (or `长期`) as an adjacent-turn Q&A echo near-homophone mismatch and enqueues it for audio/second-engine verification; without audio or explicit confirmation, do not silently overwrite by fluency and do not dismiss it as an intelligible word. |
 
 For a replay, give the reviewer the raw text, first-pass artifact and the stated
-evidence, without the expected-output column. Judge both whether it repairs the
-unsupported applied edits and whether it retains the supported spelling correction.
+evidence, without the expected-output column. Judge whether it repairs the
+unsupported applied edits, retains the supported spelling correction, and flags
+and enqueues the missed Q&A echo drift without silently overwriting it.
 Packet validation can verify literal spans and coverage; it cannot grade these
 wording judgments.
 
