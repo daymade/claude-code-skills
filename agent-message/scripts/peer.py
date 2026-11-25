@@ -7,16 +7,22 @@ denied or Held messages. This script cannot inspect a model's available tools.
 
 Discovery targets use `claude-session:<uuid>`, `claude-pid:<pid>`,
 `codex:<thread-id>`, or `antigravity:<conversation-id>` (alias `agy:<uuid>`).
-Legacy targets use `claude:<pid-or-name-or-session-id>` or
-`codex:<thread-id-or-exact-name>`. An unprefixed target preserves the original
-peer-message CLI and means Claude. The live Codex adapter uses uv/websockets.
+Unambiguous >=8-hex-digit UUID prefixes expand automatically (failing closed on
+collisions). Legacy targets use `claude:<pid-or-name-or-session-id>` or
+`codex:<thread-id-or-exact-name>`. Shared state resolves via
+`AGENT_MESSAGE_STATE_DIR` -> `PEER_MESSAGE_STATE_DIR` ->
+`${XDG_STATE_HOME:-~/.local/state}/peer-message`.
 """
 
 from __future__ import annotations
 
 import argparse
-from contextlib import closing
+from contextlib import closing, contextmanager
 import errno
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - non-POSIX fallback
+    fcntl = None
 import importlib.util
 import glob
 import hashlib
@@ -26,11 +32,13 @@ import math
 import os
 from pathlib import Path
 import re
+import shlex
 import shutil
 import socket
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import time
 import uuid
 from typing import Any
@@ -250,7 +258,7 @@ def claude_identity_key(target: str) -> tuple[str, str] | None:
             return "sessionId", value
         except ValueError:
             pass
-        if len(value) >= 8 and re.fullmatch(r"[0-9a-fA-F-]+", value):
+        if coordination.is_hex_prefix(value):
             return "sessionIdPrefix", value.lower()
         raise PeerError("invalid Claude session identity key", EXIT_TARGET)
     if target.startswith("claude-pid:"):
@@ -470,21 +478,52 @@ def parse_reply_envelope(envelope: str) -> dict[str, Any] | None:
     }
 
 
-def codex_threads(codex_home: Path, limit: int = 30) -> list[dict[str, Any]]:
+def _normalize_cwd(raw_cwd: str) -> str:
+    try:
+        return str(Path(raw_cwd).expanduser().resolve())
+    except OSError:
+        return raw_cwd.rstrip("/")
+
+
+def _cwd_matches(raw_cwd: Any, target_cwd: str) -> bool:
+    if not isinstance(raw_cwd, str) or not raw_cwd.strip():
+        return False
+    norm_cwd = _normalize_cwd(raw_cwd)
+    prefix = target_cwd.rstrip("/")
+    return norm_cwd == target_cwd or norm_cwd.startswith(prefix + "/")
+
+
+def codex_threads(
+    codex_home: Path, limit: int = 30, *, cwd_filter: str | None = None
+) -> list[dict[str, Any]]:
     state_db = versioned_db(codex_home, "state")
     if not state_db:
         return []
     try:
         with sqlite_ro(state_db) as connection:
-            rows = connection.execute(
+            if not cwd_filter:
+                rows = connection.execute(
+                    "SELECT id, name, title, cwd, recency_at_ms FROM threads "
+                    "WHERE archived = 0 AND preview <> '' "
+                    "ORDER BY recency_at_ms DESC, id DESC LIMIT ?",
+                    (limit,),
+                ).fetchall()
+                return [dict(row) for row in rows]
+            target_cwd = _normalize_cwd(cwd_filter)
+            cursor = connection.execute(
                 "SELECT id, name, title, cwd, recency_at_ms FROM threads "
                 "WHERE archived = 0 AND preview <> '' "
-                "ORDER BY recency_at_ms DESC, id DESC LIMIT ?",
-                (limit,),
-            ).fetchall()
+                "ORDER BY recency_at_ms DESC, id DESC"
+            )
+            matched: list[dict[str, Any]] = []
+            for row in cursor:
+                if _cwd_matches(row["cwd"], target_cwd):
+                    matched.append(dict(row))
+                    if len(matched) >= limit:
+                        break
+            return matched
     except sqlite3.Error as exc:
         raise PeerError(f"cannot read Codex thread catalog {state_db}: {exc}") from exc
-    return [dict(row) for row in rows]
 
 
 def resolve_codex_entry(
@@ -508,7 +547,7 @@ def resolve_codex_entry(
             rows = connection.execute(f"{fields} WHERE id = ?", (needle,)).fetchall()
             if not rows:
                 rows = connection.execute(f"{fields} WHERE name = ?", (needle,)).fetchall()
-            if not rows and len(needle) >= 8 and re.fullmatch(r"[0-9a-fA-F-]+", needle):
+            if not rows and coordination.is_hex_prefix(needle):
                 rows = connection.execute(
                     f"{fields} WHERE lower(id) LIKE ?", (needle.lower() + "%",)
                 ).fetchall()
@@ -553,15 +592,26 @@ def resolve_codex(target: str, codex_home: Path) -> str:
 
 def auto_sender() -> str:
     codex_id = os.environ.get("CODEX_THREAD_ID") or os.environ.get("CODEX_SESSION_ID")
+    claude_id = os.environ.get("CLAUDE_CODE_SESSION_ID")
+    claude_name = os.environ.get("CLAUDE_CODE_SESSION_NAME")
+    agy_id = os.environ.get("ANTIGRAVITY_CONVERSATION_ID")
+    has_codex = bool(codex_id)
+    has_claude = bool(claude_id or claude_name)
+    has_agy = bool(agy_id)
+    if sum((has_codex, has_claude, has_agy)) > 1:
+        raise PeerError(
+            "multiple host session identities (Claude/Codex/Antigravity) are present; "
+            "pass an explicit --from address instead of guessing the current host",
+            EXIT_TARGET,
+            outcome="not_sent",
+            next_command="peer.py send <target> --from <your-address> --message '...'",
+        )
     if codex_id:
         return f"codex:{codex_id}"
-    claude_id = os.environ.get("CLAUDE_CODE_SESSION_ID")
     if claude_id:
         return f"claude-session:{claude_id}"
-    claude_name = os.environ.get("CLAUDE_CODE_SESSION_NAME")
     if claude_name:
         return f"claude:{claude_name}"
-    agy_id = os.environ.get("ANTIGRAVITY_CONVERSATION_ID")
     if agy_id:
         try:
             return f"antigravity:{uuid.UUID(agy_id)}"
@@ -982,7 +1032,7 @@ def send_antigravity(
             EXIT_TRANSPORT,
             outcome="not_sent",
             reason_code=reason_code,
-            next_command=f"peer.py send {address} --antigravity-delivery queued --message '...'",
+            next_command=f"peer.py send {shlex.quote(address)} --antigravity-delivery queued --message '...'",
         )
 
     if use_queue:
@@ -1021,6 +1071,7 @@ def send_antigravity(
             envelope,
             antigravity_home,
             timeout_seconds=timeout_seconds,
+            cwd=entry.get("cwd"),
         )
     except antigravity_transport.AntigravityError as exc:
         _raise_antigravity_error(exc)
@@ -1943,10 +1994,14 @@ def cmd_list(args: argparse.Namespace) -> int:
     if full_titles and output is None:
         raise PeerError("--full-titles requires --output; do not dump full prompts into discovery")
     provider = "antigravity" if args.provider == "agy" else args.provider
+    cwd_filter = getattr(args, "cwd", None)
+    target_cwd = _normalize_cwd(cwd_filter) if cwd_filter else None
     rows = []
     if provider in ("all", "claude"):
         entries = claude_registry(args.claude_home)
         for entry in entries:
+            if target_cwd and not _cwd_matches(entry.get("cwd"), target_cwd):
+                continue
             rows.append(
                 {
                     "provider": "claude",
@@ -1961,10 +2016,9 @@ def cmd_list(args: argparse.Namespace) -> int:
             )
     codex_truncated = False
     if provider in ("all", "codex"):
-        # Probe one past the limit: a full page otherwise looks identical to a
-        # complete catalog, and a silently truncated candidate list is how
-        # fan-out broadcasts pick the wrong owner.
-        entries = codex_threads(args.codex_home, args.limit + 1)
+        # Probe one past the limit after cwd filtering so --cwd does not drop
+        # matching threads behind unrelated global sessions.
+        entries = codex_threads(args.codex_home, args.limit + 1, cwd_filter=cwd_filter)
         codex_truncated = len(entries) > args.limit
         for entry in entries[: args.limit]:
             rows.append(
@@ -1990,6 +2044,7 @@ def cmd_list(args: argparse.Namespace) -> int:
             agy_entries, antigravity_truncated = antigravity_transport.list_conversations(
                 getattr(args, "antigravity_home", None) or default_antigravity_home(),
                 args.limit,
+                cwd_filter=cwd_filter,
             )
         except antigravity_transport.AntigravityError as exc:
             _raise_antigravity_error(exc)
@@ -2012,21 +2067,6 @@ def cmd_list(args: argparse.Namespace) -> int:
                     "cwd": entry.get("cwd"),
                 }
             )
-    cwd_filter = getattr(args, "cwd", None)
-    if cwd_filter:
-        target_cwd = str(Path(cwd_filter).expanduser().resolve())
-        filtered_rows = []
-        for row in rows:
-            raw_cwd = row.get("cwd")
-            if not isinstance(raw_cwd, str) or not raw_cwd.strip():
-                continue
-            try:
-                norm_cwd = str(Path(raw_cwd).expanduser().resolve())
-            except OSError:
-                norm_cwd = raw_cwd.rstrip("/")
-            if norm_cwd == target_cwd or norm_cwd.startswith(target_cwd.rstrip("/") + "/"):
-                filtered_rows.append(row)
-        rows = filtered_rows
     if codex_truncated:
         print(
             f"note: Codex thread list truncated at --limit {args.limit} "
@@ -2272,18 +2312,43 @@ def _read_seen_inbox_ids(cursor_file: Path) -> set[str]:
     return {str(item) for item in seen if isinstance(item, str) and item}
 
 
-def _write_seen_inbox_ids(cursor_file: Path, seen_ids: set[str]) -> None:
-    import tempfile as _tempfile
+@contextmanager
+def _cursor_lock(cursor_file: Path):
+    cursor_file.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    lock_path = cursor_file.with_name(cursor_file.name + ".lock")
+    fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        if fcntl is not None:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        try:
+            if fcntl is not None:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+        finally:
+            os.close(fd)
 
+
+def _write_seen_inbox_ids(cursor_file: Path, seen_ids: set[str]) -> None:
     cursor_file.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     payload = json.dumps({"v": 1, "seen_ids": sorted(seen_ids)}, ensure_ascii=False) + "\n"
-    with _tempfile.NamedTemporaryFile(dir=cursor_file.parent, prefix=".cursor.", delete=False) as stream:
+    with tempfile.NamedTemporaryFile(dir=cursor_file.parent, prefix=".cursor.", delete=False) as stream:
         tmp = Path(stream.name)
         stream.write(payload.encode("utf-8"))
         stream.flush()
         os.fsync(stream.fileno())
     tmp.chmod(0o600)
     tmp.replace(cursor_file)
+
+
+def ack_seen_inbox_ids(cursor_file: Path, new_ids: set[str]) -> set[str]:
+    """Atomically union new_ids into cursor_file under an exclusive file lock."""
+    if not new_ids:
+        return _read_seen_inbox_ids(cursor_file)
+    with _cursor_lock(cursor_file):
+        merged = _read_seen_inbox_ids(cursor_file) | {str(i) for i in new_ids if i}
+        _write_seen_inbox_ids(cursor_file, merged)
+        return merged
 
 
 def _resolve_inbox_identity(
@@ -2429,6 +2494,7 @@ def _collect_codex_transport_inbox(thread_id: str, codex_home: Path) -> tuple[li
                 rows = conn.execute(
                     "SELECT item_id, item_type, item_json, created_at_ms FROM thread_items "
                     "WHERE thread_id = ? AND item_type IN ('userMessage', 'functionCallOutput') "
+                    "AND (item_json LIKE '%<peer-message%' OR item_json LIKE '%codex_delegation%') "
                     "ORDER BY rollout_ordinal DESC, item_id DESC LIMIT 100",
                     (thread_id,),
                 ).fetchall()
@@ -2468,6 +2534,50 @@ def _load_coord_inbound_map(state_dir: Path, board_actor: str, *, include_closed
         board.close()
 
 
+def _enrich_inbox_item(
+    item: dict[str, Any],
+    coord_map: dict[str, dict[str, Any]],
+    *,
+    drained: bool | None = None,
+) -> dict[str, Any]:
+    """Merge coordination metadata and shell-safe next_command onto an inbox item."""
+    mid = str(item.get("message_id") or "")
+    c = coord_map.get(mid)
+    enriched = dict(item)
+    if drained is not None:
+        enriched["drained"] = drained
+    if c is not None:
+        enriched["kind"] = c["kind"]
+        enriched["topic"] = c["topic"]
+        enriched["ack_required"] = c["ack_required"]
+        enriched["expires_in"] = c["expires_in"]
+    else:
+        enriched.setdefault("kind", "notice")
+        enriched.setdefault("topic", None)
+        enriched.setdefault("ack_required", False)
+        enriched.setdefault("expires_in", None)
+    enriched["next_command"] = (
+        f"peer.py reply {shlex.quote(mid[:8])} --message '...'" if mid else None
+    )
+    return enriched
+
+
+def _coord_only_inbox_item(mid: str, c: dict[str, Any], *, drained: bool) -> dict[str, Any]:
+    return {
+        "message_id": mid,
+        "sender": c["sender"],
+        "reply_to": c["sender"],
+        "kind": c["kind"],
+        "topic": c["topic"],
+        "ack_required": c["ack_required"],
+        "expires_in": c["expires_in"],
+        "drained": drained,
+        "source": "coordination_board",
+        "envelope": None,
+        "next_command": c["next_command"],
+    }
+
+
 def collect_inbox(
     target: str,
     claude_home: Path,
@@ -2483,10 +2593,10 @@ def collect_inbox(
         target, claude_home, codex_home, antigravity_home
     )
     coord_map = _load_coord_inbound_map(state_dir, board_actor, include_closed=include_all)
+    cursor_file = _inbox_cursor_file(state_dir, provider, session_id)
+    seen_ids = _read_seen_inbox_ids(cursor_file)
 
     if provider == "antigravity":
-        cursor_file = _inbox_cursor_file(state_dir, "antigravity", session_id)
-        seen_ids = _read_seen_inbox_ids(cursor_file)
         try:
             full_snapshot = antigravity_transport.read_inbox(
                 state_dir, session_id, include_drained=True
@@ -2497,36 +2607,19 @@ def collect_inbox(
                 if item.get("message_id")
             }
             if ack:
-                drained = antigravity_transport.drain_inbox(state_dir, session_id)
-                for item in drained:
-                    cid = item.get("message_id", "")
-                    if cid in coord_map:
-                        item["kind"] = coord_map[cid]["kind"]
-                        item["topic"] = coord_map[cid]["topic"]
-                        item["ack_required"] = coord_map[cid]["ack_required"]
-                        item["expires_in"] = coord_map[cid]["expires_in"]
-                    item["next_command"] = f"peer.py reply {cid[:8]} --message '...'" if cid else None
-                acked_coord_items: list[dict[str, Any]] = []
-                for mid, c in coord_map.items():
-                    if mid in all_queue_ids or c.get("closed_at") is not None or mid in seen_ids:
-                        continue
-                    acked_coord_items.append({
-                        "message_id": mid,
-                        "sender": c["sender"],
-                        "reply_to": c["sender"],
-                        "kind": c["kind"],
-                        "topic": c["topic"],
-                        "ack_required": c["ack_required"],
-                        "expires_in": c["expires_in"],
-                        "drained": False,
-                        "source": "coordination_board",
-                        "envelope": None,
-                        "next_command": c["next_command"],
-                    })
+                drained = [
+                    _enrich_inbox_item(item, coord_map)
+                    for item in antigravity_transport.drain_inbox(state_dir, session_id)
+                ]
+                acked_coord_items = [
+                    _coord_only_inbox_item(mid, c, drained=False)
+                    for mid, c in coord_map.items()
+                    if mid not in all_queue_ids and c.get("closed_at") is None and mid not in seen_ids
+                ]
                 if acked_coord_items:
-                    _write_seen_inbox_ids(
+                    ack_seen_inbox_ids(
                         cursor_file,
-                        seen_ids | {item["message_id"] for item in acked_coord_items},
+                        {item["message_id"] for item in acked_coord_items},
                     )
                 combined_acked = drained + acked_coord_items
                 return {
@@ -2538,29 +2631,15 @@ def collect_inbox(
                     "items": combined_acked,
                     "trust_boundary": INBOUND_TRUST_BOUNDARY,
                 }
-            snapshot = (
-                full_snapshot
-                if include_all
-                else antigravity_transport.read_inbox(
-                    state_dir, session_id, include_drained=False
-                )
-            )
         except (antigravity_transport.AntigravityError, OSError) as exc:
             raise PeerError(f"Antigravity inbox read failure: {exc}", EXIT_TRANSPORT) from exc
 
-        items = list(snapshot["items"])
-        for item in items:
-            mid = item.get("message_id", "")
-            if mid in coord_map:
-                c = coord_map[mid]
-                item["kind"] = c["kind"]
-                item["topic"] = c["topic"]
-                item["ack_required"] = c["ack_required"]
-                item["expires_in"] = c["expires_in"]
-            item["next_command"] = f"peer.py reply {mid[:8]} --message '...'" if mid else None
-        # Also surface any coord inbound items targeting this Antigravity session
-        # that arrived directly via agy -p (not in the JSONL queue), tracked via
-        # inbox-cursors/ so explicit --ack clears them cleanly.
+        queue_items = (
+            full_snapshot["items"]
+            if include_all
+            else [item for item in full_snapshot["items"] if not item.get("drained")]
+        )
+        items = [_enrich_inbox_item(item, coord_map) for item in queue_items]
         extra_total = 0
         extra_unread = 0
         for mid, c in coord_map.items():
@@ -2572,73 +2651,37 @@ def collect_inbox(
                 extra_unread += 1
             if is_drained and not include_all:
                 continue
-            items.append({
-                "message_id": mid,
-                "sender": c["sender"],
-                "reply_to": c["sender"],
-                "kind": c["kind"],
-                "topic": c["topic"],
-                "ack_required": c["ack_required"],
-                "expires_in": c["expires_in"],
-                "drained": is_drained,
-                "source": "coordination_board",
-                "envelope": None,
-                "next_command": c["next_command"],
-            })
+            items.append(_coord_only_inbox_item(mid, c, drained=is_drained))
         return {
             "provider": "antigravity",
             "target": canonical,
             "status": "ok",
-            **snapshot,
+            **full_snapshot,
             "cursor_path": str(cursor_file),
-            "unread_count": snapshot["unread_count"] + extra_unread,
-            "total_count": snapshot["total_count"] + extra_total,
+            "unread_count": full_snapshot["unread_count"] + extra_unread,
+            "total_count": full_snapshot["total_count"] + extra_total,
             "items": items,
             "trust_boundary": INBOUND_TRUST_BOUNDARY,
         }
 
-    # Claude & Codex unified inbox with per-session read cursor in <state_dir>/inbox-cursors/
+    # Claude & Codex unified inbox with locked per-session read cursor in <state_dir>/inbox-cursors/
     if provider == "claude":
         transport_items, source_path = _collect_claude_transport_inbox(session_id, claude_home)
     else:
         transport_items, source_path = _collect_codex_transport_inbox(session_id, codex_home)
 
-    cursor_file = _inbox_cursor_file(state_dir, provider, session_id)
-    seen_ids = _read_seen_inbox_ids(cursor_file)
-
     merged: dict[str, dict[str, Any]] = {}
     for item in transport_items:
         mid = item["message_id"]
         c = coord_map.get(mid)
-        drained = mid in seen_ids or (c is not None and c.get("closed_at") is not None)
-        enriched = {
-            **item,
-            "drained": drained,
-            "kind": c["kind"] if c else "notice",
-            "topic": c["topic"] if c else None,
-            "ack_required": c["ack_required"] if c else False,
-            "expires_in": c["expires_in"] if c else None,
-            "next_command": f"peer.py reply {mid[:8]} --message '...'",
-        }
-        merged[mid] = enriched
+        is_drained = mid in seen_ids or (c is not None and c.get("closed_at") is not None)
+        merged[mid] = _enrich_inbox_item(item, coord_map, drained=is_drained)
 
     for mid, c in coord_map.items():
         if mid in merged:
             continue
-        drained = mid in seen_ids or c.get("closed_at") is not None
-        merged[mid] = {
-            "message_id": mid,
-            "sender": c["sender"],
-            "reply_to": c["sender"],
-            "kind": c["kind"],
-            "topic": c["topic"],
-            "ack_required": c["ack_required"],
-            "expires_in": c["expires_in"],
-            "drained": drained,
-            "source": "coordination_board",
-            "envelope": None,
-            "next_command": c["next_command"],
-        }
+        is_drained = mid in seen_ids or c.get("closed_at") is not None
+        merged[mid] = _coord_only_inbox_item(mid, c, drained=is_drained)
 
     all_items = list(merged.values())
     unread_items = [item for item in all_items if not item["drained"]]
@@ -2646,8 +2689,7 @@ def collect_inbox(
     if ack:
         newly_acked = list(unread_items)
         if newly_acked:
-            updated_seen = seen_ids | {item["message_id"] for item in newly_acked}
-            _write_seen_inbox_ids(cursor_file, updated_seen)
+            ack_seen_inbox_ids(cursor_file, {item["message_id"] for item in newly_acked})
         return {
             "provider": provider,
             "target": canonical,
@@ -2715,6 +2757,50 @@ def cmd_inbox(args: argparse.Namespace) -> int:
     return 0
 
 
+def _extra_watch_paths(canonical: str, claude_home: Path) -> list[Path]:
+    """Include sibling Claude profile roots & resolved encoded-cwd transcript path when known."""
+    if not canonical.startswith("claude-session:"):
+        return []
+    session_id = canonical.removeprefix("claude-session:")
+    extras: list[Path] = []
+    cwd: str | None = None
+    try:
+        entry = resolve_claude(canonical, claude_home, require_live=False)
+        raw_cwd = entry.get("cwd")
+        if isinstance(raw_cwd, str) and raw_cwd:
+            cwd = raw_cwd
+    except PeerError:
+        cwd = None
+    for home in claude_homes(claude_home):
+        projects = home / "projects"
+        if cwd:
+            encoded = projects / cwd.replace("/", "-") / f"{session_id}.jsonl"
+            extras.append(encoded)
+        if projects.is_dir():
+            matched = sorted(projects.glob(f"*/{session_id}.jsonl"))
+            if matched:
+                extras.extend(matched)
+            else:
+                extras.append(projects)
+    return extras
+
+
+def _expand_wait_message_id(message_id: str, state_dir: Path) -> str:
+    """Expand unambiguous >=8-hex prefix via coordination DB; pass through literal if absent."""
+    db_path = Path(state_dir).expanduser() / "coordination.sqlite3"
+    if not db_path.is_file() or not coordination.is_hex_prefix(message_id):
+        return message_id
+    board = coordination.Board(state_dir, read_only=True)
+    try:
+        try:
+            row = board.find_message(message_id)
+        except coordination.CoordinationError as exc:
+            raise PeerError(str(exc), EXIT_TARGET, outcome="not_sent") from exc
+    finally:
+        board.close()
+    return row["id"] if row is not None else message_id
+
+
 def wait_for_reply_event(
     target: str,
     message_id: str,
@@ -2725,6 +2811,7 @@ def wait_for_reply_event(
     state_dir: Path,
 ) -> dict[str, Any]:
     _, _, canonical, _ = _resolve_inbox_identity(target, claude_home, codex_home, antigravity_home)
+    resolved_message_id = _expand_wait_message_id(message_id, state_dir)
     timeout = peer_wait.clamp_timeout(timeout_seconds)
 
     def paths_fn() -> list[Path]:
@@ -2734,12 +2821,13 @@ def wait_for_reply_event(
             codex_home=codex_home,
             antigravity_home=antigravity_home,
             state_dir=state_dir,
+            extra_paths=_extra_watch_paths(canonical, claude_home),
         )
 
     def check_fn() -> dict[str, Any] | None:
         res = replies(
             canonical,
-            message_id,
+            resolved_message_id,
             20,
             claude_home,
             codex_home,
@@ -2754,7 +2842,7 @@ def wait_for_reply_event(
             "status": "ready",
             "mode": "reply",
             "target": canonical,
-            "message_id": message_id,
+            "message_id": resolved_message_id,
             "waited_seconds": outcome["waited_seconds"],
             "backend": outcome["backend"],
             "replies": outcome["result"],
@@ -2763,11 +2851,14 @@ def wait_for_reply_event(
         "status": "timeout",
         "mode": "reply",
         "target": canonical,
-        "message_id": message_id,
+        "message_id": resolved_message_id,
         "waited_seconds": outcome["waited_seconds"],
         "backend": outcome["backend"],
         "checked_sources": outcome.get("checked_sources", []),
-        "next_command": f"peer.py replies {canonical} --message-id {message_id} --json",
+        "next_command": (
+            f"peer.py replies {shlex.quote(canonical)} "
+            f"--message-id {shlex.quote(resolved_message_id)} --json"
+        ),
     }
 
 
@@ -2789,6 +2880,7 @@ def wait_for_inbox_event(
             codex_home=codex_home,
             antigravity_home=antigravity_home,
             state_dir=state_dir,
+            extra_paths=_extra_watch_paths(canonical, claude_home),
         )
 
     def check_fn() -> dict[str, Any] | None:
@@ -2820,7 +2912,7 @@ def wait_for_inbox_event(
         "waited_seconds": outcome["waited_seconds"],
         "backend": outcome["backend"],
         "checked_sources": outcome.get("checked_sources", []),
-        "next_command": f"peer.py inbox {canonical} --json",
+        "next_command": f"peer.py inbox {shlex.quote(canonical)} --json",
     }
 
 
@@ -2870,45 +2962,88 @@ def cmd_wait(args: argparse.Namespace) -> int:
     return 0 if result["status"] == "ready" else EXIT_NO_REPLIES
 
 
+def _match_inbox_parent_items(
+    items: list[dict[str, Any]],
+    message_id_or_prefix: str,
+    target_address: str,
+) -> dict[str, Any] | None:
+    needle = message_id_or_prefix.strip()
+    needle_low = needle.lower()
+    exact = [it for it in items if str(it.get("message_id", "")).lower() == needle_low]
+    matches = exact
+    if not matches and coordination.is_hex_prefix(needle):
+        matches = [
+            it for it in items if str(it.get("message_id", "")).lower().startswith(needle_low)
+        ]
+    # Deduplicate identical message_ids (e.g. same message seen in multiple stores)
+    by_id: dict[str, dict[str, Any]] = {}
+    for it in matches:
+        mid = str(it.get("message_id", ""))
+        if mid and mid not in by_id:
+            by_id[mid] = it
+    if len(by_id) == 1:
+        it = next(iter(by_id.values()))
+        return {
+            "id": it["message_id"],
+            "sender": it.get("reply_to") or it.get("sender"),
+            "target": target_address,
+            "topic": None,
+            "thread_id": None,
+        }
+    if len(by_id) > 1:
+        ids = ", ".join(sorted(by_id))
+        raise PeerError(
+            f"ambiguous message id prefix {message_id_or_prefix!r}; matches: {ids}",
+            EXIT_TARGET,
+            outcome="not_sent",
+        )
+    return None
+
+
 def _find_reply_parent(
     message_id_or_prefix: str,
     sender: str,
     args: argparse.Namespace,
 ) -> tuple[dict[str, Any] | None, bool]:
-    """Lookup parent message by exact ID or unambiguous >=8-char prefix.
+    """Lookup parent message by exact ID or unambiguous >=8-hex prefix.
 
-    Returns (parent_dict, from_board). Fails closed on ambiguity or missing record.
+    Checks local coordination DB first, then falls back to the current sender's
+    transport inbox across Antigravity, Claude, and Codex. Fails closed on
+    ambiguity or missing record.
     """
     board = coordination.Board(args.state_dir)
     try:
-        row = board.find_message(message_id_or_prefix)
+        try:
+            row = board.find_message(message_id_or_prefix)
+        except coordination.CoordinationError as exc:
+            raise PeerError(str(exc), EXIT_TARGET, outcome="not_sent") from exc
     finally:
         board.close()
     if row is not None:
         return row, True
 
-    # Fallback: check current Antigravity inbox for uncoordinated inbound envelopes
-    if antigravity_transport.is_antigravity_target(sender):
-        agy_home = getattr(args, "antigravity_home", None) or default_antigravity_home()
-        cid = antigravity_transport.parse_antigravity_id(sender, antigravity_home=agy_home)
-        snap = antigravity_transport.read_inbox(args.state_dir, cid, include_drained=True)
-        needle = message_id_or_prefix.strip().lower()
-        exact = [it for it in snap["items"] if str(it.get("message_id", "")).lower() == needle]
-        matches = exact
-        if not matches and len(needle) >= 8 and re.fullmatch(r"[0-9a-f-]+", needle):
-            matches = [it for it in snap["items"] if str(it.get("message_id", "")).lower().startswith(needle)]
-        if len(matches) == 1:
-            it = matches[0]
-            return {
-                "id": it["message_id"],
-                "sender": it.get("reply_to") or it.get("sender"),
-                "target": f"antigravity:{cid}",
-                "topic": None,
-                "thread_id": None,
-            }, False
-        if len(matches) > 1:
-            ids = ", ".join(str(m.get("message_id")) for m in matches)
-            raise PeerError(f"ambiguous message id prefix {message_id_or_prefix!r}; matches: {ids}", EXIT_TARGET)
+    if not sender or sender == "local-script":
+        return None, False
+
+    agy_home = getattr(args, "antigravity_home", None) or default_antigravity_home()
+    try:
+        provider, session_id, canonical, _ = _resolve_inbox_identity(
+            sender, args.claude_home, args.codex_home, agy_home
+        )
+    except PeerError:
+        return None, False
+
+    if provider == "antigravity":
+        snap = antigravity_transport.read_inbox(args.state_dir, session_id, include_drained=True)
+        transport_items = snap["items"]
+    elif provider == "claude":
+        transport_items, _ = _collect_claude_transport_inbox(session_id, args.claude_home)
+    else:
+        transport_items, _ = _collect_codex_transport_inbox(session_id, args.codex_home)
+
+    matched = _match_inbox_parent_items(transport_items, message_id_or_prefix, canonical)
+    if matched is not None:
+        return matched, False
     return None, False
 
 
@@ -2968,17 +3103,23 @@ def cmd_reply(args: argparse.Namespace) -> int:
 
 
 def common_message_arguments(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("message_file", nargs="?", help="UTF-8 message file")
+    parser.add_argument("message_file", nargs="?", help="UTF-8 message file, or - for stdin")
     parser.add_argument("--message", help="inline message text")
     parser.add_argument(
         "--from", "--from-name", dest="sender",
         help="sender address resolvable in Claude/Codex/Antigravity registries or 'local-script'; "
-        "non-Claude/Codex/Antigravity hosts sending a one-way --kind notice should omit --from "
-        "(defaults to local-script) and identify themselves in the message body",
+        "when omitted, auto-detects the current Claude/Codex/Antigravity host (failing closed if "
+        "multiple host envs are set) and falls back to 'local-script' outside agent hosts",
     )
     parser.add_argument("--reply-to", help="address the receiver should use to reply")
-    parser.add_argument("--wait", type=wait_seconds, default=0, metavar="SECONDS")
-    parser.add_argument("--json", action="store_true")
+    parser.add_argument(
+        "--wait",
+        type=wait_seconds,
+        default=0,
+        metavar="SECONDS",
+        help="wait up to SECONDS for receiver-side delivery evidence after accepted send",
+    )
+    parser.add_argument("--json", action="store_true", help="emit machine-readable JSON output")
     parser.add_argument("--codex-delivery", choices=CODEX_DELIVERY_MODES, default="live",
                         help="live tool output for loaded Codex threads (default); "
                         "live-steer uses exact expectedTurnId user text for an active turn "
@@ -3002,7 +3143,12 @@ def common_message_arguments(parser: argparse.ArgumentParser) -> None:
         help="timeout for `agy -p` direct resume turns (default 120s)",
     )
     parser.add_argument("--topic", help="stable coordination issue/resource key")
-    parser.add_argument("--kind", choices=("request", "notice", "reply", "state"), default="notice")
+    parser.add_argument(
+        "--kind",
+        choices=("request", "notice", "reply", "state"),
+        default="notice",
+        help="coordination message kind (default: notice)",
+    )
     parser.add_argument("--expires-at", help="ISO timestamp with timezone; required for request/state")
     parser.add_argument("--expires-in", type=wait_seconds, metavar="SECONDS",
                         help="explicit relative lifetime instead of expires-at")
@@ -3431,7 +3577,9 @@ def build_parser() -> argparse.ArgumentParser:
     start_parser.add_argument("--ttl", type=positive_seconds, default=None,
                               help="optional advisory lease TTL in seconds (60..86400); expired rows remain visible as expired_unreleased")
     start_parser.set_defaults(handler=cmd_work_start)
-    status_parser = operations.add_parser("status")
+    status_parser = operations.add_parser(
+        "status", help="read-only paged snapshot of active owners and open messages"
+    )
     status_parser.add_argument("--scope")
     status_parser.add_argument("--owners-only", action="store_true", help="omit message rows; counts remain visible")
     status_parser.add_argument("--limit", type=int, default=20, help="rows per owner/message page, 1..100 (default 20)")
@@ -3442,8 +3590,13 @@ def build_parser() -> argparse.ArgumentParser:
     status_parser.add_argument("--message-id", help="one exact open coordination message id")
     status_parser.add_argument("--details", action="store_true", help="full selected rows and receipts; requires --output")
     status_parser.add_argument("--output", type=Path, help="export this page to a new private file; stdout returns a small receipt")
+    _owner_op_help = {
+        "claim": "declare low-level scope/task/resource ownership (prefer `coord start` for Git repos)",
+        "renew": "refresh an active declaration's advisory TTL lease as its recorded owner",
+        "release": "release a completed or handed-off declaration as its recorded owner",
+    }
     for operation in ("claim", "renew", "release"):
-        entry = operations.add_parser(operation)
+        entry = operations.add_parser(operation, help=_owner_op_help[operation])
         entry.add_argument("--scope", required=True)
         entry.add_argument("--task", required=True)
         if operation == "claim":
@@ -3456,7 +3609,9 @@ def build_parser() -> argparse.ArgumentParser:
     common_message_arguments(prepare_parser)
     prepare_parser.add_argument("--max-envelope-bytes", type=int,
                                 help="positive UTF-8 byte limit from the native tool schema; includes coordination framing")
-    commit_parser = operations.add_parser("commit")
+    commit_parser = operations.add_parser(
+        "commit", help="record the transport outcome (accepted/not_sent/unknown) of a prepared message"
+    )
     commit_parser.add_argument("--message-id", required=True)
     commit_parser.add_argument("--outcome", choices=("accepted", "not_sent", "unknown"), required=True)
     for operation in ("native-call", "commit-native"):
@@ -3470,11 +3625,15 @@ def build_parser() -> argparse.ArgumentParser:
         entry.add_argument("--actor", help="exact current-host address matching its provider environment")
         entry.add_argument("--json", action="store_true", help="include a structured error receipt")
         entry.set_defaults(handler=cmd_native_coord)
-    receive_parser = operations.add_parser("receive")
+    receive_parser = operations.add_parser(
+        "receive", help="verify integrity of an inbound coordination envelope and claim/close it"
+    )
     receive_parser.add_argument("envelope_file", help="original received envelope, or - for stdin")
     receive_parser.add_argument("--disposition", choices=("no-reply",),
                                 help="caller has resolved a non-request notice/reply; validate and finish without creating a reply (does not classify content)")
-    finish_parser = operations.add_parser("finish")
+    finish_parser = operations.add_parser(
+        "finish", help="mark a handled coordination message as closed"
+    )
     finish_parser.add_argument("--message-id", required=True)
     for entry in (status_parser, prepare_parser, commit_parser, receive_parser, finish_parser,
                   *[operations.choices[n] for n in ("claim", "renew", "release")]):
@@ -3522,31 +3681,58 @@ def build_parser() -> argparse.ArgumentParser:
     send_parser.set_defaults(handler=cmd_send)
 
     reply_parser = subparsers.add_parser(
-        "reply", help="one-command reply to a message id (or unambiguous >=8-char prefix)"
+        "reply", help="one-command reply to a message id (or unambiguous >=8-hex prefix)"
     )
-    reply_parser.add_argument("message_id", type=reply_message_id, help="parent message id or >=8-char hex prefix")
+    reply_parser.add_argument("message_id", type=reply_message_id, help="parent message id or >=8-hex prefix")
     reply_parser.add_argument("message_file", nargs="?", help="UTF-8 reply file, or - for stdin")
     reply_parser.add_argument("--message", help="inline reply text")
     reply_parser.add_argument("--from", "--from-name", dest="sender", help="explicit sender override (defaults to current host)")
     reply_parser.add_argument("--reply-to", help="explicit reply-to override")
-    reply_parser.add_argument("--wait", type=wait_seconds, default=0, metavar="SECONDS")
-    reply_parser.add_argument("--wait-reply", type=positive_seconds, default=None, metavar="SECONDS")
-    reply_parser.add_argument("--codex-delivery", choices=CODEX_DELIVERY_MODES, default="live")
-    reply_parser.add_argument("--antigravity-delivery", choices=ANTIGRAVITY_DELIVERY_MODES, default="auto")
+    reply_parser.add_argument(
+        "--wait",
+        type=wait_seconds,
+        default=0,
+        metavar="SECONDS",
+        help="wait up to SECONDS for receiver-side delivery evidence after accepted reply",
+    )
+    reply_parser.add_argument(
+        "--wait-reply",
+        type=positive_seconds,
+        default=None,
+        metavar="SECONDS",
+        help="after accepted reply, block via kqueue/poll up to SECONDS waiting for a follow-up reply",
+    )
+    reply_parser.add_argument(
+        "--codex-delivery",
+        choices=CODEX_DELIVERY_MODES,
+        default="live",
+        help="Codex delivery mode: live (default), live-steer, or explicit queued",
+    )
+    reply_parser.add_argument(
+        "--antigravity-delivery",
+        choices=ANTIGRAVITY_DELIVERY_MODES,
+        default="auto",
+        help="Antigravity delivery mode: auto (default), resume, or queued",
+    )
     reply_parser.add_argument(
         "--antigravity-timeout",
         type=positive_seconds,
         default=antigravity_transport.DEFAULT_ANTIGRAVITY_TIMEOUT_SECONDS,
         metavar="SECONDS",
+        help="timeout for `agy -p` direct resume turns (default 120s)",
     )
-    reply_parser.add_argument("--json", action="store_true")
+    reply_parser.add_argument("--json", action="store_true", help="emit machine-readable JSON output")
     reply_parser.set_defaults(handler=cmd_reply)
 
     wait_parser = subparsers.add_parser(
         "wait", help="block without polling loops until a reply or new inbox message arrives"
     )
     wait_mode = wait_parser.add_mutually_exclusive_group(required=True)
-    wait_mode.add_argument("--message-id", type=reply_message_id, help="wait for a reply correlated to this outbound id")
+    wait_mode.add_argument(
+        "--message-id",
+        type=reply_message_id,
+        help="wait for a reply correlated to this outbound id (or unambiguous >=8-hex prefix)",
+    )
     wait_mode.add_argument("--inbox", action="store_true", help="wait for any unread message in target's inbox")
     wait_parser.add_argument("target", nargs="?", help="inbox owner address (defaults to current host)")
     wait_parser.add_argument(
@@ -3556,12 +3742,23 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="SECONDS",
         help="finite wait deadline in seconds (default 60, max 3600)",
     )
-    wait_parser.add_argument("--json", action="store_true")
+    wait_parser.add_argument("--json", action="store_true", help="emit machine-readable JSON output")
     wait_parser.set_defaults(handler=cmd_wait)
 
     broadcast_parser = subparsers.add_parser("broadcast", help="send to explicit targets")
-    broadcast_parser.add_argument("--to", dest="targets", action="append", required=True)
-    broadcast_parser.add_argument("--confirm-count", type=int, required=True)
+    broadcast_parser.add_argument(
+        "--to",
+        dest="targets",
+        action="append",
+        required=True,
+        help="explicit recipient address; repeat once per target (never comma-joined)",
+    )
+    broadcast_parser.add_argument(
+        "--confirm-count",
+        type=int,
+        required=True,
+        help="must match the deduplicated target count after reviewing the recipient list",
+    )
     broadcast_parser.add_argument(
         "--contract",
         help=(
@@ -3575,8 +3772,14 @@ def build_parser() -> argparse.ArgumentParser:
     verify_parser = subparsers.add_parser("verify", help="read receiver-side evidence")
     verify_parser.add_argument("target")
     verify_parser.add_argument("--message-id", required=True)
-    verify_parser.add_argument("--wait", type=wait_seconds, default=0)
-    verify_parser.add_argument("--json", action="store_true")
+    verify_parser.add_argument(
+        "--wait",
+        type=wait_seconds,
+        default=0,
+        metavar="SECONDS",
+        help="wait up to SECONDS for receiver-side evidence before returning unverified",
+    )
+    verify_parser.add_argument("--json", action="store_true", help="emit machine-readable JSON output")
     verify_parser.set_defaults(handler=cmd_verify)
 
     replies_parser = subparsers.add_parser(

@@ -559,6 +559,281 @@ class PeerEvolutionTests(unittest.TestCase):
             self.assertEqual(peer.coordination.default_root(), self.root / "xdg-state" / "peer-message")
             self.assertEqual(hook_mod.default_state_dir(), self.root / "xdg-state" / "peer-message")
 
+    # ------------------------------------------------------------------
+    # Audit Hardening Regression Tests (v2.0.1)
+    # ------------------------------------------------------------------
+
+    def test_next_command_shell_quotes_untrusted_peer_strings(self):
+        import shlex
+
+        evil_task = "fix' ; echo PWNED # $(id)"
+        board = peer.coordination.Board(self.state_dir)
+        try:
+            peer.work_start.start(
+                board, "git:example.com/org/app", evil_task, f"antigravity:{AGY_A}",
+                ["git-path:example.com/org/app#src/a.py"],
+            )
+            conflict = peer.work_start.start(
+                board, "git:example.com/org/app", evil_task, f"antigravity:{AGY_B}",
+                ["git-path:example.com/org/app#src/a.py"],
+            )
+            tokens = shlex.split(conflict["next_command"])
+            self.assertEqual(tokens[0:3], ["peer.py", "send", f"antigravity:{AGY_A}"])
+            self.assertIn(f"Checking status of {evil_task[:80]}", tokens)
+
+            claim_conflict = board.claim(
+                "git:example.com/org/app", evil_task, f"antigravity:{AGY_B}",
+                ["git-path:example.com/org/app#src/a.py"],
+            )
+            claim_tokens = shlex.split(claim_conflict["next_command"])
+            self.assertIn(f"Checking status of {evil_task}", claim_tokens)
+
+            board.release("git:example.com/org/app", evil_task, f"antigravity:{AGY_A}")
+            reconcile = peer.work_start.start(
+                board, "git:example.com/org/app", evil_task, f"antigravity:{AGY_B}",
+                ["git-path:example.com/org/app#src/a.py"],
+            )
+            self.assertEqual(reconcile["status"], "reconciliation_required")
+            rec_tokens = shlex.split(reconcile["next_command"])
+            self.assertIn(evil_task, rec_tokens)
+        finally:
+            board.close()
+
+    def test_work_start_dotfile_globs_symlink_escape_and_shared_claim_overlaps(self):
+        repo = self.root / "repo"
+        outside = self.root / "outside"
+        repo.mkdir()
+        outside.mkdir()
+        (repo / ".github").mkdir()
+        (repo / "escape_link").symlink_to(outside)
+        subprocess.run(["git", "-C", str(repo), "init", "-q"], check=True)
+        subprocess.run(
+            ["git", "-C", str(repo), "remote", "add", "origin", "https://example.com/org/app.git"],
+            check=True,
+        )
+
+        # Dotfile/dotdir globs must preserve leading dot (no .lstrip("./") corruption)
+        _, dot_res = peer.work_start.resource_identity(repo, [".github/*.yml", "./.claude/*.json"])
+        self.assertEqual(
+            dot_res,
+            [
+                "git-path:example.com/org/app#.claude/*.json",
+                "git-path:example.com/org/app#.github/*.yml",
+            ],
+        )
+        self.assertTrue(
+            peer.work_start.overlaps(
+                "git-path:example.com/org/app#.github/*.yml",
+                "git-path:example.com/org/app#.github/workflows/ci.yml",
+            )
+        )
+
+        # Absolute AND relative glob symlink escapes must both be rejected
+        for bad in ("escape_link/*.txt", str(repo / "escape_link" / "*.txt")):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                peer.work_start.resource_identity(repo, [bad])
+
+        # Trailing slash, /**/ zero-dir collapse, dir ancestry, and two-glob overlaps
+        self.assertTrue(peer.work_start.overlaps("git-path:org/r#src/**/*.py", "git-path:org/r#src/app.py"))
+        self.assertTrue(peer.work_start.overlaps("git-path:org/r#src/dir/", "git-path:org/r#src/dir/file.py"))
+        self.assertTrue(peer.work_start.overlaps("git-path:org/r#src/*.py", "git-path:org/r#src/sub"))
+        self.assertTrue(peer.work_start.overlaps("git-path:org/r#src/a*", "git-path:org/r#src/*b.py"))
+        self.assertFalse(peer.work_start.overlaps("git-path:org/r#src/*.py", "git-path:org/r#docs/*.py"))
+
+        # Board.claim() shares overlaps() and detects glob conflicts
+        board = peer.coordination.Board(self.state_dir)
+        try:
+            board.claim("git:org/r", "t1", f"antigravity:{AGY_A}", ["git-path:org/r#src/*.py"])
+            res = board.claim("git:org/r", "t2", f"antigravity:{AGY_B}", ["git-path:org/r#src/app.py"])
+            self.assertEqual(res["status"], "conflict")
+        finally:
+            board.close()
+
+    def test_inbox_cursor_concurrent_ack_preserves_all_ids(self):
+        cursor = peer._inbox_cursor_file(self.state_dir, "claude", CLAUDE_A)
+        errors: list[Exception] = []
+
+        def worker(i: int):
+            try:
+                peer.ack_seen_inbox_ids(cursor, {f"msg-{i}"})
+            except Exception as exc:
+                errors.append(exc)
+
+        threads = [threading.Thread(target=worker, args=(i,)) for i in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.assertEqual(errors, [])
+        self.assertEqual(peer._read_seen_inbox_ids(cursor), {f"msg-{i}" for i in range(8)})
+
+    def test_list_cwd_filters_before_limit_and_codex_inbox_skips_unrelated_tool_outputs(self):
+        # 5 newer Codex threads in /synthetic/other + 1 older thread in /synthetic/target
+        threads = [
+            (f"0000000{i}-1111-4111-8111-111111111111", f"other-{i}", "/synthetic/other")
+            for i in range(5)
+        ]
+        threads.append((CODEX_A, "target-thread", "/synthetic/target"))
+        _init_codex_dbs(self.codex_home, threads)
+        with contextlib.closing(sqlite3.connect(self.codex_home / "state_5.sqlite")) as conn:
+            for idx, (tid, _, _) in enumerate(threads):
+                conn.execute("UPDATE threads SET recency_at_ms = ? WHERE id = ?", (2000 - idx * 10, tid))
+            conn.commit()
+
+        # With --limit 2 --cwd /synthetic/target, target thread MUST still be found (not truncated away)
+        code, out, err = self.run_cli(
+            ["list", "--provider", "codex", "--cwd", "/synthetic/target", "--limit", "2", "--json"],
+            env={},
+        )
+        self.assertEqual(code, 0)
+        rows = json.loads(out)
+        self.assertEqual([r["id"] for r in rows], [CODEX_A])
+        self.assertNotIn("truncated", err)
+
+        # Codex inbox finds a peer message buried behind 120 unrelated functionCallOutput rows
+        peer_env = peer.codex_envelope("buried msg", f"antigravity:{AGY_A}", f"antigravity:{AGY_A}", "buried-msg-1")
+        with contextlib.closing(sqlite3.connect(self.codex_home / "thread_history_1.sqlite")) as conn:
+            conn.execute(
+                "INSERT INTO thread_items VALUES (?, 't0', 'i0', 1, 'functionCallOutput', ?, 1000)",
+                (
+                    CODEX_A,
+                    json.dumps({
+                        "type": "functionCallOutput",
+                        "namespace": "peer_message",
+                        "name": "delivery",
+                        "output": peer_env,
+                    }),
+                ),
+            )
+            for idx in range(2, 125):
+                conn.execute(
+                    "INSERT INTO thread_items VALUES (?, 't1', ?, ?, 'functionCallOutput', ?, ?)",
+                    (
+                        CODEX_A,
+                        f"i{idx}",
+                        idx,
+                        json.dumps({"type": "functionCallOutput", "name": "bash", "output": "ok"}),
+                        1000 + idx,
+                    ),
+                )
+            conn.commit()
+        code, out, _ = self.run_cli(["inbox", "--json"], env={"CODEX_THREAD_ID": CODEX_A})
+        self.assertEqual(code, 0)
+        snap = json.loads(out)
+        self.assertEqual(snap["unread_count"], 1)
+        self.assertEqual(snap["items"][0]["message_id"], "buried-msg-1")
+
+    def test_auto_sender_fails_closed_on_multi_host_and_hex_prefix_validation(self):
+        # Multi-host env fails closed in auto_sender()
+        with mock.patch.dict(
+            peer.os.environ,
+            {"CODEX_THREAD_ID": CODEX_A, "ANTIGRAVITY_CONVERSATION_ID": AGY_A},
+            clear=True,
+        ):
+            with self.assertRaises(peer.PeerError) as caught:
+                peer.auto_sender()
+            self.assertEqual(caught.exception.exit_code, peer.EXIT_TARGET)
+            self.assertEqual(caught.exception.outcome, "not_sent")
+
+        # Hyphen-padded <8 hex digits must be rejected everywhere
+        for bad in ("--------", "1-------", "abcd---", "-12345678"):
+            self.assertFalse(peer.coordination.is_hex_prefix(bad), msg=bad)
+            with self.assertRaises(peer.PeerError):
+                peer.claude_identity_key(f"claude-session:{bad}")
+        self.assertTrue(peer.coordination.is_hex_prefix("a1b2c3d4"))
+        self.assertTrue(peer.coordination.is_hex_prefix("a1b2c3d4-11"))
+
+    def test_wait_message_id_prefix_expansion_and_claude_codex_reply_fallback(self):
+        _init_agy_db(self.agy_home, [{"conversation_id": AGY_A}, {"conversation_id": AGY_B}])
+        _init_codex_dbs(self.codex_home, [(CODEX_A, "cx-a", "/synthetic/repo-a")])
+
+        # 1. wait --message-id <8-hex> expands board message id cleanly
+        code, out, _ = self.run_cli(
+            ["send", f"antigravity:{AGY_B}", "--message", "wait prefix test",
+             "--antigravity-delivery", "queued", "--json"],
+            env={"ANTIGRAVITY_CONVERSATION_ID": AGY_A},
+        )
+        self.assertEqual(code, 0)
+        full_mid = json.loads(out)["message_id"]
+        reply_env = peer.codex_envelope(
+            f"in_reply_to: {full_mid}\nreply via prefix wait",
+            f"antigravity:{AGY_B}", f"antigravity:{AGY_B}", "rep-wait-pref-1",
+        )
+        agy_transport.enqueue_inbox(
+            self.state_dir, AGY_A, message_id="rep-wait-pref-1",
+            sender=f"antigravity:{AGY_B}", reply_to=f"antigravity:{AGY_B}",
+            envelope=reply_env, queue_reason="target_attached_tui",
+        )
+        code, out, _ = self.run_cli(
+            ["wait", "--message-id", full_mid[:8], "--timeout", "1", "--json"],
+            env={"ANTIGRAVITY_CONVERSATION_ID": AGY_A},
+        )
+        self.assertEqual(code, 0)
+        res = json.loads(out)
+        self.assertEqual(res["status"], "ready")
+        self.assertEqual(res["message_id"], full_mid)
+
+        # 2. Uncoordinated Claude & Codex inbound fallback in _find_reply_parent / cmd_reply
+        proj = self.claude_home / "projects" / "-synthetic-repo"
+        proj.mkdir(parents=True, exist_ok=True)
+        uncoord_id = "beef1234-5555-4555-8555-555555555555"
+        claude_msg = peer.claude_envelope(
+            "uncoordinated ping", f"antigravity:{AGY_B}", f"antigravity:{AGY_B}", uncoord_id
+        )
+        (proj / f"{CLAUDE_A}.jsonl").write_text(
+            json.dumps({"type": "queue-operation", "operation": "enqueue", "content": claude_msg}) + "\n",
+            encoding="utf-8",
+        )
+        claude_entries = [
+            {"pid": 2001, "sessionId": CLAUDE_A, "name": "cl-a", "alive": True, "socketExists": True, "cwd": "/synthetic/repo-a"}
+        ]
+        with mock.patch.object(peer, "claude_registry", return_value=claude_entries):
+            code, out, err = self.run_cli(
+                ["reply", uncoord_id[:8], "--message", "got it from claude",
+                 "--antigravity-delivery", "queued", "--json"],
+                env={"CLAUDE_CODE_SESSION_ID": CLAUDE_A},
+            )
+        self.assertEqual(code, 0, msg=err)
+        rep = json.loads(out)
+        self.assertEqual(rep["target"], f"antigravity:{AGY_B}")
+        self.assertEqual(rep["in_reply_to"], uncoord_id)
+
+        uncoord_cx_id = "cafe5678-6666-4666-8666-666666666666"
+        cx_env = peer.codex_envelope("uncoord cx", f"antigravity:{AGY_B}", f"antigravity:{AGY_B}", uncoord_cx_id)
+        with contextlib.closing(sqlite3.connect(self.codex_home / "queue_1.sqlite")) as conn:
+            conn.execute(
+                "INSERT INTO queued_items(thread_id, payload_json, queue_order, created_at_ms) VALUES (?, ?, 1, 1000)",
+                (CODEX_A, json.dumps({"UserInput": {"content": [{"text": cx_env}]}})),
+            )
+            conn.commit()
+        code, out, err = self.run_cli(
+            ["reply", uncoord_cx_id[:8], "--message", "got it from codex",
+             "--antigravity-delivery", "queued", "--json"],
+            env={"CODEX_THREAD_ID": CODEX_A},
+        )
+        self.assertEqual(code, 0, msg=err)
+        cx_rep = json.loads(out)
+        self.assertEqual(cx_rep["target"], f"antigravity:{AGY_B}")
+        self.assertEqual(cx_rep["in_reply_to"], uncoord_cx_id)
+
+        # 3. install_native_guard respects AGENT_MESSAGE_STATE_DIR
+        guard_mod = _load("test_evo_install_guard", "install_native_guard.py")
+        custom_state = self.root / "custom-guard-state"
+        custom_cfg = self.root / "custom-guard-cfg"
+        with mock.patch.dict(
+            peer.os.environ,
+            {
+                "AGENT_MESSAGE_STATE_DIR": str(custom_state),
+                "XDG_CONFIG_HOME": str(custom_cfg),
+            },
+            clear=True,
+        ):
+            import sys as _sys
+            if _sys.version_info >= (3, 11):
+                bound = guard_mod.install(_sys.executable)
+                self.assertEqual(Path(bound["entry"]), custom_state / "native-guard-entry.sh")
+                self.assertTrue((custom_state / "native-guard-entry.sh").is_file())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -26,6 +26,68 @@
         "Preserves the original message identity and does not delete queue state, resume a thread or change permissions",
         "Uses native-first only for the future distinct request rather than retroactively duplicating this one"
       ]
+    },
+    {
+      "id": 3,
+      "name": "antigravity-three-state-delivery-and-no-concurrent-resume",
+      "prompt": "A Claude Code session needs to send a coordination notice to an active Antigravity (agy) TUI conversation (`antigravity:a1b2c3d4-...`, listed as status=attached_tui). Should it use Claude's native SendMessage, force `peer.py send --antigravity-delivery resume`, or use default `peer.py send` (`auto`)? How does the live Antigravity TUI consume the message?",
+      "expected_output": "Do not call Claude SendMessage (blocked for antigravity: targets; do not run coord prepare either) and never force concurrent `agy -p` (`--antigravity-delivery resume`) against an attached_tui/running session (risks overwriting live .pb state). Send directly via `peer.py send antigravity:<uuid> ...` (default `auto` queues safely to the per-conversation durable inbox). The live TUI consumes it via `peer.py inbox` / `peer.py wait --inbox` (in a background task) or the optional user-installed Antigravity inbox hook.",
+      "files": [],
+      "expectations": [
+        "Rejects Claude SendMessage and coord prepare for antigravity: targets",
+        "Forbids concurrent `agy -p` / `--antigravity-delivery resume` against attached_tui or running sessions",
+        "Uses direct `peer.py send` (`auto`/queued) into the durable per-conversation inbox",
+        "Explains receiver consumption via `peer.py inbox`, background `peer.py wait --inbox`, or opt-in hook without claiming unapproved hook installation"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "one-command-reply-thread-and-no-courtesy-loop",
+      "prompt": "A peer receives (a) an open coordination request `msg-id: 9a8b7c6d-1111-4111-8111-111111111111` asking whether a branch is ready to merge, and later (b) a final notice saying 'Merged PR #42, no further action needed'. What CLI verbs should the peer use for (a) and (b)?",
+      "expected_output": "For (a), reply concisely with `peer.py reply 9a8b7c6d --message '...'` (or UTF-8 file / `-` stdin), which resolves the sender/topic, propagates `thread_id`, and auto-closes the parent request on accepted delivery. For (b), do not send a courtesy 'received/acknowledged' reply that restarts a loop; close it quietly via `peer.py coord receive <file> --disposition no-reply` (or end the turn quietly if no action is needed).",
+      "files": [],
+      "expectations": [
+        "Uses `peer.py reply <id-or-8hex>` for the open request instead of hand-assembling 6 `send` flags",
+        "Notes `thread_id` propagation and automatic parent closure on `accepted` delivery",
+        "Refuses to send a courtesy-only echo for the completion notice (anti-courtesy-loop)",
+        "Uses `coord receive --disposition no-reply` (or quiet completion) for non-request completion notices"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "event-driven-wait-and-idle-tui-wakeup",
+      "prompt": "An Antigravity session sends a blocking question to a Codex peer and wants to wait up to 5 minutes for a reply without burning tokens in a `sleep`/polling loop, and wants its own idle TUI to wake up immediately when the reply arrives. What command pattern should it use and what does exit code 11 mean?",
+      "expected_output": "Use `peer.py wait --message-id <id> --timeout 300 --json` (or `peer.py send ... --wait-reply 300` / background `peer.py wait --inbox --timeout 300 --json` launched via the host's async background task runner so the main turn can finish with 0 tokens burned while OS `kqueue` watches for arrival). Exit code 11 means the bounded timeout elapsed with `status=\"timeout\"`, `checked_sources`, and a `next_command` — do not loop endlessly.",
+      "files": [],
+      "expectations": [
+        "Uses `peer.py wait` (`--message-id` or `--inbox`) or `--wait-reply` instead of shell `sleep` polling",
+        "Pairs `wait` with host background task execution for zero-token idle-TUI wakeup",
+        "Correctly interprets exit code 11 as bounded timeout (not transport failure) and respects the bounded window without infinite retries"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "unified-inbox-cursors-and-short-prefix-ambiguity",
+      "prompt": "A Claude session checks unread peer messages with `peer.py inbox --json` and marks them read with `--ack`. Does `--ack` mutate Claude's JSONL transcript or Codex's SQLite queue? Separately, what happens if two targets share the 8-hex prefix `a1b2c3d4`?",
+      "expected_output": "`peer.py inbox --ack` never mutates Claude transcripts or Codex SQLite; it writes per-session read cursors under `<state-dir>/inbox-cursors/` (locked atomically). When a `>=8`-hex prefix matches multiple sessions, the CLI fails closed (exit 3) and lists all colliding full addresses instead of guessing.",
+      "files": [],
+      "expectations": [
+        "States clearly that `inbox --ack` only updates `<state-dir>/inbox-cursors/` and never mutates Claude transcripts or Codex SQLite",
+        "States that ambiguous `>=8`-hex prefixes fail closed (exit 3) listing colliding candidates",
+        "Never guesses a target by recency or title when a prefix collides"
+      ]
+    },
+    {
+      "id": 7,
+      "name": "soft-lease-expired-unreleased-and-retired-network-redirect",
+      "prompt": "An agent runs `peer.py coord start --repo . --path 'src/*.py' --task fix-auth --actor codex:<uuid>` and receives `status=\"conflict\"` where the active owner has `freshness=\"expired_unreleased\"`. Can the agent silently take over the files? Also, a user asks how to set up cross-machine `peer-message:v1` pairing across two laptops.",
+      "expected_output": "No — `expired_unreleased` is advisory staleness, never automatic takeover; the agent must verify actual git/file state or contact the recorded owner (using `next_command`), and only the recorded owner may `coord renew` or `coord release`. For cross-machine or cross-user messaging, explain that the old `peer-message` network preview is retired and direct the user to Agent Use (`https://useagent.app`).",
+      "files": [],
+      "expectations": [
+        "Enforces `staleness != takeover`: refuses silent takeover on `expired_unreleased`",
+        "Explains that only the recorded owner can `coord renew` or `coord release`, while the newcomer verifies actual sources or contacts the owner",
+        "States that the cross-machine `network` preview is retired and redirects to Agent Use (`https://useagent.app`)"
+      ]
     }
   ]
 }

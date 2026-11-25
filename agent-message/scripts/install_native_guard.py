@@ -41,7 +41,12 @@ def install(python):
     # Diagnostic installation hashes; source-backed updates retain the selected path.
     files = {name: digest(module.with_name(name)) for name in
              ("native_guard.py", "peer.py", "coordination.py")}
-    root = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")) / "peer-message"
+    state_override = os.environ.get("AGENT_MESSAGE_STATE_DIR") or os.environ.get("PEER_MESSAGE_STATE_DIR")
+    root = (
+        Path(state_override).expanduser()
+        if state_override
+        else Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")) / "peer-message"
+    )
     entry = root / "native-guard-entry.sh"
     command = ("#!/bin/bash\nmodule=${1:-" + shlex.quote(str(module)) + "}\nexec " +
                shlex.quote(str(python)) + " \"$module\"\n")

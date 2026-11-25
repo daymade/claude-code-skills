@@ -207,7 +207,7 @@ def build_parser() -> argparse.ArgumentParser:
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--status", action="store_true", help="read-only check of hooks.json (default)")
     mode.add_argument("--install", action="store_true", help="register the Antigravity inbox hook")
-    mode.add_argument("--uninstall", action="store_true", help="remove only the PeerMessage inbox hook")
+    mode.add_argument("--uninstall", action="store_true", help="remove only the agent-message inbox hook")
     parser.add_argument(
         "--hooks-file",
         type=Path,

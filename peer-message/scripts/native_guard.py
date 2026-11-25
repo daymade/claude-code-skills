@@ -21,5 +21,9 @@ def installed_check(*args, **kwargs):
     return _target().installed_check(*args, **kwargs)
 
 
+def __getattr__(name: str):
+    return getattr(_target(), name)
+
+
 if __name__ == "__main__":
     _compat_forward.exec_target("native_guard.py", __file__)

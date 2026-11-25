@@ -1,6 +1,6 @@
 ---
-name: peer-message-protocol-and-discovery
-description: Transport-neutral addressing, Claude UDS and Codex live/queued delivery, message envelopes, and receiver-side verification.
+name: agent-message-protocol-and-discovery
+description: Transport-neutral addressing (with >=8-hex prefix expansion), Claude UDS, Codex live/queued, Antigravity discovery/inbox/hook, one-command reply, kqueue wait, unified inbox, message envelopes, and receiver-side verification.
 ---
 
 # 协议与发现
@@ -26,7 +26,7 @@ description: Transport-neutral addressing, Claude UDS and Codex live/queued deli
 
 使用 `list` 返回的 `address` 原值作为脚本投递键，不从中提取名称；用独立的 `name` 字段展示名称。清单优先返回能精确选中该行的 `claude-session:` 键；UUID 缺失、为空、无效或有歧义时，退回可唯一解析的 `claude-pid:` 键。两者都无法唯一选中该行时，清单报 discovery 错误（exit 3），不输出部分清单。新键只匹配声明的身份字段，原会话消失或退出后不会转而匹配别人的名称。
 
-将新键原样传给脚本的 send、verify、replies、coord prepare 或 `--reply-to`；不要交给官方原生发送工具。自动 sender 有宿主 UUID 时同样使用类型键；脚本向 Claude 包装回信时仍先归一化为原生 `uds:` 地址，无法归一化则附上脚本回信提示。非 Claude/Codex 宿主或本地脚本没有本地 session 注册项，发送单向 `--kind notice` 时应省略 `--from`（默认走 `local-script`）并在正文标明发送方身份；传自定义前缀（如 `host:<id>`）给 `--from` 会落入 Claude 注册表解析并以 `EXIT_TARGET` 失败。保留旧 `claude:<exact-name>`／PID／UUID／`uds:` 输入的原解析语义；裸字符串以 `claude-session:` 或 `claude-pid:` 开头时属于新键，名称恰为这种形状时改用 `claude:<exact-name>` 明确寻址，非法新键拒绝后不退回名称匹配。重新发现目标，不把旧名称地址当作稳定身份。PID 不能跨进程退出或复用保存为永久身份；同一 UUID 的多进程存活集合改变时，也不保证绑定同一进程。类型键保持到解析确认；旧 canonical 拼写只用于 Board 持久化或相等比较，不先降级再交给 legacy resolver。当前 actor 结清记录、claim 或 release 时可直接按宿主身份比较已有记录，不因 registry 消失改认别人；prepare 无法解析当前 actor 时明确失败，不产生错误 sender 的记录。已有任务记录不迁移。
+将新键原样传给脚本的 send、verify、replies、coord prepare 或 `--reply-to`；不要交给官方原生发送工具。在 Claude、Codex 或 Antigravity 宿主内省略 `--from` 时，`send`/`broadcast`/`reply` 自动解析当前宿主身份（若环境变量同时暴露多个宿主身份则 fail-closed 报错并要求显式 `--from`，绝不盲猜）；非 Claude/Codex/Antigravity 宿主或本地脚本没有宿主会话身份，省略 `--from` 时默认走 `local-script`（发送单向 `--kind notice` 时应在正文标明发送方身份；传自定义前缀如 `host:<id>` 给 `--from` 会落入 Claude 注册表解析并以 `EXIT_TARGET` 失败）。脚本向 Claude 包装回信时仍先归一化为原生 `uds:` 地址，无法归一化则附上脚本回信提示。保留旧 `claude:<exact-name>`／PID／UUID／`uds:` 输入的原解析语义；裸字符串以 `claude-session:` 或 `claude-pid:` 开头时属于新键，名称恰为这种形状时改用 `claude:<exact-name>` 明确寻址，非法新键拒绝后不退回名称匹配。重新发现目标，不把旧名称地址当作稳定身份。PID 不能跨进程退出或复用保存为永久身份；同一 UUID 的多进程存活集合改变时，也不保证绑定同一进程。类型键保持到解析确认；旧 canonical 拼写只用于 Board 持久化或相等比较，不先降级再交给 legacy resolver。当前 actor 结清记录、claim 或 release 时可直接按宿主身份比较已有记录，不因 registry 消失改认别人；prepare 无法解析当前 actor 时明确失败，不产生错误 sender 的记录。已有任务记录不迁移。
 
 ### 两个 route 的地址空间
 
@@ -111,7 +111,7 @@ UDS 连接写两行 NDJSON 后关闭：
 地址解析不决定使用哪一种 transport；发送流程按本文件 §3 执行。
 官方 Claude peer 工具不能用这个地址寻址 Codex thread，接收者仍须先检查当前宿主的原生覆盖范围。
 
-所以 `from` **保持** `codex:<thread-id>`，同时在正文首行补 `[reply: peer.py send codex:<id>]`（这是跨产品脚本补缺提示，接收者仍先按主路由检查原生工具是否覆盖目标）——脚本产生端的属性集合是固定的，正文首行是唯一还能说话的地方。**两个一起走**：删掉地址只为了让一类接收方少踩一次可恢复的失败，会同时夺走另一类接收方手里能用的东西，还让路由脱离了它所路由的对象。
+所以 `from` **保持** `codex:<thread-id>`，同时在正文首行补 `[reply: peer.py send codex:<id>]`（这是跨产品脚本补缺提示，为兼容 v1.x `coord receive` 精确行首完整性校验而保持该固定线格式；接收者仍先按主路由检查原生工具，脚本回信时可直接用 `peer.py reply <short-id> --message '...'`，`peer.py inbox` 也会直接给出 `reply` 建议命令）——脚本产生端的属性集合是固定的，正文首行是唯一还能说话的地方。**两个一起走**：删掉地址只为了让一类接收方少踩一次可恢复的失败，会同时夺走另一类接收方手里能用的东西，还让路由脱离了它所路由的对象。
 
 当前 Claude 接收 parser 接受宿主生成的 `<cross-session-message>` 属性序列（包括 `from`、`from-name`、`from-mode`、`from-session`、`hop-chain`、`from-plugin`），正文首行既可以是 `[peer-coordination]`，也可以先写 `[peer-message-id]`；带 transport ID 时必须与 coordination metadata ID 一致。脚本仍拒绝正文自行闭合 `cross-session-message`/`peer-message`，避免正文逃出来源边界。官方 `SendMessage` 可用时不要手写这层；让官方通道负责包装和版本适配。精确取件与校验配方见 [Claude 跨会话入站原件接收](local-coordination.md#从-claude-跨会话入站原件接收)。
 
@@ -172,9 +172,9 @@ UTF-8 字节上限，超限会明确失败，不返回看似完整的半份清�
 行数及 Codex 条数是否截断。已有输出文件会拒绝覆盖。
 
 ```bash
-PEER_SKILL_DIR='<absolute directory containing the loaded peer-message SKILL.md>'
-python3 "$PEER_SKILL_DIR/scripts/peer.py" list --provider codex --limit 12 --json
-python3 "$PEER_SKILL_DIR/scripts/peer.py" list --provider codex --limit 12 --json \
+PEER_SKILL_ROOT='<absolute directory containing the loaded agent-message SKILL.md>'
+python3 "$PEER_SKILL_ROOT/scripts/peer.py" list --provider codex --limit 12 --json
+python3 "$PEER_SKILL_ROOT/scripts/peer.py" list --provider codex --limit 12 --json \
   --full-titles --output '<new private scratch file>'
 ```
 
@@ -264,11 +264,11 @@ queue 项可能很快被消费，所以只查 queue 会产生假阴性；必须�
 
 ### 一次性关联回复查询
 
-按上文的已加载 Skill 定位方式设置 `PEER_SKILL_DIR`，运行当前 help 确认参数，
+按上文的已加载 Skill 定位方式设置 `PEER_SKILL_ROOT`，运行当前 help 确认参数，
 设置 `INBOX_TARGET` 和 `ORIGINAL_MESSAGE_ID`，再查询原发送方自己的回信落点：
 
 ```bash
-python3 "$PEER_SKILL_DIR/scripts/peer.py" replies \
+python3 "$PEER_SKILL_ROOT/scripts/peer.py" replies \
   "${INBOX_TARGET:?Set INBOX_TARGET to the original sender inbox}" \
   --message-id "${ORIGINAL_MESSAGE_ID:?Set ORIGINAL_MESSAGE_ID to the outbound id}" --json
 ```
@@ -300,11 +300,11 @@ queue 项与已消费的 history 项可能是同一条回复。用 reply envelop
 
 ### 按自身 ID 只读查看入站信封
 
-需要查看一条已知 Codex 入站信封的原文时，使用 `inspect-inbound`；它匹配信封自身的 message ID，不要求 `in_reply_to`，不改变上面的 `replies` 关联查询。先按本文件的定位方式设置 `PEER_SKILL_DIR`，读取当前 help，再显式提供目标和 ID：
+需要查看一条已知 Codex 入站信封的原文时，使用 `inspect-inbound`；它匹配信封自身的 message ID，不要求 `in_reply_to`，不改变上面的 `replies` 关联查询。先按本文件的定位方式设置 `PEER_SKILL_ROOT`，读取当前 help，再显式提供目标和 ID：
 
 ```bash
-python3 "$PEER_SKILL_DIR/scripts/peer.py" inspect-inbound --help
-python3 "$PEER_SKILL_DIR/scripts/peer.py" inspect-inbound \
+python3 "$PEER_SKILL_ROOT/scripts/peer.py" inspect-inbound --help
+python3 "$PEER_SKILL_ROOT/scripts/peer.py" inspect-inbound \
   "${INBOX_TARGET:?Set INBOX_TARGET to codex:<canonical UUID>}" \
   --message-id "${INBOUND_MESSAGE_ID:?Set INBOUND_MESSAGE_ID to the exact envelope ID}" --json
 ```
@@ -340,7 +340,7 @@ queue 与 history 不是原子快照；内容在两次读取之间迁移时可�
 
 - `transport_status=accepted`：底层 transport 接受了消息；同时读取 `provenance_boundary`。
 - `delivery_status=not_checked`：调用者没有请求等待验证；transport 已接受，但脚本没有检查接收侧 evidence。
-- `delivery_status=verified_enqueued` / `verified_queued` / `verified_in_thread_history`：接收侧 evidence 已命中。
+- `delivery_status=verified_enqueued` / `verified_queued` / `verified_in_thread_history` / `verified_in_transcript`：接收侧 evidence 已命中（分别为 Claude enqueue、Codex/Antigravity 持久队列、Codex thread history、Antigravity transcript）。
 - `delivery_status=accepted_unverified`：transport 接受，但等待窗口内没有读回接收侧 evidence；它不是失败，也不是“对方已收到”。
 
 退出码由脚本绑定：0 表示请求完成——请求了验证时已命中，未请求时只表示 transport 接受且没有检查 evidence；2 表示参数错误、broadcast 确认错误或超过无契约目标数上限；3 表示目标不存在、歧义、Claude 无 inbox，或 **Codex thread 已归档**（归档 thread 永远不再消费 queue，send 默认拒绝；verify/replies/inspect-inbound 读路径不受影响）；4 表示 transport、证据读取或证据一致性失败；5 表示 broadcast 部分失败；10 表示 transport 接受但等待窗口内未验证，或只读查询没有适用 evidence store；11 表示只读查询成功读取了适用 store 但没有匹配记录。`replies` 与 `inspect-inbound` 的 0、10、11 判据分别按上面各自的状态表读取。
@@ -353,17 +353,17 @@ queue 与 history 不是原子快照；内容在两次读取之间迁移时可�
 ### 统一收件箱、一键回复与零轮询等待
 
 1. **统一三产品收件箱（`peer.py inbox`）**：
-   - `python3 "$PEER_SKILL_DIR/scripts/peer.py" inbox [target] [--all] [--ack] [--json]` 统一聚合当前（或显式指定）Claude、Codex、Antigravity 会话的入站消息，并与本地 `coord` 中针对该目标的未关闭入站记录合并（补齐 `ack_required`、`expires_in`、`next_command`）。
+   - `python3 "$PEER_SKILL_ROOT/scripts/peer.py" inbox [target] [--all] [--ack] [--json]` 统一聚合当前（或显式指定）Claude、Codex、Antigravity 会话的入站消息，并与本地 `coord` 中针对该目标的未关闭入站记录合并（补齐 `ack_required`、`expires_in`、`next_command`）。
    - Claude 读取 transcript 中 `queue-operation: enqueue` 的 `<cross-session-message>`；Codex 读取只读 `queued_items` 与 `thread_items`（`userMessage` 与 `peer_message/delivery` `functionCallOutput`）；Antigravity 读取 `<state-dir>/antigravity-inbox/<uuid>.jsonl`。
-   - 默认只读返回未读项（`--all` 显示全部）。传 `--ack` 时，Antigravity 原子推进 `<state-dir>/antigravity-inbox/<uuid>.cursor`，Claude 与 Codex 在 `<state-dir>/inbox-cursors/<provider>-<id>.json` 中记录已读游标，**绝不修改 Claude transcript 或 Codex SQLite**。
+   - 默认只读返回未读项（`--all` 显示全部）。传 `--ack` 时，Antigravity 原子推进 `<state-dir>/antigravity-inbox/<uuid>.cursor`（并在 `<state-dir>/inbox-cursors/` 记录直投 `coord` 项游标），Claude 与 Codex 在 `<state-dir>/inbox-cursors/<provider>-<id>.json` 中经 `flock` 原子记录已读游标，**绝不修改 Claude transcript 或 Codex SQLite**。
 
 2. **一键回复（`peer.py reply`）**：
-   - `python3 "$PEER_SKILL_DIR/scripts/peer.py" reply <message-id> [message_file|-|--message TEXT] [--wait-reply <N>] [--json]` 接受完整 message ID 或唯一的 `>=8` 位 hex 前缀（冲突时 fail-closed 退出 3）。
-   - 自动从本地协调库查回原消息并填充目标（原 `sender`）、`--kind reply`、`--in-reply-to`、原 `topic` 与 `thread_id`（保存在 companion 表 `message_threads`），并支持 `message_file` 传 `-` 从 stdin 读入多行正文。
+   - `python3 "$PEER_SKILL_ROOT/scripts/peer.py" reply <message-id> [message_file|-|--message TEXT] [--wait-reply <N>] [--json]` 接受完整 message ID 或唯一的 `>=8` 位 hex 前缀（冲突时 fail-closed 退出 3）。
+   - 自动从本地协调库（未命中时回退检查当前 Claude/Codex/Antigravity 收件箱）查回原消息并填充目标（原 `sender`）、`--kind reply`、`--in-reply-to`、原 `topic` 与 `thread_id`（保存在 companion 表 `message_threads`），并支持 `message_file` 传 `-` 从 stdin 读入多行正文。
    - 若原 `sender` 不可回复（如 `local-script`）则明确失败，不猜测收件人；投递返回 `transport_status=accepted` 时自动结清原入站协调记录，减少未关闭行堆积。
 
 3. **OS 级零轮询等待（`peer.py wait` 与 `--wait-reply`）**：
-   - 独立命令：`python3 "$PEER_SKILL_DIR/scripts/peer.py" wait (--message-id <id> | --inbox) [target] [--timeout 60] [--json]`。
+   - 独立命令：`python3 "$PEER_SKILL_ROOT/scripts/peer.py" wait (--message-id <id> | --inbox) [target] [--timeout 60] [--json]`（`--message-id` 支持完整 ID 或唯一 `>=8` 位 hex 前缀）。
    - 发送联动：`send` 与 `reply` 支持 `--wait-reply <seconds>`，在 `transport_status=accepted` 后直接进入回复等待并在 JSON 回执中附 `reply_wait`。
    - 底层由 `scripts/peer_wait.py` 驱动：macOS 使用 `select.kqueue()` 监听目标入站存储文件/目录的 `EVFILT_VNODE` 变更，辅以有界低频补偿检查（兼容 SQLite WAL 与新文件创建），非 BSD 平台回退至有界轮询。零模型 token 消耗、不执行 `sleep` 循环。
    - 结果语义：命中回复或新未读入站返回 `status=ready`（退出 0）；有界窗口到期返回结构化 `status=timeout`、`checked_sources` 与 `next_command`（退出 11）。**活 TUI 唤醒配方**：在 Antigravity 或 Claude Code 中将 `peer.py wait --inbox --timeout 300 --json` 放入宿主后台任务（`run_command` 异步或 Claude `run_in_background`），主对话即可直接收尾释放 token，一旦对方发来消息，后台任务退出 0 自动唤醒当前活跃 TUI，零 `.pb` 竞争。

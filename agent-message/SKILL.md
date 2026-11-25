@@ -26,7 +26,7 @@ description: >-
 | `inbox` | `python3 "$P" inbox [target] [--all] [--ack] [--json]` | 统一读取 Claude/Codex/Antigravity 未读入站并合并未关闭 `coord` 待办；`--ack` 仅推进本地游标，不改写宿主 transcript/SQLite |
 | `coord` | `python3 "$P" coord start --repo <dir> --path <file\|dir\|glob> --task <key> --actor <addr> [--ttl 3600]` | 独立会话开工/Fork 前在同一事务内查冲突并登记；`coord renew` 续约软租约（过期标 `expired_unreleased`，不自动抢占）；完成后本人 `coord release` |
 
-> 回执与错误中的 `next_command` 给出可直接执行的下一步；标有 `operator_only=true` 时需由用户/操作者介入（如 Held 策略或安装 Hook），Agent 不得绕过。
+> 次级只读/专项动词：`whoami`、`verify`、`replies`、`broadcast`、`inspect-inbound`（均支持 `--help` 与 `--json`）。回执与错误中的 `next_command` 给出可直接执行的下一步；标有 `operator_only=true` 时需由用户/操作者介入（如 Held 策略或安装 Hook），Agent 不得绕过。
 
 ## 路由表
 

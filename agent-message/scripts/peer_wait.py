@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Event-driven local filesystem wait primitives for peer-message.
+"""Event-driven local filesystem wait primitives for agent-message.
 
 Stdlib-only helper used by `peer.py wait` and `peer.py send --wait-reply`.
 On macOS/BSD (`select.kqueue`), watches existing target files and their nearest
@@ -9,6 +9,7 @@ without `kqueue` or if `kqueue` fails with `OSError`.
 """
 from __future__ import annotations
 
+import errno
 import math
 import os
 from pathlib import Path
@@ -144,7 +145,9 @@ def _open_event_fd(path: Path) -> int | None:
     open_flags = getattr(os, "O_EVTONLY", os.O_RDONLY)
     try:
         return os.open(path, open_flags)
-    except OSError:
+    except OSError as exc:
+        if exc.errno in (errno.EMFILE, errno.ENFILE):
+            raise
         return None
 
 
@@ -208,6 +211,15 @@ def _arm_kqueue_watches(
                 parent_dir, _ = _nearest_existing_dir(path)
                 if parent_dir is not None and parent_dir != path:
                     _add_watch(parent_dir, is_file=False)
+                # Claude transcripts live one level below `projects/<encoded-cwd>/<sid>.jsonl`.
+                # Because kqueue VNODE watches are non-recursive, watching `projects/` alone
+                # won't wake on writes inside child dirs; fall back to poll_interval slices
+                # whenever no concrete transcript file under `projects/` is armed yet.
+                if path.name == "projects" and not any(
+                    other != path and other.is_file() and path in other.parents
+                    for other in paths
+                ):
+                    has_indirect_ancestor = True
             elif is_file:
                 _add_watch(path, is_file=True)
                 parent_dir, _ = _nearest_existing_dir(path)
