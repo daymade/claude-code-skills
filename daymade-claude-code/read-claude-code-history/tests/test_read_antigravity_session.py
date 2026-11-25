@@ -1113,6 +1113,38 @@ class TestReadAntigravitySession(unittest.TestCase):
         self.assertEqual(rc_bad, 2)
         self.assertIn("--sort requires --list", err_bad)
 
+    def test_parse_iso_epoch_rfc3339nano_lowercase_z_and_non_regular_stat(self) -> None:
+        import os
+
+        nano = ras._parse_iso_epoch("2026-11-25T16:03:20.123456789Z")
+        micro = ras._parse_iso_epoch("2026-11-25T16:03:20.123456Z")
+        self.assertIsNotNone(nano)
+        self.assertEqual(nano, micro)
+
+        short_lower_z = ras._parse_iso_epoch("2026-11-25T16:03:20.5z")
+        short_utc = ras._parse_iso_epoch("2026-11-25T16:03:20.500000+00:00")
+        self.assertIsNotNone(short_lower_z)
+        self.assertEqual(short_lower_z, short_utc)
+
+        five_digit_tz = ras._parse_iso_epoch("2026-11-25T16:03:20.12345+08:00")
+        six_digit_tz = ras._parse_iso_epoch("2026-11-25T16:03:20.123450+08:00")
+        self.assertIsNotNone(five_digit_tz)
+        self.assertEqual(five_digit_tz, six_digit_tz)
+
+        self.assertIsNone(ras._parse_iso_epoch("0001-01-01T00:00:00Z"))
+        self.assertIsNone(ras._parse_iso_epoch(""))
+
+        # Non-regular files (e.g. directories and POSIX FIFOs) and invalid IDs must return (False, None)
+        self.assertEqual(ras._transcript_stat_mtime(self.store, "../etc"), (False, None))
+        dir_tpath = self.store / "brain" / "conv-dir-test" / ".system_generated" / "logs" / "transcript.jsonl"
+        dir_tpath.mkdir(parents=True, exist_ok=True)
+        self.assertEqual(ras._transcript_stat_mtime(self.store, "conv-dir-test"), (False, None))
+        if hasattr(os, "mkfifo"):
+            fifo_tpath = self.store / "brain" / "conv-fifo-test" / ".system_generated" / "logs" / "transcript.jsonl"
+            fifo_tpath.parent.mkdir(parents=True, exist_ok=True)
+            os.mkfifo(fifo_tpath)
+            self.assertEqual(ras._transcript_stat_mtime(self.store, "conv-fifo-test"), (False, None))
+
 
 if __name__ == "__main__":
     unittest.main()

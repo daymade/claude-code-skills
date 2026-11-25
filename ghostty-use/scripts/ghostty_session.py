@@ -459,26 +459,29 @@ def _agy_app_data_dir():
                 or Path(HOME) / ".gemini" / "antigravity-cli").expanduser()
 
 
-def _agy_top_level_ids(app_data_dir):
-    """Read-only set of top-level (non-subagent) Antigravity conversation IDs, or None."""
+def _agy_index_sets(app_data_dir):
+    """Read-only (top_level_ids, known_subagent_ids) from conversation_summaries.db, or None."""
     db_path = Path(app_data_dir) / "conversation_summaries.db"
-    if not db_path.is_file():
-        return None
     try:
-        conn = sqlite3.connect(f"{db_path.resolve().as_uri()}?mode=ro", uri=True)
+        if not db_path.is_file():
+            return None
+        resolved = db_path.resolve()
+        conn = sqlite3.connect(f"{resolved.as_uri()}?mode=ro", uri=True)
         try:
             rows = conn.execute(
                 "SELECT conversation_id, nesting_depth, parent_conversation_id FROM conversation_summaries"
             ).fetchall()
         finally:
             conn.close()
-    except sqlite3.Error:
+        top_level, subagents = set(), set()
+        for cid, depth, parent in rows:
+            if not isinstance(cid, str) or not UUID_RE.fullmatch(cid):
+                continue
+            is_sub = int(depth or 0) > 0 or bool(str(parent or "").strip())
+            (subagents if is_sub else top_level).add(cid)
+        return top_level, subagents
+    except (sqlite3.Error, OSError, ValueError, TypeError):
         return None
-    return {
-        cid for cid, depth, parent in rows
-        if isinstance(cid, str) and UUID_RE.fullmatch(cid)
-        and int(depth or 0) == 0 and not str(parent or "").strip()
-    }
 
 
 def _parse_agy_brain_handles(lsof_text, pids, app_data_dir):
@@ -512,11 +515,14 @@ def _assign_agy_sessions(procs, seen, *, deadline=None, counters=None):
     from ghostty_watch import run_bounded
 
     app_data_dir = _agy_app_data_dir()
-    top_level = _agy_top_level_ids(app_data_dir)
-    if top_level is None:
+    indexed = _agy_index_sets(app_data_dir)
+    if indexed is None:
         return [dict(proc, reason="Antigravity summary index unavailable") for proc in procs]
+    top_level, known_subagents = indexed
     pids = sorted({proc["pid"] for proc in procs})
     effective_deadline = deadline if deadline is not None else time.monotonic() + 10
+    if effective_deadline - time.monotonic() <= 0:
+        raise RecoveryError("observation deadline expired before Antigravity handle lookup")
     local_counters = counters if counters is not None else {"commands": 0, "lsof_calls": 0}
     local_counters.setdefault("commands", 0)
     local_counters["lsof_calls"] = local_counters.get("lsof_calls", 0) + 1
@@ -527,22 +533,31 @@ def _assign_agy_sessions(procs, seen, *, deadline=None, counters=None):
         )
     except subprocess.TimeoutExpired as error:
         raise RecoveryError("observation deadline expired during Antigravity handle lookup: " + str(error)) from error
-    except (ValueError, OSError):
+    except (ValueError, OSError) as error:
+        if isinstance(error, ValueError) and "deadline expired" in str(error):
+            raise RecoveryError("observation deadline expired during Antigravity handle lookup: " + str(error)) from error
         return [dict(proc, reason="Antigravity open-handle inspection unavailable") for proc in procs]
 
     handles = _parse_agy_brain_handles(output, pids, app_data_dir)
     claims = defaultdict(list)
     per_pid_parents = {}
+    per_pid_unindexed = {}
     for proc in procs:
-        parents = sorted(u for u in handles.get(proc["pid"], ()) if u in top_level)
+        open_uuids = handles.get(proc["pid"], set())
+        unindexed = sorted(u for u in open_uuids if u not in top_level and u not in known_subagents)
+        parents = sorted(u for u in open_uuids if u in top_level)
+        per_pid_unindexed[proc["pid"]] = unindexed
         per_pid_parents[proc["pid"]] = parents
-        if len(parents) == 1:
-            claims[parents[0]].append(proc["pid"])
+        for sid in parents:
+            claims[sid].append(proc["pid"])
 
     out = []
     for proc in procs:
+        unindexed = per_pid_unindexed[proc["pid"]]
         parents = per_pid_parents[proc["pid"]]
-        if not parents:
+        if unindexed:
+            out.append(dict(proc, reason="unindexed Antigravity conversation in open handles"))
+        elif not parents:
             out.append(dict(proc, reason="no top-level Antigravity conversation in open handles"))
         elif len(parents) > 1:
             out.append(dict(proc, reason="multiple top-level Antigravity conversations in open handles"))
@@ -636,15 +651,25 @@ class RecoveryError(ValueError):
 HISTORY_READER = None
 CODEX_HOME_OVERRIDE = None
 AGY_APP_DATA_DIR_OVERRIDE = None
+AGY_LIVENESS_TAIL_BYTES = 256 * 1024
 
 
 def _agy_liveness_path(path):
-    """Last event timestamp inside an Antigravity transcript.jsonl (never mtime)."""
+    """Last event timestamp inside a regular Antigravity transcript.jsonl (bounded tail, never mtime)."""
     try:
-        with open(path, errors="replace") as fh:
-            tail = fh.readlines()[-60:]
+        with _read_regular_file(path) as (handle, file_stat):
+            size = file_stat.st_size
+            start = max(0, size - AGY_LIVENESS_TAIL_BYTES)
+            handle.seek(start)
+            raw = handle.read(size - start)
     except OSError:
         return None, "no-file"
+    if start > 0:
+        first_nl = raw.find(b"\n")
+        if first_nl < 0:
+            return None, "ok"
+        raw = raw[first_nl + 1:]
+    tail = raw.decode("utf-8", errors="replace").splitlines()[-60:]
     last_ts = None
     for line in tail:
         try:
@@ -653,15 +678,13 @@ def _agy_liveness_path(path):
             continue
         if isinstance(rec, dict):
             ts = rec.get("created_at") or rec.get("timestamp")
-            if ts:
+            if isinstance(ts, str) and ts.strip():
                 last_ts = ts
     return last_ts, "ok"
 
 
 def agy_liveness(sid):
     tpath = _agy_app_data_dir() / "brain" / sid / ".system_generated" / "logs" / "transcript.jsonl"
-    if not tpath.is_file():
-        return None, "no-file"
     return _agy_liveness_path(str(tpath))
 
 
@@ -1091,6 +1114,10 @@ def restore_cmd(s, *, env_mapping=None):
             if not value or value.startswith("-"):
                 raise RecoveryError("captured resume selector is missing its ID")
             cursor += 1
+        elif s['tool'] == 'agy' and token in ("-i", "--prompt-interactive"):
+            # Initial prompt is capture evidence, never replayed as a new turn on restore.
+            if cursor < len(tail) and not tail[cursor].startswith('-'):
+                cursor += 1
         elif s['tool'] == 'codex' and token in ('resume', 'fork'):
             # A fork's selector names its parent, never the child's restore ID.
             if cursor < len(tail) and not tail[cursor].startswith('-'):
@@ -1108,11 +1135,13 @@ def restore_cmd(s, *, env_mapping=None):
                 cursor += 1
                 if token in optional:
                     break
-        elif token in ("--fork-session", "--continue", "-c", "--last", "--all"):
+        elif token in ("--fork-session", "--continue", "-c", "--last", "--all", "--new-project"):
             continue  # restore this saved ID, without forking or selecting another
-        elif token.startswith(("--resume=", "--session-id=", "--conversation=")):
+        elif token.startswith(("--resume=", "--session-id=", "--conversation=", "--prompt-interactive=")):
             continue
         elif s['tool'] in ('claude', 'agy') and token.startswith('-r') and not token.startswith('--'):
+            continue
+        elif s['tool'] == 'agy' and token.startswith('-i') and not token.startswith('--'):
             continue
         elif token.startswith('-'):
             flags.append(token)

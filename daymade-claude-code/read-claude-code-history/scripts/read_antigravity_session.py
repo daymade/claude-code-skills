@@ -24,6 +24,7 @@ import os
 from pathlib import Path
 import re
 import sqlite3
+import stat
 import sys
 from typing import Any
 from urllib.parse import unquote, urlparse
@@ -32,6 +33,7 @@ DEFAULT_APP_DATA_DIR = Path.home() / ".gemini" / "antigravity-cli"
 VALID_CONV_ID_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
 USER_REQUEST_RE = re.compile(r"<USER_REQUEST>\s*(.*?)\s*</USER_REQUEST>", re.S)
 ADDITIONAL_META_RE = re.compile(r"\s*<ADDITIONAL_METADATA>.*?</ADDITIONAL_METADATA>\s*", re.S)
+FRAC_SECONDS_RE = re.compile(r"\.(\d+)")
 DEFAULT_MAX_OUTPUT_BYTES = 120_000
 STALE_DB_TOLERANCE_SECONDS = 60.0
 
@@ -156,8 +158,10 @@ def _parse_iso_epoch(raw: str | None) -> float | None:
     s = raw.strip()
     if not s or s.startswith("0001-01-01"):
         return None
-    if s.endswith("Z"):
+    if s[-1] in ("Z", "z"):
         s = s[:-1] + "+00:00"
+    # Normalize RFC3339Nano / variable-width fractional seconds to 6 digits for Python 3.9/3.10.
+    s = FRAC_SECONDS_RE.sub(lambda m: "." + m.group(1)[:6].ljust(6, "0"), s, count=1)
     try:
         dt = datetime.fromisoformat(s)
     except ValueError:
@@ -171,23 +175,38 @@ def _format_utc_iso(epoch: float) -> str:
     return datetime.fromtimestamp(epoch, timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
-def _transcript_stat_mtime(app_data_dir: Path, conv_id: str) -> tuple[bool, float | None]:
+def _transcript_stat_mtime(
+    app_data_dir: Path,
+    conv_id: str,
+    cache: dict[str, tuple[bool, float | None]] | None = None,
+) -> tuple[bool, float | None]:
     """Stat-only metadata check on transcript.jsonl; never reads transcript bodies."""
+    if cache is not None and conv_id in cache:
+        return cache[conv_id]
     try:
         validate_conversation_id(conv_id)
     except ValueError:
-        return False, None
+        res = (False, None)
+        if cache is not None:
+            cache[conv_id] = res
+        return res
     tpath = app_data_dir / "brain" / conv_id / ".system_generated" / "logs" / "transcript.jsonl"
     try:
         st = tpath.stat()
     except OSError:
-        return False, None
-    if not tpath.is_file():
-        return False, None
-    return True, float(st.st_mtime)
+        res = (False, None)
+    else:
+        res = (True, float(st.st_mtime)) if stat.S_ISREG(st.st_mode) else (False, None)
+    if cache is not None:
+        cache[conv_id] = res
+    return res
 
 
-def compute_index_coverage(conn: sqlite3.Connection, app_data_dir: Path) -> dict[str, Any]:
+def compute_index_coverage(
+    conn: sqlite3.Connection,
+    app_data_dir: Path,
+    stat_cache: dict[str, tuple[bool, float | None]] | None = None,
+) -> dict[str, Any]:
     indexed_ids: set[str] = set()
     fts_convs = 0
     latest_mtime = None
@@ -198,7 +217,7 @@ def compute_index_coverage(conn: sqlite3.Connection, app_data_dir: Path) -> dict
             mt = r[1]
             if cid:
                 indexed_ids.add(cid)
-                has_t, t_mtime = _transcript_stat_mtime(app_data_dir, cid)
+                has_t, t_mtime = _transcript_stat_mtime(app_data_dir, cid, cache=stat_cache)
                 if has_t and t_mtime is not None:
                     db_epoch = _parse_iso_epoch(mt)
                     if db_epoch is None or (t_mtime - db_epoch) > STALE_DB_TOLERANCE_SECONDS:
@@ -249,8 +268,9 @@ def list_sessions(
             },
             "sessions": [],
         }
+    stat_cache: dict[str, tuple[bool, float | None]] = {}
     try:
-        coverage = compute_index_coverage(conn, app_data_dir)
+        coverage = compute_index_coverage(conn, app_data_dir, stat_cache=stat_cache)
         rows = conn.execute(
             """
             SELECT conversation_id, title, preview, step_count, last_modified_time,
@@ -282,7 +302,7 @@ def list_sessions(
         workspaces = parse_workspace_uris(r["workspace_uris"])
         if not workspace_matches_project(workspaces, project):
             continue
-        has_transcript, t_mtime = _transcript_stat_mtime(app_data_dir, cid)
+        has_transcript, t_mtime = _transcript_stat_mtime(app_data_dir, cid, cache=stat_cache)
         db_epoch = _parse_iso_epoch(r["last_modified_time"])
         db_stale = bool(
             has_transcript

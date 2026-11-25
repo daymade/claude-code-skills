@@ -1222,8 +1222,72 @@ class AgyObserverTest(unittest.TestCase):
             'agy mcp list',
             'agy remote-control status',
             'agy --help',
+            'agy -h',
         ):
             self.assertIsNone(watch.cli_identity({'cmdline': non_tui}), non_tui)
+
+        # Interactive initial-prompt flags (-i/--prompt-interactive), -- positional separator,
+        # and explicit conversation selector with a trailing prompt matching a subcommand name
+        # must stay interactive (not None), while marking sid=None (ambiguous) so lsof-brain
+        # anchors them safely instead of trusting unquoted ps argv.
+        for interactive_cmd in (
+            'agy -i "help"',
+            'agy --prompt-interactive="mcp"',
+            'agy --prompt-interactive acp',
+            'agy -- "mcp"',
+            f'agy --conversation={S1} help',
+            f'agy -r {S2} acp',
+        ):
+            ident = watch.cli_identity({'cmdline': interactive_cmd})
+            self.assertIsNotNone(ident, interactive_cmd)
+            self.assertEqual(ident[:2], ('agy', None), interactive_cmd)
+
+    def test_observe_resolved_and_cycle_with_uuidless_agy(self):
+        import sqlite3
+        import ghostty_session as gs
+
+        with tempfile.TemporaryDirectory(prefix='ghostty-agy-cycle-') as tmp:
+            state = Path(tmp) / 'state'
+            app_dir = Path(tmp) / 'agy-store'
+            app_dir.mkdir(parents=True)
+            conn = sqlite3.connect(str(app_dir / 'conversation_summaries.db'))
+            conn.execute('CREATE TABLE conversation_summaries (conversation_id TEXT, nesting_depth INTEGER, parent_conversation_id TEXT)')
+            conn.execute('INSERT INTO conversation_summaries VALUES (?, ?, ?)', (S1, 0, ''))
+            conn.commit()
+            conn.close()
+            tpath = app_dir / 'brain' / S1 / '.system_generated' / 'logs' / 'transcript.jsonl'
+            tpath.parent.mkdir(parents=True, exist_ok=True)
+            tpath.write_text('{"step_index": 0, "created_at": "2026-11-26T00:00:00Z"}\n')
+
+            graph = '\n'.join([
+                '1 0 ?? /Applications/Ghostty.app/Contents/MacOS/ghostty',
+                '10 1 ttys001 agy --dangerously-skip-permissions',
+            ])
+            brain = app_dir / 'brain'
+            def run(command, deadline, counters):
+                counters['commands'] += 1
+                if command[0] == '/bin/ps':
+                    return graph
+                if '-d' in command:
+                    return 'p10\nn/tmp/demo\n'
+                return f'p10\nn{brain / S1 / ".system_generated"}\n'
+
+            with mock.patch.object(watch, 'run_bounded', side_effect=run), \
+                 mock.patch.object(gs, '_proc_start', return_value=1000.0), \
+                 mock.patch.object(gs, 'AGY_APP_DATA_DIR_OVERRIDE', str(app_dir)), \
+                 mock.patch('ghostty_windows.capture_window_structure', return_value={'captured': False}):
+                resolved = watch.observe_resolved()
+                self.assertEqual(resolved['unresolved'], [])
+                self.assertEqual([(s['tool'], s['sid'], s['anchor']) for s in resolved['sessions']],
+                                 [('agy', S1, 'lsof-brain')])
+
+                result = watch.cycle(state)
+                self.assertEqual(result['state'], 'changed')
+                snap = json.loads((state / 'snapshots' / 'latest.json').read_text())
+                self.assertEqual(len(snap['sessions']), 1)
+                self.assertEqual(snap['sessions'][0]['tool'], 'agy')
+                self.assertEqual(snap['sessions'][0]['sid'], S1)
+                self.assertIn(f'--conversation={S1}', snap['sessions'][0]['restore_command'])
 
     def test_observe_and_canonical_support_agy_across_scopes(self):
         graph = '\n'.join([

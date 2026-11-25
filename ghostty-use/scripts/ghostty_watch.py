@@ -134,10 +134,10 @@ CODEX_REQUIRED = set("-c --config --enable --disable --remote --remote-auth-toke
 CODEX_VARIADIC = set("-i --image".split())
 CODEX_BOOLEAN = set("--strict-config --oss --approve-for-me --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust --worktree --search --no-alt-screen --no-daemon --last --all --include-non-interactive --full-auto -h --help -V --version".split())
 CODEX_OTHER_COMMANDS = set("agents exec e review login logout mcp plugin app-server remote-control app completion update doctor sandbox debug apply queue archive delete migrate-rollouts unarchive cloud exec-server features help mcp-server daemon companion".split())
-AGY_REQUIRED = set("--add-dir --agent --conversation --effort --input-format --json-schema --log-file --mode --model --output-format --print-timeout --project -r --resume --settings".split())
+AGY_REQUIRED = set("--add-dir --agent --conversation --effort -i --prompt-interactive --input-format --json-schema --log-file --mode --model --output-format --print-timeout --project -r --resume --settings".split())
 AGY_OPTIONAL = set()
 AGY_VARIADIC = set()
-AGY_BOOLEAN = set("-c --continue --dangerously-skip-permissions --disable-slash-commands -i --prompt-interactive --new-project -p --print --prompt --remote-agent --remote-control --sandbox -h --help -v --version".split())
+AGY_BOOLEAN = set("-c --continue --dangerously-skip-permissions --disable-slash-commands --new-project -p --print --prompt --remote-agent --remote-control --sandbox -h --help -v --version".split())
 AGY_OTHER_CONTEXT = set("-p --print --prompt -h --help -v --version".split())
 AGY_OTHER_COMMANDS = set("acp agent agents changelog help install mcp mic-serve models plugin plugins remote-control update".split())
 SUPPORTED_TOOLS = ("codex", "claude", "agy")
@@ -226,6 +226,10 @@ def cli_identity(row):
                         ids.add(value)
                     else:
                         ambiguous = True
+                if tool == 'agy' and option in ('-i', '--prompt-interactive'):
+                    # Initial prompt text loses quoting in ps output; stay interactive
+                    # without trusting argv selectors and never match subcommands.
+                    ambiguous = True
             if ambiguous:
                 break
             continue
@@ -244,7 +248,7 @@ def cli_identity(row):
             elif command == 'resume' and ids:
                 ambiguous = True  # trailing positional prompt is not replay-safe
         elif tool == 'agy':
-            if command is None and token in AGY_OTHER_COMMANDS:
+            if command is None and not positional_only and not ids and token in AGY_OTHER_COMMANDS:
                 return None
             ambiguous = True
             break
