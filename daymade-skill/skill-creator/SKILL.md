@@ -121,6 +121,13 @@ Treat “unsupported” as a hypothesis and investigate alternative documented p
   condition and verify the original usable result. Skip this route for
   reference-only work or self-sufficient transforms only when no execution
   prerequisite is affected.
+- When a reusable methodology Skill needs user, brand, compliance or workspace
+  context without hardcoding private repos or repeating onboarding every session,
+  follow [context inversion and persistent local state](references/context-inversion-and-state.md)
+  before drafting: keep methodology self-contained inside the bundle, declare
+  blocking vs. optional slots, run `Resolve → Diff → Ask Once → Persist` into
+  user-local storage outside the bundle, and verify live path liveness plus
+  malformed-state rejection.
 - For persisted formats/partial updates, permission-sensitive checks or large
   command output, follow the affected [stateful verification recipe](references/stateful-script-verification.md).
   For resumable writes to human-edited state, include its

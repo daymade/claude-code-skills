@@ -3,7 +3,11 @@
 Use these recipes when a change touches persisted formats, partial state updates,
 permission-sensitive checks, or output too large for a tool response. Select only the affected recipes. Run
 against an isolated state directory with synthetic values; do not mutate live
-accounts or journals to obtain test evidence. Stop when the changed contract is
+accounts or journals to obtain test evidence. For reusable Skills storing local
+domain/project context profiles outside the bundle, pair the recipes below with
+[context inversion and persistent local state](context-inversion-and-state.md#5-verify-the-inversion-and-persistence-contract)
+(empty-store exit-3 Ask-Once, stale local-pointer liveness alignment, partial
+merge, and malformed/symlinked profile rejection). Stop when the changed contract is
 decided by the checks below; the selected verification tier still governs review.
 
 ## Persisted-format compatibility

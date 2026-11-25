@@ -12,8 +12,13 @@ Apply this contract when the affected job depends on another Skill/tool, require
 data or permission, installation, account configuration, a running service or a
 human step. This includes instruction-only routers and handoffs across owners.
 Skip it for reference-only work or self-sufficient file transforms only when no
-execution prerequisite is affected. The author applies it to the affected workflow;
-it is not a reason to build a generic installer or add setup to every Skill.
+execution prerequisite is affected. For reusable methodology Skills that invert
+missing domain, brand, compliance, or project context onto user-supplied slots
+and persist reusable local profiles across sessions, use
+[context inversion and persistent local state](context-inversion-and-state.md)
+instead of modeling domain onboarding as software setup. The author applies it to
+the affected workflow; it is not a reason to build a generic installer or add
+setup to every Skill.
 
 Before planning readiness checks, bind the
 [intended consumer](change-verification.md#bind-the-intended-consumer-before-verification).
