@@ -21,8 +21,15 @@ import time
 SCHEMA = "transcript-source-v1"
 CLIP_SCHEMA = "transcript-source-clip-v1"
 FRAME_SCHEMA = "transcript-source-frame-v1"
+LOCATE_SCHEMA = "transcript-source-locate-v1"
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 MAX_WINDOW = 180.0
+_TS_PATTERN = r"(?:\d{1,2}:)?[0-5]\d:[0-5]\d(?:\.\d+)?"
+_TURN_SUFFIX_RE = re.compile(rf"^(?P<speaker>.+?)\s+(?P<bracket>\[)?(?P<ts>{_TS_PATTERN})(?(bracket)\])\s*[:：]?\s*$")
+_TURN_PREFIX_BRACKET_RE = re.compile(rf"^\[(?P<ts>{_TS_PATTERN})\]\s+(?P<rest>.+?)\s*$")
+_TURN_PREFIX_BARE_RE = re.compile(rf"^(?P<ts>{_TS_PATTERN})\s+(?P<rest>.+?)\s*$")
+_INLINE_SPEAKER_RE = re.compile(r"^(?P<speaker>[^:：。！？.?!]{1,40})\s*[:：]\s*(?P<text>.+)$")
+_PROSE_TIME_OF_DAY_RE = re.compile(r"(?:上午|下午|中午|晚上|凌晨|早上|今天|明天|昨天|周[一二三四五六日天]|星期)")
 
 # One implementation runs locally or over the existing SSH command plane.
 # The request is JSON data on stdin; paths never become shell commands.
@@ -288,6 +295,263 @@ class SourceClips:
             lock.unlink()
 
 
+def _parse_timestamp_seconds(raw: str) -> float:
+    parts = raw.strip().split(":")
+    if len(parts) == 2:
+        minutes, seconds = int(parts[0]), float(parts[1])
+        if minutes < 0 or seconds < 0 or seconds >= 60.0:
+            raise ValueError(f"invalid timestamp component: {raw!r}")
+        return minutes * 60.0 + seconds
+    if len(parts) == 3:
+        hours, minutes, seconds = int(parts[0]), int(parts[1]), float(parts[2])
+        if hours < 0 or minutes < 0 or minutes >= 60 or seconds < 0 or seconds >= 60.0:
+            raise ValueError(f"invalid timestamp component: {raw!r}")
+        return hours * 3600.0 + minutes * 60.0 + seconds
+    raise ValueError(f"unsupported timestamp format: {raw!r}")
+
+
+def _strip_header_markup(text: str) -> str:
+    cleaned = text.strip()
+    cleaned = re.sub(r"^#{1,6}\s+", "", cleaned)
+    cleaned = cleaned.strip("*_` ")
+    return cleaned
+
+
+def _split_frontmatter_end(lines: list[str]) -> int:
+    if not lines or lines[0].strip() != "---":
+        return 0
+    for idx in range(1, len(lines)):
+        if lines[idx].strip() in ("---", "..."):
+            return idx + 1
+    return 0
+
+
+def _looks_like_speaker_label(text: str) -> bool:
+    cleaned = _strip_header_markup(text)
+    if not cleaned or len(cleaned) > 30:
+        return False
+    if re.search(r"[。！？.?!，,；;]", cleaned):
+        return False
+    return True
+
+
+def _parse_transcript_turns(lines: list[str]) -> list[dict]:
+    start_idx = _split_frontmatter_end(lines)
+    turns: list[dict] = []
+    current: dict | None = None
+    for idx in range(start_idx, len(lines)):
+        lineno = idx + 1
+        raw_line = lines[idx]
+        stripped = raw_line.strip()
+        if not stripped:
+            continue
+        leading_ws = len(raw_line) - len(raw_line.lstrip())
+        header_match = None
+        speaker = ""
+        inline_text = None
+        inline_col = 0
+        m_suffix = _TURN_SUFFIX_RE.match(stripped)
+        if m_suffix and len(stripped) <= 100 and not re.search(r"[。！？.?!]", m_suffix.group("speaker")):
+            cand_speaker = _strip_header_markup(m_suffix.group("speaker"))
+            ts_str = m_suffix.group("ts")
+            is_two_part_unbracketed = (ts_str.count(":") == 1) and (m_suffix.group("bracket") is None)
+            if (
+                cand_speaker
+                and not cand_speaker.startswith("---")
+                and not (is_two_part_unbracketed and (_PROSE_TIME_OF_DAY_RE.search(cand_speaker) or len(cand_speaker) > 30))
+            ):
+                header_match = ts_str
+                speaker = cand_speaker
+        if header_match is None:
+            m_br = _TURN_PREFIX_BRACKET_RE.match(stripped)
+            if m_br:
+                header_match = m_br.group("ts")
+                rest = m_br.group("rest")
+                rest_col = leading_ws + m_br.start("rest")
+                m_inline = _INLINE_SPEAKER_RE.match(rest)
+                if m_inline:
+                    speaker = _strip_header_markup(m_inline.group("speaker"))
+                    inline_text = m_inline.group("text")
+                    inline_col = rest_col + m_inline.start("text")
+                elif _looks_like_speaker_label(rest):
+                    speaker = _strip_header_markup(rest)
+                else:
+                    speaker = ""
+                    inline_text = rest
+                    inline_col = rest_col
+        if header_match is None:
+            m_bare = _TURN_PREFIX_BARE_RE.match(stripped)
+            if m_bare:
+                ts_str = m_bare.group("ts")
+                rest = m_bare.group("rest")
+                rest_col = leading_ws + m_bare.start("rest")
+                m_inline = _INLINE_SPEAKER_RE.match(rest)
+                if m_inline:
+                    header_match = ts_str
+                    speaker = _strip_header_markup(m_inline.group("speaker"))
+                    inline_text = m_inline.group("text")
+                    inline_col = rest_col + m_inline.start("text")
+                elif ts_str.count(":") == 2 and _looks_like_speaker_label(rest):
+                    header_match = ts_str
+                    speaker = _strip_header_markup(rest)
+        if header_match is not None:
+            turn_start = _parse_timestamp_seconds(header_match)
+            current = {
+                "header_line": lineno,
+                "speaker": speaker,
+                "turn_start": turn_start,
+                "body_lines": [],
+                "turn_chars": 0,
+            }
+            turns.append(current)
+            if inline_text is not None:
+                current["body_lines"].append((lineno, inline_text, inline_col))
+                current["turn_chars"] += len(re.sub(r"\s+", "", inline_text))
+        elif current is not None:
+            current["body_lines"].append((lineno, raw_line, 0))
+            current["turn_chars"] += len(re.sub(r"\s+", "", raw_line))
+    return turns
+
+
+def _clamp_window(center: float, pad: float, duration: float | None) -> tuple[list[float], bool]:
+    width = 2.0 * pad
+    start = center - pad
+    end = center + pad
+    clamped = False
+    if duration is not None:
+        eff_width = min(width, duration)
+        if start < 0.0:
+            start = 0.0
+            end = min(duration, eff_width)
+            clamped = True
+        if end > duration:
+            end = duration
+            start = max(0.0, duration - eff_width)
+            clamped = True
+        r_start = round(start, 3)
+        r_end = round(end, 3)
+        if r_end <= r_start:
+            return [round(max(0.0, start), 6), round(duration, 6)], True
+        return [r_start, r_end], clamped
+    if start < 0.0:
+        start = 0.0
+        end = width
+        clamped = True
+    return [round(start, 3), round(end, 3)], clamped
+
+
+def locate_in_transcript(
+    transcript_path: str | Path,
+    needle: str,
+    *,
+    line: int | None = None,
+    speech_rate: float = 4.2,
+    tight_pad: float = 6.0,
+    medium_pad: float = 20.0,
+    duration: float | None = None,
+    source_spec: str | Path | None = None,
+    offset: float = 0.0,
+) -> dict:
+    """Compute exploratory intra-turn clip windows for needle occurrences in a transcript."""
+    if not needle:
+        raise ValueError("needle must be non-empty")
+    for label, val in (("speech_rate", speech_rate), ("tight_pad", tight_pad), ("medium_pad", medium_pad)):
+        if not math.isfinite(val) or val <= 0:
+            raise ValueError(f"{label} must be a positive finite number")
+    if medium_pad < tight_pad:
+        raise ValueError("medium_pad must be >= tight_pad")
+    if 2.0 * medium_pad > MAX_WINDOW:
+        raise ValueError(f"2 * medium_pad ({2.0 * medium_pad}) exceeds MAX_WINDOW ({MAX_WINDOW}s)")
+    if not math.isfinite(offset):
+        raise ValueError("offset must be finite")
+    if line is not None and line < 1:
+        raise ValueError("line must be >= 1")
+    if duration is None and source_spec is not None:
+        spec = json.loads(Path(source_spec).read_text(encoding="utf-8"))
+        raw_dur = spec.get("duration") if isinstance(spec, dict) else None
+        if not isinstance(spec, dict) or spec.get("schema") != SCHEMA or isinstance(raw_dur, bool) or not isinstance(raw_dur, (int, float)):
+            raise ValueError("invalid source spec for duration lookup")
+        duration = float(raw_dur)
+    if duration is not None and (isinstance(duration, bool) or not math.isfinite(duration) or duration <= 0):
+        raise ValueError("duration must be a positive finite number")
+
+    path = Path(transcript_path).expanduser().resolve()
+    if not path.is_file():
+        raise ValueError(f"transcript file not found: {path}")
+    lines = path.read_text(encoding="utf-8-sig").splitlines()
+    turns = _parse_transcript_turns(lines)
+    if not turns:
+        raise ValueError("no timestamped speaker turns found in transcript")
+
+    matches: list[dict] = []
+    for turn_idx, turn in enumerate(turns):
+        next_turn_start = turns[turn_idx + 1]["turn_start"] if turn_idx + 1 < len(turns) else None
+        if next_turn_start is not None and next_turn_start <= turn["turn_start"]:
+            next_turn_start = None
+        prefix_non_ws = 0
+        for lineno, text, col_offset in turn["body_lines"]:
+            if line is None or lineno == line:
+                search_from = 0
+                while True:
+                    pos = text.find(needle, search_from)
+                    if pos == -1:
+                        break
+                    local_non_ws = len(re.sub(r"\s+", "", text[:pos]))
+                    char_offset = prefix_non_ws + local_non_ws
+                    turn_chars = turn["turn_chars"]
+                    if next_turn_start is not None and turn_chars > 0:
+                        turn_span = next_turn_start - turn["turn_start"]
+                        if (turn_chars / turn_span) >= 0.5:
+                            transcript_est = turn["turn_start"] + (char_offset / turn_chars) * turn_span
+                            method = "turn_interpolation"
+                        else:
+                            transcript_est = min(next_turn_start, turn["turn_start"] + char_offset / speech_rate)
+                            method = "speech_rate_capped"
+                    else:
+                        transcript_est = turn["turn_start"] + char_offset / speech_rate
+                        method = "speech_rate"
+                    source_est = transcript_est + offset
+                    tight_window, tight_clamped = _clamp_window(source_est, tight_pad, duration)
+                    medium_window, medium_clamped = _clamp_window(source_est, medium_pad, duration)
+                    snip_start = max(0, pos - 24)
+                    snip_end = min(len(text), pos + len(needle) + 24)
+                    matches.append({
+                        "line": lineno,
+                        "column": col_offset + pos + 1,
+                        "speaker": turn["speaker"],
+                        "turn_header_line": turn["header_line"],
+                        "turn_start": round(turn["turn_start"], 3),
+                        "next_turn_start": round(next_turn_start, 3) if next_turn_start is not None else None,
+                        "turn_chars": turn_chars,
+                        "char_offset": char_offset,
+                        "method": method,
+                        "estimated_transcript_seconds": round(transcript_est, 3),
+                        "estimated_source_seconds": round(source_est, 3),
+                        "tight_window": tight_window,
+                        "medium_window": medium_window,
+                        "clamped_to_duration": tight_clamped or medium_clamped,
+                        "context_snippet": text[snip_start:snip_end].strip(),
+                    })
+                    search_from = pos + len(needle)
+            prefix_non_ws += len(re.sub(r"\s+", "", text))
+
+    if not matches:
+        if line is not None:
+            raise ValueError(f"needle {needle!r} not found in timestamped transcript body at line {line}")
+        raise ValueError(f"needle {needle!r} not found in timestamped transcript body")
+
+    return {
+        "schema": LOCATE_SCHEMA,
+        "transcript": str(path),
+        "needle": needle,
+        "exploratory": True,
+        "clock_offset": round(offset, 3),
+        "duration": round(duration, 3) if duration is not None else None,
+        "speech_rate": speech_rate,
+        "matches": matches,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -311,6 +575,16 @@ def main() -> int:
     p.add_argument("--cache-dir", required=True)
     p.add_argument("--timestamp", type=float, required=True)
     p.add_argument("--output", required=True)
+    p = commands.add_parser("locate", help="Compute exploratory intra-turn clip windows for a phrase in a transcript")
+    p.add_argument("--transcript", required=True)
+    p.add_argument("--needle", required=True)
+    p.add_argument("--line", type=int)
+    p.add_argument("--speech-rate", type=float, default=4.2)
+    p.add_argument("--tight-pad", type=float, default=6.0)
+    p.add_argument("--medium-pad", type=float, default=20.0)
+    p.add_argument("--duration", type=float)
+    p.add_argument("--source-spec")
+    p.add_argument("--offset", type=float, default=0.0)
     args = parser.parse_args()
     try:
         if args.command == "prepare":
@@ -324,6 +598,18 @@ def main() -> int:
             atomic_write(Path(args.output), (json.dumps(result, ensure_ascii=False, indent=2)+"\n").encode(), replace=False)
         elif args.command == "frame":
             result = SourceClips(args.source_spec, args.cache_dir).fetch_frame(args.timestamp, args.output)
+        elif args.command == "locate":
+            result = locate_in_transcript(
+                args.transcript,
+                args.needle,
+                line=args.line,
+                speech_rate=args.speech_rate,
+                tight_pad=args.tight_pad,
+                medium_pad=args.medium_pad,
+                duration=args.duration,
+                source_spec=args.source_spec,
+                offset=args.offset,
+            )
         else:
             result = SourceClips(args.source_spec, args.cache_dir).fetch(args.start, args.end, args.output)
         print(json.dumps(result, ensure_ascii=False))
