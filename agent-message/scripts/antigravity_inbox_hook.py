@@ -85,7 +85,7 @@ def main() -> int:
         response = handle_event(payload)
         print(json.dumps(response, ensure_ascii=False))
     except Exception as exc:
-        print(f"peer-message antigravity inbox hook warning: {exc}", file=sys.stderr)
+        print(f"agent-message antigravity inbox hook warning: {exc}", file=sys.stderr)
         print("{}")
     return 0
 

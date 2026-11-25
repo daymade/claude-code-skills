@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Atomic work entry using PeerMessage's existing ownership declarations.
+"""Atomic work entry using agent-message's existing ownership declarations.
 
 This is a coordination check, not a lock or proof that a delivered result works.
 Git-origin plus repository-relative paths identify the same resource across clones.
@@ -11,6 +11,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import shlex
 import subprocess
 from urllib.parse import quote, unquote, urlsplit
 
@@ -66,6 +67,43 @@ def _has_glob(text: str) -> bool:
     return any(ch in text for ch in ("*", "?", "["))
 
 
+def _strip_dot_slash(text: str) -> str:
+    while text.startswith("./"):
+        text = text[2:]
+    return text or "."
+
+
+def _glob_variants(pattern: str) -> list[str]:
+    """Expand zero-directory `/**/` and leading `**/` forms for fnmatch matching."""
+    seen: list[str] = [pattern]
+    queue: list[str] = [pattern]
+    while queue and len(seen) < 16:
+        cur = queue.pop(0)
+        for nxt in (
+            cur.replace("/**/", "/"),
+            cur[3:] if cur.startswith("**/") else cur,
+        ):
+            if nxt != cur and nxt not in seen:
+                seen.append(nxt)
+                queue.append(nxt)
+    return seen
+
+
+def _glob_matches(pattern: str, candidate: str) -> bool:
+    return any(fnmatch.fnmatchcase(candidate, variant) for variant in _glob_variants(pattern))
+
+
+def _glob_dir_prefix(pattern: str) -> str:
+    """Return concrete directory prefix before the first glob segment ('' if root-level glob)."""
+    parts = [p for p in pattern.split("/") if p]
+    prefix: list[str] = []
+    for part in parts:
+        if _has_glob(part):
+            break
+        prefix.append(part)
+    return "/".join(prefix)
+
+
 def resource_identity(repo, paths, *, remote="origin"):
     root = Path(git(repo, "rev-parse", "--show-toplevel")).resolve()
     identity = origin_identity(git(root, "remote", "get-url", remote), root)
@@ -74,27 +112,40 @@ def resource_identity(repo, paths, *, remote="origin"):
         if not isinstance(value, str) or not value.strip():
             raise ValueError("resource path must be nonempty")
         if _has_glob(value):
-            raw_parts = Path(value).parts
+            raw_path = Path(value).expanduser()
+            raw_parts = raw_path.parts
             if any(part == ".." for part in raw_parts):
                 raise ValueError("resource path escapes the declared repository")
-            if Path(value).is_absolute():
+            prefix_parts: list[str] = []
+            suffix_parts: list[str] = []
+            hit_glob = False
+            for part in raw_parts:
+                if not hit_glob and _has_glob(part):
+                    hit_glob = True
+                if hit_glob:
+                    suffix_parts.append(part)
+                else:
+                    prefix_parts.append(part)
+            if raw_path.is_absolute():
+                prefix_candidate = Path(*prefix_parts) if prefix_parts else Path("/")
+                prefix_resolved = prefix_candidate.resolve()
                 try:
-                    relative = Path(value).relative_to(root).as_posix()
+                    rel_prefix = prefix_resolved.relative_to(root)
                 except ValueError as exc:
                     raise ValueError("resource path escapes the declared repository") from exc
+                rel_path = rel_prefix.joinpath(*suffix_parts) if suffix_parts else rel_prefix
+                relative = _strip_dot_slash(rel_path.as_posix())
             else:
-                prefix_parts = []
-                for part in raw_parts:
-                    if _has_glob(part):
-                        break
-                    prefix_parts.append(part)
                 if prefix_parts:
-                    prefix_resolved = (root.joinpath(*prefix_parts)).resolve()
+                    prefix_resolved = root.joinpath(*prefix_parts).resolve()
                     try:
-                        prefix_resolved.relative_to(root)
+                        rel_prefix = prefix_resolved.relative_to(root)
                     except ValueError as exc:
                         raise ValueError("resource path escapes the declared repository") from exc
-                relative = Path(value).as_posix().lstrip("./") or "."
+                    rel_path = rel_prefix.joinpath(*suffix_parts) if suffix_parts else rel_prefix
+                    relative = _strip_dot_slash(rel_path.as_posix())
+                else:
+                    relative = _strip_dot_slash(raw_path.as_posix())
         else:
             path = Path(value).expanduser()
             path = (path if path.is_absolute() else root / path).resolve()
@@ -111,25 +162,48 @@ def overlaps(left, right):
         return True
     if not (left.startswith("git-path:") and right.startswith("git-path:")):
         if _has_glob(left) or _has_glob(right):
-            return fnmatch.fnmatchcase(left, right) or fnmatch.fnmatchcase(right, left)
+            return _glob_matches(left, right) or _glob_matches(right, left)
         return False
     left_repo, _, left_path = left.partition("#")
     right_repo, _, right_path = right.partition("#")
     if left_repo != right_repo or not left_path or not right_path:
         return False
-    a, b = unquote(left_path), unquote(right_path)
-    if a == "." or b == "." or a.startswith(b + "/") or b.startswith(a + "/"):
+    a = _strip_dot_slash(unquote(left_path))
+    b = _strip_dot_slash(unquote(right_path))
+    if a != ".":
+        a = a.rstrip("/") or "."
+    if b != ".":
+        b = b.rstrip("/") or "."
+    if a == b or a == "." or b == "." or a.startswith(b + "/") or b.startswith(a + "/"):
         return True
-    if _has_glob(a) or _has_glob(b):
-        if fnmatch.fnmatchcase(a, b) or fnmatch.fnmatchcase(b, a):
+    a_is_glob, b_is_glob = _has_glob(a), _has_glob(b)
+    if a_is_glob or b_is_glob:
+        if _glob_matches(a, b) or _glob_matches(b, a):
             return True
-        # Match directory prefix of a glob against a directory resource (e.g. `src/*.py` vs `src`)
-        a_base = a.split("*", 1)[0].split("?", 1)[0].split("[", 1)[0].rstrip("/")
-        b_base = b.split("*", 1)[0].split("?", 1)[0].split("[", 1)[0].rstrip("/")
-        if a_base and (a_base == b or a_base.startswith(b + "/")):
+        a_base = _glob_dir_prefix(a) if a_is_glob else a
+        b_base = _glob_dir_prefix(b) if b_is_glob else b
+        if a_is_glob and not b_is_glob:
+            b_looks_like_dir = "." not in b.rsplit("/", 1)[-1]
+            if not a_base:
+                return "**" in a and b_looks_like_dir
+            return (
+                a_base == b
+                or a_base.startswith(b + "/")
+                or (b.startswith(a_base + "/") and b_looks_like_dir)
+            )
+        if b_is_glob and not a_is_glob:
+            a_looks_like_dir = "." not in a.rsplit("/", 1)[-1]
+            if not b_base:
+                return "**" in b and a_looks_like_dir
+            return (
+                b_base == a
+                or b_base.startswith(a + "/")
+                or (a.startswith(b_base + "/") and a_looks_like_dir)
+            )
+        # Both are globs: overlap if their base directories share ancestry (or either is root-level)
+        if not a_base or not b_base:
             return True
-        if b_base and (b_base == a or b_base.startswith(a + "/")):
-            return True
+        return a_base == b_base or a_base.startswith(b_base + "/") or b_base.startswith(a_base + "/")
     return False
 
 
@@ -208,7 +282,10 @@ def start(board, scope, task, actor, resources, *, reconciled=(), limit=10, ttl=
                 status="conflict",
                 registered=False,
                 next_action="contact_existing_owner; verify current work or result before duplicating",
-                next_command=f"peer.py send {first_owner} --message 'Checking status of {task[:80]}'",
+                next_command=(
+                    f"peer.py send {shlex.quote(first_owner)} "
+                    f"--message {shlex.quote(f'Checking status of {task[:80]}')}"
+                ),
             )
         known = {row["declaration_id"] for row in previous}
         if set(reconciled) - known:
@@ -220,7 +297,11 @@ def start(board, scope, task, actor, resources, *, reconciled=(), limit=10, ttl=
                 status="reconciliation_required",
                 registered=False,
                 next_action="verify_released_owner_and_actual_result; released is not delivered",
-                next_command=f"peer.py coord start --scope {scope} --task {task} --actor {actor} --reconciled-declaration {first_decl}",
+                next_command=(
+                    f"peer.py coord start --scope {shlex.quote(scope)} "
+                    f"--task {shlex.quote(task)} --actor {shlex.quote(actor)} "
+                    f"--reconciled-declaration {shlex.quote(first_decl)}"
+                ),
             )
         now = board.clock()
         expires_at = now + float(ttl) if ttl is not None else None

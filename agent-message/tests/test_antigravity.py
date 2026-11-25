@@ -1002,6 +1002,83 @@ class AntigravityTests(unittest.TestCase):
                 self.assertEqual(rec["status"], "action_needed")
                 self.assertEqual(rec["integrity"], "verified_prepared_core")
 
+    def test_send_agy_resume_passes_existing_target_cwd_and_ignores_missing(self):
+        ws_dir = self.root / "target-repo"
+        ws_dir.mkdir()
+        captured_cwds: list[str | None] = []
+
+        def fake_run(cmd, *, cwd=None, **kwargs):
+            captured_cwds.append(cwd)
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout=json.dumps({
+                    "conversation_id": CID_IDLE,
+                    "status": "SUCCESS",
+                    "response": "ok",
+                }),
+                stderr="",
+            )
+
+        with mock.patch.object(agy_transport.subprocess, "run", side_effect=fake_run):
+            agy_transport.send_agy_resume(CID_IDLE, "hi", self.agy_home, cwd=str(ws_dir))
+            agy_transport.send_agy_resume(
+                CID_IDLE, "hi", self.agy_home, cwd=str(self.root / "does-not-exist")
+            )
+        self.assertEqual(captured_cwds, [str(ws_dir), None])
+
+    def test_list_conversations_applies_cwd_filter_before_limit(self):
+        target_ws = self.root / "repo-target"
+        other_ws = self.root / "repo-other"
+        target_ws.mkdir()
+        other_ws.mkdir()
+        _create_summaries_db(
+            self.agy_home,
+            [
+                {"conversation_id": "11111111-0000-4000-8000-000000000001", "last_modified_time": 500, "workspace_uris": json.dumps([f"file://{other_ws}"])},
+                {"conversation_id": "11111111-0000-4000-8000-000000000002", "last_modified_time": 400, "workspace_uris": json.dumps([f"file://{other_ws}"])},
+                {"conversation_id": "11111111-0000-4000-8000-000000000003", "last_modified_time": 300, "workspace_uris": json.dumps([f"file://{other_ws}"])},
+                {"conversation_id": "11111111-0000-4000-8000-000000000004", "last_modified_time": 200, "workspace_uris": json.dumps([f"file://{target_ws}"])},
+                {"conversation_id": "11111111-0000-4000-8000-000000000005", "last_modified_time": 100, "workspace_uris": json.dumps([f"file://{target_ws}"])},
+            ],
+        )
+        rows, truncated = agy_transport.list_conversations(
+            self.agy_home, limit=2, cwd_filter=str(target_ws)
+        )
+        self.assertFalse(truncated)
+        self.assertEqual(
+            [r["id"] for r in rows],
+            ["11111111-0000-4000-8000-000000000004", "11111111-0000-4000-8000-000000000005"],
+        )
+
+    def test_prefix_resolution_prefers_active_top_level_and_requires_8_hex_digits(self):
+        live_cid = "deadbeef-1111-4111-8111-111111111111"
+        killed_cid = "deadbeef-2222-4222-8222-222222222222"
+        archived_cid = "deadbeef-3333-4333-8333-333333333333"
+        subagent_cid = "deadbeef-4444-4444-8444-444444444444"
+        _create_summaries_db(
+            self.agy_home,
+            [
+                {"conversation_id": live_cid, "title": "live"},
+                {"conversation_id": killed_cid, "title": "killed", "killed": 1},
+                {"conversation_id": archived_cid, "title": "archived"},
+                {"conversation_id": subagent_cid, "title": "sub", "nesting_depth": 1, "parent_conversation_id": live_cid},
+            ],
+        )
+        _write_annotation(self.agy_home, archived_cid, 'title:"archived" archived:true')
+
+        # Active top-level wins unambiguously over killed/archived/subagent sharing same prefix
+        self.assertEqual(
+            agy_transport.parse_antigravity_id("agy:deadbeef", antigravity_home=self.agy_home),
+            live_cid,
+        )
+
+        # Hyphen-padded strings with <8 hex digits MUST be rejected
+        for bad in ("agy:--------", "agy:1-------", "agy:dead-be-", "agy:-deadbeef"):
+            with self.subTest(bad=bad):
+                with self.assertRaises(agy_transport.AntigravityError):
+                    agy_transport.parse_antigravity_id(bad, antigravity_home=self.agy_home)
+
 
 if __name__ == "__main__":
     unittest.main()
