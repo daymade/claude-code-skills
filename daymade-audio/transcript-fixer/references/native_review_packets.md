@@ -113,11 +113,13 @@ The spelling control uses a fictional system, not a person-name exception.
 | Unknown token | Raw `这个 tavri 我还没弄懂`; the complete conversation and available local records supply no definition or canonical match. First pass replaced it with a familiar product solely because it fits the topic. | Restore `tavri`. Report an unresolved load-bearing token when needed; unfamiliarity alone supplies no correction. |
 | Supported same-sound spelling | Raw `名台系统，名字取明亮的明、平台的台`; the fictional system's written record is `明台系统`. First pass left `名台` unchanged. | Correct only `名台`→`明台`. The explicit spelling applies to this occurrence and the pronunciation is unchanged; do not generalize it into a person-name rule. |
 | Q&A echo near-homophone | Turn A asks `这个交付周期是长期的安排吗？`; Turn B immediately replies `很常见的安排，对，明年全年都按这个节奏走。` First pass skipped `很常见` without enqueueing because it is an intelligible common word. | Cold review flags `很常见`→`嗯，长期` (or `长期`) as an adjacent-turn Q&A echo near-homophone mismatch and enqueues it for audio/second-engine verification; without audio or explicit confirmation, do not silently overwrite by fluency and do not dismiss it as an intelligible word. |
+| Predicate–argument / scene mismatch | During a screen-shared spreadsheet review, Speaker A says `你把表格里的优劣拉宽一点，里面的数字都被截断了。` First pass left `优劣` unqueued because it is a common word, and no source video frame has been checked yet. | Cold review flags `优劣` as a predicate–argument/scene mismatch (`拉宽` on a sheet expects a column label or UI element, not an abstract noun) and enqueues it for rung 7 audio/visual-frame verification; do not guess the column letter without inspecting the video frame or audio. |
 
 For a replay, give the reviewer the raw text, first-pass artifact and the stated
 evidence, without the expected-output column. Judge whether it repairs the
 unsupported applied edits, retains the supported spelling correction, and flags
-and enqueues the missed Q&A echo drift without silently overwriting it.
+and enqueues both missed Q&A echo drift and predicate–argument/scene mismatches
+without silently overwriting them.
 Packet validation can verify literal spans and coverage; it cannot grade these
 wording judgments.
 

@@ -156,3 +156,106 @@ def test_cache_metadata_cannot_replace_source_spec(source, tmp_path):
         SourceClips(path, cache).fetch(1, 2, tmp_path/"out.wav")
     assert path.read_bytes() == before
     assert not (tmp_path/"out.wav").exists()
+
+
+@pytest.fixture
+def video_source(tmp_path):
+    if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
+        pytest.skip("ffmpeg and ffprobe required")
+    p = tmp_path / "screen share.mp4"
+    cp = subprocess.run(
+        [
+            "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error",
+            "-f", "lavfi", "-i", "testsrc=duration=2:size=160x120:rate=10",
+            "-c:v", "mpeg4", "-pix_fmt", "yuv420p", str(p),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if cp.returncode != 0:
+        pytest.skip(f"ffmpeg lavfi/mpeg4 unavailable: {cp.stderr.strip()}")
+    spec = prepare({"kind": "local", "path": str(p), "sha256": hashlib.sha256(p.read_bytes()).hexdigest()})
+    s = tmp_path / "video_source.json"
+    s.write_text(json.dumps(spec))
+    return p, s
+
+
+def test_frame_extracts_valid_png_and_reuses_cache(video_source, tmp_path):
+    p, s = video_source
+    clips = SourceClips(s, tmp_path / "cache")
+    out = tmp_path / "frame.png"
+    first = clips.fetch_frame(1.0, out)
+    assert out.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+    assert first["cache_reused"] is False
+    assert first["source_sha256"] == hashlib.sha256(p.read_bytes()).hexdigest()
+    assert first["source_timestamp"] == 1.0
+    second = clips.fetch_frame(1.0, tmp_path / "frame_copy.png")
+    assert second["cache_reused"] is True
+    assert second["frame_sha256"] == first["frame_sha256"]
+
+
+@pytest.mark.parametrize("ts", [-0.1, 3.5, float("nan"), float("inf")])
+def test_frame_refuses_invalid_timestamp(video_source, tmp_path, ts):
+    with pytest.raises(ValueError, match="invalid source-clock timestamp"):
+        SourceClips(video_source[1], tmp_path / "cache").fetch_frame(ts, tmp_path / "bad.png")
+
+
+def test_frame_refuses_source_change(video_source, tmp_path):
+    p, s = video_source
+    clips = SourceClips(s, tmp_path / "cache")
+    clips.fetch_frame(0.5, tmp_path / "first.png")
+    p.write_bytes(p.read_bytes() + b"mutated")
+    out = tmp_path / "must-not-exist.png"
+    with pytest.raises(ValueError, match="source version changed"):
+        clips.fetch_frame(0.5, out)
+    assert not out.exists()
+
+
+def test_frame_on_audio_only_source_fails_cleanly(source, tmp_path):
+    out = tmp_path / "audio_only.png"
+    with pytest.raises(ValueError, match="no video frame|ffmpeg frame extraction failed"):
+        SourceClips(source[1], tmp_path / "cache").fetch_frame(1.0, out)
+    assert not out.exists()
+
+
+def test_frame_cli_and_existing_output_protection(video_source, tmp_path):
+    _, s = video_source
+    out = tmp_path / "cli_frame.png"
+    cp = subprocess.run(
+        [
+            sys.executable, str(Path(__file__).resolve().parents[1] / "source_clip.py"),
+            "frame", "--source-spec", str(s), "--cache-dir", str(tmp_path / "cache"),
+            "--timestamp", "0.5", "--output", str(out),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert cp.returncode == 0, cp.stderr
+    receipt = json.loads(cp.stdout)
+    assert receipt["frame_sha256"] == hashlib.sha256(out.read_bytes()).hexdigest()
+    # Different timestamp must not overwrite an output bound to 0.5s
+    with pytest.raises(ValueError, match="existing output"):
+        SourceClips(s, tmp_path / "cache").fetch_frame(1.2, out)
+    assert hashlib.sha256(out.read_bytes()).hexdigest() == receipt["frame_sha256"]
+
+
+def test_frame_damaged_cache_and_truncated_wire_are_handled(video_source, tmp_path, monkeypatch):
+    import source_clip
+    _, s = video_source
+    cache = tmp_path / "cache"
+    clips = SourceClips(s, cache)
+    first = clips.fetch_frame(0.5, tmp_path / "one.png")
+    next(cache.glob("*.png")).write_bytes(b"not-a-png")
+    second = clips.fetch_frame(0.5, tmp_path / "two.png")
+    assert second["cache_reused"] is False
+    assert second["frame_sha256"] == first["frame_sha256"]
+
+    original = source_clip.run_worker
+    def broken(spec, request):
+        data = original(spec, request)
+        return data[:-1] if request["action"] == "frame" else data
+    monkeypatch.setattr(source_clip, "run_worker", broken)
+    bad = tmp_path / "bad.png"
+    with pytest.raises(ValueError, match="transfer/format"):
+        SourceClips(s, tmp_path / "cache2").fetch_frame(0.5, bad)
+    assert not bad.exists()

@@ -194,9 +194,20 @@ task, or require someone to enable exports before other items can be adjudicated
   recognizers fail to resolve a short spoken letter/code into intelligible text
   (synthetic example: the speaker points at a sheet saying "widen column F" and
   both audio engines render it as meaningless Chinese syllables), extract a single
-  frame from the clock-calibrated source video (`ffmpeg -ss <t> -i <video> -vframes 1`)
-  and inspect the visible label. The frame is independent visual evidence for that
-  screen-referenced occurrence only; do not generalize it into a dictionary rule.
+  identity-bound PNG frame from the clock-calibrated source video via
+  `uv run scripts/source_clip.py frame --source-spec <spec.json> --cache-dir <cache> --timestamp <t> --output <frame.png>`
+  (or `ffmpeg -ss <t> -i <video> -frames:v 1 <frame.png>` when no source spec is
+  configured) and inspect the visible label. The frame is independent visual
+  evidence for that screen-referenced occurrence only; do not generalize it into a
+  dictionary rule.
+- **Resolve load-bearing pendings at rung 7 before parking when media is accessible.**
+  Do not reflexively park high-impact unresolved items (decisions, action owners,
+  dates/budgets, attrition/contract reasons, key proper nouns, or screen-shared UI
+  references) as "no audio checked" when authorized source audio/video and a
+  permitted second recognizer or multimodal inspection channel are already
+  available. Reserve parking without rung 7 for genuinely low-stakes/noise spans
+  or inaccessible/unauthorized media, and record the concrete media boundary when
+  rung 7 cannot run.
 - **Cut two clips, not one.** A tight cut (~±5 s around the token) stops a
   second engine from being dragged by surrounding context into "repairing" the
   token into something fluent. A medium cut (~±20 s) keeps enough acoustic

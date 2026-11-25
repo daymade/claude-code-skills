@@ -30,6 +30,7 @@ Check evidence selected under the source contract; for transcript quotations:
 - [ ] Quote accurately reflects speaker's point
 - [ ] Speaker attribution is correct
 - [ ] Context around quote is preserved
+- [ ] Load-bearing quotes checked against transcript `asr_note`/pending markers and pragmatic coherence (Q&A echo, intra-turn causal inversion, verb–object/scene mismatch; unverified or suspect ASR wording verified or marked `[unverified ASR — check audio]`, never silently smoothed or stated as settled fact)
 
 ### Phase 4: Action Items Audit
 
@@ -41,6 +42,7 @@ Cross-reference with all supplied sources for:
 - [ ] Follow-up discussions needed ("Discuss offline...", "Follow up separately...")
 - [ ] Compare each status with the exact action its source supports
 - [ ] Check unknown fields and later corrections against the source/status and merge contracts
+- [ ] Verify no action owner, deadline, or commitment relies on a pending or pragmatically suspect ASR span (e.g., ambiguous surname/owner homophone) without verification or routing to Open Questions
 
 ## Common Omission Patterns
 
