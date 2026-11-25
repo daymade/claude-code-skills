@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Snapshot local Claude Code / Codex CLIs; restore missing sessions in Ghostty.
+"""Snapshot local Claude Code / Codex / Antigravity (agy) CLIs; restore missing sessions in Ghostty.
 
 Usage:
   ghostty_session.py snapshot [--scope all-cli|ghostty] [--expected-tabs N]
@@ -46,6 +46,7 @@ from pathlib import Path
 from types import SimpleNamespace
 import os
 import re
+import sqlite3
 import subprocess
 import sys
 import time
@@ -89,18 +90,21 @@ class SessionList(list):
 
 
 def list_sessions(resolve_uuidless=True, *, deadline=None, scope='ghostty', preserve_duplicates=False):
-    """One entry per live claude/codex session.
+    """One entry per live claude/codex/agy session.
 
-    Anchor is a parsed resume UUID. A fork's argv UUID belongs to its parent.
-    A fresh TUI has no UUID
+    Anchor is a parsed resume/conversation UUID. A fork's argv UUID belongs to its parent.
+    A fresh Claude/Codex TUI has no UUID
     on its command line, so with resolve_uuidless its sid is recovered from
-    transcript storage (session file born after process start, same cwd). When
+    transcript storage (session file born after process start, same cwd); a
+    UUID-less agy TUI is anchored fail-closed via open brain/<UUID> handles
+    filtered to top-level conversations in read-only conversation_summaries.db
+    (anchor='lsof-brain'). When
     several UUID-less TUIs share one cwd bucket, candidates are assigned
     disjointly — one transcript per TUI, closest verified birth first — and
     anything ambiguous or left over lands in .unresolved rather than being
     attributed to the wrong session or dropped silently (theft/collision probe
     reproduced 2026-10-07). Manual and automatic callers share this resolution:
-    it reads a bounded set of per-cwd/day buckets, never a history scan.
+    it reads a bounded set of per-cwd/day buckets or index metadata, never a history scan.
     """
     from ghostty_watch import observe, cli_identity, OPAQUE_REASON
     try:
@@ -137,13 +141,20 @@ def list_sessions(resolve_uuidless=True, *, deadline=None, scope='ghostty', pres
                 fresh.append(dict(proc, started=started))
         else:
             unresolved.append(proc)
-    for proc in _assign_transcripts(fresh, seen, **({'deadline': deadline} if deadline is not None else {})):
+    fresh_transcript = [p for p in fresh if p["tool"] != "agy"]
+    fresh_agy = [p for p in fresh if p["tool"] == "agy"]
+    resolved_fresh = list(_assign_transcripts(
+        fresh_transcript, seen, **({'deadline': deadline} if deadline is not None else {})))
+    if fresh_agy:
+        resolved_fresh.extend(_assign_agy_sessions(
+            fresh_agy, seen, deadline=deadline, counters=observed.setdefault('counters', {})))
+    for proc in resolved_fresh:
         if "sid" in proc:
             seen[proc["sid"]] = {
                 "tty": proc["tty"], "tool": proc["tool"],
                 "sid": proc["sid"], "cwd": proc["cwd"], "cmdline": proc["cmd"].strip(),
                 "profile": _detect_profile(proc["cmd"]),
-                "anchor": "transcript", "transcript": proc["transcript"],
+                "anchor": proc.get("anchor", "transcript"), "transcript": proc["transcript"],
             }
             if preserve_duplicates:
                 seen[proc['sid']].update(pid=proc['pid'], process_started_epoch=proc['started'])
@@ -446,6 +457,126 @@ def _codex_parent_thread_id(meta):
     return next(iter(parents), None)
 
 
+def _agy_app_data_dir():
+    return Path(AGY_APP_DATA_DIR_OVERRIDE or os.environ.get("ANTIGRAVITY_APP_DATA_DIR")
+                or Path(HOME) / ".gemini" / "antigravity-cli").expanduser()
+
+
+def _agy_index_sets(app_data_dir):
+    """Read-only (top_level_ids, known_subagent_ids) from conversation_summaries.db, or None."""
+    db_path = Path(app_data_dir) / "conversation_summaries.db"
+    try:
+        if not db_path.is_file():
+            return None
+        resolved = db_path.resolve()
+        conn = sqlite3.connect(f"{resolved.as_uri()}?mode=ro", uri=True)
+        try:
+            rows = conn.execute(
+                "SELECT conversation_id, nesting_depth, parent_conversation_id FROM conversation_summaries"
+            ).fetchall()
+        finally:
+            conn.close()
+        top_level, subagents = set(), set()
+        for cid, depth, parent in rows:
+            if not isinstance(cid, str) or not UUID_RE.fullmatch(cid):
+                continue
+            is_sub = int(depth or 0) > 0 or bool(str(parent or "").strip())
+            (subagents if is_sub else top_level).add(cid)
+        return top_level, subagents
+    except (sqlite3.Error, OSError, ValueError, TypeError):
+        return None
+
+
+def _parse_agy_brain_handles(lsof_text, pids, app_data_dir):
+    """Map each PID to the set of brain/<UUID> directories it holds open."""
+    prefixes = {
+        str(Path(app_data_dir) / "brain") + os.sep,
+        str(Path(app_data_dir).resolve(strict=False) / "brain") + os.sep,
+    }
+    handles = {pid: set() for pid in pids}
+    current = None
+    for line in lsof_text.splitlines():
+        if line.startswith("p"):
+            try:
+                current = int(line[1:])
+            except ValueError:
+                current = None
+        elif line.startswith("n") and current in handles:
+            path = line[1:]
+            for prefix in prefixes:
+                if path.startswith(prefix):
+                    rest = path[len(prefix):]
+                    candidate = rest.split(os.sep, 1)[0]
+                    if UUID_RE.fullmatch(candidate):
+                        handles[current].add(candidate)
+                    break
+    return handles
+
+
+def _assign_agy_sessions(procs, seen, *, deadline=None, counters=None):
+    """Anchor UUID-less Antigravity TUIs via open brain/<UUID> FDs filtered to top-level parents."""
+    from ghostty_watch import run_bounded
+
+    app_data_dir = _agy_app_data_dir()
+    indexed = _agy_index_sets(app_data_dir)
+    if indexed is None:
+        return [dict(proc, reason="Antigravity summary index unavailable") for proc in procs]
+    top_level, known_subagents = indexed
+    pids = sorted({proc["pid"] for proc in procs})
+    effective_deadline = deadline if deadline is not None else time.monotonic() + 10
+    if effective_deadline - time.monotonic() <= 0:
+        raise RecoveryError("observation deadline expired before Antigravity handle lookup")
+    local_counters = counters if counters is not None else {"commands": 0, "lsof_calls": 0}
+    local_counters.setdefault("commands", 0)
+    local_counters["lsof_calls"] = local_counters.get("lsof_calls", 0) + 1
+    try:
+        output = run_bounded(
+            ["/usr/sbin/lsof", "-a", "-p", ",".join(map(str, pids)), "-Fpn"],
+            effective_deadline, local_counters,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise RecoveryError("observation deadline expired during Antigravity handle lookup: " + str(error)) from error
+    except (ValueError, OSError) as error:
+        if isinstance(error, ValueError) and "deadline expired" in str(error):
+            raise RecoveryError("observation deadline expired during Antigravity handle lookup: " + str(error)) from error
+        return [dict(proc, reason="Antigravity open-handle inspection unavailable") for proc in procs]
+
+    handles = _parse_agy_brain_handles(output, pids, app_data_dir)
+    claims = defaultdict(list)
+    per_pid_parents = {}
+    per_pid_unindexed = {}
+    for proc in procs:
+        open_uuids = handles.get(proc["pid"], set())
+        unindexed = sorted(u for u in open_uuids if u not in top_level and u not in known_subagents)
+        parents = sorted(u for u in open_uuids if u in top_level)
+        per_pid_unindexed[proc["pid"]] = unindexed
+        per_pid_parents[proc["pid"]] = parents
+        for sid in parents:
+            claims[sid].append(proc["pid"])
+
+    out = []
+    for proc in procs:
+        unindexed = per_pid_unindexed[proc["pid"]]
+        parents = per_pid_parents[proc["pid"]]
+        if unindexed:
+            out.append(dict(proc, reason="unindexed Antigravity conversation in open handles"))
+        elif not parents:
+            out.append(dict(proc, reason="no top-level Antigravity conversation in open handles"))
+        elif len(parents) > 1:
+            out.append(dict(proc, reason="multiple top-level Antigravity conversations in open handles"))
+        else:
+            sid = parents[0]
+            if sid in seen or len(claims[sid]) != 1:
+                out.append(dict(proc, reason="ambiguous Antigravity conversation claim"))
+            else:
+                tpath = app_data_dir / "brain" / sid / ".system_generated" / "logs" / "transcript.jsonl"
+                out.append(dict(
+                    proc, sid=sid, anchor="lsof-brain",
+                    transcript=str(tpath) if tpath.is_file() else None,
+                ))
+    return out
+
+
 def _transcript_candidates(tool, cwd, started):
     if not cwd or started is None:
         return []
@@ -522,6 +653,42 @@ class RecoveryError(ValueError):
 
 HISTORY_READER = None
 CODEX_HOME_OVERRIDE = None
+AGY_APP_DATA_DIR_OVERRIDE = None
+AGY_LIVENESS_TAIL_BYTES = 256 * 1024
+
+
+def _agy_liveness_path(path):
+    """Last event timestamp inside a regular Antigravity transcript.jsonl (bounded tail, never mtime)."""
+    try:
+        with _read_regular_file(path) as (handle, file_stat):
+            size = file_stat.st_size
+            start = max(0, size - AGY_LIVENESS_TAIL_BYTES)
+            handle.seek(start)
+            raw = handle.read(size - start)
+    except OSError:
+        return None, "no-file"
+    if start > 0:
+        first_nl = raw.find(b"\n")
+        if first_nl < 0:
+            return None, "ok"
+        raw = raw[first_nl + 1:]
+    tail = raw.decode("utf-8", errors="replace").splitlines()[-60:]
+    last_ts = None
+    for line in tail:
+        try:
+            rec = json.loads(line)
+        except Exception:
+            continue
+        if isinstance(rec, dict):
+            ts = rec.get("created_at") or rec.get("timestamp")
+            if isinstance(ts, str) and ts.strip():
+                last_ts = ts
+    return last_ts, "ok"
+
+
+def agy_liveness(sid):
+    tpath = _agy_app_data_dir() / "brain" / sid / ".system_generated" / "logs" / "transcript.jsonl"
+    return _agy_liveness_path(str(tpath))
 
 
 def history_reader():
@@ -651,6 +818,8 @@ def _entry_liveness(e, codex_lookup=None):
     """Resolved entries already know their verified transcript path — read it
     directly instead of rediscovering it through the pool glob or Codex index."""
     path = e.get("transcript")
+    if e["tool"] == "agy":
+        return _agy_liveness_path(path) if path else agy_liveness(e["sid"])
     if path and e["tool"] == "claude":
         return _claude_liveness_path(path)
     if path:
@@ -711,7 +880,7 @@ def cmd_snapshot(args):
     windows = capture_window_structure()
     path = write_snapshot(sessions, args.out, expected_tabs=getattr(args, 'expected_tabs', None), windows=windows)
     unresolved = live.unresolved if isinstance(live, SessionList) else []
-    anchored = len([s for s in sessions if s.get("anchor") == "transcript"])
+    anchored = len([s for s in sessions if s.get("anchor") in ("transcript", "lsof-brain")])
     act = [s for s in sessions if s["status"].startswith("active")]
     print(f"captured {len(sessions)} sessions -> {path}")
     if isinstance(live, SessionList):
@@ -732,7 +901,7 @@ def cmd_snapshot(args):
     print(f"  active(<{ACTIVE_HOURS}h): {len(act)}   other: {len(sessions) - len(act)}   "
           f"transcript-anchored: {anchored}")
     for s in sessions:
-        mark = "~" if s.get("anchor") == "transcript" else " "
+        mark = "~" if s.get("anchor") in ("transcript", "lsof-brain") else " "
         print(f"  {s['tty']:<8} {s['tool']:<6} {s['profile']:<8} {s['status']:<20}{mark} "
               f"{s['sid'][:13]}  last={s['last_interaction'] or '???'}")
     if unresolved:
@@ -771,7 +940,7 @@ def load_snapshot(path, optional=False):
         raise RecoveryError("snapshot windows must be an object")
     seen = set()
     for s in doc["sessions"]:
-        if not isinstance(s, dict) or s.get("tool") not in ("claude", "codex") or not UUID_RE.fullmatch(str(s.get("sid", ""))):
+        if not isinstance(s, dict) or s.get("tool") not in ("claude", "codex", "agy") or not UUID_RE.fullmatch(str(s.get("sid", ""))):
             raise RecoveryError("snapshot session requires tool and a full UUID sid")
         if s["sid"] in seen:
             raise RecoveryError("snapshot contains duplicate session IDs")
@@ -930,19 +1099,28 @@ def restore_cmd(s, *, env_mapping=None):
         raise RecoveryError("captured command has no matching tool executable")
     flags = []
     tail = tokens[start + 1:]
-    from ghostty_watch import CODEX_REQUIRED, CLAUDE_REQUIRED, CODEX_VARIADIC, CLAUDE_VARIADIC, CLAUDE_OPTIONAL
-    required = CODEX_REQUIRED if s['tool'] == 'codex' else CLAUDE_REQUIRED
-    variadic = CODEX_VARIADIC if s['tool'] == 'codex' else CLAUDE_VARIADIC
-    optional = set() if s['tool'] == 'codex' else CLAUDE_OPTIONAL
+    from ghostty_watch import (CODEX_REQUIRED, CLAUDE_REQUIRED, AGY_REQUIRED,
+                               CODEX_VARIADIC, CLAUDE_VARIADIC, AGY_VARIADIC,
+                               CLAUDE_OPTIONAL, AGY_OPTIONAL)
+    if s['tool'] == 'codex':
+        required, variadic, optional = CODEX_REQUIRED, CODEX_VARIADIC, set()
+    elif s['tool'] == 'agy':
+        required, variadic, optional = AGY_REQUIRED, AGY_VARIADIC, AGY_OPTIONAL
+    else:
+        required, variadic, optional = CLAUDE_REQUIRED, CLAUDE_VARIADIC, CLAUDE_OPTIONAL
     cursor = 0
     while cursor < len(tail):
         token = tail[cursor]
         cursor += 1
-        if token in ("-r", "--resume", "--session-id"):
+        if token in ("-r", "--resume", "--session-id", "--conversation"):
             value = tail[cursor] if cursor < len(tail) else None
             if not value or value.startswith("-"):
                 raise RecoveryError("captured resume selector is missing its ID")
             cursor += 1
+        elif s['tool'] == 'agy' and token in ("-i", "--prompt-interactive"):
+            # Initial prompt is capture evidence, never replayed as a new turn on restore.
+            if cursor < len(tail) and not tail[cursor].startswith('-'):
+                cursor += 1
         elif s['tool'] == 'codex' and token in ('resume', 'fork'):
             # A fork's selector names its parent, never the child's restore ID.
             if cursor < len(tail) and not tail[cursor].startswith('-'):
@@ -960,18 +1138,24 @@ def restore_cmd(s, *, env_mapping=None):
                 cursor += 1
                 if token in optional:
                     break
-        elif token in ("--fork-session", "--continue", "-c", "--last", "--all"):
+        elif token in ("--fork-session", "--continue", "-c", "--last", "--all", "--new-project"):
             continue  # restore this saved ID, without forking or selecting another
-        elif token.startswith(("--resume=", "--session-id=")):
+        elif token.startswith(("--resume=", "--session-id=", "--conversation=", "--prompt-interactive=")):
             continue
-        elif s['tool'] == 'claude' and token.startswith('-r') and not token.startswith('--'):
+        elif s['tool'] in ('claude', 'agy') and token.startswith('-r') and not token.startswith('--'):
+            continue
+        elif s['tool'] == 'agy' and token.startswith('-i') and not token.startswith('--'):
             continue
         elif token.startswith('-'):
             flags.append(token)
         # Positional prompt text is capture evidence, not a new model request.
     executable = tokens[start]
-    command = ([executable, "resume", s["sid"]] + flags if s["tool"] == "codex"
-               else [executable] + flags + ["-r", s["sid"]])
+    if s["tool"] == "codex":
+        command = [executable, "resume", s["sid"]] + flags
+    elif s["tool"] == "agy":
+        command = [executable] + flags + [f"--conversation={s['sid']}"]
+    else:
+        command = [executable] + flags + ["-r", s["sid"]]
     cwd = s.get("cwd") or HOME
     return f"cd -- {shlex.quote(cwd)} && {_profile_env_prefix(s, env_mapping)}{shlex.join(command)}"
 
@@ -1590,7 +1774,7 @@ def main(argv=None):
     sub = ap.add_subparsers(dest="cmd", required=True)
     p1 = sub.add_parser("snapshot")
     p1.add_argument('--scope', choices=('all-cli', 'ghostty'), default='all-cli',
-                    help='manual default: all local interactive Codex/Claude CLIs, including headless terminals; automatic backups remain Ghostty-only')
+                    help='manual default: all local interactive Codex/Claude/agy CLIs, including headless terminals; automatic backups remain Ghostty-only')
     p1.add_argument("--out", type=nonempty)
     p1.add_argument("--expected-tabs", type=positive,
                     help="user-reported tab count; recorded separately from terminal surfaces")

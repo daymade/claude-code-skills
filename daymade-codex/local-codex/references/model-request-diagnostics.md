@@ -92,7 +92,7 @@ fork proves the fork works, not that the original SID recovered. An ephemeral
 fork/copy must preserve the source history; use the current native help to select
 the supported isolation mode and verify source preservation after the probe.
 
-Before a diagnostic message to the original session, use `peer-message`'s
+Before a diagnostic message to the original session, use `agent-message`'s
 diagnostic-coordination guidance. “Only reply with a marker; do not use tools” in
 peer text is not tool isolation. Prefer an isolated ephemeral consumer or a pure
 HTTP replay that never executes returned tool calls. If resuming the original is

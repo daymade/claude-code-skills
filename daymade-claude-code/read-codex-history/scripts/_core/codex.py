@@ -14,6 +14,7 @@ apart. The model / parse / text helpers it builds on already live in the same co
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import os
 import re
@@ -33,6 +34,7 @@ SESSION_ID_RE = re.compile(
 )
 STATE_DATABASE_RE = re.compile(r"^state_(\d+)\.sqlite$")
 CODEX_HOME_ENV = "CODEX_HOME"
+CODEX_COLD_ARCHIVE_ROOTS_ENV = "CODEX_COLD_ARCHIVE_ROOTS"
 CODEX_DEFAULT_HOME_DIRNAME = ".codex"
 
 
@@ -45,6 +47,155 @@ def resolve_codex_home(explicit: Optional[str]) -> Path:
     return Path(
         explicit or os.environ.get(CODEX_HOME_ENV) or default_codex_home()
     ).expanduser()
+
+
+def registered_codex_cold_archive_roots(home: Optional[Path] = None) -> list[Path]:
+    """Return explicitly registered cold-archive roots allowed as Codex symlink targets.
+
+    Reads ``cold_archive_roots`` (and ``sources[]`` entries with
+    ``kind == "cold_archive"``) from ``~/.claude/history-sources.json``, plus
+    optional ``os.pathsep``-delimited paths from ``CODEX_COLD_ARCHIVE_ROOTS``.
+    Overly broad roots (filesystem root, home directory, or paths with ``..``)
+    and unmounted/missing paths are ignored so symlink traversal stays
+    fail-closed against arbitrary escapes.
+    """
+    base_home = (home or Path.home()).expanduser()
+    try:
+        home_resolved = base_home.resolve()
+    except OSError:
+        home_resolved = base_home
+    raw_candidates: list[str] = []
+    registry = base_home / ".claude" / "history-sources.json"
+    if registry.is_file():
+        try:
+            payload = json.loads(registry.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            payload = {}
+        if isinstance(payload, dict):
+            raw_cold = payload.get("cold_archive_roots", [])
+            if isinstance(raw_cold, list):
+                for item in raw_cold:
+                    if isinstance(item, str):
+                        raw_candidates.append(item)
+                    elif isinstance(item, dict):
+                        provider = item.get("provider")
+                        if provider not in (None, "", "codex"):
+                            continue
+                        path_val = item.get("path")
+                        if isinstance(path_val, str) and path_val:
+                            raw_candidates.append(path_val)
+            raw_sources = payload.get("sources", [])
+            if isinstance(raw_sources, list):
+                for row in raw_sources:
+                    if not isinstance(row, dict) or row.get("kind") != "cold_archive":
+                        continue
+                    if row.get("provider") not in (None, "", "codex"):
+                        continue
+                    path_val = row.get("path") or row.get("home")
+                    if isinstance(path_val, str) and path_val:
+                        raw_candidates.append(path_val)
+    env_roots = os.environ.get(CODEX_COLD_ARCHIVE_ROOTS_ENV, "")
+    if env_roots:
+        for part in env_roots.split(os.pathsep):
+            if part.strip():
+                raw_candidates.append(part.strip())
+
+    roots: list[Path] = []
+    seen: set[str] = set()
+    for raw in raw_candidates:
+        candidate = (
+            (base_home / raw[2:]) if raw.startswith("~/") else Path(raw).expanduser()
+        )
+        if not candidate.is_absolute() or ".." in candidate.parts:
+            continue
+        if not candidate.is_dir():
+            continue
+        try:
+            resolved = candidate.resolve(strict=True)
+        except OSError:
+            continue
+        if resolved == Path("/") or resolved == home_resolved or len(resolved.parts) < 3:
+            continue
+        key = str(resolved)
+        if key not in seen:
+            seen.add(key)
+            roots.append(resolved)
+    return roots
+
+
+def _path_within_roots(resolved: Path, allowed_roots: list[Path]) -> bool:
+    return any(
+        resolved == root or root in resolved.parents for root in allowed_roots
+    )
+
+
+def iter_codex_rollout_files(
+    root: Path,
+    filename_pattern: str = "*.jsonl",
+    *,
+    cold_archive_roots: Optional[Iterable[Path]] = None,
+    on_progress: Optional[Callable[[int], None]] = None,
+) -> list[Path]:
+    """Walk a Codex rollout root while safely traversing registered cold-archive symlinks.
+
+    Unlike ``Path.rglob``, this follows directory symlinks whose resolved target
+    lies inside ``root`` or an explicitly registered cold-archive root, while
+    rejecting unregistered symlink escapes and guarding against directory cycles.
+    """
+    if not root.is_dir():
+        return []
+    try:
+        root_resolved = root.resolve(strict=True)
+    except OSError:
+        return []
+    extra_roots = (
+        [Path(p).expanduser().resolve() for p in cold_archive_roots if Path(p).expanduser().is_dir()]
+        if cold_archive_roots is not None
+        else registered_codex_cold_archive_roots()
+    )
+    allowed_roots = [root_resolved, *extra_roots]
+    visited_dirs: set[tuple[int, int]] = set()
+    try:
+        root_stat = root_resolved.stat()
+        visited_dirs.add((root_stat.st_dev, root_stat.st_ino))
+    except OSError:
+        return []
+
+    found: list[Path] = []
+    for dirpath, dirs, files in os.walk(root, followlinks=True):
+        current_dir = Path(dirpath)
+        kept_dirs: list[str] = []
+        for name in sorted(dirs):
+            child = current_dir / name
+            try:
+                resolved = child.resolve(strict=True)
+                child_stat = resolved.stat()
+            except OSError:
+                continue
+            if child.is_symlink() and not _path_within_roots(resolved, allowed_roots):
+                continue
+            dir_key = (child_stat.st_dev, child_stat.st_ino)
+            if dir_key in visited_dirs:
+                continue
+            visited_dirs.add(dir_key)
+            kept_dirs.append(name)
+        dirs[:] = kept_dirs
+
+        for name in sorted(files):
+            if not fnmatch.fnmatch(name, filename_pattern):
+                continue
+            candidate = current_dir / name
+            if candidate.is_symlink():
+                try:
+                    resolved = candidate.resolve(strict=True)
+                except OSError:
+                    continue
+                if not _path_within_roots(resolved, allowed_roots):
+                    continue
+            found.append(candidate)
+            if on_progress is not None and len(found) % 256 == 0:
+                on_progress(len(found))
+    return sorted(found)
 
 
 def sqlite_uri(path: Path) -> str:

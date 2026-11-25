@@ -1,11 +1,38 @@
 #!/bin/bash
-# Plugin PreToolUse entry. The installer owns the fixed interpreter binding.
+# Compatibility forwarder shim: delegates to agent-message/scripts/native-guard.sh.
 set -uo pipefail
-trap 'rc=$?; case "$rc" in 0|2) ;; *) echo "BLOCKED (PeerMessage): native guard failed; no send authorized." >&2; exit 2;; esac' EXIT
-entry="${XDG_STATE_HOME:-$HOME/.local/state}/peer-message/native-guard-entry.sh"
-if [ ! -f "$entry" ]; then
-  echo 'BLOCKED (PeerMessage): native guard not initialized. Run scripts/install_native_guard.py with the installer-owned fixed Python entry; do not switch transport.' >&2
-  exit 2
+trap 'rc=$?; case "$rc" in 0|2) ;; *) echo "BLOCKED (agent-message): native guard forwarder failed; no send authorized." >&2; exit 2;; esac' EXIT
+
+shim_dir="$(cd "$(dirname "$0")" && pwd -P)"
+sibling="$(cd "$shim_dir/../.." && pwd -P)/agent-message/scripts/native-guard.sh"
+if [ -f "$sibling" ]; then
+  exec /bin/bash "$sibling" "$@"
 fi
-/bin/bash "$entry" "$(cd "$(dirname "$0")" && pwd)/native_guard.py"
-exit $?
+
+skills_target="$HOME/.agents/skills/agent-message/scripts/native-guard.sh"
+if [ -f "$skills_target" ]; then
+  exec /bin/bash "$skills_target" "$@"
+fi
+
+cache_root="$HOME/.claude/plugins/cache/daymade-skills/agent-message"
+if [ -d "$cache_root" ]; then
+  best=""
+  best_ver=""
+  for dir in "$cache_root"/*; do
+    [ -d "$dir" ] || continue
+    ver="$(basename "$dir")"
+    [[ "$ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || continue
+    candidate="$dir/scripts/native-guard.sh"
+    [ -f "$candidate" ] || continue
+    if [ -z "$best_ver" ] || [ "$(printf '%s\n%s\n' "$best_ver" "$ver" | sort -t. -k1,1n -k2,2n -k3,3n | tail -n1)" = "$ver" ]; then
+      best_ver="$ver"
+      best="$candidate"
+    fi
+  done
+  if [ -n "$best" ]; then
+    exec /bin/bash "$best" "$@"
+  fi
+fi
+
+echo "BLOCKED (agent-message): peer-message has been replaced by agent-message, but agent-message/scripts/native-guard.sh was not found. Install it with: claude plugin install agent-message@daymade-skills" >&2
+exit 2

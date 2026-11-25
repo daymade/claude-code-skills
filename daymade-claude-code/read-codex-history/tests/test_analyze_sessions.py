@@ -1471,5 +1471,79 @@ class LiveSearchBoundaryTests(unittest.TestCase):
             self.assertNotIn("Searching ", result.stdout)
 
 
+class ColdArchiveSymlinkTests(unittest.TestCase):
+    def _write_rollout(self, path: Path, session_id: str) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(
+                {
+                    "type": "session_meta",
+                    "payload": {
+                        "id": session_id,
+                        "timestamp": "2026-10-15T10:00:00Z",
+                        "cwd": "/tmp/demo",
+                    },
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+    def test_discover_and_locate_traverse_registered_cold_archive_only(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td).resolve()
+            fake_home = base / "home"
+            codex_home = fake_home / ".codex"
+            cold_root = base / "external-cold" / "codex-sessions"
+            outside_root = base / "unregistered-outside"
+            sid_cold = "019a1111-2222-7333-8444-555555555555"
+            sid_out = "019a9999-2222-7333-8444-555555555555"
+            sid_local = "019a2222-2222-7333-8444-555555555555"
+
+            self._write_rollout(
+                cold_root / "2026" / "10" / "15" / f"rollout-2026-10-15T10-00-00-{sid_cold}.jsonl",
+                sid_cold,
+            )
+            self._write_rollout(
+                outside_root / "2026" / "08" / "01" / f"rollout-2026-08-01T10-00-00-{sid_out}.jsonl",
+                sid_out,
+            )
+            self._write_rollout(
+                codex_home / "sessions" / "2026" / "11" / "01" / f"rollout-2026-11-01T10-00-00-{sid_local}.jsonl",
+                sid_local,
+            )
+
+            (codex_home / "sessions" / "2026" / "10").symlink_to(cold_root / "2026" / "10")
+            (codex_home / "sessions" / "2026" / "08").symlink_to(outside_root / "2026" / "08")
+            # Symlink cycle inside sessions must terminate cleanly without looping.
+            (codex_home / "sessions" / "2026" / "loop").symlink_to(codex_home / "sessions" / "2026")
+
+            (fake_home / ".claude").mkdir(parents=True, exist_ok=True)
+            (fake_home / ".claude" / "history-sources.json").write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "sources": [],
+                        "cold_archive_roots": [{"path": str(cold_root), "provider": "codex"}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            module = _load_analyze_module()
+            with mock.patch.dict(os.environ, {"HOME": str(fake_home)}, clear=False):
+                discovered = module.discover_codex_rollouts(codex_home)
+                located_cold = module.locate_codex_rollouts(codex_home, sid_cold)
+                located_out = module.locate_codex_rollouts(codex_home, sid_out)
+
+            names = [p.name for p in discovered]
+            self.assertIn(f"rollout-2026-10-15T10-00-00-{sid_cold}.jsonl", names)
+            self.assertIn(f"rollout-2026-11-01T10-00-00-{sid_local}.jsonl", names)
+            self.assertNotIn(f"rollout-2026-08-01T10-00-00-{sid_out}.jsonl", names)
+            self.assertEqual(len(located_cold), 1)
+            self.assertEqual(located_cold[0]["session_id"], sid_cold)
+            self.assertEqual(located_out, [])
+
+
 if __name__ == "__main__":
     unittest.main()

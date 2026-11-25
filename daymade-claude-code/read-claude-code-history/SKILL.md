@@ -395,8 +395,8 @@ Use the bundled zero-dependency reader `scripts/read_antigravity_session.py` —
 `brain/*/transcript.jsonl` raw files:
 
 ```text
-# Indexed inventory (read-only SQLite; reports exact unindexed brain/ gap)
-<skill-dir>/scripts/read_antigravity_session.py --list [--project <dir>] [--exclude-current <ID>]
+# Indexed inventory (read-only SQLite; reports unindexed brain/ gap and stale DB timestamps)
+<skill-dir>/scripts/read_antigravity_session.py --list [--sort db|activity] [--project <dir>] [--exclude-current <ID>]
 
 # Native SQLite FTS5 + bounded summary metadata search (never scans raw transcripts)
 <skill-dir>/scripts/read_antigravity_session.py --query '<terms>' [--project <dir>] [--exclude-current <ID>]
@@ -415,7 +415,17 @@ Key invariants:
 
 - Opens `conversation_summaries.db` strictly read-only (`?mode=ro`) and refuses to fall back to a
   raw corpus scan when the DB is missing or conversations are unindexed; always read the reported
-  `unindexed_brain_dirs` and `fts_indexed_conversations` coverage numbers.
+  `unindexed_brain_dirs`, `stale_db_timestamp_count`, and `fts_indexed_conversations` coverage numbers.
+- `conversation_summaries.last_modified_time` can lag behind actual writes when an older session is
+  resumed or an `agy` process is killed abruptly. `--list` performs a `stat`-only check (never reads
+  transcript bodies) to surface `stale_db_timestamp_count`; pass `--sort activity` to rank by
+  `max(last_modified_time, stat(transcript.jsonl).st_mtime)` so resumed older sessions are not missed.
+- **Finding recently killed / non-running `agy` sessions** (e.g., after a terminal or remote-host
+  disconnect): (1) run `--list --sort activity --limit 20 --exclude-current <CURRENT_ID>` (top-level
+  parents only; subagents are excluded by `nesting_depth > 0`), (2) subtract live `agy` processes by
+  matching `antigravity-cli/brain/<UUID>` in `lsof -a -p <agy-pids> -Fpn`, and (3) verify each
+  candidate's final turns with `--session <ID> --step <N:M>` before handing out
+  `agy --conversation=<ID>` (or `agy --resume <ID>`). Do not trust DB `last_modified_time` alone.
 - `conversations_fts` uses `unicode61` tokenization, so CJK phrases may require shorter terms or
   exact Conversation ID lookup; zero hits never prove absence.
 - Exact-session reads parse compact `transcript.jsonl` first and hydrate only `step_index` records

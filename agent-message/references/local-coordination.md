@@ -1,5 +1,5 @@
 ---
-name: peer-message-local-coordination
+name: agent-message-local-coordination
 description: >-
   Maintain local task/resource declarations and coordination request lifecycle after installation.
   Read before independent-session ownership lookup, shared-resource windows, native preflight,
@@ -12,16 +12,16 @@ description: >-
 将下文的 `PEER_SKILL_ROOT` 设置为该目录；不要使用当前项目的 `scripts/`：
 
 ```bash
-PEER_SKILL_ROOT='<absolute-directory-of-loaded-peer-message>'
+PEER_SKILL_ROOT='<absolute-directory-of-loaded-agent-message>'
 test -f "$PEER_SKILL_ROOT/SKILL.md"
 test -f "$PEER_SKILL_ROOT/scripts/peer.py"
 ```
 
 使用包内 `scripts/peer.py` 和 `scripts/coordination.py`；仅需 Python 标准库。
-首次 `coord` 或发送调用自动创建
-`$XDG_STATE_HOME/peer-message/coordination.sqlite3`，未设置时用
-`~/.local/state/peer-message/coordination.sqlite3`。所有本机安装副本共用此位置。
-不额外安装服务，不让用户建立或维护记录；调用时更新和检查，不做后台广播。
+首次 `coord` 或发送调用自动初始化共享状态目录，按
+`AGENT_MESSAGE_STATE_DIR` → `PEER_MESSAGE_STATE_DIR` → `${XDG_STATE_HOME:-~/.local/state}/peer-message`
+顺序解析并创建 `coordination.sqlite3`（保留原有 `peer-message` 历史与游标，升级零数据丢失）。
+所有本机安装副本共用此位置，不额外安装服务，不让用户建立或维护记录；调用时更新和检查，不做后台广播。
 `--state-dir` 只用于明确隔离的测试或不同操作边界，正常协作不各建一份库。
 
 ## 开工、范围变化和退出
@@ -33,21 +33,24 @@ test -f "$PEER_SKILL_ROOT/scripts/peer.py"
 
 ```bash
 python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord start \
-  --repo '<absolute-target-checkout>' --path '<owned-repo-relative-file-or-directory>' \
-  --task '<stable-issue-or-deliverable>' --actor '<exact-current-host-address>'
+  --repo '<absolute-target-checkout>' --path '<owned-repo-relative-file-or-directory-or-glob>' \
+  --task '<stable-issue-or-deliverable>' --actor '<exact-current-host-address>' \
+  [--ttl 3600]
 ```
 
-重复 `--path` 只声明本次实际负责的文件或目录。入口按 origin 的远端身份与仓内路径
-识别不同 clone，目录与子路径也相交；不使用 cwd、clone 名或相似标题判断同一事项。
+重复 `--path` 只声明本次实际负责的文件、目录或相对 glob 模式（如 `src/*.py`、`scripts/**`）。入口按 origin 的远端身份与仓内路径
+识别不同 clone，目录与子路径、以及 glob 与具体文件/目录前缀均会精确判定相交；不使用 cwd、clone 名或相似标题判断同一事项。
 缺远端、路径越界、空资源或错误 actor 明确失败。非 Git 资源使用稳定 `--scope` 与
 `--resource`；同一桌面或发布窗口在各会话中保持同一 key。不要把整个仓库声明成
 一项小改动的资源，从而阻断独立文件。实现与 CLI 帮助由 `scripts/work_start.py` 和
 `scripts/peer.py coord start --help` 维护。
 
+**软租约（`--ttl`）与续约（`coord renew`）**：`coord start` 与 `coord claim` 支持可选 `--ttl <seconds>`（合法范围 `60..86400`，写入 companion 表 `owner_leases`，不改变 `owners` 既有 6 列 wire format）。租约到期后，该记录保持在库中并标为 `freshness=expired_unreleased`，**绝不自动删除或允许他人静默抢占**（`staleness != takeover`）；原负责人可用 `coord renew --scope <scope> --task <task> [--ttl <seconds>]` 刷新租约，其他会话撞见时仍需核实或联系原负责人。
+
 `registered`（退出 0）只表示同一事务内完成已参与调用者的检查和本人登记，
-`occupancy` 仍为 unknown。`conflict`（退出 3）给出现有负责人，直接定向协调，
-先核实它的在制品或已有成果；不因陈旧而抢占。`reconciliation_required`（退出 3）
-给出已释放声明的线索；release 不证明成果已交付。先读实际代码/PR/产物并向原负责人
+`occupancy` 仍为 unknown。`conflict`（退出 3）给出现有负责人与建议的 `next_command`，直接定向协调，
+先核实它的在制品或已有成果；不因陈旧或租约过期而抢占。`reconciliation_required`（退出 3）
+给出已释放声明的线索与 `next_command`；release 不证明成果已交付。先读实际代码/PR/产物并向原负责人
 核对仍缺的范围，确认确有新工作后，将返回的精确 `declaration_id` 作为
 `--reconciled-declaration` 再运行同一入口。该参数只声明执行者已核验，不代替证据。
 多页线索按 `unreconciled_total` 处理：传入已核过的 ID 后，下一次返回其余未核行；
@@ -186,9 +189,9 @@ CLI；旧 CLI 能继续处理原 notice/request/reply，但不提供新状态模
 需要独立会话或跨产品协调时，才按现有身份协议绑定发送者和回信路线；普通父子 agent
 交办继续使用宿主身份，不为该例额外执行脚本身份探测、登记或发送。
 
-宿主同时继承 Claude 与 Codex 身份时，在每个写入型 `coord` 子命令后传
-`--actor codex:<完整 UUID>` 或 `--actor claude-session:<完整 UUID>`，明确当前宿主。
-它必须逐字匹配所选产品的环境身份；同产品身份冲突、缺失或空值仍拒绝。
+宿主同时继承 Claude、Codex 与 Antigravity 身份时，在每个写入型 `coord` 子命令后传
+`--actor codex:<完整 UUID>`、`--actor claude-session:<完整 UUID>` 或 `--actor antigravity:<完整 UUID>`，明确当前宿主。
+它必须逐字匹配所选产品的环境身份（Antigravity 校验 `ANTIGRAVITY_CONVERSATION_ID`）；同产品身份冲突、缺失或空值仍拒绝。
 `prepare` 的 `--from` 也受同一校验；后续 `commit/receive/finish/claim/release`
 继续传相同的 `--actor`。原生发送仍由宿主事件独立校验，不能用该参数选择另一会话。
 
@@ -374,9 +377,12 @@ final，也不通过归档线程实现静默。默认 receive 保留 `action_nee
 
 保留完整原信封；有本地 prepared 摘要时，receive 先核对正文及协调元数据，再领取或判断过期/关闭。`integrity=verified_prepared_core` 只证明与该本地准备记录一致，不证明发送者身份或用户授权。正文冲突、损坏摘要或不能识别的包装明确报错，保留输入和状态，不能按旧回执忽略，也不要重写正文凑过检查。无摘要的旧记录仍按旧生命周期处理并标 `unavailable_legacy_digest`；无协调字段标 `legacy_no_metadata`，都不补造摘要或有效期。正常的新消息仍使用自己的 ID 处理，不因话题相同被丢弃。
 
-确需回信时关联原 id；短时请求已过期/关闭时回信也会被发送前抑制：
+确需回信时优先使用 `peer.py reply <message-id>`（接受完整 ID 或唯一 `>=8` 位 hex 前缀，自动继承收件人、topic 与 `thread_id`，并在 `accepted` 时自动结清原入站记录）；显式 `send` 仍支持并关联原 id。短时请求已过期/关闭时回信也会被发送前抑制：
 
 ```bash
+# 推荐：一键回复并自动传播 thread_id、结清原入站记录
+python3 "$PEER_SKILL_ROOT/scripts/peer.py" reply '<original-id-or-8hex>' reply.txt --json
+# 或显式指定 send + finish
 python3 "$PEER_SKILL_ROOT/scripts/peer.py" send '<original-sender>' reply.txt \
   --kind reply --in-reply-to '<original-id>' --json
 python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord finish --message-id '<original-id>'
@@ -594,6 +600,10 @@ ID 的 `[peer-coordination: {...}]`；若宿主额外写入 marker，marker 只�
 零命中、多条冲突、只有 remove、JSON 损坏或找不到精确会话事件时保留 unknown；能从当前会话事件直接确认的，
 不要另起历史全量扫描。领取成功后按正文分流处理，动作完成再 `coord finish`；接收成功只证明协调记录被领取，
 不证明业务完成或用户授权。
+
+### 从 Antigravity 入站原件接收
+
+Antigravity 经 `agy -p` 收到的信封在 `transcript.jsonl` 的 `USER_INPUT.content` 中会包一层 `<USER_REQUEST>\n...\n</USER_REQUEST>`，经可选收件箱 Hook 注入的信封在 `SYSTEM_MESSAGE.content`（或 `<state-dir>/antigravity-inbox/<uuid>.jsonl` 的 `envelope` 字段）中为原始 `<peer-message>` 字符串。保存原始字节后直接运行 `python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord receive "$RECEIVED_FILE" --actor "antigravity:$ANTIGRAVITY_CONVERSATION_ID"`：`coord receive` 会自动剥离单层 `<USER_REQUEST>` 包装并核对 prepared digest，无需手工删标签。
 
 ## 覆盖与验收
 

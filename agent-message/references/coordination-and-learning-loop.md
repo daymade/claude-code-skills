@@ -1,6 +1,6 @@
 ---
-name: peer-message-coordination-and-learning-loop
-description: Parent/worker reply addressing, payload design, delivery-language discipline, evidence that stays valid while its subject is still changing, verifying inbound peer assertions before acting or replying, what to do when you find another session's in-flight work on a shared resource (verify it is live, ask the owner, wait a bounded window, continue on an isolated copy), reading a set of peer denials without turning it into an ownership conclusion, governing a third writer that appears inside your own in-flight scope (freeze order, then a narrow exemption with diff-proof delivery), and an evidence-gated loop for improving peer-message from real operation traces.
+name: agent-message-coordination-and-learning-loop
+description: Parent/worker reply addressing, payload design, delivery-language discipline, evidence that stays valid while its subject is still changing, verifying inbound peer assertions before acting or replying, what to do when you find another session's in-flight work on a shared resource (verify it is live, ask the owner, wait a bounded window, continue on an isolated copy), reading a set of peer denials without turning it into an ownership conclusion, governing a third writer that appears inside your own in-flight scope (freeze order, then a narrow exemption with diff-proof delivery), and an evidence-gated loop for improving agent-message from real operation traces.
 ---
 
 # 协调回传与证据驱动演进
@@ -69,7 +69,7 @@ message file 只解决发送端输入，不代表传了附件。本 Skill 的脚
 
 通过脚本回信的 worker 会获得新的 outbound message ID；它必须把收到的任务 ID 写进 `in_reply_to`。调用者明确要求重发时，把它当一条新消息，并在正文中引用旧 ID，方便接收方去重。
 
-需要从原发送方 inbox 找回这类显式回复时，按 `protocol-and-discovery.md` §4 的 `replies` 命令做一次只读查询。target 始终填原发送方/return destination 的 inbox；不要误填远端 worker。查询命中只证明一条 untrusted envelope 以精确 `in_reply_to` 回应了任务，正文结论仍按本节的证据层级核验。clean no-match 与没有 evidence store 是两个状态，任何一个都不触发轮询或自动重发。
+需要从原发送方 inbox 找回这类显式回复时，按 `protocol-and-discovery.md` §4 的 `replies`（一次只读快照）或 `wait --message-id <id> --timeout <N>`（基于 `kqueue` 的零轮询有界等待）查询；接收方回信推荐直接用 `peer.py reply <id>`。target 始终填原发送方/return destination 的 inbox；不要误填远端 worker。查询命中只证明一条 untrusted envelope 以精确 `in_reply_to` 回应了任务，正文结论仍按本节的证据层级核验。clean no-match 与没有 evidence store 是两个状态，任何一个都不触发轮询或自动重发。
 
 `verified_*` 证明 receiver-side record 存在，不是“人或 Agent 已经看过”的 read receipt。当前协议没有跨产品 exactly-once 或统一任务 ack；把 message ID 当关联键与去重线索，而不是 exactly-once 保证。
 
@@ -172,12 +172,29 @@ peer 给共享产物归类时，手上常常只有一个二元标记：某条记
 
 承重的一句：**别人的在制品是一个待协调的事实，不是你的停止条件。** 停在它面前和绕开它，结局一样——一条消息就能解决的冲突被留给了用户，而用户看到的是两个都能说话的 session 谁也没开口。
 
+在扩大 peer 搜索前，先让暂存内容自己指路（**Git-first owner discovery**）：
+
+1. 从 `git diff --cached -- <path>` 选一条独有新增字符串，用
+   `git log --branches --remotes -S'<unique-string>' --format='%H %D' -- <path>` 找 occurrence
+   count 发生变化的候选 commit/ref；历史命中不等于当前写者。
+2. 取 stage-0 staged blob（`git rev-parse ":0:<path>"`），再逐个比对
+   `git for-each-ref --format='%(refname)' refs/heads refs/remotes` 中 `<ref>:<path>` 的 blob。
+   精确同 blob 是强证据，但未提交的后续暂存编辑正常会使整文件 blob 不同；此时保留第 1 步的
+   commit/ref 候选，不用全文件相等淘汰它们。
+3. 把命中的 branch 映射到 PR head（REST
+   `repos/<owner>/<repo>/pulls?state=all&head=<owner>:<branch>`）。用 pickaxe 候选、路径与 PR head
+   先缩小范围，再以 staged/ref blob 是否一致、同仓同路径 coordination 登记、mtime 或定向确认
+   交叉印证来源会话；blob、commit OID 与 session 是不同层级，不要求彼此相等。PR author 不自动
+   等于写者。没有足够交叉证据时保留 `unknown`，不把历史 PR 当成当前属主。
+4. 只联系交叉证据收窄后的 top-3。`verified_queued` 只证明入队，不证明已读；没有映射或无人
+   回应都保留 owner `unknown`，不写成「无主」。
+
 在实际发送归属或发布窗口问题前，由发送 agent 再读一次会改变下一步的当前事实；检索、审查或等待前的快照不能替代这次读回。Git 场景重新解析当前 main 的完整 SHA，并核对相关提交是否已合入、相关内容差异和当前占用；远端是否合入取决于本次远端读回，旧 `origin/main` 不证明当前远端状态。如果问题已经解决，或其答案已不能改变下一步授权动作，就不发这条问题；仍有真实冲突则沿下表定向协调。保留未提交改动，不从“已合入”推断可以清除它们。这个语义判断由 agent 执行，脚本不保证每次发问前都已重读。
 
 | 字段 | 内容 |
 |---|---|
 | **When** | 你要动的共享产物（checkout、分支、文件、锁、DB 行）上有别人的痕迹——未提交改动、别的分支被 checkout、锁被持有——而它挡住了你的下一步；或者你正准备「绕开它」（另开副本、复制一份、改别的文件）却还没问过任何人 |
-| **Do** | ① 先用产物自己的权威源核实它是不是真在飞：tracked 路径用 `git diff <BASE> -- <路径>`，**untracked（`??`）路径** `git diff` 不会输出差异，须逐个比对 `git hash-object <路径>` 与 `git rev-parse <BASE>:<路径>`（分支切回旧 `main` 时，已合入 PR 新增的文件会以 `??` 留在工作树里，仅看 `status` 或 `git diff` 会误判为他人 WIP）。当 `BASE` 取已合入的 main 且 tracked diff 为空、`??` 与 `<BASE>:<路径>` 逐字节一致时，这份内容就已经落地，所以是残影。为空/逐字节一致即残影，**到此结束——没有人在改它，它不是协调事项，按你原本的计划推进**（共享 checkout 仍停在别人分支上是另一回事，照常从不可变 ref 建独立副本；清残影见本节末段）；非空或 `??` 路径在 `BASE` 不存在/内容不同只说明**它不是残影**，并不证明此刻真有人在改（工作树落后于 main、别人分支上已提交未合入的内容，都给非空 diff）——非空之后别继续猜，进 ② 去问，问一次比猜十次便宜。`git log` / `git status` 只用来挑候选（这条路径最近落在谁的分支上），不用来判残影与在制品，那两者只有内容比对能分开。锁要看它自己的形态：有的锁文件写了持有者 pid，能查进程活性；**git 自己的 `.git/index.lock` 是 0 字节、不含 pid**，连 git 的报错都只能说「某个进程可能崩溃后留下了它」。读不出属主就别对着文件推断，直接进 ② 去问。② **发问前先核对归属证据、收窄候选**：a) `git log` / 三点 diff 看这条路径最近落在谁的分支上；b) 涉及文件的 mtime 看写入是否还在推进；c) 历史索引反查哪个 session 写过它（命令与覆盖边界见本节末「归属核对的索引侧」）；在 `peer.py list` 里看到 Claude 候选为 `status=waiting` 时**不要等同于 `idle`**——它可能正停在终端的工具权限审批提示（如 `Edit`/`Bash`）上，须结合目标文件的 mtime 或定向查看该精确 UUID 末尾的 tool_use 再判定是否仍为活写者。这些证据能直接答的就不问——归属问题的答案大多数时候就在 git 里；答不了，把候选收窄到 top-3 再问。发问：使用已选通道的发现工具（原生列表，或仅补缺时的 `peer.py list`）找候选属主，**只问收窄后的那几个**——原生按工具契约逐个发送或广播；脚本补缺才按 `protocol-and-discovery.md` §5 使用显式 `broadcast`（其消息自动带 fan-out 标记，接收方按「仅属主回复、其余忽略」处理，非属主零成本）。不得从一次单发请求推断全机广播。正文写明：你要做什么；你看到了什么（路径 + 观测时间，按 §2 的可变状态规则注明观察范围与失效条件）；问清——是不是你的、什么时候落、要我等还是你先收尾。阻塞性请求再带一句「若 <时间> 前不回，我将 <推进方式>」，被问方到点答不完回一行 ETA。**不要套 §2 的回传字段**：那是回传结构，冷发问没有 `in_reply_to` 也没有 `result`；§2 里适用的是可变状态证据与长正文/message file 入口。③ 使用当前宿主支持的等待或通知机制，设一个有界窗口，**到期就往下走**。Claude 官方 idle/exit 订阅的条件见 `references/official-feature.md` §3；Codex 内部等待与 App 线程等待的范围见其 §6，并以当前工具契约为准。本 Skill 的脚本不仿造这些能力；脚本路径或当前宿主无相应等待工具时，选一个可交代的有界等待窗口，到点继续。报告实际等了多久，不重复轮询或重发。④ 回复到了按回复走；没到，见 If missing。原生 subagent 按宿主契约直接协调；仅当所选脚本使用父 session 地址、回信会落父对话，或当前工具不允许所需操作时，把 ① 的读回和待问问题交回父 session，由它执行后续协调 |
+| **Do** | ① 先用产物自己的权威源核实它是不是真在飞：tracked 路径用 `git diff <BASE> -- <路径>`，**untracked（`??`）路径** `git diff` 不会输出差异，须逐个比对 `git hash-object <路径>` 与 `git rev-parse <BASE>:<路径>`（分支切回旧 `main` 时，已合入 PR 新增的文件会以 `??` 留在工作树里，仅看 `status` 或 `git diff` 会误判为他人 WIP）。当 `BASE` 取已合入的 main 且 tracked diff 为空、`??` 与 `<BASE>:<路径>` 逐字节一致时，这份内容就已经落地，所以是残影。为空/逐字节一致即残影，**到此结束——没有人在改它，它不是协调事项，按你原本的计划推进**（共享 checkout 仍停在别人分支上是另一回事，照常从不可变 ref 建独立副本；清残影见本节末段）；非空或 `??` 路径在 `BASE` 不存在/内容不同只说明**它不是残影**，并不证明此刻真有人在改（工作树落后于 main、别人分支上已提交未合入的内容，都给非空 diff）——非空之后别继续猜，进 ② 去问，问一次比猜十次便宜。`git log` / `git status` 只用来挑候选（这条路径最近落在谁的分支上），不用来判残影与在制品，那两者只有内容比对能分开。锁要看它自己的形态：有的锁文件写了持有者 pid，能查进程活性；**git 自己的 `.git/index.lock` 是 0 字节、不含 pid**，连 git 的报错都只能说「某个进程可能崩溃后留下了它」。读不出属主就别对着文件推断，直接进 ② 去问。② **发问前先核对归属证据、收窄候选**：a) `git log` / 三点 diff 看这条路径最近落在谁的分支上；b) 涉及文件的 mtime 看写入是否还在推进；c) 历史索引反查哪个 session 写过它（命令与覆盖边界见本节末「归属核对的索引侧」）；d) 本机 codex fork 任务的分支名后缀即 fork 会话 ID 前缀（`fix/<task>-<id>` ↔ `ps` 里的 `codex fork <id>-…`），活跃的 `git push` 进程行可把变更直接定位到写者会话；在 `peer.py list` 里看到 Claude 候选为 `status=waiting` 时**不要等同于 `idle`**——它可能正停在终端的工具权限审批提示（如 `Edit`/`Bash`）上，须结合目标文件的 mtime 或定向查看该精确 UUID 末尾的 tool_use 再判定是否仍为活写者。这些证据能直接答的就不问——归属问题的答案大多数时候就在 git 里；答不了，把候选收窄到 top-3 再问。发问：使用已选通道的发现工具（原生列表，或仅补缺时的 `peer.py list`）找候选属主，**只问收窄后的那几个**——原生按工具契约逐个发送或广播；脚本补缺才按 `protocol-and-discovery.md` §5 使用显式 `broadcast`（其消息自动带 fan-out 标记，接收方按「仅属主回复、其余忽略」处理，非属主零成本）。不得从一次单发请求推断全机广播。正文写明：你要做什么；你看到了什么（路径 + 观测时间，按 §2 的可变状态规则注明观察范围与失效条件）；问清——是不是你的、什么时候落、要我等还是你先收尾。阻塞性请求再带一句「若 <时间> 前不回，我将 <推进方式>」，被问方到点答不完回一行 ETA。**不要套 §2 的回传字段**：那是回传结构，冷发问没有 `in_reply_to` 也没有 `result`；§2 里适用的是可变状态证据与长正文/message file 入口。③ 使用当前宿主支持的等待或通知机制，设一个有界窗口，**到期就往下走**。Claude 官方 idle/exit 订阅的条件见 `references/official-feature.md` §3；Codex 内部等待与 App 线程等待的范围见其 §6，并以当前工具契约为准。需要等待脚本回信或本机入站时，可用 `peer.py wait --message-id <id> --timeout <N>`（或 `send --wait-reply <N>`）配合宿主后台任务监听，零轮询、到点退出。报告实际等了多久，不重复轮询或重发。④ 回复到了按回复走；没到，见 If missing。原生 subagent 按宿主契约直接协调；仅当所选脚本使用父 session 地址、回信会落父对话，或当前工具不允许所需操作时，把 ① 的读回和待问问题交回父 session，由它执行后续协调 |
 | **Expected evidence** | 核实那一步的读回（diff 为空/非空、锁能不能读出属主）与它的观测时间；发出的消息 ID 与对方的回复（`in_reply_to` 或明确答复）。**无论有没有人认领，报告里都写你问过谁、谁答了什么**——只在无人认领时才写口径，会让「问了一圈有人认领」这条路径完全不留痕。「我看见它脏了」不是证据，「它相对不可变 ref 有差异」才是 |
 | **If missing** | 窗口内无人认领：在从不可变 ref 建的独立 worktree 或副本上继续，**不碰它的文件、不切它的分支、不释放它的锁**；报告里写明问过谁（口径按 §5.2，**按你实际用的那个 `list` 写**：官方 `ListAgents` 没有 provider / `--limit` / saved catalog 这几个字段，那两项工具覆盖面就改写成它给了你哪几类行、哪一类你没问、有没有你看不见的类别）、谁没回、等了多久、以哪个 ref 为基线——**写解析出来的 SHA，不写 `origin/main` 这种名字**，它随 fetch 移动，下一个读报告的人解析出的可能不是同一个 commit；归属仍是 `unknown` |
 | **Do not infer** | 没人回 ≠ 没人在做（对方可能 busy、被 hold、或在另一台机器上）；Claude 注册表里的 `status=waiting` ≠ `idle`（它可能正卡在未完成的写工具审批上）；残影 ≠ 在制品，而内容比对（tracked `git diff` + untracked `hash-object` vs `BASE:<path>`）分开的其实是**已落地 / 未落地**（`status` 与 mtime 连这一层都分不开：内容等于另一个 ref 的文件相对 HEAD 照样显示 `M` 或 `??`，与真在制品同形）。「未落地」里既有别人的在制品，也有你自己的旧改动、还有落在别的远端分支上的东西——所以非空之后要去问，别拿 diff 当能分辨归属的仪器；「我开了独立副本」≠ 冲突消失——落地时仍要 rebase 到最新 main，且对方落地后你的副本就过期了 |
@@ -207,7 +224,7 @@ peer 给共享产物归类时，手上常常只有一个二元标记：某条记
 
 先弄清 `list` 到底给了你什么，否则口径写不对。下面每条都自己跑一次确认，**这里的数字一个都不要抄**——session 在分钟级生灭，行数和工作目录数都会变，例证数字只说明形态，承重的是它们旁边那些结构性事实（有没有过滤开关、打印哪些字段、默认值是多少）：
 
-- **它不按工作目录分区。** `cmd_list` 没有 cwd 过滤开关，两个打印分支都带 `cwd=`；一次 `--provider claude` 的观测里同时出现了 8 个不同工作目录下的 session。所以「工作目录在别的项目、用绝对路径伸进来的 session」**不是**它够不到的类别——恰恰相反，你要的线索就摆在行里。
+- **默认不按工作目录分区；显式 `--cwd <path>` 是有损过滤。** 不传 `--cwd` 时 `list` 跨全部工作目录列出 session，并打印 `cwd=`；一次 `--provider claude` 的观测里可同时出现多个工作目录下的 session。传 `--cwd <path>` 可按路径精确或子路径收窄日常发现，但**会把工作目录在别处、用绝对路径伸进当前仓库的写者排除在列表之外**——用于归属调查时必须在口径里写明施加了 `--cwd` 过滤，且不得凭 filtered 否认推论「无主」。
 - **一行不等于「在跑」，而且两个 provider 的含义不一样。** Claude 侧读 registry，进程退出即掉出，所以一行基本等于活着；Codex 侧读本地 saved catalog，`status` 全是 `saved`、`alive` 与 `reachable` 为空，**它列出的绝大多数恰恰是已经结束的 session**（`references/official-feature.md` §6 明写不据此判断活性）。对归属调查来说这是反直觉的好消息：一个已退出的 Codex session 会带着 `cwd` 出现在行里，那是线索不是噪音——别因为「它已经死了」就把它划出候选。默认 `--provider all` 时两种行混在一起，要区分就读每行的 `status` / `alive`，不要把 catalog 行数当成活跃 session 数写进口径。
 - **它会截断，触顶时会出声。** `--limit` 的当前默认值从 CLI help 读取，作用范围是 Codex catalog（Claude registry 不吃这个参数）——`--help` 写明默认值与作用范围；Codex 侧触顶时脚本在 stderr 印一行截断提示。提示只在触顶时出现：**没印提示不证明覆盖面完整**（Claude 侧从来不截），口径照写当次 provider 与 limit。
 
@@ -276,7 +293,7 @@ peer 给共享产物归类时，手上常常只有一个二元标记：某条记
 
 1. 确定 message-id：当次 receipt 里有；丢了就按发送时间窗在自己 transcript 里 grep `message_id`（receipt 打印行的 `message_id=` 或 JSON receipt 的 `"message_id":`）或 `peer.py send` / `peer.py broadcast`（命令行本身）。`peer-message-id` 只存在于**接收侧**信封，在发送方 transcript 里 grep 它找不到自己那次 send。
 2. 按 message-id 在自己 transcript 反查这次 send 的目标、receipt 与 exit——receipt 的 `resolved` 对象记录目标字符串当时实际解析出的地址/name/id/cwd，认错目录先在这里对。
-3. 查对方回了什么：对**原发送方自己的 inbox** 跑一次 `replies --message-id <id>`（原生回传沿宿主机制，命令与边界见 `protocol-and-discovery.md` §4）。
+3. 查对方回了什么：对**原发送方自己的 inbox** 跑一次 `replies --message-id <id>`（或有界等待时用 `wait --message-id <id> --timeout <N>`；原生回传沿宿主机制，命令与边界见 `protocol-and-discovery.md` §4）。
 4. 查对方收到没有：`verify --message-id <id>` 读接收侧证据——入队、进入对话、已回应、已执行属于不同证据层级，停在命中的那层（§3）。
 
 ## 8. RSI 的准确边界

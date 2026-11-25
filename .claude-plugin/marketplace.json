@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Professional Claude Code and Codex skills marketplace — production-ready skills spanning GitHub and git operations (including current-base contributor PR review), document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, evidence-backed HTML reports and data-visualization judgment, prompt and skill engineering, product growth diagnosis, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, local inter-agent messaging, Claude Code operations and permission triage, technology selection and build-vs-buy decisions, and model-aware Codex workstation setup. Suite plugins bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
-    "version": "3.29.3"
+    "version": "3.30.3"
   },
   "plugins": [
     {
@@ -126,18 +126,21 @@
       ]
     },
     {
-      "name": "peer-message",
-      "description": "Bridge local Claude Code and Codex sessions only when the current host's native communication tools do not cover the target. Use for cross-product messages, hooks/scripts posting to sessions, fallback reply lookup and delivery verification, or diagnosing Held peer messages. Also use its coordination guidance when shared-work ownership or an inbound peer assertion needs verification. For ordinary parent/subagent, teammate, or independent-session communication, first discover and use available native tools; do not load this skill merely to send a native message. The bundled network preview for cross-machine pairing is deprecated (existing deployments only; invitations use the peer-message:v1 format). Never bypass a denied or Held message with another transport. Not for spawning agents, moving full history, or granting user approval. Triggers: 跨产品通信、原生工具未覆盖的会话、脚本回帖、peer 送达排查、共享在制品归属核实、peer-message:v1 邀请（既有部署）。",
-      "source": "./peer-message",
+      "name": "agent-message",
+      "description": "Bridges local Claude Code, Codex, and Antigravity (agy) sessions when native tools can't reach the target (replaces peer-message). Use for cross-product messaging, one-command reply, kqueue event-driven wait, unified 3-provider inbox, delivery verification (Held included), shared-work ownership leases, or inbound peer assertions. Not for same-product/subagent messaging (use native tools), spawning agents, full history, or cross-machine messaging (use Agent Use: https://useagent.app). Triggers: agent-message、peer-message、跨产品通信、原生工具未覆盖的会话、脚本回帖、peer 送达排查、共享在制品归属核实、Antigravity/agy 跨会话通信。",
+      "source": "./agent-message",
       "strict": false,
-      "version": "1.28.3",
+      "version": "2.0.1",
       "category": "communication",
       "keywords": [
+        "agent-message",
         "agent-communication",
         "cross-session",
         "peer-message",
         "claude-code",
         "codex",
+        "antigravity",
+        "agy",
         "codex-queue",
         "uds",
         "multi-agent",
@@ -145,6 +148,20 @@
         "session-coordination",
         "crossSessionInbound",
         "inbound-assertions"
+      ]
+    },
+    {
+      "name": "peer-message",
+      "description": "Deprecated compatibility alias for agent-message (replaces peer-message). Local Claude Code, Codex, and Antigravity messaging and coordination now live in agent-message; scripts in this package forward to agent-message when installed. The cross-machine network preview is retired (use Agent Use: https://useagent.app).",
+      "source": "./peer-message",
+      "strict": false,
+      "version": "1.30.1",
+      "category": "communication",
+      "keywords": [
+        "peer-message",
+        "agent-message",
+        "compatibility-alias",
+        "deprecated"
       ]
     },
     {
@@ -204,7 +221,7 @@
       "description": "Claude Code operations suite that bundles cross-project prior-work retrieval across code, docs, Skills, meetings, WeChat archives, and conversation history; provider-separated Claude Code and Codex history readers; identity- and lineage-gated continuation workflows; plugin/skill troubleshooting; CLAUDE.md progressive disclosure optimization; statusline configuration; exported .txt repair; full claude.ai conversation extraction with tool-call rendering and file download; plugin marketplace development and suite consolidation; writing/testing/debugging Claude Code hooks; permission-prompt triage for subagents, background workers, and Agent Team teammates; multi-provider profile isolation; personal-memory migration into tool-agnostic AGENTS.md reference docs; one-shot local timers that ping Claude right after subscription quota reset to start a fresh 5-hour usage window; working web search installed on an agent whose relayed model backend cannot execute the built-in one; and terminal-output-to-PNG rendering for visual CLI verification under one shared namespace. Install once to get the full Claude Code power-user toolkit.",
       "source": "./daymade-claude-code",
       "strict": false,
-      "version": "5.3.11",
+      "version": "5.3.14",
       "category": "suite",
       "keywords": [
         "suite",
@@ -261,7 +278,7 @@
       "description": "OpenAI Codex operations and design exploration suite bundling model-aware long-context workstation setup, local Codex delegation, generated-image review, static visual-direction selection, and runnable HTML interaction Design Boards under one shared namespace.",
       "source": "./daymade-codex",
       "strict": false,
-      "version": "2.4.23",
+      "version": "2.4.24",
       "category": "suite",
       "keywords": [
         "suite",
@@ -366,7 +383,7 @@
       "description": "Apple-platform development and operations suite for macOS window capture, TCC and Keychain dialog diagnosis, Full Disk Access repair, iOS/macOS app development, disk cleanup, and launchd watchdogs.",
       "source": "./daymade-macos",
       "strict": false,
-      "version": "1.34.27",
+      "version": "1.34.28",
       "category": "suite",
       "keywords": [
         "suite",
@@ -393,7 +410,7 @@
       "description": "Audio processing suite covering the full speech pipeline: ASR transcription (Qwen3, StepFun) with batch-mode guards against music-only repetition-loop hallucinations, speaker diarization and CAM++ voiceprint identification for multi-speaker recordings, transcript error correction, structured meeting minutes generation, and TTS voice synthesis (StepFun). Install once for the complete audio workflow.",
       "source": "./daymade-audio",
       "strict": false,
-      "version": "1.65.8",
+      "version": "1.65.10",
       "category": "suite",
       "keywords": [
         "suite",
@@ -420,7 +437,7 @@
       "description": "Daymade skills core suite. Bundles skill creation, quality review, real Claude/Codex Skill-surface governance, suite-migration reconciliation, and marketplace development tooling under one shared namespace. Skill governance separates canonical source, installed inventory, discovery policy, the fresh model-visible catalog, and router-resolved cold resources instead of optimizing cache counts; it preserves Claude's official versioned-cache lifecycle and verifies selected entries in the real host prompt. It distinguishes in-place Marketplace source replacement from destructive remove-and-restore, preserves plugin options/secrets/data, and requires install-ledger commit identity plus declaration-scope and plugin-state readback. Skill verification separates risk classification from evaluation spend: bounded fixes use targeted checks, narrow behavior changes use sampled replays, and paired baselines, graders, benchmarks, or a viewer run only after explicit user authorization or a decision-bearing evidence plan plus opt-in; that authorization does not change the risk tier. Existing-skill edits retain an old-vs-new capability audit and content-bound packaging attestation so prompt compression cannot silently delete runtime contracts. When the official skill-creator plugin is also installed, skill-creator detects the coexistence and offers a consent-based, reversible SessionStart routing hook so the daymade edition wins deterministically; on machines without the official plugin nothing is ever installed.",
       "source": "./daymade-skill",
       "strict": false,
-      "version": "1.83.12",
+      "version": "1.84.1",
       "category": "suite",
       "keywords": [
         "suite",
@@ -1139,7 +1156,7 @@
       "description": "Audits rendered UI, whole-site route censuses and task/object-link handoffs in web apps, decks, dashboards, design systems, Markdown/Obsidian and Electron. Uses real-browser journeys and Playwright for typography, overflow, responsive, routing, data-viz, browser-output or native-shell defects and reference comparisons. Excludes source-only citation checks, greenfield design (ui-designer) and QA setup (qa-expert).",
       "source": "./frontend-visual-qa",
       "strict": false,
-      "version": "1.22.5",
+      "version": "1.22.6",
       "category": "design",
       "keywords": [
         "frontend",
@@ -1340,7 +1357,7 @@
       "description": "Produces standalone reader-facing HTML reports/dashboards and review workbenches — evidence-backed, browser-verified. Use for a visual HTML report or requests for “可视化报告”“图表报告” or a standalone HTML dashboard; load data-visualization-discipline before charts. Not for product UI, chat or Markdown unless asked to become a report, or PowerPoint.",
       "source": "./report-with-html",
       "strict": false,
-      "version": "1.7.5",
+      "version": "1.7.6",
       "category": "documentation",
       "keywords": [
         "HTML报告",
@@ -1366,10 +1383,10 @@
     },
     {
       "name": "ghostty-use",
-      "description": "Snapshots local Codex/Claude CLI sessions across terminals and restores IDs in Ghostty after reboot (保存会话/重启前备份/恢复窗口), audits survivors, and makes change-only automatic backups (定期增量快照). Handles unmanaged Codex account switches (额度耗尽换号); Minions native_runtime uses Account Manager. Supports background /compact and targeted Ghostty terminal input (批量压缩 Ghostty 会话). Not --resume help, screenshots or tmux.",
+      "description": "Snapshots local Codex/Claude/agy CLI sessions across terminals and restores IDs in Ghostty after reboot (保存会话/重启前备份/恢复窗口), audits survivors, and makes change-only automatic backups (定期增量快照). Handles unmanaged Codex account switches (额度耗尽换号); Minions native_runtime uses Account Manager. Supports background /compact and targeted Ghostty terminal input (批量压缩 Ghostty 会话). Not --resume help, screenshots or tmux.",
       "source": "./ghostty-use",
       "strict": false,
-      "version": "1.16.0",
+      "version": "1.17.1",
       "category": "developer-tools",
       "keywords": [
         "ghostty",

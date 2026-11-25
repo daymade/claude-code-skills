@@ -1197,5 +1197,127 @@ class DeployFreshnessHardeningTest(unittest.TestCase):
             watch.install(self.state, apply=True)
 
 
+class AgyObserverTest(unittest.TestCase):
+    def test_cli_identity_for_agy_interactive_and_non_interactive(self):
+        self.assertEqual(
+            watch.cli_identity({'cmdline': f'agy --dangerously-skip-permissions --conversation={S1}'})[:2],
+            ('agy', S1),
+        )
+        self.assertEqual(
+            watch.cli_identity({'cmdline': f'/usr/local/bin/agy -r {S2}'})[:2],
+            ('agy', S2),
+        )
+        self.assertEqual(
+            watch.cli_identity({'cmdline': f'agy --resume {S3}'})[:2],
+            ('agy', S3),
+        )
+        self.assertEqual(
+            watch.cli_identity({'cmdline': 'agy --dangerously-skip-permissions'})[:2],
+            ('agy', None),
+        )
+        for non_tui in (
+            'agy -p hello',
+            'agy --print hello',
+            'agy acp',
+            'agy mcp list',
+            'agy remote-control status',
+            'agy --help',
+            'agy -h',
+        ):
+            self.assertIsNone(watch.cli_identity({'cmdline': non_tui}), non_tui)
+
+        # Interactive initial-prompt flags (-i/--prompt-interactive), -- positional separator,
+        # and explicit conversation selector with a trailing prompt matching a subcommand name
+        # must stay interactive (not None), while marking sid=None (ambiguous) so lsof-brain
+        # anchors them safely instead of trusting unquoted ps argv.
+        for interactive_cmd in (
+            'agy -i "help"',
+            'agy --prompt-interactive="mcp"',
+            'agy --prompt-interactive acp',
+            'agy -- "mcp"',
+            f'agy --conversation={S1} help',
+            f'agy -r {S2} acp',
+        ):
+            ident = watch.cli_identity({'cmdline': interactive_cmd})
+            self.assertIsNotNone(ident, interactive_cmd)
+            self.assertEqual(ident[:2], ('agy', None), interactive_cmd)
+
+    def test_observe_resolved_and_cycle_with_uuidless_agy(self):
+        import sqlite3
+        import ghostty_session as gs
+
+        with tempfile.TemporaryDirectory(prefix='ghostty-agy-cycle-') as tmp:
+            state = Path(tmp) / 'state'
+            app_dir = Path(tmp) / 'agy-store'
+            app_dir.mkdir(parents=True)
+            conn = sqlite3.connect(str(app_dir / 'conversation_summaries.db'))
+            conn.execute('CREATE TABLE conversation_summaries (conversation_id TEXT, nesting_depth INTEGER, parent_conversation_id TEXT)')
+            conn.execute('INSERT INTO conversation_summaries VALUES (?, ?, ?)', (S1, 0, ''))
+            conn.commit()
+            conn.close()
+            tpath = app_dir / 'brain' / S1 / '.system_generated' / 'logs' / 'transcript.jsonl'
+            tpath.parent.mkdir(parents=True, exist_ok=True)
+            tpath.write_text('{"step_index": 0, "created_at": "2026-11-26T00:00:00Z"}\n')
+
+            graph = '\n'.join([
+                '1 0 ?? /Applications/Ghostty.app/Contents/MacOS/ghostty',
+                '10 1 ttys001 agy --dangerously-skip-permissions',
+            ])
+            brain = app_dir / 'brain'
+            def run(command, deadline, counters):
+                counters['commands'] += 1
+                if command[0] == '/bin/ps':
+                    return graph
+                if '-d' in command:
+                    return 'p10\nn/tmp/demo\n'
+                return f'p10\nn{brain / S1 / ".system_generated"}\n'
+
+            with mock.patch.object(watch, 'run_bounded', side_effect=run), \
+                 mock.patch.object(gs, '_proc_start', return_value=1000.0), \
+                 mock.patch.object(gs, 'AGY_APP_DATA_DIR_OVERRIDE', str(app_dir)), \
+                 mock.patch('ghostty_windows.capture_window_structure', return_value={'captured': False}):
+                resolved = watch.observe_resolved()
+                self.assertEqual(resolved['unresolved'], [])
+                self.assertEqual([(s['tool'], s['sid'], s['anchor']) for s in resolved['sessions']],
+                                 [('agy', S1, 'lsof-brain')])
+
+                result = watch.cycle(state)
+                self.assertEqual(result['state'], 'changed')
+                snap = json.loads((state / 'snapshots' / 'latest.json').read_text())
+                self.assertEqual(len(snap['sessions']), 1)
+                self.assertEqual(snap['sessions'][0]['tool'], 'agy')
+                self.assertEqual(snap['sessions'][0]['sid'], S1)
+                self.assertIn(f'--conversation={S1}', snap['sessions'][0]['restore_command'])
+
+    def test_observe_and_canonical_support_agy_across_scopes(self):
+        graph = '\n'.join([
+            '1 0 ?? /Applications/Ghostty.app/Contents/MacOS/ghostty',
+            f'10 1 ttys001 agy --dangerously-skip-permissions --conversation={S1}',
+            '11 1 ttys002 agy --dangerously-skip-permissions',
+            '12 1 ttys003 agy mcp list',
+            f'30 0 ?? /Applications/UURemote.app/Contents/Helpers/tmux/uuyc-mux -S /tmp/tmux.sock',
+            f'31 30 ttys004 agy --dangerously-skip-permissions --conversation={S2}',
+        ])
+        def run(command, deadline, counters):
+            counters['commands'] += 1
+            return graph if command[0] == '/bin/ps' else ''.join(
+                'p' + pid + '\nn/tmp/demo\n' for pid in command[3].split(','))
+
+        with mock.patch.object(watch, 'run_bounded', side_effect=run):
+            ghostty_only = watch.observe(scope='ghostty', include_terminals=True)
+            all_cli = watch.observe(scope='all-cli', include_terminals=True)
+
+        self.assertEqual([(r['tool'], r['sid']) for r in ghostty_only['sessions']], [('agy', S1)])
+        self.assertEqual([(r['tool'], r['pid']) for r in ghostty_only['unresolved']], [('agy', 11)])
+        self.assertEqual({r['sid'] for r in all_cli['sessions']}, {S1, S2})
+        uu_row = next(r for r in all_cli['sessions'] if r['sid'] == S2)
+        self.assertEqual(uu_row['terminal_owner'], 'non-ghostty')
+
+        canon = watch.canonical(all_cli['sessions'], {})
+        self.assertEqual([r['sid'] for r in canon], [S1, S2])
+        self.assertIn(f'--conversation={S1}', canon[0]['restore_command'])
+        self.assertIn(f'--conversation={S2}', canon[1]['restore_command'])
+
+
 if __name__ == '__main__':
     unittest.main()

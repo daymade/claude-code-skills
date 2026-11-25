@@ -157,6 +157,7 @@ class CliErrorReceiptTests(unittest.TestCase):
             code, output, errors = self.run_cli([
                 "--claude-home", str(self.root / "claude"),
                 "--codex-home", str(self.root / "codex"),
+                "--antigravity-home", str(self.root / "antigravity"),
                 "list", "--json",
             ])
         self.assertEqual((code, errors), (0, ""))

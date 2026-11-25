@@ -1,8 +1,8 @@
 ---
 name: ghostty-use
 description: >-
-  Snapshots local Codex/Claude CLI sessions across terminals and restores IDs in Ghostty
-  after reboot (保存会话/重启前备份/恢复窗口), audits survivors, and makes change-only
+  Snapshots local Codex/Claude/agy CLI sessions across terminals and restores IDs
+  in Ghostty after reboot (保存会话/重启前备份/恢复窗口), audits survivors, and makes change-only
   automatic backups (定期增量快照). Handles unmanaged Codex account switches
   (额度耗尽换号); Minions native_runtime uses Account Manager. Supports background
   /compact and targeted Ghostty terminal input (批量压缩 Ghostty 会话). Not --resume help,
@@ -11,8 +11,8 @@ description: >-
 
 # ghostty-use
 
-Capture identifiable local Claude Code and Codex CLI sessions before a reboot and
-reopen recorded IDs afterwards. Manual snapshots grade liveness; automatic backups
+Capture identifiable local Claude Code, Codex CLI, and Antigravity (`agy`) sessions before a
+reboot and reopen recorded IDs afterwards. Manual snapshots grade liveness; automatic backups
 store recovery metadata with explicit partial coverage and unknown liveness.
 
 ## Ghostty interaction channel
@@ -111,6 +111,11 @@ Ghostty, other terminal emulators and headless terminal processes. Use
 `--scope ghostty` only for an explicitly Ghostty-only request. Automatic
 backups remain Ghostty-only. A connection client such as ToDesk does not identify
 the terminal owner: inspect CLI processes, not the remote-access service.
+Remote-terminal containers such as NetEase UU Remote (`uuyc-mux` on
+`~/Library/Application Support/UURemote/tmux.sock`) are non-Ghostty hosts whose
+child sessions terminate when the remote host app exits; `--scope all-cli`
+records them with `terminal_owner: non-ghostty` while alive, whereas automatic
+Ghostty-only backups exclude them.
 Snapshots persist resumable AI `sessions`, `unresolved` TUIs and the observed
 `terminal_inventory`, including ordinary-terminal cwd/process evidence. Use the saved
 scope and unresolved rows to state coverage; Ghostty-only totals cannot establish
@@ -189,9 +194,9 @@ Past membership proves only that a session appeared in that snapshot. Indexed
 terminal candidates prove terminal origin, not that the tab was live at shutdown.
 Review timestamps/titles and select the intended set before restore. `--limit` is a
 hard cap on indexed candidates inspected; widen discovery bounds only when needed.
-No snapshot means Claude membership remains unknown;
-reconstruction does not discover Claude sessions. Preserve explicit Claude records
-from a known snapshot rather than claiming an exhaustive recovery.
+No snapshot means Claude and `agy` membership remain unknown;
+reconstruction does not discover Claude or `agy` sessions. Preserve explicit
+Claude/`agy` records from a known snapshot rather than claiming an exhaustive recovery.
 
 The new manifest never changes `snapshots/latest.json` and refuses to overwrite an
 existing output. Exit 0 means the selected evidence was verified; exit 1 means the
@@ -210,8 +215,14 @@ or unavailable evidence. Dry-run output is JSON for inspection.
   of the same cwd, internal identity verified. When several
   fresh TUIs share one bucket, transcripts are assigned disjointly — one file
   per TUI; an undecidable race (equidistant claims) refuses to the unresolved
-  section rather than guessing. Live TUIs matching neither way are persisted as
-  unresolved rows and printed in the snapshot report — visible, never silently dropped.
+  section rather than guessing. For Antigravity (`agy`), argv selectors
+  (`--conversation`, `-r`, `--resume`) anchor directly; UUID-less `agy` TUIs are
+  anchored (`lsof-brain`) via open `~/.gemini/antigravity-cli/brain/<UUID>`
+  handles filtered to top-level conversations (`nesting_depth == 0`) in read-only
+  `conversation_summaries.db`, failing closed to unresolved when the index is
+  unavailable or multiple/colliding parent handles appear. Live TUIs matching
+  neither way are persisted as unresolved rows and printed in the snapshot
+  report — visible, never silently dropped.
 - **Liveness**: last timestamp read from the *content* of the session file — not
   its mtime, which can change without real interaction. Use the time-window recipe
   above to qualify actual work rather than treating every record as interaction.
@@ -286,7 +297,7 @@ user-local data outside the skill bundle; no default mapping ships.
 | `check` says present but tab looks empty | another live process already claimed that session id (e.g. resumed in another tab) |
 | osascript refuses keystrokes | grant Accessibility (System Events) permission; verify with `osascript -e 'tell application "System Events" to get UI elements enabled'` |
 | a brand-new tab is missing from the session list | a fresh TUI has no argv UUID and its transcript file appears with its first message; until then it shows under unresolved live TUIs. A late first message can fall outside the upper window defined by `FIRST_WRITE_WINDOW_SECONDS` and the candidate filters in [the resolver](scripts/ghostty_session.py) |
-| an obviously active session still shows as unresolved | replay the resolver against the real inputs instead of guessing: `python3 -I` + importlib to load `scripts/ghostty_session.py`, then call `_claude_candidates(cwd, process_start_epoch)` (or `_codex_candidates`). Empty candidates point at the filter layer — birth window, or `_head_cwd` identity verification failing closed on its shared `MAX_IDENTITY_HEAD_BYTES` head budget or a foreign sessionId — not at multi-TUI assignment. `_head_cwd(path, expected_sid=sid)` returning None while `_head_cwd(path)` returns a cwd isolates expected-identity/bounded-head verification; inspect the head to distinguish budget overflow from a foreign, missing, or invalid sessionId |
+| an obviously active session still shows as unresolved | replay the resolver against the real inputs instead of guessing: `python3 -I` + importlib to load `scripts/ghostty_session.py`, then call `_claude_candidates(cwd, process_start_epoch)` (or `_codex_candidates`), or `_assign_agy_sessions` for `agy` (inspect open `brain/<UUID>` handles via `lsof` and `conversation_summaries.db` read-only indexing). Empty candidates for Claude/Codex point at the filter layer — birth window, or `_head_cwd` identity verification failing closed on its shared `MAX_IDENTITY_HEAD_BYTES` head budget or a foreign sessionId — not at multi-TUI assignment. `_head_cwd(path, expected_sid=sid)` returning None while `_head_cwd(path)` returns a cwd isolates expected-identity/bounded-head verification; inspect the head to distinguish budget overflow from a foreign, missing, or invalid sessionId |
 | a long-open TUI stays unresolved with no transcript of its own | nothing born in its start window means no fresh-TUI anchor: either the tab was never used, or it resumed an older session inside the TUI whose rollout predates the process start (outside the fresh-TUI window by design). Both are correct unresolved behavior — establish which before treating it as a defect |
 
 ## One-shot helper terminals and original sessions

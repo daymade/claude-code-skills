@@ -79,10 +79,10 @@ CATEGORY_RULES: list[tuple[str, str, tuple[str, ...]]] = [
     ),
     (
         "agent-skill-ops",
-        "Claude Code/Codex/Kimi Agent 编排、Skill/Hook/MCP、对话历史、复盘、交接、模型管理",
-        ("claude", "codex", "kimi", "agent", "skill", "skills", "hook", "hooks", "mcp", "harness",
+        "Claude Code/Codex/Antigravity/Kimi Agent 编排、Skill/Hook/MCP、对话历史、复盘、交接、模型管理",
+        ("claude", "codex", "antigravity", "kimi", "agent", "skill", "skills", "hook", "hooks", "mcp", "harness",
          "gru", "dstack", "loopx", "prompt", "llm", "context", "history", "retrospective",
-         "onboarding", "handover", "chatgpt", "openclaw", "workbuddy", "peer-message"),
+         "onboarding", "handover", "chatgpt", "openclaw", "workbuddy", "agent-message", "peer-message"),
     ),
     (
         "dev-code-git",

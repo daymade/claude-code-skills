@@ -31,7 +31,7 @@ from typing import Any, Optional
 # The shared core is bundled into this skill's scripts/_core/ by sync_core.py
 # (see _core/homes.py for why we bundle rather than import a sibling skill).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _core.codex import collect_codex  # noqa: E402
+from _core.codex import collect_codex, iter_codex_rollout_files  # noqa: E402
 from _core.parse import format_timestamp  # noqa: E402
 from _core.text import extract_text, is_noise_text, iter_jsonl  # noqa: E402
 
@@ -229,7 +229,7 @@ def _rollout_candidates(session_id: str, indexed_path: str = "") -> list[Path]:
     for dirname in ("sessions", "archived_sessions"):
         root = CODEX_HOME / dirname
         if root.is_dir():
-            candidates.extend(root.rglob(f"rollout-*{session_id}*.jsonl"))
+            candidates.extend(iter_codex_rollout_files(root, f"rollout-*{session_id}*.jsonl"))
 
     verified: list[Path] = []
     seen: set[str] = set()
@@ -2326,7 +2326,7 @@ def _make_exact_rollout_resolver(
         for dirname in ("sessions", "archived_sessions"):
             root = CODEX_HOME / dirname
             if root.is_dir():
-                physical.extend(p for p in root.rglob(f"rollout-*{session_id}.jsonl")
+                physical.extend(p for p in iter_codex_rollout_files(root, f"rollout-*{session_id}.jsonl")
                                 if _rollout_ids(p) and _rollout_ids(p)[1] == session_id.lower())
         if physical:
             unique = {_resolved_path_key(p): p for p in physical}

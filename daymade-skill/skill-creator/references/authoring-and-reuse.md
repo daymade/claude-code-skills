@@ -652,7 +652,7 @@ Executable code (Python/Bash/etc.) for tasks that require deterministic reliabil
 - **Example**: `scripts/rotate_pdf.py` for PDF rotation tasks
 - **Benefits**: Token efficient, deterministic, may be executed without loading into context
 - **Note**: Scripts may still need to be read by Claude for patching or environment-specific adjustments
-- **User-mutable data lives outside the bundle**: if a script accumulates user data (correction dictionaries, learned preferences, caches), store it under a stable home-relative directory (e.g. `~/.<skill-name>/`) with its own backup — never inside the skill directory. Skill installs are wiped and re-created on every update and suite migration; a home-relative store survives them untouched. This is how a dictionary-accumulating skill survived a full suite migration with zero user data loss
+- **User-mutable data lives outside the bundle**: if a script accumulates user data (correction dictionaries, learned preferences, caches, or recurring domain/project profiles), store it under a stable home-relative directory (e.g. `~/.config/<skill-name>/` or `~/.<skill-name>/`) with its own backup — never inside the skill directory. Skill installs are wiped and re-created on every update and suite migration; a home-relative store survives them untouched. This is how a dictionary-accumulating skill survived a full suite migration with zero user data loss. For reusable methodology Skills that need user/project context slots persisted across sessions, follow [context inversion and persistent local state](context-inversion-and-state.md)
 
 ##### References (`references/`)
 
@@ -776,6 +776,7 @@ Analyze each example by:
 2. Determining the appropriate level of freedom for Claude
 3. Identifying what scripts, references, and assets would be helpful when executing these workflows repeatedly
 4. Deciding how a user will inspect the result: a concise reply, an existing domain artifact or viewer, or a conditional handoff to `report-with-html` when a visual report would clarify evidence, comparisons, or decisions. For recurring customer reports, plan a first real report and a **post-review template decision**; the approved form lives in user-local data outside the Skill package, never in its `assets/` or an update-owned cache.
+5. Separating self-contained methodology from volatile domain, brand, compliance, or workspace facts: when the Skill must work across projects or clients without hardcoding private repositories or repeating onboarding every session, plan explicit blocking vs. optional context slots and a user-local profile store outside the bundle using [context inversion and persistent local state](context-inversion-and-state.md).
 
 **Match specificity to task risk:**
 - **High freedom (text instructions)**: Multiple valid approaches exist

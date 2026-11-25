@@ -5,8 +5,9 @@
 Use the shared [inventory and liveness implementation](../scripts/ghostty_session.py)
 for storage lookup, filename/cwd encoding, process-to-artifact assignment, metadata
 bounds and classification settings. Its `list_sessions`, `_assign_transcripts`,
-`_claude_candidates` and `_codex_candidates` define the current identity checks;
-`claude_liveness`, `codex_liveness` and `classify` define the emitted grades.
+`_assign_agy_sessions`, `_claude_candidates` and `_codex_candidates` define the current
+identity checks; `claude_liveness`, `codex_liveness`, `agy_liveness` and `classify`
+define the emitted grades.
 Do not maintain another filename pattern, timing tolerance or status catalogue here.
 
 When inspecting original history, load the installed `read-claude-code-history`
@@ -77,6 +78,11 @@ candidate.
 4. For Claude rows already named in the snapshot, load `read-claude-code-history`
    and read those exact IDs. The Codex inventory above cannot establish Claude
    continuation coverage. Keep absent/unexamined Claude membership explicitly unknown.
+   For Antigravity (`agy`) candidates — including sessions whose SQLite
+   `last_modified_time` lagged after resume or abrupt termination — load
+   `read-claude-code-history` and follow its `Antigravity (agy)` section
+   (`SKILL.md#antigravity-agy`, including `--list --sort activity`) rather than
+   sweeping raw transcripts or relying on DB timestamps alone.
 5. Qualify activity by original event timestamps inside the window: user or agent
    messages, reasoning, and tool calls/results can establish activity. File mtime,
    index update time, metadata-only records and token/heartbeat events cannot.
