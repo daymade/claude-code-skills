@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **transcript-fixer** (`daymade-audio` v1.65.7 → v1.65.8): Add adjacent-turn Q&A echo near-homophone drift detection (with a synthetic replay control) so intelligible everyday words that answer off-topic in a confirmation slot are flagged and enqueued for verification instead of skipped by the intelligible-real-words guard; add playback-page recording retrieval routing and screen-shared single-frame visual verification to rung 7 (`One recording, two engines`).
 - **github-ops** (`github-ops` v1.20.4 → v1.20.5): Link `references/ci-demand-and-notifications.md` to `workflow_operations.md#pre-merge-local-ci-equivalence-for-zero-step-budget-blocks` and synchronize repository `CLAUDE.md` routing for zero-step budget blocks and shared-checkout recovery.
 - **github-ops** (`github-ops` v1.20.3 → v1.20.4): Add a pre-merge local CI equivalence rule for zero-step spending-limit/budget blocks: enumerate every path-matched `.github/workflows/*.yml` at the exact PR head and run local equivalence before any authorized bypass merge rather than backfilling afterward.
 - **git-safety-net** (`git-safety-net` v1.30.6 → v1.30.7): Require working-tree and index blob-hash classification against `origin/main`, recent ancestors, and other branches/open PRs before halting shared-checkout synchronization as "collaborator WIP", distinguishing disjoint dirty paths and already-committed-elsewhere deltas from truly uncommitted overlapping edits.
