@@ -1658,5 +1658,56 @@ class TruncationContractTests(unittest.TestCase):
         self.assertIn("状态 3", expanded)
 
 
+class ColdArchiveRolloutResolutionTests(unittest.TestCase):
+    def test_rollout_candidates_follow_registered_cold_archive_and_block_escape(self):
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td).resolve()
+            fake_home = base / "home"
+            codex_home = fake_home / ".codex"
+            cold_root = base / "cold-archive" / "codex-sessions"
+            outside_root = base / "outside-unregistered"
+            sid_cold = "019a3333-2222-7333-8444-555555555555"
+            sid_out = "019a4444-2222-7333-8444-555555555555"
+
+            cold_file = cold_root / "2026" / "10" / "12" / f"rollout-2026-10-12T08-00-00-{sid_cold}.jsonl"
+            cold_file.parent.mkdir(parents=True)
+            cold_file.write_text(
+                json.dumps({"type": "session_meta", "payload": {"id": sid_cold, "timestamp": "2026-10-12T08:00:00Z"}})
+                + "\n",
+                encoding="utf-8",
+            )
+            out_file = outside_root / "2026" / "08" / "12" / f"rollout-2026-08-12T08-00-00-{sid_out}.jsonl"
+            out_file.parent.mkdir(parents=True)
+            out_file.write_text(
+                json.dumps({"type": "session_meta", "payload": {"id": sid_out, "timestamp": "2026-08-12T08:00:00Z"}})
+                + "\n",
+                encoding="utf-8",
+            )
+
+            (codex_home / "sessions" / "2026").mkdir(parents=True)
+            (codex_home / "sessions" / "2026" / "10").symlink_to(cold_root / "2026" / "10")
+            (codex_home / "sessions" / "2026" / "08").symlink_to(outside_root / "2026" / "08")
+            (fake_home / ".claude").mkdir(parents=True)
+            (fake_home / ".claude" / "history-sources.json").write_text(
+                json.dumps({"version": 1, "sources": [], "cold_archive_roots": [str(cold_root)]}),
+                encoding="utf-8",
+            )
+
+            import os
+            from unittest import mock
+            orig_home = mod.CODEX_HOME
+            try:
+                mod.CODEX_HOME = codex_home
+                with mock.patch.dict(os.environ, {"HOME": str(fake_home)}, clear=False):
+                    hits_cold = mod._rollout_candidates(sid_cold)
+                    hits_out = mod._rollout_candidates(sid_out)
+            finally:
+                mod.CODEX_HOME = orig_home
+
+            self.assertEqual(len(hits_cold), 1)
+            self.assertEqual(hits_cold[0].resolve(), cold_file.resolve())
+            self.assertEqual(hits_out, [])
+
+
 if __name__ == "__main__":
     unittest.main()
