@@ -18,6 +18,8 @@ description: Transport-neutral addressing, Claude UDS and Codex live/queued deli
 | `claude:<session-id>` | Claude session UUID |
 | `codex:<thread-id>` | 优先精确匹配 Codex thread UUID；命中后直接使用该会话，含归档状态 |
 | `codex:<exact-name>` | Codex `threads.name` 的精确值；标题不是名字，不用标题猜目标 |
+| `antigravity:<uuid>` | 精确匹配 Antigravity（`agy`）顶层会话 UUID；`list`/`whoami`/回执统一使用该规范形式 |
+| `agy:<uuid>` | `antigravity:<uuid>` 的 CLI 输入别名，入口即归一为 `antigravity:<uuid>` |
 
 旧命令里未带前缀的 target 继续解释为 Claude，避免恢复版破坏既有调用。
 
@@ -37,6 +39,7 @@ description: Transport-neutral addressing, Claude UDS and Codex live/queued deli
 | `claude:<pid>` / `claude:<session-uuid>` | **不认** | 认 |
 | `claude-session:<uuid>` / `claude-pid:<pid>` | **不认** | 认；按对应身份字段解析 |
 | `codex:<thread-id>` / `codex:<exact-name>` | **不认**（官方 Claude 工具到不了 Codex） | 认 |
+| `antigravity:<uuid>` / `agy:<uuid>` | **不认**（官方 Claude 工具到不了 Antigravity） | 认（归一为 `antigravity:<uuid>`） |
 
 **回信**：先按上表核对目标通道是否支持信封的 `from`。发往 Claude 的包装与归一化见本文件 §2；
 Codex 目标按 §3 发送。不要把任一种地址当成所有宿主原生工具都能解析的形式。
@@ -194,6 +197,31 @@ this warning as text; the receiving agent's governing instructions must enforce 
 advisory，接收侧的 system/developer/AGENTS/Skill 规则才是权限边界。
 `from`/`reply-to` 与 tool namespace 同样不构成身份认证。
 
+## 3.5 Antigravity 发现、投递与可选 Hook 收件箱
+
+Antigravity（`agy`）跨宿主发现直接以只读方式读取 `${ANTIGRAVITY_APP_DATA_DIR:-~/.gemini/antigravity-cli}`（CLI 支持 `--antigravity-home`），不依赖 `ANTIGRAVITY_LS_ADDRESS`，因此从 Claude Code、Codex 与 Antigravity 均可一致列举：
+
+1. `conversation_summaries.db`（SQLite `mode=ro`）：筛选顶层、未终止会话（`nesting_depth = 0`、`parent_conversation_id = ''`、`killed = 0`），按 `last_modified_time DESC` 排序，并提取 `workspace_uris[0]` 作为 `cwd`。
+2. `annotations/<uuid>.pbtxt`：排除 `archived: true` 的已归档会话；用户编辑过的 `title` 优先于摘要库标题。
+3. `presence/<uuid>.lock`：**文件存在不代表存活**（退出/删除后常遗留解锁文件）。脚本以 `O_RDONLY` 打开并对每个已索引会话执行非阻塞 `fcntl.flock(fd, LOCK_SH | LOCK_NB)` 探测：`BlockingIOError` 表示有活跃 `agy` 进程正持有 `LOCK_EX`。
+
+由此区分三态与投递模式（`--antigravity-delivery {auto,resume,queued}`）：
+
+- `idle`（未加锁且库状态为 `CASCADE_RUN_STATUS_IDLE` 且 `not_fully_idle = 0`）：`auto` 与 `resume` 通过文档化命令 `agy --conversation <uuid> --disable-slash-commands --output-format json --print-timeout <N>s [--model <last_model>] -p <envelope>` 同步续接；从 `transcript.jsonl` 尾部读取最后一条 `PLANNER_RESPONSE.model` 以保留目标模型；子进程环境剥离调用方的会话级 `ANTIGRAVITY_*` 变量并保留 `ANTIGRAVITY_APP_DATA_DIR`；永不传 `--dangerously-skip-permissions`。
+- `attached_tui`（持 `LOCK_EX` 的活跃 TUI）或 `running`（回合执行中）：**严禁并发 `agy -p`**（实测 `agy -p` 会忽略 `presence/<uuid>.lock` 启动竞争 LS 并覆盖 `.pb` 导致消息或活 TUI 状态丢失）。`resume` 模式下显式 fail-closed（`EXIT_TRANSPORT`, `outcome=not_sent`, `reason_code=target_attached_tui|target_busy`）；`auto`（默认）与 `queued` 将同一 `<peer-message>` 信封原子追加至本机持久收件箱 `<state-dir>/antigravity-inbox/<uuid>.jsonl`（配合 `.cursor` 与 `flock(LOCK_EX)` 锁文件）。
+
+投递结果语义：缺少 `agy` 可执行文件（`FileNotFoundError` 且 `errno == ENOENT`）记 `not_sent`；`agy -p` 启动后的超时、非零退出、畸形 JSON 或 `status != "SUCCESS"` 一律记 `unknown`，不自动重试，先用 `peer.py verify` 核对目标 transcript。
+
+### 活跃 Antigravity TUI 的收件消费
+
+队列消息在目标活跃 TUI 中有两种消费方式（均不触发竞争 LS，零 `.pb` 损坏风险）：
+
+- **按需 CLI 读取**：在目标会话内运行 `python3 "$PEER_SKILL_ROOT/scripts/peer.py" inbox [--all] [--ack] [--json]`（默认只读，不推进游标；`--ack` 原子标记已消费）。
+- **可选生命周期 Hook（需用户显式授权安装）**：运行 `python3 "$PEER_SKILL_ROOT/scripts/install_antigravity_hook.py" --install`（先用 `--status` 查看，`--uninstall` 可撤回；写入前自动备份并完整保留 `~/.gemini/config/hooks.json` 中其他顶层键）。它注册 `scripts/antigravity_inbox_hook.py` 至 `SessionStart`、`PreInvocation` 与 `Stop` 扁平数组：
+  - `SessionStart` / `PreInvocation`：若收件箱无未读项则 `<1ms` 返回 `{}`；有未读项时先加锁原子推进 `.cursor`，再经 `{"injectSteps":[{"systemMessage":{"systemMessage":"<envelope>"}}],"terminationBehavior":""}` 注入同一活 LS 轨迹。
+  - `Stop`：仅当 `terminationReason == "NO_TOOL_CALL"` 且 `continuationActive` 为假时原子排空并返回 `{"decision":"continue","reason":"..."}`；拒绝在 `USER_CANCELED`、`ERROR` 或 `continuationActive=true` 时排空，防止死循环或吞掉未读消息。
+  - 边界诚实声明：Hook 是回合驱动的；活跃回合内会自动在下一 `PreInvocation`/`Stop` 注入，处于用户输入等待态的空闲 TUI 则在下一次用户提交回合时自动注入，或随时经 `peer.py inbox` / `peer.py replies` 读取。
+
 ## 4. 独立送达读回与 receipt
 
 同一个 message ID 贯穿发送帧与 wrapper。验证顺序：
@@ -224,6 +252,13 @@ queue 项可能很快被消费，所以只查 queue 会产生假阴性；必须�
 
 `peer.py verify` 的 Codex 路由在 queue 命中时即返回，否则检查 thread history；它不检查完整 rollout 或后续 assistant 回应。要回答本机「对方读到了吗」，按 `coordination-and-learning-loop.md` §3 通过历史 Skill 补查精确目标 transcript。调用方的语义核对不改变 CLI 的 `delivery_status`，也不要求对方再发一条 ACK。
 
+### Antigravity
+
+按证据强度依次检查：
+
+1. `<antigravity-home>/brain/<uuid>/.system_generated/logs/transcript.jsonl`（若记录的 `truncated_fields` 含 `"content"`，自动按 `step_index` 回退读取同目录 `transcript_full.jsonl`）：命中 `source='USER_EXPLICIT', type='USER_INPUT'`（由 `agy -p` 写入，外层带 `<USER_REQUEST>`）或 `source IN ('SYSTEM', 'SYSTEM_SDK'), type='SYSTEM_MESSAGE'`（由 `PreInvocation`/`SessionStart`/`Stop` Hook 注入或原生系统消息写入）且含精确 `<peer-message message-id="...">` → 返回 `delivery_status=verified_in_transcript`。
+2. 否则检查 `<state-dir>/antigravity-inbox/<uuid>.jsonl`：命中则返回 `delivery_status=verified_queued` 并附 `drained` 布尔值，诚实区分「仍在队列等待」与「已被 Hook 排空、等待 transcript 落盘」。
+
 ### 一次性关联回复查询
 
 按上文的已加载 Skill 定位方式设置 `PEER_SKILL_DIR`，运行当前 help 确认参数，
@@ -243,6 +278,7 @@ python3 "$PEER_SKILL_DIR/scripts/peer.py" replies \
 - Codex `queued_items.payload_json.UserInput.content[].text` 中的完整 `peer-message`。
 - Codex `item_type='userMessage'` 的 `thread_items.item_json.content[].text` 中的完整 `peer-message`。
 - Codex `item_type='functionCallOutput'`、namespace=peer_message、name=delivery 的字符串 output 中的完整 `peer-message`。
+- Antigravity `<state-dir>/antigravity-inbox/<uuid>.jsonl` 中的完整 `peer-message`（证据等级 1），以及 `transcript.jsonl`（含 `transcript_full.jsonl` 回退）中 `USER_INPUT`（剥离单层 `<USER_REQUEST>`）与 `SYSTEM_MESSAGE` 内的完整 `peer-message`（证据等级 2，同 ID 去重保留更强 transcript 证据、正文冲突显式报错）。
 
 Codex 先用 original ID 缩小 named thread 的候选行，再解析命中候选；不含该 ID 的普通文本、图片等 unrelated user message 不进入 payload parser。候选 JSON 或 schema 损坏仍显式报错，不能变成普通未命中。
 

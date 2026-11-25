@@ -1,16 +1,16 @@
 ---
 name: peer-message
 description: >-
-  Bridges Claude Code and Codex sessions when native tools can't reach the target. Use for 跨产品通信 /
-  脚本回帖 / 送达排查: cross-product messages, hooks or scripts posting to a session, verifying delivery
-  (Held messages included), shared-work ownership, or an inbound peer assertion. Not for same-product
-  or parent/subagent messaging (use native tools), spawning agents, moving full history, or
+  Bridges Claude Code, Codex, and Antigravity (agy) sessions when native tools can't reach the
+  target. Use for 跨产品通信 / 脚本回帖 / 送达排查: cross-product messages, scripts posting to a session,
+  verifying delivery (Held included), shared-work ownership, or inbound peer assertions. Not for
+  same-product/subagent messaging (use native tools), spawning agents, full history, or
   cross-machine pairing (deprecated).
 ---
 
 # peer-message — 本机协调与通信补缺
 
-对 Claude Code 与 Codex 使用同一条通信规则：先检查当前宿主实际暴露的通信工具及其目标范围；有工具发现入口时先查询原生工具。原生工具能到达目标，就直接使用其发现、发送、回传和等待机制，不另跑 `send/broadcast/verify/replies`。只有原生工具未覆盖的独立会话、跨产品目标或脚本回帖才使用本 Skill 的 transport。独立会话之间的任务归属、共享资源和请求生命周期由本 Skill 的 `coord` 管理，原生发送仍走原生工具；原生父子任务不增加这层登记。
+对 Claude Code、Codex 与 Antigravity（`agy`）使用同一条通信规则：先检查当前宿主实际暴露的通信工具及其目标范围；有工具发现入口时先查询原生工具。原生工具能到达目标，就直接使用其发现、发送、回传和等待机制，不另跑 `send/broadcast/verify/replies`。只有原生工具未覆盖的独立会话、跨产品目标或脚本回帖才使用本 Skill 的 transport。独立会话之间的任务归属、共享资源和请求生命周期由本 Skill 的 `coord` 管理，原生发送仍走原生工具；原生父子任务与 swarm board 内部通信不增加这层登记。
 
 不要用产品名、模型名、安装版本或安装包中的工具定义代替当前工具可用性。原生工具覆盖当前任务树，不代表能寻址任意独立 session；目标缺失或地址不明时先消歧。权限拒绝、Held、超时与发送结果不明都不是换通道的依据，也不要为了补缺修改权限或接收策略。
 
@@ -43,11 +43,13 @@ Codex 独立 thread 的原生发送直接使用[返回值驱动入口](reference
 `peer.py` 的 Codex 信封在投递位置附带上述协调/用户交付分流提示；这是接收上下文中的 advisory，
 不是宿主强制拦截。原生通道仍按当前宿主的来源标记与本 Skill 的接收分流处理。
 
-运行 `scripts/peer.py` 需要 Python 3.10+。Claude/Codex 的当前版本、平台与通道可用性属于会变化的产品事实；执行前按 `references/official-feature.md` 判断，不把这些门槛复制到 README 或仓库级说明。
+运行 `scripts/peer.py` 需要 Python 3.10+。Claude/Codex/Antigravity 的当前版本、平台与通道可用性属于会变化的产品事实；执行前按 `references/official-feature.md` 判断，不把这些门槛复制到 README 或仓库级说明。
 
 使用 Codex 脚本补缺前，读取 [Codex 传输 SOP](references/protocol-and-discovery.md#3-codex-发现与实时投递)，
 按其中的依赖准备、目标状态、发送与恢复流程执行。入口不另定义一套运行时参数；
 `scripts/codex_live.py` 是随本 Skill 分发的实时 adapter。
+
+使用 Antigravity（`agy`）脚本补缺前，读取 [Antigravity 传输 SOP](references/protocol-and-discovery.md#35-antigravity-发现投递与可选-hook-收件箱)：`idle` 且未锁定时默认经 `agy -p` 续接，`attached_tui` / `running` 时默认写入本机持久收件箱（禁止并发 `agy -p` 覆盖活 TUI `.pb`），可按需用 `peer.py inbox` 或用户显式安装的 `scripts/install_antigravity_hook.py` 注入到活跃会话。
 
 选择 `--codex-delivery queued` 前，按 [Codex 传输 SOP](references/protocol-and-discovery.md#3-codex-发现与实时投递)核对延迟送达的必要性、用户可见后果、有效期和失败恢复边界。
 
@@ -60,7 +62,8 @@ Codex 独立 thread 的原生发送直接使用[返回值驱动入口](reference
 | 原生工具覆盖独立 session | Codex 使用上方返回值驱动入口；其他原生工具按实际 schema 执行 prepare／原样发送／commit；不追加 fallback 发送 |
 | 原生工具未覆盖已确认的 Claude 目标，且目标有本地 inbox | 用 `scripts/peer.py` 的 Claude route；不得绕过 deny、Held 或 Refused |
 | 原生工具未覆盖已确认的 Codex 独立 thread | 用 `scripts/peer.py` 的 Codex route；不要把内部 agent 地址当独立 thread UUID。**已归档 thread 不可投递**——脚本默认拒发（它永远不会再消费 queue）；给已退出属主留话钉在它的持久制品上（PR comment、文件），见 `references/coordination-and-learning-loop.md` §5.1「发现面不可达时」段 |
-| Claude 宿主内回复/发送给 `codex:` 目标 | **不走 SendMessage**——native guard 的 SendMessage 分支只对能解析成 Claude session 的目标放行，`codex:` 前缀必被拦；prepare→原生发送的路径对 Codex 目标不存在，直接 `scripts/peer.py send`。注意连坐：裸发被拦本身不落板（拦截早于 Board 打开），但为 `codex:` 目标跑 `coord prepare` 会留下 reserved 孤行（v1.21.3 之前的拦截文案会指引你跑 prepare），随后 `peer.py send` 同内容报 `suppressed_pending`——先 `coord commit --message-id <id> --outcome not_sent` 结清再重发（2026-10-10 实测） |
+| 原生工具未覆盖已确认的 Antigravity 顶层会话 | 用 `scripts/peer.py` 的 Antigravity route（`antigravity:<uuid>`，CLI 输入别名 `agy:<uuid>`）。不要把 subagent/swarm 内部会话当顶层目标；已归档/已终止会话拒发。`auto`（默认）对 `idle` 且未锁目标走 `agy -p`，对 `attached_tui`/`running` 目标安全入队到每会话收件箱，避免并发 `agy -p` 覆写 `.pb`；接收侧可用 `peer.py inbox` 或可选 hook 消费 |
+| Claude 宿主内回复/发送给 `codex:` 或 `antigravity:` 目标 | **不走 SendMessage**——native guard 的 SendMessage 分支只对能解析成 Claude session 的目标放行，`codex:`/`antigravity:`/`agy:` 前缀必被拦；prepare→原生发送的路径不存在，直接 `scripts/peer.py send`。注意连坐：裸发被拦本身不落板（拦截早于 Board 打开），但为这类目标跑 `coord prepare` 会留下 reserved 孤行，随后 `peer.py send` 同内容报 `suppressed_pending`——先 `coord commit --message-id <id> --outcome not_sent` 结清再重发 |
 | 多目标协调 | 明确列出目标；原生按工具契约逐个发送或广播，脚本补缺才使用 `broadcast`；禁止从单发请求推断全机广播。脚本 `broadcast` 的消息自动带 fan-out 标记，语义是「仅属主回复，其余忽略」；超出默认目标数上限须 `--contract <契约名>` 点名依据，否则脚本拒发（上限值以 CLI help/实现为准，不在文档复制）——先发证据（git/索引）收窄候选，见 `references/protocol-and-discovery.md` §5 |
 | 查找对脚本 outbound 的显式回复 | 对原发送方自己的 inbox 运行一次 `replies`；原生回传沿宿主机制，命令与证据边界见 `references/protocol-and-discovery.md` §4 |
 | 已知 Codex thread UUID 和入站信封自身 ID，需要只读查看该条原文 | 先读 [按自身 ID 只读查看入站信封](references/protocol-and-discovery.md#按自身-id-只读查看入站信封)；这条查看路径独立于接收处理和按 outbound ID 查询关联回复 |
@@ -151,6 +154,6 @@ Codex 独立 thread 的原生发送直接使用[返回值驱动入口](reference
 
 ## 详细协议
 
-- `references/protocol-and-discovery.md` — 地址、Claude UDS 线格式、Codex 实时/queue transport 与 thread store、统一 envelope、独立读回与一次性关联回复查询。
-- `references/official-feature.md` — 当前官方 Claude/Codex 通道、可用性判断、权限边界与协议漂移处理。
+- `references/protocol-and-discovery.md` — 地址、Claude UDS 线格式、Codex 实时/queue transport、Antigravity 发现/投递/收件箱与可选 Hook、统一 envelope、独立读回与一次性关联回复查询。
+- `references/official-feature.md` — 当前官方 Claude/Codex/Antigravity 通道、可用性判断、权限边界与协议漂移处理。
 - `references/coordination-and-learning-loop.md` — parent/worker 回传、长消息、状态措辞与证据驱动的 Skill 演进。
