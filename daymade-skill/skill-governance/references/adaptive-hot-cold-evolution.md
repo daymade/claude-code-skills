@@ -50,10 +50,11 @@ python3 <skill-governance>/scripts/evolve_skill_surface.py rollback --backup ~/.
 python3 <skill-governance>/scripts/evolve_skill_surface.py install-schedule --interval-minutes 30 --throttle-seconds 60
 ```
 
-In the default watched proposal mode, telemetry updates regenerate the report
-using the last successful ledger refresh within the configured interval. A
-missing or changed database triggers a refresh. If telemetry changes while the
-report is being built, the runner can regenerate it once using the same ledger.
+In the default proposal mode, the periodic LaunchAgent refreshes the ledger
+and regenerates the report. Its companion `-telemetry` LaunchAgent regenerates
+the report after a telemetry update and reuses the last successful ledger
+unless the database is missing or changed. Both share a lock. The runner can
+regenerate the report once if telemetry changes during proposal generation.
 
 ## Safety Invariants
 

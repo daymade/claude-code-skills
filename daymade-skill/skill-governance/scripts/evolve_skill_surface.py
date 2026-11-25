@@ -1380,7 +1380,7 @@ def render_evolution_runner(
     python_bin: str,
     data_dir: Path,
     ledger_db: Path,
-    refresh_interval: int,
+    watch_enabled: bool,
     auto_apply: bool,
     hosts: str,
 ) -> str:
@@ -1407,7 +1407,7 @@ PYTHON = {python_bin!r}
 LEDGER_CMD = [PYTHON, {str(ledger_script)!r}, "--db", str(LEDGER_DB), "index", "--json"]
 EVOLVE_CMD = [PYTHON, {str(script_path)!r}, "--ledger-db", str(LEDGER_DB), *{evolve_args!r}]
 MODE = {mode_str!r}
-REFRESH_INTERVAL = {refresh_interval!r}
+WATCH_ENABLED = {watch_enabled!r}
 
 def now_iso():
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -1435,27 +1435,30 @@ def ledger_identity():
     facts = LEDGER_DB.stat()
     return [facts.st_dev, facts.st_ino, facts.st_size, facts.st_mtime_ns, facts.st_ctime_ns]
 
-def ledger_is_fresh(now):
+def ledger_is_current():
     try:
         receipt = json.loads(LEDGER_RECEIPT.read_text(encoding="utf-8"))
-        return (0 <= now - receipt["started_at"] < REFRESH_INTERVAL
-                and receipt["database"] == ledger_identity()
+        return (receipt == ledger_identity()
                 and not LEDGER_DB.with_name(LEDGER_DB.name + "-wal").exists())
-    except (OSError, ValueError, TypeError, KeyError):
+    except (OSError, ValueError):
         return False
 
-def main():
+def main(telemetry_only=False):
     LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(LOCK_FILE, "a+", encoding="utf-8") as lfh:
         try:
-            fcntl.flock(lfh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            # A scheduled refresh must run even if a proposal already holds
+            # the lock. A busy refresh will itself read the latest telemetry.
+            flags = fcntl.LOCK_EX
+            if telemetry_only or not WATCH_ENABLED:
+                flags |= fcntl.LOCK_NB
+            fcntl.flock(lfh.fileno(), flags)
         except BlockingIOError:
             return 0
         t0 = time.monotonic()
-        started_at = time.time()
         ledger = "reused"
-        if not REFRESH_INTERVAL or not ledger_is_fresh(started_at):
-            if REFRESH_INTERVAL:
+        if not telemetry_only or not ledger_is_current():
+            if WATCH_ENABLED:
                 LEDGER_RECEIPT.unlink(missing_ok=True)
             r1 = subprocess.run(LEDGER_CMD, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             if r1.returncode != 0:
@@ -1463,9 +1466,8 @@ def main():
                 sys.stderr.write(r1.stderr)
                 return 1
             ledger = "refreshed"
-            if REFRESH_INTERVAL:
-                receipt = {{"started_at": started_at, "database": ledger_identity()}}
-                write_state(LEDGER_RECEIPT, json.dumps(receipt))
+            if WATCH_ENABLED:
+                write_state(LEDGER_RECEIPT, json.dumps(ledger_identity()))
         for pass_idx in (0, 1):
             before_mt = tel_mtime()
             r2 = subprocess.run(EVOLVE_CMD, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -1480,7 +1482,7 @@ def main():
     return 0
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(telemetry_only=WATCH_ENABLED and sys.argv[1:] == ["--telemetry"]))
 '''
 
 
@@ -1499,6 +1501,8 @@ def install_launchagent(
 
     python_bin = resolve_python311_plus()
     label = "ai.daymade.skill-governance-evolve"
+    watch_label = label + "-telemetry"
+    separate_watch = near_realtime and not auto_apply
     launch_dir = Path.home() / "Library" / "LaunchAgents"
     log_dir = Path.home() / "Library" / "Logs" / "skill-governance"
     reports_dir = DEFAULT_DATA_DIR / "reports"
@@ -1513,7 +1517,7 @@ def install_launchagent(
     runner_body = render_evolution_runner(
         script_path, ledger_script, python_bin=python_bin, data_dir=DEFAULT_DATA_DIR,
         ledger_db=ledger_db.expanduser().resolve(), auto_apply=auto_apply, hosts=hosts,
-        refresh_interval=interval_seconds if near_realtime and not auto_apply else 0,
+        watch_enabled=separate_watch,
     )
     atomic_write_text(runner, runner_body)
     os.chmod(runner, 0o755)
@@ -1533,23 +1537,40 @@ def install_launchagent(
         "StandardOutPath": str(log_dir / "evolve.out.log"),
         "StandardErrorPath": str(log_dir / "evolve.err.log"),
     }
-    if near_realtime:
+    if near_realtime and auto_apply:
         plist_data["WatchPaths"] = [str(telemetry_path)]
-    with open(plist_path, "wb") as fh:
-        plistlib.dump(plist_data, fh)
+    atomic_write_text(plist_path, plistlib.dumps(plist_data).decode("utf-8"))
+
+    watch_plist = launch_dir / f"{watch_label}.plist"
+    if separate_watch:
+        watch_data = {key: value for key, value in plist_data.items() if key != "StartInterval"}
+        watch_data.update(Label=watch_label, ProgramArguments=[python_bin, str(runner), "--telemetry"],
+                          RunAtLoad=False, WatchPaths=[str(telemetry_path)])
+        atomic_write_text(watch_plist, plistlib.dumps(watch_data).decode("utf-8"))
 
     uid = os.getuid()
+    subprocess.run(["launchctl", "bootout", f"gui/{uid}/{watch_label}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if not separate_watch:
+        watch_plist.unlink(missing_ok=True)
     subprocess.run(["launchctl", "bootout", f"gui/{uid}/{label}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     res = subprocess.run(["launchctl", "bootstrap", f"gui/{uid}", str(plist_path)], capture_output=True, text=True)
+    timer_loaded = res.returncode == 0
+    watch_loaded = False
+    if timer_loaded and separate_watch:
+        res = subprocess.run(["launchctl", "bootstrap", f"gui/{uid}", str(watch_plist)], capture_output=True, text=True)
+        watch_loaded = res.returncode == 0
     return {
         "status": "installed" if res.returncode == 0 else "written_not_loaded",
+        "timer_loaded": timer_loaded,
+        "watch_loaded": watch_loaded,
         "label": label,
         "plist": str(plist_path),
         "runner": str(runner),
         "python": python_bin,
         "ledger_script": str(ledger_script),
         "status_file": str(DEFAULT_DATA_DIR / ".evolve-status"),
-        "watch_paths": plist_data.get("WatchPaths", []),
+        "watch_paths": [str(telemetry_path)] if near_realtime else [],
+        "watch_label": watch_label if separate_watch else None,
         "interval_seconds": int(interval_seconds),
         "throttle_seconds": int(throttle_seconds),
         "mode": "auto_apply" if auto_apply else "propose_only",
@@ -1621,7 +1642,7 @@ def main(argv: list[str] | None = None) -> int:
             ledger_db=args.ledger_db,
         )
         print(json.dumps(res, ensure_ascii=False, indent=2))
-        return 0
+        return 0 if res["status"] == "installed" else 1
 
     installed, name_to_entry = discover_installed_skills(args.installed_root)
 
