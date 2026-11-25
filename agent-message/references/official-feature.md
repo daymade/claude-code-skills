@@ -1,11 +1,11 @@
 ---
-name: peer-message-official-feature
-description: Current Claude Code and Codex messaging surfaces, availability checks, permission boundaries, and fallback decisions.
+name: agent-message-official-feature
+description: Current Claude Code, Codex, and Antigravity (agy) messaging surfaces, availability checks, permission boundaries, and fallback decisions.
 ---
 
 # 当前官方通道与 fallback 决策
 
-## 0. 两个产品使用同一套选择流程
+## 0. 三个产品使用同一套选择流程
 
 先读当前宿主工具契约；有工具发现入口时先查询原生通信工具。使用能覆盖目标的原生发现、发送、回传与等待机制，不先执行 `peer.py list`、`whoami` 或 `verify`。独立会话发送的准备与前置检查按 [本地协调机制](local-coordination.md#原生跨会话通信)执行；这不改变 transport。只有已确认的目标不在原生能力范围内，才按 `SKILL.md` 进入脚本补缺。
 

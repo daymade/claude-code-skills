@@ -3,8 +3,8 @@
 set -uo pipefail
 trap 'rc=$?; case "$rc" in 0|2) ;; *) echo "BLOCKED (agent-message): native guard forwarder failed; no send authorized." >&2; exit 2;; esac' EXIT
 
-shim_dir="$(cd "$(dirname "$0")" && pwd)"
-sibling="$(cd "$shim_dir/../.." && pwd)/agent-message/scripts/native-guard.sh"
+shim_dir="$(cd "$(dirname "$0")" && pwd -P)"
+sibling="$(cd "$shim_dir/../.." && pwd -P)/agent-message/scripts/native-guard.sh"
 if [ -f "$sibling" ]; then
   exec /bin/bash "$sibling" "$@"
 fi

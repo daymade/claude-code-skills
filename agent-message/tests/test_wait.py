@@ -1,6 +1,7 @@
 """Unit and live kqueue/poll wakeup tests for peer_wait.py."""
 from __future__ import annotations
 
+import errno
 import importlib.util
 import os
 from pathlib import Path
@@ -323,6 +324,61 @@ class PeerWaitTests(unittest.TestCase):
         )
         self.assertIn(claude_home / "projects", claude_paths)
         self.assertIn(claude_tx, claude_paths)
+
+    def test_emfile_in_open_event_fd_triggers_poll_fallback(self):
+        target = self.root / "emfile.txt"
+
+        def write_later():
+            time.sleep(0.05)
+            target.write_text("recovered", encoding="utf-8")
+
+        th = threading.Thread(target=write_later)
+        th.start()
+        with mock.patch.object(
+            peer_wait.os,
+            "open",
+            side_effect=OSError(errno.EMFILE, "Too many open files"),
+        ):
+            res = peer_wait.watch_until(
+                lambda: [target],
+                lambda: target.read_text(encoding="utf-8") if target.is_file() else None,
+                timeout_sec=3.0,
+                poll_interval=0.02,
+                backend="auto",
+            )
+        th.join(timeout=2.0)
+        self.assertEqual(res["status"], "ready")
+        self.assertEqual(res["backend"], "poll")
+        self.assertEqual(res["result"], "recovered")
+
+    def test_unmatched_claude_projects_subdir_uses_poll_slice(self):
+        claude_home = self.root / "claude"
+        proj_dir = claude_home / "projects" / "-synthetic-new"
+        proj_dir.mkdir(parents=True)
+        cid = "22222222-2222-4222-8222-222222222222"
+        tx_file = proj_dir / f"{cid}.jsonl"
+
+        def create_inside_subdir():
+            time.sleep(0.05)
+            tx_file.write_text('{"type":"queue-operation"}\n', encoding="utf-8")
+
+        th = threading.Thread(target=create_inside_subdir)
+        th.start()
+        t0 = time.monotonic()
+        res = peer_wait.watch_until(
+            lambda: peer_wait.watch_paths_for_target(
+                f"claude-session:{cid}", claude_home=claude_home
+            ),
+            lambda: "found" if tx_file.is_file() else None,
+            timeout_sec=3.0,
+            poll_interval=0.04,
+        )
+        elapsed = time.monotonic() - t0
+        th.join(timeout=2.0)
+        self.assertEqual(res["status"], "ready")
+        self.assertEqual(res["result"], "found")
+        # Must wake well below _DIRECT_KQUEUE_SLICE_SECONDS (2.0s)
+        self.assertLess(elapsed, 0.8)
 
 
 if __name__ == "__main__":

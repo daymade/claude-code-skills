@@ -58,20 +58,30 @@ def is_antigravity_target(target: str) -> bool:
 
 def _resolve_prefix_candidates(prefix: str, antigravity_home: Path) -> list[str]:
     lowered = prefix.lower()
-    candidates: set[str] = set()
+    active_top_level: set[str] = set()
+    all_candidates: set[str] = set()
     db_path = antigravity_home / "conversation_summaries.db"
     if db_path.is_file():
         try:
             with closing(_sqlite_ro(db_path)) as connection:
                 rows = connection.execute(
-                    "SELECT conversation_id FROM conversation_summaries "
+                    "SELECT conversation_id, nesting_depth, parent_conversation_id, killed "
+                    "FROM conversation_summaries "
                     "WHERE lower(conversation_id) LIKE ?",
                     (lowered + "%",),
                 ).fetchall()
                 for row in rows:
                     cid = row["conversation_id"]
-                    if isinstance(cid, str) and cid:
-                        candidates.add(cid.lower())
+                    if not isinstance(cid, str) or not cid:
+                        continue
+                    cid_l = cid.lower()
+                    all_candidates.add(cid_l)
+                    is_subagent = bool(
+                        row["nesting_depth"] or (row["parent_conversation_id"] or "").strip()
+                    )
+                    is_killed = bool(row["killed"])
+                    if not is_subagent and not is_killed and not read_annotation(antigravity_home, cid_l)["archived"]:
+                        active_top_level.add(cid_l)
         except sqlite3.Error:
             pass
     brain_dir = antigravity_home / "brain"
@@ -80,10 +90,12 @@ def _resolve_prefix_candidates(prefix: str, antigravity_home: Path) -> list[str]
             name = entry.name.lower()
             if name.startswith(lowered):
                 try:
-                    candidates.add(str(uuid.UUID(name)))
+                    all_candidates.add(str(uuid.UUID(name)))
                 except ValueError:
                     pass
-    return sorted(candidates)
+    if active_top_level:
+        return sorted(active_top_level)
+    return sorted(all_candidates)
 
 
 def parse_antigravity_id(target: str, *, antigravity_home: Path | None = None) -> str:
@@ -104,7 +116,11 @@ def parse_antigravity_id(target: str, *, antigravity_home: Path | None = None) -
         return str(parsed)
     except (ValueError, AttributeError):
         pass
-    if antigravity_home is not None and len(raw) >= 8 and re.fullmatch(r"[0-9a-fA-F-]+", raw):
+    if (
+        antigravity_home is not None
+        and len(raw.replace("-", "")) >= 8
+        and re.fullmatch(r"[0-9a-fA-F][0-9a-fA-F-]*", raw)
+    ):
         matches = _resolve_prefix_candidates(raw, antigravity_home)
         if len(matches) == 1:
             return matches[0]
@@ -363,8 +379,21 @@ def _sqlite_ro(path: Path) -> sqlite3.Connection:
     return connection
 
 
+def _matches_cwd_filter(entry_cwd: str | None, target_cwd: str) -> bool:
+    if not isinstance(entry_cwd, str) or not entry_cwd.strip():
+        return False
+    try:
+        norm_cwd = str(Path(entry_cwd).expanduser().resolve())
+    except OSError:
+        norm_cwd = entry_cwd.rstrip("/")
+    return norm_cwd == target_cwd or norm_cwd.startswith(target_cwd.rstrip("/") + "/")
+
+
 def list_conversations(
-    antigravity_home: Path, limit: int = 30
+    antigravity_home: Path,
+    limit: int = 30,
+    *,
+    cwd_filter: str | None = None,
 ) -> tuple[list[dict[str, Any]], bool]:
     """List top-level, non-killed, non-archived Antigravity conversations."""
     db_path = antigravity_home / "conversation_summaries.db"
@@ -387,11 +416,18 @@ def list_conversations(
             f"cannot read Antigravity conversation catalog {db_path}: {exc}"
         ) from exc
 
+    target_cwd: str | None = None
+    if cwd_filter:
+        target_cwd = str(Path(cwd_filter).expanduser().resolve())
+
     results: list[dict[str, Any]] = []
     truncated = False
     for row in rows:
         cid = row["conversation_id"]
         if not isinstance(cid, str) or not cid:
+            continue
+        entry_cwd = extract_cwd(row["workspace_uris"])
+        if target_cwd is not None and not _matches_cwd_filter(entry_cwd, target_cwd):
             continue
         annotation = read_annotation(antigravity_home, cid)
         if annotation["archived"]:
@@ -413,7 +449,7 @@ def list_conversations(
                 "alive": alive,
                 "reachable": True,
                 "delivery_hint": delivery_hint,
-                "cwd": extract_cwd(row["workspace_uris"]),
+                "cwd": entry_cwd,
                 "project_id": row["project_id"],
                 "last_modified_time": row["last_modified_time"],
                 "lock_held": lock_held,
@@ -903,6 +939,7 @@ def send_agy_resume(
     antigravity_home: Path,
     *,
     timeout_seconds: float = DEFAULT_ANTIGRAVITY_TIMEOUT_SECONDS,
+    cwd: str | None = None,
 ) -> dict[str, Any]:
     """Deliver an envelope to an idle, unlocked Antigravity conversation via `agy -p`."""
     model = last_planner_model(antigravity_home, conversation_id)
@@ -921,9 +958,16 @@ def send_agy_resume(
         cmd.extend(["--model", model])
     cmd.extend(["-p", envelope])
 
+    run_cwd: str | None = None
+    if isinstance(cwd, str) and cwd.strip():
+        candidate_cwd = Path(cwd).expanduser()
+        if candidate_cwd.is_dir():
+            run_cwd = str(candidate_cwd)
+
     try:
         completed = subprocess.run(
             cmd,
+            cwd=run_cwd,
             env=sanitized_agy_env(antigravity_home),
             capture_output=True,
             text=True,

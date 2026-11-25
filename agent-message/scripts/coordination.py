@@ -10,14 +10,43 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 import hashlib
 import html
+import importlib.util
 import json
 import math
 import os
 from pathlib import Path
 import re
+import shlex
 import sqlite3
 import time
 import uuid
+
+_WORK_START_OVERLAPS = None
+
+
+def _resource_overlaps(left: str, right: str) -> bool:
+    global _WORK_START_OVERLAPS
+    if _WORK_START_OVERLAPS is None:
+        ws_path = Path(__file__).with_name("work_start.py")
+        if ws_path.is_file():
+            spec = importlib.util.spec_from_file_location("_coord_work_start", ws_path)
+            if spec and spec.loader:
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                _WORK_START_OVERLAPS = mod.overlaps
+        if _WORK_START_OVERLAPS is None:
+            _WORK_START_OVERLAPS = lambda a, b: a == b
+    return bool(_WORK_START_OVERLAPS(left, right))
+
+
+def is_hex_prefix(value: str, *, min_hex_digits: int = 8) -> bool:
+    """Return True iff value has >=min_hex_digits hex chars and valid UUID-prefix syntax."""
+    if not isinstance(value, str) or not value:
+        return False
+    return (
+        len(value.replace("-", "")) >= min_hex_digits
+        and bool(re.fullmatch(r"[0-9a-fA-F][0-9a-fA-F-]*", value))
+    )
 
 MARKER = "[peer-coordination: "
 DEFAULT_DEDUP_SECONDS = 300
@@ -482,14 +511,20 @@ class Board:
         with self.transaction():
             for row in self.db.execute("SELECT * FROM owners WHERE released IS NULL"):
                 same_task = row["scope"] == scope and row["task"] == task
-                overlap = set(json.loads(row["resources"])) & set(resources)
+                existing_resources = json.loads(row["resources"])
+                overlap = any(
+                    _resource_overlaps(a, b) for a in existing_resources for b in resources
+                )
                 if row["owner"] != actor and (same_task or overlap):
                     owner_info = self.owner_row(row)
                     return {
                         "status": "conflict",
                         "owner": owner_info,
                         "next_action": "coordinate_with_declared_owner; staleness is not takeover",
-                        "next_command": f"peer.py send {owner_info['owner']} --message 'Checking status of {task}'",
+                        "next_command": (
+                            f"peer.py send {shlex.quote(owner_info['owner'])} "
+                            f"--message {shlex.quote(f'Checking status of {task}')}"
+                        ),
                     }
             self.db.execute("""INSERT INTO owners VALUES(?,?,?,?,?,NULL)
                 ON CONFLICT(scope,task) DO UPDATE SET owner=excluded.owner,
@@ -748,10 +783,11 @@ class Board:
                 ambiguous = previous["state"] in ("reserved", "unknown")
                 pending_request = kind == "request" and previous["expires"] > now
                 if ambiguous or pending_request or previous["dedup_until"] > now:
+                    prev_id_q = shlex.quote(previous["id"])
                     next_cmd = (
-                        f"peer.py coord commit --message-id {previous['id']} --outcome not_sent"
+                        f"peer.py coord commit --message-id {prev_id_q} --outcome not_sent"
                         if previous["state"] == "reserved"
-                        else f"peer.py coord status --message-id {previous['id']}"
+                        else f"peer.py coord status --message-id {prev_id_q}"
                     )
                     return {"status": "suppressed_pending", "message_id": previous["id"],
                             "target": target, "prior_state": previous["state"],
@@ -801,11 +837,19 @@ class Board:
             if tid is not None:
                 result["thread_id"] = tid
             return result
-        if len(needle) >= 8 and re.fullmatch(r"[0-9a-fA-F-]+", needle):
+        if is_hex_prefix(needle):
+            low = needle.lower()
+            hi = low[:-1] + chr(ord(low[-1]) + 1)
+            # Fast O(log N) PRIMARY KEY range scan on lowercase UUIDs
             rows = self.db.execute(
-                "SELECT * FROM messages WHERE lower(id) LIKE ? ORDER BY created DESC LIMIT 10",
-                (needle.lower() + "%",),
+                "SELECT * FROM messages WHERE id >= ? AND id < ? ORDER BY created DESC LIMIT 10",
+                (low, hi),
             ).fetchall()
+            if not rows:
+                rows = self.db.execute(
+                    "SELECT * FROM messages WHERE lower(id) LIKE ? ORDER BY created DESC LIMIT 10",
+                    (low + "%",),
+                ).fetchall()
             if len(rows) == 1:
                 result = self.message_row(rows[0])
                 tid = self._message_thread_id(result["id"])
@@ -836,9 +880,9 @@ class Board:
             )
             short_id = item["id"][:8]
             item["next_command"] = (
-                f"peer.py reply {short_id} --message '...'"
+                f"peer.py reply {shlex.quote(short_id)} --message '...'"
                 if item["ack_required"]
-                else f"peer.py coord finish --message-id {item['id']}"
+                else f"peer.py coord finish --message-id {shlex.quote(item['id'])}"
             )
             items.append(item)
         return items

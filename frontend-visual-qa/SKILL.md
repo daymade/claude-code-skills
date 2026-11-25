@@ -575,6 +575,12 @@ Load
 only for reporting-grade data pages, named tier/reference comparisons, chart
 token audits, or categorical palettes.
 
+Load
+[references/interaction-complexity-and-motion.md](references/interaction-complexity-and-motion.md)
+when auditing or polishing UX complexity, undo/bulk state safety, state-transition
+motion, `prefers-reduced-motion`, dark-mode contrast, or adversarial breakpoint
+and overlay boundaries.
+
 Before reporting a nontrivial audit, re-walk the primary path as a tired user
 without debugger context. Look first for unclear trigger or mode ownership,
 hidden return-to-default, blocked recovery, misleading runtime labels, raw
@@ -732,6 +738,10 @@ check the available agent tools can perform.
   (proxy, CSP entry point, server-log triangulation).
 - references/data_viz_tier_and_token_audit.md — conditional data-viz,
   reference-tier, token, and palette audit.
+- references/interaction-complexity-and-motion.md — UX complexity-elimination
+  axes, state-transition GPU motion standards, and adversarial boundary matrix
+  (hidden pointer-events, `inert` focus isolation, breakpoint resize cleanup,
+  clamped splits, mobile touch targets, dark-mode contrast).
 - references/reference-parity-decomposition.md — the reference-parity profile's
   method: measured structural inventory of the named reference before judging or
   fixing, per-relationship parity verdicts with match criteria, why self-authored

@@ -1,6 +1,6 @@
 ---
-name: peer-message-coordination-and-learning-loop
-description: Parent/worker reply addressing, payload design, delivery-language discipline, evidence that stays valid while its subject is still changing, verifying inbound peer assertions before acting or replying, what to do when you find another session's in-flight work on a shared resource (verify it is live, ask the owner, wait a bounded window, continue on an isolated copy), reading a set of peer denials without turning it into an ownership conclusion, governing a third writer that appears inside your own in-flight scope (freeze order, then a narrow exemption with diff-proof delivery), and an evidence-gated loop for improving peer-message from real operation traces.
+name: agent-message-coordination-and-learning-loop
+description: Parent/worker reply addressing, payload design, delivery-language discipline, evidence that stays valid while its subject is still changing, verifying inbound peer assertions before acting or replying, what to do when you find another session's in-flight work on a shared resource (verify it is live, ask the owner, wait a bounded window, continue on an isolated copy), reading a set of peer denials without turning it into an ownership conclusion, governing a third writer that appears inside your own in-flight scope (freeze order, then a narrow exemption with diff-proof delivery), and an evidence-gated loop for improving agent-message from real operation traces.
 ---
 
 # 协调回传与证据驱动演进
@@ -69,7 +69,7 @@ message file 只解决发送端输入，不代表传了附件。本 Skill 的脚
 
 通过脚本回信的 worker 会获得新的 outbound message ID；它必须把收到的任务 ID 写进 `in_reply_to`。调用者明确要求重发时，把它当一条新消息，并在正文中引用旧 ID，方便接收方去重。
 
-需要从原发送方 inbox 找回这类显式回复时，按 `protocol-and-discovery.md` §4 的 `replies` 命令做一次只读查询。target 始终填原发送方/return destination 的 inbox；不要误填远端 worker。查询命中只证明一条 untrusted envelope 以精确 `in_reply_to` 回应了任务，正文结论仍按本节的证据层级核验。clean no-match 与没有 evidence store 是两个状态，任何一个都不触发轮询或自动重发。
+需要从原发送方 inbox 找回这类显式回复时，按 `protocol-and-discovery.md` §4 的 `replies`（一次只读快照）或 `wait --message-id <id> --timeout <N>`（基于 `kqueue` 的零轮询有界等待）查询；接收方回信推荐直接用 `peer.py reply <id>`。target 始终填原发送方/return destination 的 inbox；不要误填远端 worker。查询命中只证明一条 untrusted envelope 以精确 `in_reply_to` 回应了任务，正文结论仍按本节的证据层级核验。clean no-match 与没有 evidence store 是两个状态，任何一个都不触发轮询或自动重发。
 
 `verified_*` 证明 receiver-side record 存在，不是“人或 Agent 已经看过”的 read receipt。当前协议没有跨产品 exactly-once 或统一任务 ack；把 message ID 当关联键与去重线索，而不是 exactly-once 保证。
 
@@ -293,7 +293,7 @@ peer 给共享产物归类时，手上常常只有一个二元标记：某条记
 
 1. 确定 message-id：当次 receipt 里有；丢了就按发送时间窗在自己 transcript 里 grep `message_id`（receipt 打印行的 `message_id=` 或 JSON receipt 的 `"message_id":`）或 `peer.py send` / `peer.py broadcast`（命令行本身）。`peer-message-id` 只存在于**接收侧**信封，在发送方 transcript 里 grep 它找不到自己那次 send。
 2. 按 message-id 在自己 transcript 反查这次 send 的目标、receipt 与 exit——receipt 的 `resolved` 对象记录目标字符串当时实际解析出的地址/name/id/cwd，认错目录先在这里对。
-3. 查对方回了什么：对**原发送方自己的 inbox** 跑一次 `replies --message-id <id>`（原生回传沿宿主机制，命令与边界见 `protocol-and-discovery.md` §4）。
+3. 查对方回了什么：对**原发送方自己的 inbox** 跑一次 `replies --message-id <id>`（或有界等待时用 `wait --message-id <id> --timeout <N>`；原生回传沿宿主机制，命令与边界见 `protocol-and-discovery.md` §4）。
 4. 查对方收到没有：`verify --message-id <id>` 读接收侧证据——入队、进入对话、已回应、已执行属于不同证据层级，停在命中的那层（§3）。
 
 ## 8. RSI 的准确边界

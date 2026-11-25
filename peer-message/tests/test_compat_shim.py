@@ -170,6 +170,56 @@ class CompatShimTests(unittest.TestCase):
             self.assertEqual(proc.returncode, 0, msg=proc.stderr)
             self.assertEqual(proc.stdout.strip(), "forwarded-2.10.0")
 
+    def test_native_guard_shell_shim_resolves_symlinked_sibling(self):
+        with tempfile.TemporaryDirectory(prefix="pm-symlink-sib-") as tmp:
+            root = Path(tmp)
+            empty_home = root / "empty-home"
+            empty_home.mkdir()
+            repo = root / "custom-repo"
+            (repo / "agent-message/scripts").mkdir(parents=True)
+            (repo / "peer-message/scripts").mkdir(parents=True)
+            target_sh = repo / "agent-message/scripts/native-guard.sh"
+            target_sh.write_text("#!/bin/bash\necho sibling-forwarded\nexit 0\n", encoding="utf-8")
+            target_sh.chmod(0o755)
+            shutil.copy2(SCRIPTS / "native-guard.sh", repo / "peer-message/scripts/native-guard.sh")
+
+            cache_link = root / "cache/peer-message/1.30.1"
+            cache_link.parent.mkdir(parents=True)
+            cache_link.symlink_to(repo / "peer-message")
+
+            env = {
+                "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+                "HOME": str(empty_home),
+            }
+            proc = subprocess.run(
+                ["/bin/bash", str(cache_link / "scripts/native-guard.sh")],
+                env=env,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=15,
+                check=False,
+            )
+            self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+            self.assertEqual(proc.stdout.strip(), "sibling-forwarded")
+
+    def test_python_shims_forward_importlib_attributes_and_coordination_shim(self):
+        checks = (
+            ("peer.py", "main"),
+            ("coordination.py", "Board"),
+            ("native_guard.py", "main"),
+            ("antigravity_inbox_hook.py", "handle_event"),
+            ("install_antigravity_hook.py", "install"),
+            ("install_native_guard.py", "main"),
+            ("work_start.py", "overlaps"),
+        )
+        for idx, (filename, attr) in enumerate(checks):
+            with self.subTest(script=filename, attr=attr):
+                spec = importlib.util.spec_from_file_location(f"compat_attr_{idx}", SCRIPTS / filename)
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                self.assertTrue(callable(getattr(mod, attr)))
+
 
 if __name__ == "__main__":
     unittest.main()

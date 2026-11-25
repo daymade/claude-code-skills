@@ -1,5 +1,5 @@
 ---
-name: peer-message-local-coordination
+name: agent-message-local-coordination
 description: >-
   Maintain local task/resource declarations and coordination request lifecycle after installation.
   Read before independent-session ownership lookup, shared-resource windows, native preflight,
@@ -12,16 +12,16 @@ description: >-
 将下文的 `PEER_SKILL_ROOT` 设置为该目录；不要使用当前项目的 `scripts/`：
 
 ```bash
-PEER_SKILL_ROOT='<absolute-directory-of-loaded-peer-message>'
+PEER_SKILL_ROOT='<absolute-directory-of-loaded-agent-message>'
 test -f "$PEER_SKILL_ROOT/SKILL.md"
 test -f "$PEER_SKILL_ROOT/scripts/peer.py"
 ```
 
 使用包内 `scripts/peer.py` 和 `scripts/coordination.py`；仅需 Python 标准库。
-首次 `coord` 或发送调用自动创建
-`$XDG_STATE_HOME/peer-message/coordination.sqlite3`，未设置时用
-`~/.local/state/peer-message/coordination.sqlite3`。所有本机安装副本共用此位置。
-不额外安装服务，不让用户建立或维护记录；调用时更新和检查，不做后台广播。
+首次 `coord` 或发送调用自动初始化共享状态目录，按
+`AGENT_MESSAGE_STATE_DIR` → `PEER_MESSAGE_STATE_DIR` → `${XDG_STATE_HOME:-~/.local/state}/peer-message`
+顺序解析并创建 `coordination.sqlite3`（保留原有 `peer-message` 历史与游标，升级零数据丢失）。
+所有本机安装副本共用此位置，不额外安装服务，不让用户建立或维护记录；调用时更新和检查，不做后台广播。
 `--state-dir` 只用于明确隔离的测试或不同操作边界，正常协作不各建一份库。
 
 ## 开工、范围变化和退出
