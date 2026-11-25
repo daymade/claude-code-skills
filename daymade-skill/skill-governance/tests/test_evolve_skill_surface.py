@@ -6,11 +6,15 @@ from datetime import datetime, timedelta, timezone
 import json
 import os
 from pathlib import Path
+import runpy
 import sqlite3
 import stat
+import subprocess
 import sys
 import tempfile
+import time
 import unittest
+from unittest.mock import patch
 
 SCRIPTS_DIR = Path(__file__).resolve().parents[1] / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
@@ -159,6 +163,67 @@ class EvolveSkillSurfaceTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.tmp.cleanup()
+
+    def test_watched_runner_refreshes_once_and_reuses_ledger_for_new_telemetry(self) -> None:
+        runner = self.base / "runner.py"
+        ledger_script = self.base / "index.py"
+        runner.write_text(ev.render_evolution_runner(
+            SCRIPTS_DIR / "evolve_skill_surface.py", ledger_script,
+            python_bin=sys.executable, data_dir=self.data, ledger_db=self.ledger,
+            refresh_interval=1800, auto_apply=False, hosts="claude",
+        ), encoding="utf-8")
+        main = runpy.run_path(str(runner))["main"]
+        telemetry = self.data / "telemetry.jsonl"
+        status = self.data / ".evolve-status"
+        receipt = self.data / ".evolve-ledger-refresh"
+        report = self.data / "reports" / "latest.md"
+        calls = []
+
+        def child(cmd, **kwargs):
+            if cmd[1] == str(ledger_script):
+                self.assertEqual(cmd[2:], ["--db", str(self.ledger), "index", "--json"])
+                calls.append("index")
+            else:
+                self.assertEqual(cmd[2:5], ["--ledger-db", str(self.ledger), "propose"])
+                calls.append("propose")
+                report.parent.mkdir(exist_ok=True)
+                report.write_text(telemetry.read_text(encoding="utf-8"), encoding="utf-8")
+                if calls == ["index", "propose"]:
+                    before = telemetry.stat()
+                    telemetry.write_text("arrived during proposal", encoding="utf-8")
+                    os.utime(telemetry, ns=(before.st_atime_ns, before.st_mtime_ns + 1_000_000_000))
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        with patch.object(subprocess, "run", side_effect=child):
+            self.assertEqual(main(), 0)
+            self.assertEqual(calls, ["index", "propose", "propose"])
+            self.assertIn("ledger=refreshed", status.read_text())
+            telemetry.write_text("next telemetry update")
+            self.assertEqual(main(), 0)
+            self.assertEqual(calls, ["index", "propose", "propose", "propose"])
+            self.assertIn("ledger=reused", status.read_text())
+            self.assertEqual(report.read_text(), "next telemetry update")
+
+            fresh = json.loads(receipt.read_text())
+            invalid_receipts = ["{", json.dumps({**fresh, "started_at": time.time() - 1800}),
+                                json.dumps({**fresh, "started_at": time.time() + 60})]
+            for invalid in invalid_receipts:
+                receipt.write_text(invalid)
+                self.assertEqual(main(), 0)
+                self.assertEqual(calls[-2:], ["index", "propose"])
+            self.ledger.touch()
+            self.assertEqual(main(), 0)
+            self.assertEqual(calls[-2:], ["index", "propose"])
+
+        self.ledger.unlink()
+        with patch.object(subprocess, "run", return_value=subprocess.CompletedProcess(
+            [], 2, "", "index failed",
+        )) as fail:
+            self.assertEqual(main(), 1)
+            self.assertEqual(fail.call_count, 1)
+            self.assertIn("ledger_rc=2", status.read_text())
+            self.assertFalse(receipt.exists())
+            self.assertEqual(report.read_text(), "next telemetry update")
 
     def test_antigravity_real_transcript_name_mapping_non_destructive_and_idempotent(self) -> None:
         installed, name_to_entry = ev.discover_installed_skills(self.installed)

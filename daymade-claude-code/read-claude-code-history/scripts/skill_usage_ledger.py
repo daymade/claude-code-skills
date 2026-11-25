@@ -68,8 +68,11 @@ COUNTED_INITIATORS = ("user_command", "model_named", "model_auto")
 
 COMMAND_NAME_RE = re.compile(r"<command-name>/?([^<\s]+)</command-name>")
 CODEX_SKILL_RE = re.compile(r"<skill>\s*<name>([^<\s]+)</name>")
+PATH_TOKEN_CHAR = r"""[^\s"'`\\;|&()<>]"""
+# Only try the greedy prefix at the start of a token. Starting it at each
+# character in a long argument without a slash makes a failed search quadratic.
 SKILL_PATH_RE = re.compile(
-    r"""(?:([^\s"'`\\;|&()<>]*)/)?(?<![A-Za-z0-9._-])([A-Za-z0-9._-]+)/SKILL\.md"""
+    rf"(?:(?<!{PATH_TOKEN_CHAR})({PATH_TOKEN_CHAR}*)/)?(?<![A-Za-z0-9._-])([A-Za-z0-9._-]+)/SKILL\.md"
 )
 # A deleted file under one of these was an install (since removed or
 # upgraded away), not a working copy.

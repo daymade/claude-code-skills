@@ -23,7 +23,7 @@
 | `~/.config/skill-governance/hot-set.json` | Single source of truth for `pinned`, `dynamic_hot`, `router_children`, `blocked_cold`, policy thresholds, and history |
 | `~/.config/skill-governance/aliases.json` | Sanitized self-learned `query -> skill` search aliases read by `skills-search` |
 | `~/.local/share/skill-governance/telemetry.jsonl` | Locked runtime `search` / `load` telemetry emitted by `skills-search` |
-| `~/.local/share/skill-governance/.evolve-status` | Machine-readable health heartbeat (`OK`/`FAIL`, timestamp, elapsed seconds, mode) |
+| `~/.local/share/skill-governance/.evolve-status` | Health heartbeat with elapsed seconds, mode, and ledger refresh or reuse on success |
 | `~/.config/skill-governance/backups/<ts>/` | Atomic pre-apply backups (retained up to latest 20) + `manifest.json` |
 | `~/.local/share/skill-governance/reports/latest.md` | Latest human-readable evolution report |
 
@@ -46,9 +46,14 @@ python3 <skill-governance>/scripts/evolve_skill_surface.py apply --hosts antigra
 # 5. Roll back any apply atomically (binary-safe, preserves permissions)
 python3 <skill-governance>/scripts/evolve_skill_surface.py rollback --backup ~/.config/skill-governance/backups/<ts>
 
-# 6. Install near-real-time macOS LaunchAgent (WatchPaths on telemetry.jsonl + 30m incremental refresh)
+# 6. Install macOS suggestions on telemetry changes with periodic ledger refresh
 python3 <skill-governance>/scripts/evolve_skill_surface.py install-schedule --interval-minutes 30 --throttle-seconds 60
 ```
+
+In the default watched proposal mode, telemetry updates regenerate the report
+using the last successful ledger refresh within the configured interval. A
+missing or changed database triggers a refresh. If telemetry changes while the
+report is being built, the runner can regenerate it once using the same ledger.
 
 ## Safety Invariants
 
