@@ -1447,10 +1447,10 @@ def main(telemetry_only=False):
     LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(LOCK_FILE, "a+", encoding="utf-8") as lfh:
         try:
-            # A scheduled refresh must run even if a proposal already holds
-            # the lock. A busy refresh will itself read the latest telemetry.
+            # A timer or watch event may be the only wake for new input.
+            # Serialize both split jobs so lock contention cannot consume it.
             flags = fcntl.LOCK_EX
-            if telemetry_only or not WATCH_ENABLED:
+            if not WATCH_ENABLED:
                 flags |= fcntl.LOCK_NB
             fcntl.flock(lfh.fileno(), flags)
         except BlockingIOError:
