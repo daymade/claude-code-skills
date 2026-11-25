@@ -1342,7 +1342,7 @@
       "description": "Produces standalone reader-facing HTML reports/dashboards and review workbenches — evidence-backed, browser-verified. Use for a visual HTML report or requests for “可视化报告”“图表报告” or a standalone HTML dashboard; load data-visualization-discipline before charts. Not for product UI, chat or Markdown unless asked to become a report, or PowerPoint.",
       "source": "./report-with-html",
       "strict": false,
-      "version": "1.7.5",
+      "version": "1.7.6",
       "category": "documentation",
       "keywords": [
         "HTML报告",
