@@ -57,6 +57,15 @@ The default delivery is the verified HTML opened in a browser. A PNG is a QA art
 and is delivered only when the user asks for an image. If the user needs editable
 PowerPoint, finish and verify the HTML first, then use `deck-creator` (Route C).
 
+When the delivered HTML will be hosted inside a sandboxed share container
+(`<iframe sandbox="allow-scripts">` without `allow-same-origin`, or a host-enforced
+strict-CSP share route), keep the artifact sandbox-portable: inline all data bundles
+with zero external `<script src>`, zero local filesystem paths (`/Users/`, `file://`),
+no reliance on `localStorage`, `sessionStorage`, `document.cookie`, or same-origin
+`fetch()` (which fail under an opaque `null` origin), readable body text (`≥13px`),
+`object-fit: contain` for portrait media, and any host-required provenance JSON block;
+run the host's share linter before publication.
+
 ## SSOT map
 
 **Visualization judgment lives in another skill — load it before designing any chart or
