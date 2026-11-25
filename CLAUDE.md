@@ -762,36 +762,36 @@ for candidate selection and commands; keep the detailed rules in those owners.
 ### Local Agent Messaging
 
 For local transport selection or accepted/consumed delivery interpretation, enter
-[peer-message](peer-message/SKILL.md), starting with
-[current-host tool discovery](peer-message/references/local-coordination.md#先发现完整工具面再选通信通道).
+[agent-message](agent-message/SKILL.md) (supersedes `peer-message`), starting with
+[current-host tool discovery](agent-message/references/local-coordination.md#先发现完整工具面再选通信通道).
 For independent work starts, scope changes or Fork handoff, use the
-[work-entry procedure](peer-message/references/local-coordination.md#开工范围变化和退出).
+[work-entry procedure](agent-message/references/local-coordination.md#开工范围变化和退出).
 For independent-session preflight and request lifecycle, follow the
-[local coordination workflow](peer-message/references/local-coordination.md#原生跨会话通信).
+[local coordination workflow](agent-message/references/local-coordination.md#原生跨会话通信).
 For a native payload limit or a rejected preparation, use its
-[complete-envelope preflight and recovery](peer-message/references/local-coordination.md#完整信封限制与失败收口).
+[complete-envelope preflight and recovery](agent-message/references/local-coordination.md#完整信封限制与失败收口).
 Keep native-guard installation, recovery and actual-host acceptance in that workflow;
 do not duplicate its parameters here. Reply lookup, transport and discovery
-details belong in [the transport and receiver-evidence SOP](peer-message/references/protocol-and-discovery.md).
+details belong in [the transport and receiver-evidence SOP](agent-message/references/protocol-and-discovery.md).
 Enter that SOP when diagnosing delayed Codex coordination or comparing live and queued receipts.
 Before a diagnostic pause, marker-only reply or no-tools request to a running session, enter
-[diagnostic coordination](peer-message/references/coordination-and-learning-loop.md#诊断消息与执行隔离).
+[diagnostic coordination](agent-message/references/coordination-and-learning-loop.md#诊断消息与执行隔离).
 Before asking about mutable ownership or a publication window, use the
-[fresh-state preflight](peer-message/references/coordination-and-learning-loop.md#51-发现别人的在制品先核实再问等一个有界窗口).
+[fresh-state preflight](agent-message/references/coordination-and-learning-loop.md#51-发现别人的在制品先核实再问等一个有界窗口).
 For an inbound coordination envelope, a native reply, original-input capture or a receive-integrity error, follow
-[receive, reply and closure](peer-message/references/local-coordination.md#收件回信和关闭).
+[receive, reply and closure](agent-message/references/local-coordination.md#收件回信和关闭).
 For a known inbound script or native coordination envelope ID in Codex, use the
-[original-envelope receive recipe](peer-message/references/local-coordination.md#从-codex-入站原件接收).
+[original-envelope receive recipe](agent-message/references/local-coordination.md#从-codex-入站原件接收).
 If that cache does not cover the known inbound, use its
-[original host-event recovery](peer-message/references/local-coordination.md#入站缓存缺失时读取原始宿主事件).
+[original host-event recovery](agent-message/references/local-coordination.md#入站缓存缺失时读取原始宿主事件).
 For oversized discovery responses or complete-title export, use its
-[discovery-output contract](peer-message/references/protocol-and-discovery.md#发现输出的范围).
+[discovery-output contract](agent-message/references/protocol-and-discovery.md#发现输出的范围).
 Current product availability, provenance, and inbound-control mechanics belong in
-`peer-message/references/official-feature.md`; reply addressing, payload structure,
+`agent-message/references/official-feature.md`; reply addressing, payload structure,
 delivery-status language, what to do when you find another session's in-flight work on a
 shared resource, and the verification contracts that decide what a peer assertion or a
 peer denial is worth belong in
-`peer-message/references/coordination-and-learning-loop.md`. Keep implementation, CLI help,
+`agent-message/references/coordination-and-learning-loop.md`. Keep implementation, CLI help,
 tests, and those owners aligned; README and changelog entries should point to
 them instead of restating volatile protocol facts.
 
@@ -977,7 +977,7 @@ For staged-set inspection, deletions or entries outside this task, follow
 [commit-scope hygiene](git-safety-net/references/prevention_practices.md#commit-scope-hygiene-dont-sweep-unrelated-staged-work).
 
 For inbound coordination during delivery or closeout, use
-[peer-message's receiving route](peer-message/SKILL.md#收到消息先分流).
+[agent-message's receiving route](agent-message/SKILL.md#收到-peer-消息先分流再核前提).
 
 For first-push route selection, branch publication or PR creation, read
 [the publication preflight and recipe](github-ops/references/pr_operations.md#basic-pr-creation)

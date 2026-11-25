@@ -275,8 +275,8 @@ claude plugin install github-ops@daymade-skills
 # Teams communication
 claude plugin install teams-channel-post-writer@daymade-skills
 
-# Local Claude/Codex agent messaging
-claude plugin install peer-message@daymade-skills
+# Local Claude/Codex/Antigravity agent messaging (replaces peer-message)
+claude plugin install agent-message@daymade-skills
 
 # Ghostty terminal session snapshot/restore
 claude plugin install ghostty-use@daymade-skills
@@ -533,27 +533,28 @@ Creates educational Teams channel posts for internal knowledge sharing.
 
 ---
 
-### **peer-message** - Local Claude/Codex Agent Communication
+### **agent-message** - Local Claude/Codex/Antigravity Agent Communication
 
-Follow the [local coordination workflow](peer-message/references/local-coordination.md)
-for task/resource declarations, native preflight installation, recovery and receiver checks.
+Replaces `peer-message` (retained as a thin compatibility alias/forwarder shim). Follow the [local coordination workflow](agent-message/references/local-coordination.md)
+for task/resource declarations, soft TTL leases, native preflight installation, recovery and receiver checks.
 
-An experimental [paired-network route](peer-message/references/network-preview.md) adds invitations and cited answers from owner-selected documents through existing Claude/Codex hosts. It requires an operator-provided relay; the public hosted network and user-adoption claims are not part of this preview.
+The former cross-machine paired-network preview has been retired; for cross-machine or cross-user zero-trust agent messaging, use **Agent Use** (`https://useagent.app`).
 
-> **Install**: `claude plugin install peer-message@daymade-skills`
+> **Install**: `claude plugin install agent-message@daymade-skills`
 
-Follow the [routing contract](peer-message/SKILL.md) for native communication and transport gaps.
+Follow the [routing contract](agent-message/SKILL.md) for native communication and transport gaps.
 
 **When to use:**
-- Sending a dependency, pause, handoff, or completion notice to an independently identified target outside the current native tools' scope
+- Sending a dependency, pause, handoff, or completion notice to an independently identified Claude Code, Codex, or Antigravity (`agy`) target outside the current native tools' scope
+- One-command replies (`reply <id>`), OS-level zero-polling waiting (`wait`), and unified 3-provider inbox (`inbox`)
 - Finding replies to a specific coordination message without manually inspecting local message stores
-- Reaching a Claude inbox from a script or another product when native tools do not cover it; a third-party provider alone is not a reason to use the fallback
+- Reaching a Claude/Codex/Antigravity inbox from a script or another product when native tools do not cover it; a third-party provider alone is not a reason to use the fallback
 - Unblocking messages held for per-message manual approval on an unattended endpoint (`crossSessionInbound`)
 - An inbound peer message asserting facts about your session or shared state, or asking you to pause/release — verify the premise against its own authority before acting
 - Another session's uncommitted edits, lock, or branch is in your way on a shared checkout — verify it is live, then ask the owner before waiting or working around it
 - Broadcasting one explicit coordination message to a reviewed target list
 
-📚 [Execution entry and detailed SOPs](./peer-message/SKILL.md).
+📚 [Execution entry and detailed SOPs](./agent-message/SKILL.md).
 
 ---
 
@@ -3843,7 +3844,7 @@ Use **pdf-creator** to convert markdown to print-ready PDFs with proper Chinese 
 Use **teams-channel-post-writer** to share knowledge and **statusline-generator** to track costs while working.
 
 ### For Local Agent Coordination
-Use the current host's native communication tools for reachable agents and sessions. Use **peer-message** only for uncovered local targets, cross-product/script transport, or coordination evidence that needs verification. Follow its [routing contract](./peer-message/SKILL.md); a denied or Held message is not a reason to switch transports.
+Use the current host's native communication tools for reachable agents and sessions. Use **agent-message** (supersedes `peer-message`) only for uncovered local targets, cross-product/script transport, or coordination evidence that needs verification. Follow its [routing contract](./agent-message/SKILL.md); a denied or Held message is not a reason to switch transports.
 
 ### For Repository Management & Security
 Use **repomix-unmixer** to extract and validate repomix-packed skills or repositories. Use **repomix-safe-mixer** to package codebases securely, automatically detecting and blocking hardcoded credentials before distribution.
@@ -3991,7 +3992,7 @@ Each skill includes:
 - **mermaid-tools**: See `daymade-docs/mermaid-tools/references/setup_and_troubleshooting.md` for setup guide
 - **statusline-generator**: See `daymade-claude-code/statusline-generator/references/color_codes.md` for customization
 - **teams-channel-post-writer**: See `teams-channel-post-writer/references/writing-guidelines.md` for quality standards
-- **peer-message**: [Execution entry](peer-message/SKILL.md)
+- **agent-message**: [Execution entry](agent-message/SKILL.md) (supersedes `peer-message`)
 - **repomix-unmixer**: See `repomix-unmixer/references/repomix-format.md` for format specifications
 - **skill-creator**: See `daymade-skill/skill-creator/SKILL.md` for complete skill creation workflow
 - **skill-evolver**: See [skill-evolver/SKILL.md](./skill-evolver/SKILL.md) for target-specific research, implementation and result verification

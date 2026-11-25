@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Professional Claude Code and Codex skills marketplace — production-ready skills spanning GitHub and git operations (including current-base contributor PR review), document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, evidence-backed HTML reports and data-visualization judgment, prompt and skill engineering, product growth diagnosis, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, local inter-agent messaging, Claude Code operations and permission triage, technology selection and build-vs-buy decisions, and model-aware Codex workstation setup. Suite plugins bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
-    "version": "3.29.2"
+    "version": "3.30.0"
   },
   "plugins": [
     {
@@ -126,13 +126,14 @@
       ]
     },
     {
-      "name": "peer-message",
-      "description": "Bridge local Claude Code, Codex, and Antigravity (agy) sessions only when the current host's native communication tools do not cover the target. Use for cross-product messages, hooks/scripts posting to sessions, fallback reply lookup and delivery verification, or diagnosing Held peer messages. Also use its coordination guidance when shared-work ownership or an inbound peer assertion needs verification. For ordinary parent/subagent, teammate, or independent-session communication, first discover and use available native tools; do not load this skill merely to send a native message. The bundled network preview for cross-machine pairing is deprecated (existing deployments only; invitations use the peer-message:v1 format). Never bypass a denied or Held message with another transport. Not for spawning agents, moving full history, or granting user approval. Triggers: 跨产品通信、原生工具未覆盖的会话、脚本回帖、peer 送达排查、共享在制品归属核实、Antigravity/agy 跨会话通信、peer-message:v1 邀请（既有部署）。",
-      "source": "./peer-message",
+      "name": "agent-message",
+      "description": "Bridges local Claude Code, Codex, and Antigravity (agy) sessions when native tools can't reach the target (replaces peer-message). Use for cross-product messaging, one-command reply, kqueue event-driven wait, unified 3-provider inbox, delivery verification (Held included), shared-work ownership leases, or inbound peer assertions. Not for same-product/subagent messaging (use native tools), spawning agents, full history, or cross-machine messaging (use Agent Use: https://useagent.app). Triggers: agent-message、peer-message、跨产品通信、原生工具未覆盖的会话、脚本回帖、peer 送达排查、共享在制品归属核实、Antigravity/agy 跨会话通信。",
+      "source": "./agent-message",
       "strict": false,
-      "version": "1.29.0",
+      "version": "2.0.0",
       "category": "communication",
       "keywords": [
+        "agent-message",
         "agent-communication",
         "cross-session",
         "peer-message",
@@ -147,6 +148,20 @@
         "session-coordination",
         "crossSessionInbound",
         "inbound-assertions"
+      ]
+    },
+    {
+      "name": "peer-message",
+      "description": "Deprecated compatibility alias for agent-message (replaces peer-message). Local Claude Code, Codex, and Antigravity messaging and coordination now live in agent-message; scripts in this package forward to agent-message when installed. The cross-machine network preview is retired (use Agent Use: https://useagent.app).",
+      "source": "./peer-message",
+      "strict": false,
+      "version": "1.30.0",
+      "category": "communication",
+      "keywords": [
+        "peer-message",
+        "agent-message",
+        "compatibility-alias",
+        "deprecated"
       ]
     },
     {

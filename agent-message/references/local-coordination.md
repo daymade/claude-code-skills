@@ -33,21 +33,24 @@ test -f "$PEER_SKILL_ROOT/scripts/peer.py"
 
 ```bash
 python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord start \
-  --repo '<absolute-target-checkout>' --path '<owned-repo-relative-file-or-directory>' \
-  --task '<stable-issue-or-deliverable>' --actor '<exact-current-host-address>'
+  --repo '<absolute-target-checkout>' --path '<owned-repo-relative-file-or-directory-or-glob>' \
+  --task '<stable-issue-or-deliverable>' --actor '<exact-current-host-address>' \
+  [--ttl 3600]
 ```
 
-重复 `--path` 只声明本次实际负责的文件或目录。入口按 origin 的远端身份与仓内路径
-识别不同 clone，目录与子路径也相交；不使用 cwd、clone 名或相似标题判断同一事项。
+重复 `--path` 只声明本次实际负责的文件、目录或相对 glob 模式（如 `src/*.py`、`scripts/**`）。入口按 origin 的远端身份与仓内路径
+识别不同 clone，目录与子路径、以及 glob 与具体文件/目录前缀均会精确判定相交；不使用 cwd、clone 名或相似标题判断同一事项。
 缺远端、路径越界、空资源或错误 actor 明确失败。非 Git 资源使用稳定 `--scope` 与
 `--resource`；同一桌面或发布窗口在各会话中保持同一 key。不要把整个仓库声明成
 一项小改动的资源，从而阻断独立文件。实现与 CLI 帮助由 `scripts/work_start.py` 和
 `scripts/peer.py coord start --help` 维护。
 
+**软租约（`--ttl`）与续约（`coord renew`）**：`coord start` 与 `coord claim` 支持可选 `--ttl <seconds>`（合法范围 `60..86400`，写入 companion 表 `owner_leases`，不改变 `owners` 既有 6 列 wire format）。租约到期后，该记录保持在库中并标为 `freshness=expired_unreleased`，**绝不自动删除或允许他人静默抢占**（`staleness != takeover`）；原负责人可用 `coord renew --scope <scope> --task <task> [--ttl <seconds>]` 刷新租约，其他会话撞见时仍需核实或联系原负责人。
+
 `registered`（退出 0）只表示同一事务内完成已参与调用者的检查和本人登记，
-`occupancy` 仍为 unknown。`conflict`（退出 3）给出现有负责人，直接定向协调，
-先核实它的在制品或已有成果；不因陈旧而抢占。`reconciliation_required`（退出 3）
-给出已释放声明的线索；release 不证明成果已交付。先读实际代码/PR/产物并向原负责人
+`occupancy` 仍为 unknown。`conflict`（退出 3）给出现有负责人与建议的 `next_command`，直接定向协调，
+先核实它的在制品或已有成果；不因陈旧或租约过期而抢占。`reconciliation_required`（退出 3）
+给出已释放声明的线索与 `next_command`；release 不证明成果已交付。先读实际代码/PR/产物并向原负责人
 核对仍缺的范围，确认确有新工作后，将返回的精确 `declaration_id` 作为
 `--reconciled-declaration` 再运行同一入口。该参数只声明执行者已核验，不代替证据。
 多页线索按 `unreconciled_total` 处理：传入已核过的 ID 后，下一次返回其余未核行；
@@ -374,9 +377,12 @@ final，也不通过归档线程实现静默。默认 receive 保留 `action_nee
 
 保留完整原信封；有本地 prepared 摘要时，receive 先核对正文及协调元数据，再领取或判断过期/关闭。`integrity=verified_prepared_core` 只证明与该本地准备记录一致，不证明发送者身份或用户授权。正文冲突、损坏摘要或不能识别的包装明确报错，保留输入和状态，不能按旧回执忽略，也不要重写正文凑过检查。无摘要的旧记录仍按旧生命周期处理并标 `unavailable_legacy_digest`；无协调字段标 `legacy_no_metadata`，都不补造摘要或有效期。正常的新消息仍使用自己的 ID 处理，不因话题相同被丢弃。
 
-确需回信时关联原 id；短时请求已过期/关闭时回信也会被发送前抑制：
+确需回信时优先使用 `peer.py reply <message-id>`（接受完整 ID 或唯一 `>=8` 位 hex 前缀，自动继承收件人、topic 与 `thread_id`，并在 `accepted` 时自动结清原入站记录）；显式 `send` 仍支持并关联原 id。短时请求已过期/关闭时回信也会被发送前抑制：
 
 ```bash
+# 推荐：一键回复并自动传播 thread_id、结清原入站记录
+python3 "$PEER_SKILL_ROOT/scripts/peer.py" reply '<original-id-or-8hex>' reply.txt --json
+# 或显式指定 send + finish
 python3 "$PEER_SKILL_ROOT/scripts/peer.py" send '<original-sender>' reply.txt \
   --kind reply --in-reply-to '<original-id>' --json
 python3 "$PEER_SKILL_ROOT/scripts/peer.py" coord finish --message-id '<original-id>'
