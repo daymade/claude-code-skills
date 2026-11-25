@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-governance** (`daymade-skill` v1.84.1 → v1.84.2) and **read-claude-code-history** (`daymade-claude-code` v5.3.13 → v5.3.14): Reuse a recent successful skill-usage index for watched proposal updates and keep indexing out of telemetry follow-up passes. Match Codex Skill paths without quadratic work on long command arguments.
+
 - **ghostty-use** (`ghostty-use` v1.17.0 → v1.17.1) & `CLAUDE.md`: Synchronize `references/session_liveness.md`, `references/automatic-snapshots.md`, `SKILL.md` (reconstruction boundary & troubleshooting), `ghostty_session.py`/`ghostty_watch.py` CLI help and docstrings, and repository `CLAUDE.md` routing with Antigravity (`agy`) support (`lsof-brain`, `agy_liveness`, `read-claude-code-history` `Antigravity (agy)` entry), removing duplicated UUID-less resolution restatement in `automatic-snapshots.md`.
 
 - **read-claude-code-history** (`daymade-claude-code` v5.3.12 → v5.3.13) & **ghostty-use** (`ghostty-use` v1.16.0 → v1.17.0):

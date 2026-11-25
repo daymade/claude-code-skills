@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -112,6 +113,23 @@ def codex_session(cwd: Path) -> list[dict]:
 
 
 class LedgerTest(unittest.TestCase):
+    def test_skill_path_search_handles_shell_tokens_and_long_non_paths(self) -> None:
+        command = (
+            'cat "/a/skills/a-b/SKILL.md" && read solo/SKILL.md\n'
+            'cat /x/one/SKILL.md=other/SKILL.md /x/one/SKILL.md=/other/SKILL.md'
+            ' | cat /y/SKILL.md; cat /y/SKILL.md'
+        )
+        self.assertEqual(ledger.SKILL_PATH_RE.findall(command), [
+            ("/a/skills", "a-b"), ("", "solo"),
+            ("/x", "one"), ("", "other"), ("/x/one/SKILL.md=", "other"), ("", "y"), ("", "y"),
+        ])
+        subprocess.run([
+            sys.executable, "-c",
+            "import skill_usage_ledger as ledger\n"
+            "assert ledger.SKILL_PATH_RE.findall('A' * 100_000 + ' /x/skill/SKILL.md')"
+            " == [('/x', 'skill')]\n",
+        ], cwd=SKILL_DIR / "scripts", check=True, timeout=10)
+
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         root = Path(self.tmp.name)
