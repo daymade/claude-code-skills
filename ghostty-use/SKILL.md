@@ -1,8 +1,8 @@
 ---
 name: ghostty-use
 description: >-
-  Snapshots local Codex/Claude CLI sessions across terminals and restores IDs in Ghostty
-  after reboot (保存会话/重启前备份/恢复窗口), audits survivors, and makes change-only
+  Snapshots local Codex/Claude/agy CLI sessions across terminals and restores IDs
+  in Ghostty after reboot (保存会话/重启前备份/恢复窗口), audits survivors, and makes change-only
   automatic backups (定期增量快照). Handles unmanaged Codex account switches
   (额度耗尽换号); Minions native_runtime uses Account Manager. Supports background
   /compact and targeted Ghostty terminal input (批量压缩 Ghostty 会话). Not --resume help,
@@ -11,8 +11,8 @@ description: >-
 
 # ghostty-use
 
-Capture identifiable local Claude Code and Codex CLI sessions before a reboot and
-reopen recorded IDs afterwards. Manual snapshots grade liveness; automatic backups
+Capture identifiable local Claude Code, Codex CLI, and Antigravity (`agy`) sessions before a
+reboot and reopen recorded IDs afterwards. Manual snapshots grade liveness; automatic backups
 store recovery metadata with explicit partial coverage and unknown liveness.
 
 ## Ghostty interaction channel
@@ -111,6 +111,11 @@ Ghostty, other terminal emulators and headless terminal processes. Use
 `--scope ghostty` only for an explicitly Ghostty-only request. Automatic
 backups remain Ghostty-only. A connection client such as ToDesk does not identify
 the terminal owner: inspect CLI processes, not the remote-access service.
+Remote-terminal containers such as NetEase UU Remote (`uuyc-mux` on
+`~/Library/Application Support/UURemote/tmux.sock`) are non-Ghostty hosts whose
+child sessions terminate when the remote host app exits; `--scope all-cli`
+records them with `terminal_owner: non-ghostty` while alive, whereas automatic
+Ghostty-only backups exclude them.
 Snapshots persist resumable AI `sessions`, `unresolved` TUIs and the observed
 `terminal_inventory`, including ordinary-terminal cwd/process evidence. Use the saved
 scope and unresolved rows to state coverage; Ghostty-only totals cannot establish
@@ -210,8 +215,14 @@ or unavailable evidence. Dry-run output is JSON for inspection.
   of the same cwd, internal identity verified. When several
   fresh TUIs share one bucket, transcripts are assigned disjointly — one file
   per TUI; an undecidable race (equidistant claims) refuses to the unresolved
-  section rather than guessing. Live TUIs matching neither way are persisted as
-  unresolved rows and printed in the snapshot report — visible, never silently dropped.
+  section rather than guessing. For Antigravity (`agy`), argv selectors
+  (`--conversation`, `-r`, `--resume`) anchor directly; UUID-less `agy` TUIs are
+  anchored (`lsof-brain`) via open `~/.gemini/antigravity-cli/brain/<UUID>`
+  handles filtered to top-level conversations (`nesting_depth == 0`) in read-only
+  `conversation_summaries.db`, failing closed to unresolved when the index is
+  unavailable or multiple/colliding parent handles appear. Live TUIs matching
+  neither way are persisted as unresolved rows and printed in the snapshot
+  report — visible, never silently dropped.
 - **Liveness**: last timestamp read from the *content* of the session file — not
   its mtime, which can change without real interaction. Use the time-window recipe
   above to qualify actual work rather than treating every record as interaction.

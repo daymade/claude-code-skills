@@ -18,6 +18,7 @@ Design invariants:
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -32,6 +33,7 @@ VALID_CONV_ID_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
 USER_REQUEST_RE = re.compile(r"<USER_REQUEST>\s*(.*?)\s*</USER_REQUEST>", re.S)
 ADDITIONAL_META_RE = re.compile(r"\s*<ADDITIONAL_METADATA>.*?</ADDITIONAL_METADATA>\s*", re.S)
 DEFAULT_MAX_OUTPUT_BYTES = 120_000
+STALE_DB_TOLERANCE_SECONDS = 60.0
 
 
 def resolve_app_data_dir(explicit: str | None) -> Path:
@@ -148,16 +150,59 @@ def count_brain_transcripts(app_data_dir: Path) -> int:
     return len(list_brain_transcript_ids(app_data_dir))
 
 
+def _parse_iso_epoch(raw: str | None) -> float | None:
+    if not raw or not isinstance(raw, str):
+        return None
+    s = raw.strip()
+    if not s or s.startswith("0001-01-01"):
+        return None
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(s)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.timestamp()
+
+
+def _format_utc_iso(epoch: float) -> str:
+    return datetime.fromtimestamp(epoch, timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def _transcript_stat_mtime(app_data_dir: Path, conv_id: str) -> tuple[bool, float | None]:
+    """Stat-only metadata check on transcript.jsonl; never reads transcript bodies."""
+    try:
+        validate_conversation_id(conv_id)
+    except ValueError:
+        return False, None
+    tpath = app_data_dir / "brain" / conv_id / ".system_generated" / "logs" / "transcript.jsonl"
+    try:
+        st = tpath.stat()
+    except OSError:
+        return False, None
+    if not tpath.is_file():
+        return False, None
+    return True, float(st.st_mtime)
+
+
 def compute_index_coverage(conn: sqlite3.Connection, app_data_dir: Path) -> dict[str, Any]:
     indexed_ids: set[str] = set()
     fts_convs = 0
     latest_mtime = None
+    stale_db_timestamp_count = 0
     try:
         for r in conn.execute("SELECT conversation_id, last_modified_time FROM conversation_summaries"):
             cid = r[0]
+            mt = r[1]
             if cid:
                 indexed_ids.add(cid)
-            mt = r[1]
+                has_t, t_mtime = _transcript_stat_mtime(app_data_dir, cid)
+                if has_t and t_mtime is not None:
+                    db_epoch = _parse_iso_epoch(mt)
+                    if db_epoch is None or (t_mtime - db_epoch) > STALE_DB_TOLERANCE_SECONDS:
+                        stale_db_timestamp_count += 1
             if mt is not None and (latest_mtime is None or mt > latest_mtime):
                 latest_mtime = mt
     except sqlite3.Error:
@@ -177,6 +222,7 @@ def compute_index_coverage(conn: sqlite3.Connection, app_data_dir: Path) -> dict
         "fts_indexed_conversations": fts_convs,
         "brain_transcript_dirs": len(brain_ids),
         "unindexed_brain_dirs": unindexed_gap,
+        "stale_db_timestamp_count": stale_db_timestamp_count,
         "latest_indexed_modified_time": latest_mtime,
     }
 
@@ -187,7 +233,10 @@ def list_sessions(
     limit: int = 10,
     exclude_current: str | None = None,
     include_subagents: bool = False,
+    sort_by: str = "db",
 ) -> dict[str, Any]:
+    if sort_by not in ("db", "activity"):
+        raise ValueError(f"Unsupported sort_by mode: {sort_by!r} (expected 'db' or 'activity')")
     conn, err = open_summaries_db_readonly(app_data_dir)
     if err or conn is None:
         return {
@@ -222,7 +271,7 @@ def list_sessions(
     finally:
         conn.close()
 
-    sessions: list[dict[str, Any]] = []
+    candidates: list[tuple[float, str, str, dict[str, Any]]] = []
     for r in rows:
         cid = r["conversation_id"]
         if exclude_current and cid == exclude_current:
@@ -233,27 +282,44 @@ def list_sessions(
         workspaces = parse_workspace_uris(r["workspace_uris"])
         if not workspace_matches_project(workspaces, project):
             continue
-        tpath = app_data_dir / "brain" / cid / ".system_generated" / "logs" / "transcript.jsonl"
-        sessions.append({
+        has_transcript, t_mtime = _transcript_stat_mtime(app_data_dir, cid)
+        db_epoch = _parse_iso_epoch(r["last_modified_time"])
+        db_stale = bool(
+            has_transcript
+            and t_mtime is not None
+            and (db_epoch is None or (t_mtime - db_epoch) > STALE_DB_TOLERANCE_SECONDS)
+        )
+        effective_epoch = max((v for v in (db_epoch, t_mtime) if v is not None), default=float("-inf"))
+        item = {
             "conversation_id": cid,
             "title": r["title"] or "",
             "preview": (r["preview"] or "")[:160],
             "step_count": int(r["step_count"] or 0),
             "last_modified_time": r["last_modified_time"],
+            "transcript_mtime": _format_utc_iso(t_mtime) if t_mtime is not None else None,
+            "db_timestamp_stale": db_stale,
             "last_user_input_time": r["last_user_input_time"],
             "workspaces": workspaces,
             "status": r["status"] or "",
             "parent_conversation_id": r["parent_conversation_id"] or "",
             "nesting_depth": int(r["nesting_depth"] or 0),
             "killed": bool(r["killed"]),
-            "has_transcript": tpath.is_file(),
-        })
-        if len(sessions) >= limit:
+            "has_transcript": has_transcript,
+        }
+        candidates.append((effective_epoch, str(r["last_modified_time"] or ""), cid, item))
+        if sort_by == "db" and len(candidates) >= limit:
             break
+
+    if sort_by == "activity":
+        candidates.sort(key=lambda t: (t[0], t[1], t[2]), reverse=True)
+        candidates = candidates[:limit]
+
+    sessions = [t[3] for t in candidates]
 
     return {
         "mode": "list",
         "status": "ok",
+        "sort_by": sort_by,
         "project_filter": project,
         "exclude_current": exclude_current,
         "include_subagents": include_subagents,
@@ -892,11 +958,19 @@ def render_markdown(payload: dict[str, Any], full: bool = False) -> str:
 
     if mode == "list":
         cov = payload["coverage"]
+        sort_by = payload.get("sort_by", "db")
+        stale_count = int(cov.get("stale_db_timestamp_count") or 0)
         lines.append("# Antigravity Conversations (Indexed Inventory)")
         lines.append(
             f"- Store: `{cov['app_data_dir']}` | Indexed summaries: {cov['indexed_summaries']} | "
-            f"Brain transcript dirs: {cov['brain_transcript_dirs']} | Unindexed gap: {cov['unindexed_brain_dirs']}"
+            f"Brain transcript dirs: {cov['brain_transcript_dirs']} | Unindexed gap: {cov['unindexed_brain_dirs']} | "
+            f"Stale DB timestamps: {stale_count} | Sort: `{sort_by}`"
         )
+        if stale_count > 0 and sort_by != "activity":
+            lines.append(
+                f"- Note: {stale_count} indexed conversation(s) have a newer `transcript.jsonl` mtime than "
+                "`conversation_summaries.last_modified_time`; rerun with `--sort activity` to catch resumed older sessions."
+            )
         if payload.get("project_filter"):
             lines.append(f"- Project filter: `{payload['project_filter']}`")
         if payload.get("exclude_current"):
@@ -904,6 +978,18 @@ def render_markdown(payload: dict[str, Any], full: bool = False) -> str:
         lines.append("")
         if not payload["sessions"]:
             lines.append("_No matching indexed conversations found._")
+        elif sort_by == "activity":
+            lines.append("| Conversation ID | Transcript Mtime | DB Modified | Steps | Title | Workspaces |")
+            lines.append("|---|---|---|---:|---|---|")
+            for s in payload["sessions"]:
+                ws = ", ".join(s["workspaces"][:2]) or "—"
+                title = (s["title"] or "(untitled)").replace("|", "\\|")
+                tm = s.get("transcript_mtime") or "—"
+                if s.get("db_timestamp_stale"):
+                    tm = f"{tm} *(DB stale)*"
+                lines.append(
+                    f"| `{s['conversation_id']}` | {tm} | {s['last_modified_time']} | {s['step_count']} | {title} | `{ws}` |"
+                )
         else:
             lines.append("| Conversation ID | Modified | Steps | Title | Workspaces |")
             lines.append("|---|---|---:|---|---|")
@@ -1080,6 +1166,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--project", "-p", help="Filter --list/--query by workspace path")
     parser.add_argument("--all-projects", "-a", action="store_true", help="Do not filter --list/--query by workspace path")
     parser.add_argument("--limit", "-n", type=int, default=10, help="Max items for --list/--query (default: 10)")
+    parser.add_argument(
+        "--sort",
+        choices=("db", "activity"),
+        default=None,
+        help="With --list: sort by SQLite last_modified_time ('db', default) or max(DB time, stat(transcript.jsonl) mtime) ('activity', catches stale DB timestamps without reading bodies)",
+    )
     parser.add_argument("--exclude-current", help="Conversation ID to exclude from --list/--query")
     parser.add_argument("--include-subagents", action="store_true", help="Include child subagent conversations in --list/--query")
     parser.add_argument("--full", action="store_true", help="Hydrate truncated_fields from transcript_full.jsonl and avoid clipping text")
@@ -1106,6 +1198,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("Specify at most one of --verbatim-inputs, --subagents, --step, or --tool-evidence")
     if (args.tool or args.contains) and not args.tool_evidence:
         parser.error("--tool and --contains require --tool-evidence")
+    if args.sort is not None and not args.list:
+        parser.error("--sort requires --list")
 
     app_data_dir = resolve_app_data_dir(args.app_data_dir)
     project_filter = None if args.all_projects else args.project
@@ -1140,6 +1234,7 @@ def main(argv: list[str] | None = None) -> int:
                 limit=max(1, args.limit),
                 exclude_current=args.exclude_current,
                 include_subagents=args.include_subagents,
+                sort_by=args.sort or "db",
             )
     except ValueError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

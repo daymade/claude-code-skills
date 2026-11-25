@@ -1798,5 +1798,124 @@ class CallerTtyTest(unittest.TestCase):
             self.assertEqual(gs._caller_ttys(), {"ttys018", "ttys019"})
 
 
+class AgySessionTest(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="ghostty-agy-test-")
+        self.app_dir = Path(self.temp.name) / "agy-store"
+        self.app_dir.mkdir(parents=True)
+        self.db_path = self.app_dir / "conversation_summaries.db"
+        conn = sqlite3.connect(str(self.db_path))
+        conn.execute(
+            """
+            CREATE TABLE conversation_summaries (
+                conversation_id TEXT PRIMARY KEY,
+                nesting_depth INTEGER DEFAULT 0,
+                parent_conversation_id TEXT DEFAULT ''
+            )
+            """
+        )
+        conn.executemany(
+            "INSERT INTO conversation_summaries VALUES (?, ?, ?)",
+            [
+                (S_HEALTHY, 0, ""),
+                (S_DEAD, 1, S_HEALTHY),
+                (S_PROSE, 0, ""),
+            ],
+        )
+        conn.commit()
+        conn.close()
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def _write_transcript(self, sid, records):
+        tpath = self.app_dir / "brain" / sid / ".system_generated" / "logs" / "transcript.jsonl"
+        tpath.parent.mkdir(parents=True, exist_ok=True)
+        tpath.write_text("\n".join(json.dumps(r) for r in records) + "\n")
+        return tpath
+
+    def test_assign_agy_sessions_filters_subagents_and_fails_closed(self):
+        tpath = self._write_transcript(S_HEALTHY, [{"step_index": 0, "created_at": iso(1)}])
+        procs = [
+            {"pid": 101, "tty": "ttys001", "tool": "agy", "cwd": "/tmp/a", "cmd": "agy --dangerously-skip-permissions"},
+            {"pid": 102, "tty": "ttys002", "tool": "agy", "cwd": "/tmp/b", "cmd": "agy --dangerously-skip-permissions"},
+            {"pid": 103, "tty": "ttys003", "tool": "agy", "cwd": "/tmp/c", "cmd": "agy --dangerously-skip-permissions"},
+        ]
+        brain = self.app_dir / "brain"
+        # PID 101: 1 parent + 1 subagent -> resolves unambiguously to S_HEALTHY
+        # PID 102: 2 top-level parents -> fails closed
+        # PID 103: subagent only -> fails closed
+        lsof_out = "\n".join([
+            "p101",
+            f"n{brain / S_HEALTHY / '.system_generated'}",
+            f"n{brain / S_DEAD / '.system_generated'}",
+            "p102",
+            f"n{brain / S_HEALTHY / 'scratch'}",
+            f"n{brain / S_PROSE / 'scratch'}",
+            "p103",
+            f"n{brain / S_DEAD / 'scratch'}",
+        ]) + "\n"
+        with mock.patch.object(gs, "AGY_APP_DATA_DIR_OVERRIDE", str(self.app_dir)), \
+             mock.patch("ghostty_watch.run_bounded", return_value=lsof_out):
+            assigned = gs._assign_agy_sessions(procs, seen={})
+        by_pid = {p["pid"]: p for p in assigned}
+        self.assertEqual(by_pid[101]["sid"], S_HEALTHY)
+        self.assertEqual(by_pid[101]["anchor"], "lsof-brain")
+        self.assertEqual(by_pid[101]["transcript"], str(tpath))
+        self.assertNotIn("sid", by_pid[102])
+        self.assertIn("multiple top-level", by_pid[102]["reason"])
+        self.assertNotIn("sid", by_pid[103])
+        self.assertIn("no top-level", by_pid[103]["reason"])
+
+    def test_assign_agy_sessions_rejects_duplicate_claim_and_missing_db(self):
+        procs = [
+            {"pid": 201, "tty": "ttys001", "tool": "agy", "cwd": "/tmp/a", "cmd": "agy"},
+            {"pid": 202, "tty": "ttys002", "tool": "agy", "cwd": "/tmp/a", "cmd": "agy"},
+        ]
+        brain = self.app_dir / "brain"
+        lsof_out = f"p201\nn{brain / S_HEALTHY}\np202\nn{brain / S_HEALTHY}\n"
+        with mock.patch.object(gs, "AGY_APP_DATA_DIR_OVERRIDE", str(self.app_dir)), \
+             mock.patch("ghostty_watch.run_bounded", return_value=lsof_out):
+            assigned = gs._assign_agy_sessions(procs, seen={})
+        self.assertTrue(all("sid" not in p and "ambiguous" in p["reason"] for p in assigned))
+
+        # Missing DB fails closed without calling lsof
+        missing_dir = Path(self.temp.name) / "missing-store"
+        with mock.patch.object(gs, "AGY_APP_DATA_DIR_OVERRIDE", str(missing_dir)), \
+             mock.patch("ghostty_watch.run_bounded") as mocked_run:
+            res = gs._assign_agy_sessions(procs[:1], seen={})
+        mocked_run.assert_not_called()
+        self.assertNotIn("sid", res[0])
+        self.assertIn("index unavailable", res[0]["reason"])
+
+    def test_agy_liveness_restore_cmd_and_load_snapshot(self):
+        ts = iso(2)
+        self._write_transcript(S_HEALTHY, [{"step_index": 0, "created_at": ts}])
+        with mock.patch.object(gs, "AGY_APP_DATA_DIR_OVERRIDE", str(self.app_dir)):
+            last_ts, err = gs.agy_liveness(S_HEALTHY)
+            self.assertEqual((last_ts, err), (ts, "ok"))
+            self.assertEqual(gs.classify(last_ts, err), "active")
+            self.assertEqual(gs.agy_liveness(S_PROSE), (None, "no-file"))
+
+        entry = {
+            "tool": "agy",
+            "sid": S_HEALTHY,
+            "cwd": "/tmp/demo",
+            "profile": "direct",
+            "cmdline": f"agy --dangerously-skip-permissions --model gemini --conversation={S_PROSE} -c",
+        }
+        cmd = gs.restore_cmd(entry, env_mapping={})
+        self.assertEqual(
+            cmd,
+            f"cd -- /tmp/demo && agy --dangerously-skip-permissions --model gemini --conversation={S_HEALTHY}",
+        )
+
+        snap = Path(self.temp.name) / "snap.json"
+        snap.write_text(json.dumps({"sessions": [entry]}))
+        loaded = gs.load_snapshot(str(snap))
+        self.assertEqual(loaded["sessions"][0]["tool"], "agy")
+        self.assertEqual(loaded["sessions"][0]["sid"], S_HEALTHY)
+
+
 if __name__ == "__main__":
     unittest.main()

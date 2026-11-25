@@ -1197,5 +1197,63 @@ class DeployFreshnessHardeningTest(unittest.TestCase):
             watch.install(self.state, apply=True)
 
 
+class AgyObserverTest(unittest.TestCase):
+    def test_cli_identity_for_agy_interactive_and_non_interactive(self):
+        self.assertEqual(
+            watch.cli_identity({'cmdline': f'agy --dangerously-skip-permissions --conversation={S1}'})[:2],
+            ('agy', S1),
+        )
+        self.assertEqual(
+            watch.cli_identity({'cmdline': f'/usr/local/bin/agy -r {S2}'})[:2],
+            ('agy', S2),
+        )
+        self.assertEqual(
+            watch.cli_identity({'cmdline': f'agy --resume {S3}'})[:2],
+            ('agy', S3),
+        )
+        self.assertEqual(
+            watch.cli_identity({'cmdline': 'agy --dangerously-skip-permissions'})[:2],
+            ('agy', None),
+        )
+        for non_tui in (
+            'agy -p hello',
+            'agy --print hello',
+            'agy acp',
+            'agy mcp list',
+            'agy remote-control status',
+            'agy --help',
+        ):
+            self.assertIsNone(watch.cli_identity({'cmdline': non_tui}), non_tui)
+
+    def test_observe_and_canonical_support_agy_across_scopes(self):
+        graph = '\n'.join([
+            '1 0 ?? /Applications/Ghostty.app/Contents/MacOS/ghostty',
+            f'10 1 ttys001 agy --dangerously-skip-permissions --conversation={S1}',
+            '11 1 ttys002 agy --dangerously-skip-permissions',
+            '12 1 ttys003 agy mcp list',
+            f'30 0 ?? /Applications/UURemote.app/Contents/Helpers/tmux/uuyc-mux -S /tmp/tmux.sock',
+            f'31 30 ttys004 agy --dangerously-skip-permissions --conversation={S2}',
+        ])
+        def run(command, deadline, counters):
+            counters['commands'] += 1
+            return graph if command[0] == '/bin/ps' else ''.join(
+                'p' + pid + '\nn/tmp/demo\n' for pid in command[3].split(','))
+
+        with mock.patch.object(watch, 'run_bounded', side_effect=run):
+            ghostty_only = watch.observe(scope='ghostty', include_terminals=True)
+            all_cli = watch.observe(scope='all-cli', include_terminals=True)
+
+        self.assertEqual([(r['tool'], r['sid']) for r in ghostty_only['sessions']], [('agy', S1)])
+        self.assertEqual([(r['tool'], r['pid']) for r in ghostty_only['unresolved']], [('agy', 11)])
+        self.assertEqual({r['sid'] for r in all_cli['sessions']}, {S1, S2})
+        uu_row = next(r for r in all_cli['sessions'] if r['sid'] == S2)
+        self.assertEqual(uu_row['terminal_owner'], 'non-ghostty')
+
+        canon = watch.canonical(all_cli['sessions'], {})
+        self.assertEqual([r['sid'] for r in canon], [S1, S2])
+        self.assertIn(f'--conversation={S1}', canon[0]['restore_command'])
+        self.assertIn(f'--conversation={S2}', canon[1]['restore_command'])
+
+
 if __name__ == '__main__':
     unittest.main()
