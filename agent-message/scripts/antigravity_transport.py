@@ -56,8 +56,38 @@ def is_antigravity_target(target: str) -> bool:
     return isinstance(target, str) and target.startswith(("antigravity:", "agy:"))
 
 
-def parse_antigravity_id(target: str) -> str:
-    """Validate an antigravity:<uuid> or agy:<uuid> target and return canonical UUID."""
+def _resolve_prefix_candidates(prefix: str, antigravity_home: Path) -> list[str]:
+    lowered = prefix.lower()
+    candidates: set[str] = set()
+    db_path = antigravity_home / "conversation_summaries.db"
+    if db_path.is_file():
+        try:
+            with closing(_sqlite_ro(db_path)) as connection:
+                rows = connection.execute(
+                    "SELECT conversation_id FROM conversation_summaries "
+                    "WHERE lower(conversation_id) LIKE ?",
+                    (lowered + "%",),
+                ).fetchall()
+                for row in rows:
+                    cid = row["conversation_id"]
+                    if isinstance(cid, str) and cid:
+                        candidates.add(cid.lower())
+        except sqlite3.Error:
+            pass
+    brain_dir = antigravity_home / "brain"
+    if brain_dir.is_dir():
+        for entry in brain_dir.iterdir():
+            name = entry.name.lower()
+            if name.startswith(lowered):
+                try:
+                    candidates.add(str(uuid.UUID(name)))
+                except ValueError:
+                    pass
+    return sorted(candidates)
+
+
+def parse_antigravity_id(target: str, *, antigravity_home: Path | None = None) -> str:
+    """Validate an antigravity:<uuid> or agy:<uuid> target (or unambiguous >=8-char hex prefix)."""
     if not is_antigravity_target(target):
         raise AntigravityError(
             f"not an Antigravity address: {target!r}",
@@ -71,18 +101,36 @@ def parse_antigravity_id(target: str) -> str:
     )
     try:
         parsed = uuid.UUID(raw)
-    except (ValueError, AttributeError) as exc:
+        return str(parsed)
+    except (ValueError, AttributeError):
+        pass
+    if antigravity_home is not None and len(raw) >= 8 and re.fullmatch(r"[0-9a-fA-F-]+", raw):
+        matches = _resolve_prefix_candidates(raw, antigravity_home)
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            choices = ", ".join(f"antigravity:{m}" for m in matches)
+            raise AntigravityError(
+                f"ambiguous Antigravity prefix {target!r}; use one of: {choices}",
+                is_target_error=True,
+                outcome="not_sent",
+            )
         raise AntigravityError(
-            f"invalid Antigravity conversation UUID in {target!r}; "
-            "use antigravity:<uuid> from `peer.py list --provider antigravity`",
+            f"no Antigravity conversation matches prefix {target!r}; "
+            "use `peer.py list --provider antigravity`",
             is_target_error=True,
             outcome="not_sent",
-        ) from exc
-    return str(parsed)
+        )
+    raise AntigravityError(
+        f"invalid Antigravity conversation UUID in {target!r}; "
+        "use antigravity:<uuid> (or unambiguous >=8-char hex prefix) from `peer.py list --provider antigravity`",
+        is_target_error=True,
+        outcome="not_sent",
+    )
 
 
-def canonical_antigravity_address(target: str) -> str:
-    return f"antigravity:{parse_antigravity_id(target)}"
+def canonical_antigravity_address(target: str, *, antigravity_home: Path | None = None) -> str:
+    return f"antigravity:{parse_antigravity_id(target, antigravity_home=antigravity_home)}"
 
 
 def _unescape_pbtxt_string(raw: str) -> str:
@@ -382,7 +430,7 @@ def resolve_conversation(
     require_catalog: bool = False,
 ) -> dict[str, Any]:
     """Resolve an Antigravity target against conversation_summaries.db + annotations + flock."""
-    cid = parse_antigravity_id(target)
+    cid = parse_antigravity_id(target, antigravity_home=antigravity_home)
     address = f"antigravity:{cid}"
     db_path = antigravity_home / "conversation_summaries.db"
     if not db_path.is_file():

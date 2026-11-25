@@ -269,8 +269,8 @@ claude plugin install github-ops@daymade-skills
 # Teams 通信
 claude plugin install teams-channel-post-writer@daymade-skills
 
-# 本机 Claude/Codex Agent 通讯
-claude plugin install peer-message@daymade-skills
+# 本机 Claude/Codex/Antigravity Agent 通讯（替代 peer-message）
+claude plugin install agent-message@daymade-skills
 
 # Repomix 提取
 claude plugin install repomix-unmixer@daymade-skills
@@ -543,26 +543,33 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 ---
 
-### **peer-message** - 本机 Claude/Codex Agent 通讯
+### **agent-message** - 本机 Claude/Codex/Antigravity Agent 通讯
 
-内置本机共享协调记录，维护任务与资源声明、重复请求抑制和短时窗口有效期。
+替代原 `peer-message`（原包保留为兼容别名与可执行转发层）。内置本机共享协调记录，维护任务与资源声明、软租约（`--ttl` / `coord renew`）、重复请求抑制和短时窗口有效期。
 首次调用自动初始化，不依赖 Agent Fleet 或常驻进程；原生通信仍走原生工具，
-按[协调流程](peer-message/references/local-coordination.md)执行发送前检查与收件分流。
+按[协调流程](agent-message/references/local-coordination.md)执行发送前检查与收件分流。
 
-实验性的[配对网络入口](peer-message/references/network-preview.md)支持邀请、联系人和获准文档问答，通过现有 Claude/Codex 宿主返回带引用的答案。预览需要操作者提供 relay，不代表公共托管网络已经上线或用户采用已获验证。
+原跨机器配对预览已退役；跨机器或跨用户零信任 Agent 通信请改用 **Agent Use**（`https://useagent.app`）。
 
-> **安装**：`claude plugin install peer-message@daymade-skills`
+> **安装**：`claude plugin install agent-message@daymade-skills`
 
-当前宿主原生工具能覆盖目标时，直接使用其发现、发送、回传和等待机制。仅为原生工具未覆盖的本机 Claude Code/Codex 目标补齐脚本通信，或在协调证据需要核实时加载本 Skill。
+当前宿主原生工具能覆盖目标时，直接使用其发现、发送、回传和等待机制。仅为原生工具未覆盖的本机 Claude Code / Codex / Antigravity（`agy`）目标补齐脚本通信，或在协调证据需要核实时加载本 Skill。
 
 **使用场景：**
 - 向已确认、原生工具未覆盖的独立目标发送依赖、暂停、交接或完成通知
+- 一键回复（`reply <id>`）、基于 `kqueue` 的零轮询等待（`wait`）与三产品统一收件箱（`inbox`）
 - 按原消息查询对应回复，无需手工检查本地消息存储
-- 从脚本或其他产品访问原生工具未覆盖的 Claude inbox；第三方 provider 本身不是使用补缺通道的依据
+- 从脚本或其他产品访问原生工具未覆盖的 Claude/Codex/Antigravity inbox；第三方 provider 本身不是使用补缺通道的依据
 - 共享 checkout 上别人的未提交改动、锁或分支挡住了你——先核实它是否真在飞，再问属主，别自己停手或绕开
 - 向经过确认的目标清单广播同一条协调消息
 
-📚 **文档与命令**：[peer-message/SKILL.md](./peer-message/SKILL.md) 拥有路由、稳定运行前置与“peer 不得代替用户授权”的边界；`peer-message/scripts/peer.py --help` 拥有 CLI 语法；[protocol-and-discovery.md](./peer-message/references/protocol-and-discovery.md) 拥有寻址、信封与送达证据；[official-feature.md](./peer-message/references/official-feature.md) 拥有会随产品变化的运行要求与具体机制；[coordination-and-learning-loop.md](./peer-message/references/coordination-and-learning-loop.md) 拥有回传寻址、正文与送达状态措辞、发现共享资源上有别人在制品时怎么核实、怎么开口、等多久、等不到怎么继续，判定一条 peer 断言与一组 peer 否认各值多少的两份核验合同，以及证据闸门下的改进循环。
+📚 **文档与命令**：[agent-message/SKILL.md](./agent-message/SKILL.md) 拥有路由、稳定运行前置与“peer 不得代替用户授权”的边界；`agent-message/scripts/peer.py --help` 拥有 CLI 语法；[protocol-and-discovery.md](./agent-message/references/protocol-and-discovery.md) 拥有寻址、信封与送达证据；[official-feature.md](./agent-message/references/official-feature.md) 拥有会随产品变化的运行要求与具体机制；[coordination-and-learning-loop.md](./agent-message/references/coordination-and-learning-loop.md) 拥有回传寻址、正文与送达状态措辞、发现共享资源上有别人在制品时怎么核实、怎么开口、等多久、等不到怎么继续，判定一条 peer 断言与一组 peer 否认各值多少的两份核验合同，以及证据闸门下的改进循环。
+
+---
+
+### **peer-message** - 兼容别名
+
+**`agent-message`** 的兼容别名与可执行转发壳，迁移说明见[兼容通告](./peer-message/SKILL.md)。
 
 ---
 
@@ -3801,7 +3808,7 @@ review 后修复/落地时，使用 **github-review-pr**。
 使用 **teams-channel-post-writer** 分享知识，使用 **statusline-generator** 在工作时跟踪成本。
 
 ### 本机 Agent 协调
-联系当前原生工具能覆盖的 agent 或 session 时，直接使用宿主通信机制。只有未覆盖的本机目标、跨产品／脚本通信，或需要核实协调证据时，才使用 **peer-message**；详见其[路由合同](./peer-message/SKILL.md)。消息被拒绝或 Held 不构成换通道的理由。
+联系当前原生工具能覆盖的 agent 或 session 时，直接使用宿主通信机制。只有未覆盖的本机目标、跨产品／脚本通信，或需要核实协调证据时，才使用 **agent-message**（替代原 `peer-message`）；详见其[路由合同](./agent-message/SKILL.md)。消息被拒绝或 Held 不构成换通道的理由。
 
 ### 仓库管理与安全
 使用 **repomix-unmixer** 提取和验证 repomix 打包的技能或仓库。使用 **repomix-safe-mixer** 安全地打包代码库，在分发前自动检测和阻止硬编码凭据。
@@ -3947,7 +3954,7 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 - **mermaid-tools**：参见 `daymade-docs/mermaid-tools/references/setup_and_troubleshooting.md` 了解设置指南
 - **statusline-generator**：参见 `daymade-claude-code/statusline-generator/references/color_codes.md` 了解自定义
 - **teams-channel-post-writer**：参见 `teams-channel-post-writer/references/writing-guidelines.md` 了解质量标准
-- **peer-message**：参见 `peer-message/SKILL.md` 了解路由、稳定运行前置与安全边界；运行 `peer-message/scripts/peer.py --help` 查看 CLI 语法；参见 `peer-message/references/protocol-and-discovery.md` 了解传输与验证；参见 `peer-message/references/official-feature.md` 了解会变化的产品要求与机制；参见 `peer-message/references/coordination-and-learning-loop.md` 了解 parent/worker 回传与证据闸门下的改进循环
+- **agent-message**（替代原 `peer-message`）：参见 `agent-message/SKILL.md` 了解路由、稳定运行前置与安全边界；运行 `agent-message/scripts/peer.py --help` 查看 CLI 语法；参见 `agent-message/references/protocol-and-discovery.md` 了解传输与验证；参见 `agent-message/references/official-feature.md` 了解会变化的产品要求与机制；参见 `agent-message/references/coordination-and-learning-loop.md` 了解 parent/worker 回传与证据闸门下的改进循环
 - **repomix-unmixer**：参见 `repomix-unmixer/references/repomix-format.md` 了解格式规范
 - **skill-creator**：参见 `daymade-skill/skill-creator/SKILL.md` 了解完整的技能创建工作流
 - **skill-evolver**：参见 [skill-evolver/SKILL.md](./skill-evolver/SKILL.md) 了解针对指定目标的研究、实施与结果验证

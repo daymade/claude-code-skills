@@ -20,6 +20,7 @@ description: Transport-neutral addressing, Claude UDS and Codex live/queued deli
 | `codex:<exact-name>` | Codex `threads.name` 的精确值；标题不是名字，不用标题猜目标 |
 | `antigravity:<uuid>` | 精确匹配 Antigravity（`agy`）顶层会话 UUID；`list`/`whoami`/回执统一使用该规范形式 |
 | `agy:<uuid>` | `antigravity:<uuid>` 的 CLI 输入别名，入口即归一为 `antigravity:<uuid>` |
+| `<provider>:<8+位hex前缀>` | Claude（`claude-session:`/`claude:`）、Codex（`codex:`）与 Antigravity（`antigravity:`/`agy:`）均支持 8 位以上唯一十六进制 UUID 前缀，入口自动展开为完整规范地址；命中多个候选时 fail-closed 报错（exit 3）并列出候选完整地址，不猜测 |
 
 旧命令里未带前缀的 target 继续解释为 Claude，避免恢复版破坏既有调用。
 
@@ -157,6 +158,8 @@ unknown。notLoaded 的 receipt 标明 target_not_loaded，不自动 resume。�
 thread 出现在 `state` 只能说明它已保存；不能据此断言活跃、空闲或立即处理。多目标广播因此只接受调用者显式列出的 Codex UUID，不从“最近 threads”自动扩张。
 
 ### 发现输出的范围
+
+`list` 支持可选 `--cwd <path>` 按工作目录（精确或子目录前缀，经 `realpath` 归一化）收窄跨三个 provider 的日常发现结果；用于归属排查时，记得按 `coordination-and-learning-loop.md` §5.2 记录施加的过滤条件（避免遗漏跨目录写入的写者）。
 
 `list` 默认只展示 Codex 标题的短预览，并返回 `title_chars` 和
 `title_truncated`。标题可能是完整首条输入，行数限制不限制其长度。地址、ID、
@@ -347,9 +350,27 @@ queue 与 history 不是原子快照；内容在两次读取之间迁移时可�
 同时读取 `route` 与适用时的 `queue_reason`，辨别实时投递、未加载目标排队和显式排队。
 这些字段在普通文本与 JSON 回执中均可见；route 不证明接收方已读。
 
-### JSON 错误回执
+### 统一收件箱、一键回复与零轮询等待
 
-对于带 `--json` 的 `send`、`broadcast`、`list`、`whoami`、`verify`、`replies`、
+1. **统一三产品收件箱（`peer.py inbox`）**：
+   - `python3 "$PEER_SKILL_DIR/scripts/peer.py" inbox [target] [--all] [--ack] [--json]` 统一聚合当前（或显式指定）Claude、Codex、Antigravity 会话的入站消息，并与本地 `coord` 中针对该目标的未关闭入站记录合并（补齐 `ack_required`、`expires_in`、`next_command`）。
+   - Claude 读取 transcript 中 `queue-operation: enqueue` 的 `<cross-session-message>`；Codex 读取只读 `queued_items` 与 `thread_items`（`userMessage` 与 `peer_message/delivery` `functionCallOutput`）；Antigravity 读取 `<state-dir>/antigravity-inbox/<uuid>.jsonl`。
+   - 默认只读返回未读项（`--all` 显示全部）。传 `--ack` 时，Antigravity 原子推进 `<state-dir>/antigravity-inbox/<uuid>.cursor`，Claude 与 Codex 在 `<state-dir>/inbox-cursors/<provider>-<id>.json` 中记录已读游标，**绝不修改 Claude transcript 或 Codex SQLite**。
+
+2. **一键回复（`peer.py reply`）**：
+   - `python3 "$PEER_SKILL_DIR/scripts/peer.py" reply <message-id> [message_file|-|--message TEXT] [--wait-reply <N>] [--json]` 接受完整 message ID 或唯一的 `>=8` 位 hex 前缀（冲突时 fail-closed 退出 3）。
+   - 自动从本地协调库查回原消息并填充目标（原 `sender`）、`--kind reply`、`--in-reply-to`、原 `topic` 与 `thread_id`（保存在 companion 表 `message_threads`），并支持 `message_file` 传 `-` 从 stdin 读入多行正文。
+   - 若原 `sender` 不可回复（如 `local-script`）则明确失败，不猜测收件人；投递返回 `transport_status=accepted` 时自动结清原入站协调记录，减少未关闭行堆积。
+
+3. **OS 级零轮询等待（`peer.py wait` 与 `--wait-reply`）**：
+   - 独立命令：`python3 "$PEER_SKILL_DIR/scripts/peer.py" wait (--message-id <id> | --inbox) [target] [--timeout 60] [--json]`。
+   - 发送联动：`send` 与 `reply` 支持 `--wait-reply <seconds>`，在 `transport_status=accepted` 后直接进入回复等待并在 JSON 回执中附 `reply_wait`。
+   - 底层由 `scripts/peer_wait.py` 驱动：macOS 使用 `select.kqueue()` 监听目标入站存储文件/目录的 `EVFILT_VNODE` 变更，辅以有界低频补偿检查（兼容 SQLite WAL 与新文件创建），非 BSD 平台回退至有界轮询。零模型 token 消耗、不执行 `sleep` 循环。
+   - 结果语义：命中回复或新未读入站返回 `status=ready`（退出 0）；有界窗口到期返回结构化 `status=timeout`、`checked_sources` 与 `next_command`（退出 11）。**活 TUI 唤醒配方**：在 Antigravity 或 Claude Code 中将 `peer.py wait --inbox --timeout 300 --json` 放入宿主后台任务（`run_command` 异步或 Claude `run_in_background`），主对话即可直接收尾释放 token，一旦对方发来消息，后台任务退出 0 自动唤醒当前活跃 TUI，零 `.pb` 竞争。
+
+### JSON 错误回执与自引导动作
+
+对于带 `--json` 的 `send`、`reply`、`broadcast`、`list`、`whoami`、`verify`、`replies`、`wait`、`inbox`、
 `inspect-inbound` 和 `coord prepare`，仅进入 handler 后由 `main()` 捕获的异常会让 stdout 额外输出一个可解析的错误
 对象，成功路径输出不变；stderr 诊断文本与上表退出码逐字保持不变，非 JSON 调用
 的通道逐字节不变：
@@ -357,6 +378,8 @@ queue 与 history 不是原子快照；内容在两次读取之间迁移时可�
 ```json
 {"status": "error", "outcome": "not_sent", "error": "synthetic pre-send failure"}
 ```
+
+当存在明确可执行的后续动作时，JSON 错误回执、协调冲突/抑制回执、`wait` 超时回执与 `inbox` 条目会附带可选的 `next_command`（下一条建议命令）与 `operator_only`（布尔值，为 `true` 时表示需要用户/操作者介入如 Held 策略或安装 Hook，禁止 Agent 擅自绕过）。未携带这两个字段时保持原精简结构。
 
 - `status` 恒为 `error`。`outcome` 只取投递路径或专用异常处理分支明确给出的值：
   `not_sent`（确定未发出，如缺 uv、live adapter 无法启动）与 `unknown`（发出与否

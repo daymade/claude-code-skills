@@ -753,15 +753,29 @@ class AntigravityTests(unittest.TestCase):
         loaded = json.loads(hooks_file.read_text(encoding="utf-8"))
         self.assertEqual(loaded["heavy-worktree-guard"], existing["heavy-worktree-guard"])
         for event in ("SessionStart", "PreInvocation", "Stop"):
-            self.assertIsInstance(loaded["peer-message-inbox"][event], list)
-            self.assertEqual(loaded["peer-message-inbox"][event][0]["type"], "command")
+            self.assertIsInstance(loaded["agent-message-inbox"][event], list)
+            self.assertEqual(loaded["agent-message-inbox"][event][0]["type"], "command")
 
         # Idempotent re-install produces already_installed and no second backup
         res2 = agy_installer.install(hooks_file, python_path=Path(sys.executable))
         self.assertEqual(res2["status"], "already_installed")
         self.assertIsNone(res2["backup"])
 
-        # Uninstall removes only peer-message-inbox and preserves heavy-worktree-guard
+        # Migrating legacy peer-message-inbox replaces it cleanly with zero duplicates
+        legacy_config = {
+            **existing,
+            "peer-message-inbox": {"SessionStart": [{"type": "command", "command": "/old/hook.py", "timeout": 5}]},
+        }
+        hooks_file.write_text(json.dumps(legacy_config, indent=2) + "\n", encoding="utf-8")
+        migrated = agy_installer.install(hooks_file, python_path=Path(sys.executable))
+        self.assertEqual(migrated["status"], "installed")
+        self.assertEqual(migrated["migrated_from"], ["peer-message-inbox"])
+        loaded_migrated = json.loads(hooks_file.read_text(encoding="utf-8"))
+        self.assertNotIn("peer-message-inbox", loaded_migrated)
+        self.assertIn("agent-message-inbox", loaded_migrated)
+        self.assertEqual(loaded_migrated["heavy-worktree-guard"], existing["heavy-worktree-guard"])
+
+        # Uninstall removes managed hook key and preserves heavy-worktree-guard
         res3 = agy_installer.uninstall(hooks_file)
         self.assertEqual(res3["status"], "uninstalled")
         self.assertEqual(json.loads(hooks_file.read_text(encoding="utf-8")), existing)
