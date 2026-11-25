@@ -1373,68 +1373,54 @@ def resolve_python311_plus() -> str:
     return sys.executable or "/usr/bin/python3"
 
 
-def install_launchagent(
+def render_evolution_runner(
     script_path: Path,
     ledger_script: Path,
-    interval_seconds: int = 1800,
-    near_realtime: bool = True,
-    throttle_seconds: int = 60,
-    auto_apply: bool = False,
-    hosts: str = "antigravity,codex,claude",
-) -> dict:
-    if not ledger_script.is_file():
-        raise FileNotFoundError(f"Refusing to install LaunchAgent with missing ledger_script: {ledger_script}")
-
-    python_bin = resolve_python311_plus()
-    label = "ai.daymade.skill-governance-evolve"
-    launch_dir = Path.home() / "Library" / "LaunchAgents"
-    log_dir = Path.home() / "Library" / "Logs" / "skill-governance"
-    reports_dir = DEFAULT_DATA_DIR / "reports"
-    telemetry_path = DEFAULT_DATA_DIR / "telemetry.jsonl"
-    status_file = DEFAULT_DATA_DIR / ".evolve-status"
-    lock_file = DEFAULT_DATA_DIR / ".evolve.flock"
-    runner = DEFAULT_GOVERNANCE_DIR / "run-evolution.py"
-    launch_dir.mkdir(parents=True, exist_ok=True)
-    log_dir.mkdir(parents=True, exist_ok=True)
-    reports_dir.mkdir(parents=True, exist_ok=True)
-    telemetry_path.parent.mkdir(parents=True, exist_ok=True)
-    if not telemetry_path.exists():
-        telemetry_path.touch()
-
+    *,
+    python_bin: str,
+    data_dir: Path,
+    ledger_db: Path,
+    watch_enabled: bool,
+    auto_apply: bool,
+    hosts: str,
+) -> str:
+    report = str(data_dir / "reports" / "latest.md")
     mode_str = "auto_apply" if auto_apply else "propose_only"
     evolve_args = (
-        ["apply", "--hosts", hosts, "--auto-aliases", "--report-out", str(reports_dir / "latest.md")]
+        ["apply", "--hosts", hosts, "--auto-aliases", "--report-out", report]
         if auto_apply
-        else ["propose", "--markdown", "--report-out", str(reports_dir / "latest.md")]
+        else ["propose", "--markdown", "--report-out", report]
     )
 
-    runner_body = f'''#!/usr/bin/env python3
-"""Locked near-real-time evolution runner invoked by LaunchAgent {label}."""
-import fcntl, os, subprocess, sys, tempfile, time
+    return f'''#!/usr/bin/env python3
+"""Locked evolution runner invoked by LaunchAgent ai.daymade.skill-governance-evolve."""
+import fcntl, json, os, subprocess, sys, tempfile, time
 from datetime import datetime, timezone
 from pathlib import Path
 
-STATUS_FILE = Path({str(status_file)!r})
-LOCK_FILE = Path({str(lock_file)!r})
-TELEMETRY = Path({str(telemetry_path)!r})
+STATUS_FILE = Path({str(data_dir / ".evolve-status")!r})
+LOCK_FILE = Path({str(data_dir / ".evolve.flock")!r})
+TELEMETRY = Path({str(data_dir / "telemetry.jsonl")!r})
+LEDGER_RECEIPT = Path({str(data_dir / ".evolve-ledger-refresh")!r})
+LEDGER_DB = Path({str(ledger_db)!r})
 PYTHON = {python_bin!r}
-LEDGER_CMD = [PYTHON, {str(ledger_script)!r}, "index", "--json"]
-EVOLVE_CMD = [PYTHON, {str(script_path)!r}, *{evolve_args!r}]
+LEDGER_CMD = [PYTHON, {str(ledger_script)!r}, "--db", str(LEDGER_DB), "index", "--json"]
+EVOLVE_CMD = [PYTHON, {str(script_path)!r}, "--ledger-db", str(LEDGER_DB), *{evolve_args!r}]
 MODE = {mode_str!r}
+WATCH_ENABLED = {watch_enabled!r}
 
 def now_iso():
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-def write_status(line):
-    STATUS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(prefix=".evolve-status.", dir=STATUS_FILE.parent)
+def write_state(path, line):
+    fd, tmp = tempfile.mkstemp(prefix=path.name + ".", dir=path.parent)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             fh.write(line + "\\n")
             fh.flush()
             os.fsync(fh.fileno())
         os.chmod(tmp, 0o644)
-        os.replace(tmp, STATUS_FILE)
+        os.replace(tmp, path)
     finally:
         if os.path.exists(tmp):
             os.unlink(tmp)
@@ -1445,35 +1431,94 @@ def tel_mtime():
     except OSError:
         return 0
 
-def main():
+def ledger_identity():
+    facts = LEDGER_DB.stat()
+    return [facts.st_dev, facts.st_ino, facts.st_size, facts.st_mtime_ns, facts.st_ctime_ns]
+
+def ledger_is_current():
+    try:
+        receipt = json.loads(LEDGER_RECEIPT.read_text(encoding="utf-8"))
+        return (receipt == ledger_identity()
+                and not LEDGER_DB.with_name(LEDGER_DB.name + "-wal").exists())
+    except (OSError, ValueError):
+        return False
+
+def main(telemetry_only=False):
     LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(LOCK_FILE, "a+", encoding="utf-8") as lfh:
         try:
-            fcntl.flock(lfh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            # A timer or watch event may be the only wake for new input.
+            # Serialize both split jobs so lock contention cannot consume it.
+            flags = fcntl.LOCK_EX
+            if not WATCH_ENABLED:
+                flags |= fcntl.LOCK_NB
+            fcntl.flock(lfh.fileno(), flags)
         except BlockingIOError:
             return 0
-        for pass_idx in (0, 1):
-            before_mt = tel_mtime()
-            t0 = time.monotonic()
+        t0 = time.monotonic()
+        ledger = "reused"
+        if not telemetry_only or not ledger_is_current():
+            if WATCH_ENABLED:
+                LEDGER_RECEIPT.unlink(missing_ok=True)
             r1 = subprocess.run(LEDGER_CMD, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             if r1.returncode != 0:
-                write_status(f"FAIL\\t{{now_iso()}}\\tledger_rc={{r1.returncode}}")
+                write_state(STATUS_FILE, f"FAIL\\t{{now_iso()}}\\tledger_rc={{r1.returncode}}")
                 sys.stderr.write(r1.stderr)
                 return 1
+            ledger = "refreshed"
+            if WATCH_ENABLED:
+                write_state(LEDGER_RECEIPT, json.dumps(ledger_identity()))
+        for pass_idx in (0, 1):
+            before_mt = tel_mtime()
             r2 = subprocess.run(EVOLVE_CMD, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             if r2.returncode != 0:
-                write_status(f"FAIL\\t{{now_iso()}}\\tevolve_rc={{r2.returncode}}")
+                write_state(STATUS_FILE, f"FAIL\\t{{now_iso()}}\\tevolve_rc={{r2.returncode}}")
                 sys.stderr.write(r2.stderr)
                 return 1
-            elapsed = round(time.monotonic() - t0, 1)
-            write_status(f"OK\\t{{now_iso()}}\\t{{elapsed}}s\\tmode={{MODE}}")
             if tel_mtime() == before_mt or pass_idx == 1:
                 break
+        elapsed = round(time.monotonic() - t0, 1)
+        write_state(STATUS_FILE, f"OK\\t{{now_iso()}}\\t{{elapsed}}s\\tmode={{MODE}}\\tledger={{ledger}}")
     return 0
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(telemetry_only=WATCH_ENABLED and sys.argv[1:] == ["--telemetry"]))
 '''
+
+
+def install_launchagent(
+    script_path: Path,
+    ledger_script: Path,
+    interval_seconds: int = 1800,
+    near_realtime: bool = True,
+    throttle_seconds: int = 60,
+    auto_apply: bool = False,
+    hosts: str = "antigravity,codex,claude",
+    ledger_db: Path = DEFAULT_LEDGER_DB,
+) -> dict:
+    if not ledger_script.is_file():
+        raise FileNotFoundError(f"Refusing to install LaunchAgent with missing ledger_script: {ledger_script}")
+
+    python_bin = resolve_python311_plus()
+    label = "ai.daymade.skill-governance-evolve"
+    watch_label = label + "-telemetry"
+    separate_watch = near_realtime and not auto_apply
+    launch_dir = Path.home() / "Library" / "LaunchAgents"
+    log_dir = Path.home() / "Library" / "Logs" / "skill-governance"
+    reports_dir = DEFAULT_DATA_DIR / "reports"
+    telemetry_path = DEFAULT_DATA_DIR / "telemetry.jsonl"
+    runner = DEFAULT_GOVERNANCE_DIR / "run-evolution.py"
+    launch_dir.mkdir(parents=True, exist_ok=True)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    if not telemetry_path.exists():
+        telemetry_path.touch()
+
+    runner_body = render_evolution_runner(
+        script_path, ledger_script, python_bin=python_bin, data_dir=DEFAULT_DATA_DIR,
+        ledger_db=ledger_db.expanduser().resolve(), auto_apply=auto_apply, hosts=hosts,
+        watch_enabled=separate_watch,
+    )
     atomic_write_text(runner, runner_body)
     os.chmod(runner, 0o755)
 
@@ -1492,26 +1537,43 @@ if __name__ == "__main__":
         "StandardOutPath": str(log_dir / "evolve.out.log"),
         "StandardErrorPath": str(log_dir / "evolve.err.log"),
     }
-    if near_realtime:
+    if near_realtime and auto_apply:
         plist_data["WatchPaths"] = [str(telemetry_path)]
-    with open(plist_path, "wb") as fh:
-        plistlib.dump(plist_data, fh)
+    atomic_write_text(plist_path, plistlib.dumps(plist_data).decode("utf-8"))
+
+    watch_plist = launch_dir / f"{watch_label}.plist"
+    if separate_watch:
+        watch_data = {key: value for key, value in plist_data.items() if key != "StartInterval"}
+        watch_data.update(Label=watch_label, ProgramArguments=[python_bin, str(runner), "--telemetry"],
+                          RunAtLoad=False, WatchPaths=[str(telemetry_path)])
+        atomic_write_text(watch_plist, plistlib.dumps(watch_data).decode("utf-8"))
 
     uid = os.getuid()
+    subprocess.run(["launchctl", "bootout", f"gui/{uid}/{watch_label}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if not separate_watch:
+        watch_plist.unlink(missing_ok=True)
     subprocess.run(["launchctl", "bootout", f"gui/{uid}/{label}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     res = subprocess.run(["launchctl", "bootstrap", f"gui/{uid}", str(plist_path)], capture_output=True, text=True)
+    timer_loaded = res.returncode == 0
+    watch_loaded = False
+    if timer_loaded and separate_watch:
+        res = subprocess.run(["launchctl", "bootstrap", f"gui/{uid}", str(watch_plist)], capture_output=True, text=True)
+        watch_loaded = res.returncode == 0
     return {
         "status": "installed" if res.returncode == 0 else "written_not_loaded",
+        "timer_loaded": timer_loaded,
+        "watch_loaded": watch_loaded,
         "label": label,
         "plist": str(plist_path),
         "runner": str(runner),
         "python": python_bin,
         "ledger_script": str(ledger_script),
-        "status_file": str(status_file),
-        "watch_paths": plist_data.get("WatchPaths", []),
+        "status_file": str(DEFAULT_DATA_DIR / ".evolve-status"),
+        "watch_paths": [str(telemetry_path)] if near_realtime else [],
+        "watch_label": watch_label if separate_watch else None,
         "interval_seconds": int(interval_seconds),
         "throttle_seconds": int(throttle_seconds),
-        "mode": mode_str,
+        "mode": "auto_apply" if auto_apply else "propose_only",
         "launchctl_stderr": res.stderr.strip(),
     }
 
@@ -1577,9 +1639,10 @@ def main(argv: list[str] | None = None) -> int:
             throttle_seconds=max(10, args.throttle_seconds),
             auto_apply=args.auto_apply,
             hosts=args.hosts,
+            ledger_db=args.ledger_db,
         )
         print(json.dumps(res, ensure_ascii=False, indent=2))
-        return 0
+        return 0 if res["status"] == "installed" else 1
 
     installed, name_to_entry = discover_installed_skills(args.installed_root)
 
