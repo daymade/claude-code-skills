@@ -201,12 +201,21 @@ Before classifying a uv target, distinguish its role from its directory name:
 |---|---|---|
 | Downloaded/built package archives | Resolve the configured cache and exact package names; check current references and restoration inputs | A later install may download or build again; shared extents/hard links can limit physical release |
 | Cache-managed execution environments | Inspect the actual launcher, environment configuration and active consumers | A running or later invocation may depend on the cached environment; preserve active or unresolved references |
+| Service-private uv cache | Resolve the owning service's non-default `UV_CACHE_DIR`, plist/installer and active `.lock` holder | This is service runtime state, not global-cache garbage; retire it only through that service's lifecycle |
+| Per-invocation uv temporary cache | Resolve the exact `uv run --no-cache` process and its `DARWIN_USER_TEMP_DIR/.tmp*` child | Normal exit removes it; `SIGKILL`, panic or power loss can leave an owned stale directory. Remove only the exact directory after proving its owner is gone and obtaining the required cleanup authorization |
 | Project/service persistent virtual environment | Resolve its Python, base interpreter, lockfile and owning installer | This is a runtime, even when reproducible; retire it through its project/service lifecycle, not a cache cleanup |
 
 Treat internal bucket names and suffixes as installed-version details. Do not
 infer abandonment from a name, age, bucket version or cache-to-project count.
 Keep missing reference evidence `unknown`; a cache's total allocation is not a
 garbage estimate. Never manually delete an internal cache subset.
+
+Do not broad-delete `DARWIN_USER_TEMP_DIR` or every `.tmp*` directory to clean
+uv leftovers. Many tools create same-shaped directories, and a live uv process
+can still hold one. Resolve the exact directory from the target process's open
+file descriptors, prove that process is gone, and keep the removal bounded to
+that path. A service-private `UV_CACHE_DIR` is expected to persist across
+restarts and may stay small and stable; that is not evidence of abandonment.
 
 For an approved finite package list, check `uv --version`, `uv cache clean --help`
 and relevant known issues for that installed release before selecting the command.

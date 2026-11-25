@@ -234,6 +234,7 @@ For Shadowrocket module activation or database rule-order claims, use the same
 proxy-conflict reference; keep its dated build observations separate from current write acceptance.
 When a watchdog is suspected, first align the actual actor and state transitions through
 [macos-watchdog troubleshooting](daymade-macos/macos-watchdog/SKILL.md#troubleshooting-quick-map).
+For an interrupted batch collector, follow [interrupted-batch recovery](daymade-macos/macos-watchdog/references/interrupted-batches.md). For intermittent network evidence, use the [collection and recovery acceptance SOP](debugging-network-issues/references/intermittent-evidence-collection.md).
 For unresolved tunnel packet-loss
 localization, read the [capture procedure](debugging-network-issues/references/packet-capture-recipes.md#four-boundary-tunnel-captures).
 For same-provider node failures with a working subscription, enter

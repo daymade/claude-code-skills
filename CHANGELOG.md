@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **claude-code-hooks / prior-work-retrieval** (`daymade-claude-code` v5.3.10 → v5.3.11): Add Pitfall 73 requiring hook Python runtimes to resolve to the exact fixed interpreter, and preserve prior-work retrieval behavior across sparse checkpoints and hook follow-ups.
+- **macos-cleaner / macos-permissions / macos-watchdog** (`daymade-macos` v1.34.26 → v1.34.27): Preserve service-private uv cache isolation, accepted FDA reuse boundaries, comparable watchdog A/B windows and probe-cost routing updates.
 - **transcript-fixer** (`daymade-audio` v1.65.7 → v1.65.8): Add adjacent-turn Q&A echo near-homophone drift detection (with a synthetic replay control) so intelligible everyday words that answer off-topic in a confirmation slot are flagged and enqueued for verification instead of skipped by the intelligible-real-words guard; add playback-page recording retrieval routing and screen-shared single-frame visual verification to rung 7 (`One recording, two engines`).
 - **github-ops** (`github-ops` v1.20.4 → v1.20.5): Link `references/ci-demand-and-notifications.md` to `workflow_operations.md#pre-merge-local-ci-equivalence-for-zero-step-budget-blocks` and synchronize repository `CLAUDE.md` routing for zero-step budget blocks and shared-checkout recovery.
 - **github-ops** (`github-ops` v1.20.3 → v1.20.4): Add a pre-merge local CI equivalence rule for zero-step spending-limit/budget blocks: enumerate every path-matched `.github/workflows/*.yml` at the exact PR head and run local equivalence before any authorized bypass merge rather than backfilling afterward.

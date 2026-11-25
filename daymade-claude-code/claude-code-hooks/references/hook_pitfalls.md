@@ -3593,3 +3593,28 @@ action, and a nonblocking fault must not be reported as a healthy no-match.
   source checkout leaves the live wrapper's SHA-256 and exit status unchanged;
   and verify an explicit reinstall from a verified ref atomically updates the
   runtime copy and passes readback.
+## 73. An absolute executable is not necessarily a fixed Python runtime
+
+- **Failure:** a registrar accepts `--python /absolute/path/to/uv`, `env` or
+  `pip` because the path exists and is executable. Its smoke can even succeed,
+  but every later prompt/tool boundary enters a package manager or environment
+  resolver. One long-running `uv run` then holds the shared cache lock and turns
+  a local maintenance event into timeouts across many unrelated hooks.
+- **Fix:** for `.py` hooks, inspect the candidate's lexical path and every
+  symlink hop before behavior probing; reject known wrappers (`uv`, `uvx`,
+  `env`, `pip`, `pip3`), direct `.py` files and non-Python executables. Run the
+  candidate without a shell using `-I -B -c`, a small timeout and a controlled
+  environment; require stdout to report Python 3 and `os.path.samefile(
+  sys.executable, candidate)` to be true. The same-file check rejects a script
+  that merely `exec`s another interpreter. The only wrapper exception is the
+  exact direct-runtime shim declared by the machine behavior SSOT. Perform all
+  checks before writing settings or creating a hook symlink, and never put
+  `uv run`, `pip install` or another package manager on a synchronous hook path.
+- **Bidirectional calibration:** keep a healthy fixed interpreter, including a
+  path with spaces. Create dangerous fixtures named `uv`, `env` and `pip` that
+  symlink to the same working Python; static existence and behavior checks pass,
+  so only the wrapper-name assertion can reject them. Add a `python3` script
+  that `exec`s the real interpreter: it behaves like Python but must fail the
+  same-file check unless it is the exact SSOT shim. Add `/bin/sh` as the
+  non-Python control. For every rejection, assert settings are byte-for-byte
+  unchanged and no hook symlink or partial install remains.
