@@ -296,6 +296,39 @@ class RuntimeSearchTests(unittest.TestCase):
         self.assertNotIn("secret.example", telem_text)
         self.assertIn("[redacted]", telem_text)
 
+    def test_agent_skill_ops_category_matches_agent_message_antigravity_and_legacy_peer_message(self) -> None:
+        make_skill(
+            self.installed,
+            "agent-message",
+            "agent-message",
+            "Bridges local cross-session messaging across terminal windows.",
+        )
+        make_skill(
+            self.installed,
+            "agy-helper",
+            "agy-helper",
+            "Inspects Antigravity workspace transcripts.",
+        )
+        make_skill(
+            self.installed,
+            "peer-message",
+            "peer-message",
+            "Deprecated compatibility alias forwarding legacy scripts.",
+        )
+
+        # Invalidate index cache and verify all three land in agent-skill-ops
+        browsed = rs.browse_skill_category(
+            "agent-skill-ops",
+            installed_root=self.installed,
+            sources_config=self.sources_cfg,
+            governance_dir=self.gov,
+            cache_path=self.cache,
+        )
+        catalog = browsed["catalog"]
+        self.assertIn("agent-message", catalog)
+        self.assertIn("agy-helper", catalog)
+        self.assertIn("peer-message", catalog)
+
 
 if __name__ == "__main__":
     unittest.main()
