@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Observe Ghostty descendants on a calendar; save complete manifests only on change.
 
-Runtime shares the manual inventory's bounded process/cwd/start identity resolver.
-Only candidate transcript metadata is read; no liveness, GUI or restore API is used.
+Runtime shares the manual inventory's bounded identity resolver (cwd/start-time
+transcript metadata for Claude/Codex; read-only conversation_summaries.db + lsof-brain
+for agy). No liveness, GUI or restore API is used.
 Every attempt leaves timestamped telemetry, independently of snapshot changes.
 """
 import argparse

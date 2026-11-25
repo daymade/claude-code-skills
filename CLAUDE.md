@@ -749,6 +749,11 @@ For Claude history discovery without a known Session, use
 [read-claude-code-history's indexed search entry](daymade-claude-code/read-claude-code-history/SKILL.md#indexed-content-search).
 Keep executable examples and coverage requirements in that owner.
 
+For Antigravity (`agy`) indexed inventory, FTS5 search, exact-session evidence, or
+locating recently interrupted or resumed sessions whose SQLite timestamps lagged, use
+[Antigravity (agy)](daymade-claude-code/read-claude-code-history/SKILL.md#antigravity-agy).
+Keep commands and stale-timestamp handling in that owner.
+
 For Codex session inventory, launch-source interpretation or task clustering, use
 [Recent inventory](daymade-claude-code/read-codex-history/SKILL.md#recent-inventory).
 Edit shared reader code in `daymade-claude-code/_conversation_core/`, then run
@@ -797,8 +802,9 @@ them instead of restating volatile protocol facts.
 
 ### Ghostty Terminal Sessions
 
-For pre-reboot snapshots of local Claude Code / Codex CLI sessions across terminals,
-or restoring and reconciling their IDs in Ghostty, enter [`ghostty-use`](ghostty-use/SKILL.md).
+For pre-reboot snapshots of local Claude Code / Codex / Antigravity (`agy`) CLI sessions
+across terminals, or restoring and reconciling their IDs in Ghostty, enter
+[`ghostty-use`](ghostty-use/SKILL.md).
 Unmanaged/legacy manual Codex account
 switches start at its
 [account-owner selection](ghostty-use/references/codex-account-switch.md#choose-the-account-owner-first).

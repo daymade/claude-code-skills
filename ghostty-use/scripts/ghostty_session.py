@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Snapshot local Claude Code / Codex CLIs; restore missing sessions in Ghostty.
+"""Snapshot local Claude Code / Codex / Antigravity (agy) CLIs; restore missing sessions in Ghostty.
 
 Usage:
   ghostty_session.py snapshot [--scope all-cli|ghostty] [--expected-tabs N]
@@ -90,18 +90,21 @@ class SessionList(list):
 
 
 def list_sessions(resolve_uuidless=True, *, deadline=None, scope='ghostty', preserve_duplicates=False):
-    """One entry per live claude/codex session.
+    """One entry per live claude/codex/agy session.
 
-    Anchor is a parsed resume UUID. A fork's argv UUID belongs to its parent.
-    A fresh TUI has no UUID
+    Anchor is a parsed resume/conversation UUID. A fork's argv UUID belongs to its parent.
+    A fresh Claude/Codex TUI has no UUID
     on its command line, so with resolve_uuidless its sid is recovered from
-    transcript storage (session file born after process start, same cwd). When
+    transcript storage (session file born after process start, same cwd); a
+    UUID-less agy TUI is anchored fail-closed via open brain/<UUID> handles
+    filtered to top-level conversations in read-only conversation_summaries.db
+    (anchor='lsof-brain'). When
     several UUID-less TUIs share one cwd bucket, candidates are assigned
     disjointly — one transcript per TUI, closest verified birth first — and
     anything ambiguous or left over lands in .unresolved rather than being
     attributed to the wrong session or dropped silently (theft/collision probe
     reproduced 2026-10-07). Manual and automatic callers share this resolution:
-    it reads a bounded set of per-cwd/day buckets, never a history scan.
+    it reads a bounded set of per-cwd/day buckets or index metadata, never a history scan.
     """
     from ghostty_watch import observe, cli_identity, OPAQUE_REASON
     try:
@@ -1771,7 +1774,7 @@ def main(argv=None):
     sub = ap.add_subparsers(dest="cmd", required=True)
     p1 = sub.add_parser("snapshot")
     p1.add_argument('--scope', choices=('all-cli', 'ghostty'), default='all-cli',
-                    help='manual default: all local interactive Codex/Claude CLIs, including headless terminals; automatic backups remain Ghostty-only')
+                    help='manual default: all local interactive Codex/Claude/agy CLIs, including headless terminals; automatic backups remain Ghostty-only')
     p1.add_argument("--out", type=nonempty)
     p1.add_argument("--expected-tabs", type=positive,
                     help="user-reported tab count; recorded separately from terminal surfaces")
