@@ -102,8 +102,10 @@ The supervisor bounds each observation and kills its process group on timeout.
 Failed observations exit nonzero. With Ghostty absent, stand down quietly and retain
 the backup. With Ghostty present but observation empty or failed, report unknown
 and retain the backup. A process graph and batched cwd query select candidate CLI
-processes. UUID-less identities use the manual inventory's bounded cwd/start-time
-resolver and internal session-ID verification; ambiguous matches remain unresolved.
+processes. UUID-less identities use the shared bounded resolver in
+[ghostty_session.py](../scripts/ghostty_session.py) (cwd/start-time transcript
+verification for Claude/Codex; `lsof-brain` filtered by read-only
+`conversation_summaries.db` for `agy`); ambiguous or unindexed matches remain unresolved.
 Do not replace this with an unrestricted history search or index refresh.
 
 ## Verify observation health
@@ -172,14 +174,16 @@ Non-Ghostty or missing/empty provenance stays in the original manual archive;
 an unresolved Ghostty observation cannot promote it into automatic scope.
 
 Only Ghostty descendants are observed; unrelated Terminal sessions are excluded.
-Some native Codex TUIs do not expose a session UUID in argv. Resolve them with the
+Some native Codex and Antigravity (`agy`) TUIs do not expose a session UUID in argv.
+Resolve them with the
 shared bounded inventory resolver before recording remaining ambiguities as
 `unresolved`, with their captured flags, profile and cwd. Never guess an ID from
 the newest rollout or an unrelated history row. A Node wrapper and its native
 vendor child count as one TUI. Noninteractive CLI workers are excluded.
 
 Identity parsing consumes known option values before recognizing selectors.
-Unknown option arity, Claude positional prompts, fork selectors and prompts
+Unknown option arity, Claude/`agy` positional prompts, `agy` `-i`/`--prompt-interactive`
+prompts, fork selectors and prompts
 following a Codex resume ID do not establish the current ID from argv. Parseable
 unresolved TUIs use the shared bounded metadata resolver; retain `unresolved`
 when verification cannot settle the identity. `ps` flattens argv and loses quoting: a quoted
@@ -216,8 +220,8 @@ already-closed sessions conservatively; follow
 before selecting or retrying them. When a captured tree is available, follow
 [recorded tab layout restoration](restore_mechanics.md#restore-recorded-tab-order-and-titles);
 unknown or unsupported grouping retains the legacy process-only boundary. Automatic and
-manual inventories share UUID-less identity resolution (session file born after
-process start, same cwd, identity verified); unresolved or ambiguous identities
+manual inventories share the bounded UUID-less identity resolver in
+[ghostty_session.py](../scripts/ghostty_session.py); unresolved or ambiguous identities
 remain explicit partial coverage. Calendar observation also cannot capture a
 change that occurs and vanishes between scheduled rounds.
 

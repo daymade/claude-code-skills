@@ -1386,7 +1386,7 @@
       "description": "Snapshots local Codex/Claude/agy CLI sessions across terminals and restores IDs in Ghostty after reboot (保存会话/重启前备份/恢复窗口), audits survivors, and makes change-only automatic backups (定期增量快照). Handles unmanaged Codex account switches (额度耗尽换号); Minions native_runtime uses Account Manager. Supports background /compact and targeted Ghostty terminal input (批量压缩 Ghostty 会话). Not --resume help, screenshots or tmux.",
       "source": "./ghostty-use",
       "strict": false,
-      "version": "1.17.0",
+      "version": "1.17.1",
       "category": "developer-tools",
       "keywords": [
         "ghostty",
