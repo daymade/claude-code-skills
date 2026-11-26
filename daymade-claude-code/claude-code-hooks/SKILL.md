@@ -358,6 +358,10 @@ shape and bidirectional fixtures.
 
 After a reinstall, restore only the entries the current installer declares active;
 do not reconstruct registrations from old filenames or reinstall retired aliases.
+When renaming a hook-bearing plugin while keeping a compatibility-alias plugin on
+disk, disable the alias plugin (or strip its hooks) so the same event does not
+fire twice; see
+[references/hook_pitfalls.md](references/hook_pitfalls.md#74-renaming-a-hook-bearing-plugin-while-keeping-a-compatibility-alias-plugin-fires-the-same-hook-twice).
 Preserve independent rule state and authorization writers when migrating entries.
 Verify the consumed entrypoint, modules and effective settings, then exercise a
 real matching event in a fresh native session. A dangling link can silently disarm
