@@ -356,7 +356,7 @@ class SharedEvidence:
         current = configured_id(device.get("id")) if isinstance(device, dict) else None
         return current, configured_id(binding.get("owner_device_id"))
 
-    def publish(self, config_dir):
+    def publish(self, config_dir, *, invoke_publisher: bool = True):
         if not self.publisher or "transcript-fixer.dictionary" not in self.bindings:
             return
         from filelock import FileLock
@@ -400,6 +400,8 @@ class SharedEvidence:
             if not state["pending"]:
                 return
             save()  # Durable pending precedes any external publication attempt.
+            if not invoke_publisher:
+                return
             for native, pending in list(state["pending"].items()):
                 # A changed owner binding cannot publish a previous owner's file.
                 if (pending["uri"] != resource["uri"] or pending["source_key"] != key
@@ -465,7 +467,10 @@ def evidence_operation():
         try:
             if evidence.publisher:
                 from utils.config import get_config
-                evidence.publish(get_config().paths.config_dir)
+                evidence.publish(
+                    get_config().paths.config_dir,
+                    invoke_publisher=not getattr(evidence, "defer_publish", False),
+                )
         except Exception:
             # Native writes are already committed. Preserve their success; the
             # pending state/audit cursor supplies the next ordinary-call replay.

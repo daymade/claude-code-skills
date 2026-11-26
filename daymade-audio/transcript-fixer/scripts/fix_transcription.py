@@ -84,6 +84,11 @@ def _main() -> None:
     """Main entry point - parse arguments and dispatch to commands"""
     parser = create_argument_parser()
     args = parser.parse_args()
+    if getattr(args, "defer_shared_publish", False):
+        import shared_evidence as _se
+        _ev = _se.current()
+        if _ev is not None:
+            _ev.defer_publish = True
     state_commands = [
         name for name in ("disable_context_rule", "enable_context_rule")
         if getattr(args, name, None) is not None
