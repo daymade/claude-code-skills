@@ -48,6 +48,14 @@ baseline and the working files independently. A path-limited checkout alone
 can leave an incomplete index and stage every unselected baseline file as a
 deletion. Sparse configuration success does not prove files were materialized.
 
+Because `git_prepare_sparse_worktree.py` uses non-cone literal sparse patterns,
+root-level files (such as `CHANGELOG.md` or root configuration files) are not
+materialized automatically the way cone mode does; include every root file you
+will edit or that repository hooks read in the initial `--path` list. If you
+later add a single root file manually with `git sparse-checkout add`, prefix it
+with a leading slash (for example, `/CHANGELOG.md`) so Git matches only that
+root path instead of matching same-named files in subdirectories.
+
 For an LFS-bearing repository, a linked worktree shares the registered repository's common Git directory and LFS object storage; an independent clone has a separate store. Prefer the linked worktree when publication or verification requires existing LFS objects. Do not bulk-copy a large `.git/lfs/objects` tree as a setup shortcut: check `df` first and preserve the existing store identity. Missing LFS objects remain an environment gap, not permission to disable smudge or bypass the owning audit.
 
 New files authored inside an owned directory are not automatically added to a

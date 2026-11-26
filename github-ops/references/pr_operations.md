@@ -499,7 +499,19 @@ gh pr merge 123 -R OWNER/REPO --auto --squash --match-head-commit "$HEAD_SHA"
 
 Capture `HEAD_SHA` from a fresh `gh pr view` immediately before merging. Afterward, read the PR
 state again and verify the accepted behavior on the fetched base; a changed squash/rebase commit
-identity is not evidence of loss.
+identity is not evidence of loss. When merging locally from the PR head branch in a linked
+worktree (without `-R`, which disables local cleanup in `gh`) while another worktree already
+checks out the base branch, omit `--delete-branch` (or pass `--delete-branch=false` in
+interactive use so `gh` does not prompt for deletion): GitHub can merge the PR while `gh` still
+exits non-zero trying to check out the base branch locally (`fatal: '<base>' is already used by
+worktree at ...`), aborting chained verification commands. Defer cleanup with
+`--delete-branch=false` (or by omitting `--delete-branch` non-interactively) whenever cleanup
+should run separately: verify the merged state first, confirm whether `refs/heads/<branch>`
+still exists on the verified head remote (repositories with auto-delete enabled usually remove
+it automatically unless branch rules or fork permissions prevent deletion), delete any remaining
+remote branch via the
+[exact-tip leased deletion procedure](#4-retire-remote-branches-only-against-an-exact-saved-tip),
+and retire the linked worktree and local branch separately.
 
 Execute these mutations through `scripts/checked_gh.py` as directed by the Skill
 entry. The helper binds one explicit PR/repository and complete reviewed head,
@@ -801,12 +813,20 @@ behavior. Local one-main state and WIP byte preservation are separate `git-safet
 # Check CI/CD status
 gh pr checks 123
 
-# Watch PR checks until they finish; exit 0 only when all passed (see best_practices.md)
+# Watch PR checks until they finish (still inspect buckets on exit 0; see below and best_practices.md)
 gh pr checks 123 --watch --fail-fast
 
 # Get checks as JSON
 gh pr checks 123 --json name,state,bucket,workflow
 ```
+
+Even when `gh pr checks --watch` exits `0`, confirm the actual check buckets with `gh pr checks NUMBER -R OWNER/REPO --json name,state,bucket,workflow` before treating the PR as green: `gh` counts `cancel` separately from `fail`, so a watch with canceled checks and no failed or pending checks can still exit `0`.
+
+Do not treat every non-zero exit from `gh pr checks --watch` as a CI failure. Separate three cases first:
+
+- **Not registered yet (`no checks reported` right after `git push`):** GitHub can take several seconds to create workflow runs for a new head. Wait briefly, confirm the expected `headSha`, and re-check or re-attach `--watch`.
+- **Transient watch/API interruption (e.g., `HTTP 499`, `502`/`503`, or connection reset):** The watch client disconnected while checks may still be running. Read current buckets with `gh pr checks NUMBER -R OWNER/REPO --json name,state,bucket,workflow` and re-attach `--watch`, or use the exact-head PR check polling loop in [real-time monitoring](workflow_operations.md#real-time-monitoring) (which covers all PR check contexts and returns an explicit non-zero unresolved result on timeout).
+- **Actual check failure or cancellation (`bucket` is `fail` or `cancel`):** Distinguish failed checks (`fail`) from canceled checks (`cancel`) and inspect the corresponding run or job logs before retrying or merging.
 
 ### PR Metadata Operations
 
