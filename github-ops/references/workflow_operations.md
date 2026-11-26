@@ -157,20 +157,52 @@ gh api -X GET 'repos/OWNER/REPO/actions/runners?per_page=100' --paginate \
 
 If every matching runner is `offline` or `busy` on a long-running job, diagnose the runner/queue instead of polling an empty queue.
 
-**Resilient monitoring for long runs (>5 min) and flaky links:** `gh pr checks --watch` and `gh run watch` can hang silently after a transient proxy/API `EOF` or laptop sleep, leaving a failed run unnoticed. Prefer a deadline-bounded polling loop that tolerates single-iteration API errors and matches the exact `headSha` + `status == "completed"`:
+**Resilient monitoring for long runs (>5 min) and flaky links:** `gh pr checks --watch` and `gh run watch` can hang silently after a transient proxy/API `EOF` or laptop sleep, exit non-zero on a transient GitHub API error (such as `HTTP 499`) while checks are still running, or report `no checks reported` when invoked immediately after `git push` before runs register. Confirm actual check state against the expected `headSha` before treating a watch exit as a CI failure (and inspect check buckets even after exit `0`, since canceled checks can finish with exit `0` when no check failed or stayed pending). When polling instead of watching, choose the loop that matches your scope and fail explicitly on timeout rather than exiting `0`:
 
 ```bash
+# Single known workflow: match exact headSha + completed status, propagate lookup and conclusion failures
+resolved=0
 for attempt in $(seq 1 40); do
-  INFO=$(gh run list -R OWNER/REPO --branch BRANCH --limit 1 \
+  INFO=$(gh run list -R OWNER/REPO --workflow WORKFLOW_FILE --branch BRANCH --limit 1 \
     --json databaseId,headSha,status,conclusion \
     -q '.[0] | "\(.databaseId) \(.headSha) \(.status) \(.conclusion // "-")" ' 2>/dev/null || true)
-  RID=$(awk '{print $1}' <<<"$INFO"); SHA=$(awk '{print $2}' <<<"$INFO"); ST=$(awk '{print $3}' <<<"$INFO")
+  RID=$(awk '{print $1}' <<<"$INFO"); SHA=$(awk '{print $2}' <<<"$INFO"); ST=$(awk '{print $3}' <<<"$INFO"); CONCL=$(awk '{print $4}' <<<"$INFO")
   if [ "$SHA" = "EXPECTED_40_CHAR_SHA" ] && [ "$ST" = "completed" ]; then
-    gh run view "$RID" -R OWNER/REPO --json jobs -q '.jobs[] | "\(.name): \(.conclusion)"'
+    gh run view "$RID" -R OWNER/REPO --json jobs -q '.jobs[] | "\(.name): \(.conclusion)"' || exit 1
+    [ "$CONCL" = "success" ] || exit 1
+    resolved=1
     break
   fi
   sleep 45
 done
+[ "$resolved" -eq 1 ] || { echo "UNRESOLVED: timed out waiting for EXPECTED_40_CHAR_SHA" >&2; exit 1; }
+```
+
+For a PR with multiple workflows or required check contexts, do not rely on `gh run list --limit 1` (one completed workflow can hide another still-pending required check) or separate head-then-checks queries (head drift between calls can match the wrong commit). Fetch `headRefOid` and `statusCheckRollup` in one `gh pr view` call, list expected check names in `REQUIRED_JSON` to wait for those names to appear, and fail explicitly on drift, non-passing/canceled conclusions, or timeout. Name-only matching cannot verify the reporting app/source identity or prove branch-protection satisfaction, so treat this loop as a wait monitor and still run `scripts/checked_gh.py --landing-preflight` for authoritative commit-scoped merge readiness:
+
+```bash
+REQUIRED_JSON='["REQUIRED_CHECK_1"]' # expected check names to wait for (name-only; not source-bound); '[]' waits only for already-registered checks
+resolved=0
+for attempt in $(seq 1 40); do
+  PR=$(gh pr view NUMBER -R OWNER/REPO --json headRefOid,statusCheckRollup 2>/dev/null || true)
+  HEAD=$(jq -r '.headRefOid // empty' <<<"$PR" 2>/dev/null || true)
+  if [ -n "$HEAD" ] && [ "$HEAD" != "EXPECTED_40_CHAR_SHA" ]; then
+    echo "DRIFT: PR head moved to $HEAD" >&2; exit 1
+  fi
+  if [ "$HEAD" = "EXPECTED_40_CHAR_SHA" ] && jq -e --argjson req "$REQUIRED_JSON" '
+    (.statusCheckRollup // []) as $r |
+    ($r | length) > 0 and
+    ($req | all(. as $need | $r | any((.name // .context) == $need))) and
+    ($r | all(if .__typename == "StatusContext" then (.state != "PENDING" and .state != "EXPECTED") else (.status == "COMPLETED") end))
+  ' >/dev/null 2>&1 <<<"$PR"; then
+    jq -r '.statusCheckRollup[] | if .__typename == "StatusContext" then "\(.state)\t\(.context)" else "\(.status)/\(.conclusion // "-")\t\(.name)" end' <<<"$PR"
+    jq -e '.statusCheckRollup | all(if .__typename == "StatusContext" then .state == "SUCCESS" else (.conclusion == "SUCCESS" or .conclusion == "SKIPPED" or .conclusion == "NEUTRAL") end)' >/dev/null <<<"$PR" || exit 1
+    resolved=1
+    break
+  fi
+  sleep 45
+done
+[ "$resolved" -eq 1 ] || { echo "UNRESOLVED: timed out waiting for PR checks on EXPECTED_40_CHAR_SHA" >&2; exit 1; }
 ```
 
 For multi-job runs where one shard fails early while siblings are still running, `gh run view --log-failed` blocks until the whole run finishes. Read the completed job's log immediately via its job ID:
