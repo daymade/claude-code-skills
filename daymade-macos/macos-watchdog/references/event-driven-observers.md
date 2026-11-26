@@ -252,6 +252,19 @@ Require ALL of the following before declaring done:
    status. Do not accept success-side freshness (log mtime, last-success
    timestamp) as health.
 
+When file events and periodic refresh have different jobs, also replay both
+orders against the actual consumer, using a distinguishable input in each:
+
+| Order to exercise | Expected result |
+| --- | --- |
+| Change an input that only the periodic path refreshes. Trigger the scheduled entry once while an event-driven run still holds the lock and once just after that run finishes. | Each scheduled refresh runs once and its downstream output includes the changed input. |
+| Deliver a file event after an active refresh has read its input, while it still holds its execution lock or is finishing. | The follow-up output includes the marked change within the delivery window. With valid refresh evidence, the follow-up uses that evidence and makes zero extra expensive refreshes. |
+
+Read the output content and count refresh invocations for each order. A lock
+that serializes execution also needs a way for contending work to wait or remain
+pending until consumed. Test that boundary with a controlled fixture instead
+of waiting for the timing to recur in production.
+
 Sources: `man launchd.plist` and `man launchctl` for key and command semantics;
 Apple's [Creating Launchd Jobs](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingLaunchdJobs.html)
 for `WatchPaths` trigger behavior.

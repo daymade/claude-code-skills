@@ -260,6 +260,21 @@ proves the collection still works. Resource measurements describe the host
 at their sample time. Leave desktop recovery unverified without an actual
 interaction observation.
 
+### Capture a slow round while it is active
+
+Capture the job label when available, the run start time and the target PID
+with its start time and parent. Read any existing stage timestamps
+for lock acquisition, expensive input work and output generation. If they
+leave the current stage ambiguous, take one bounded stack or progress sample
+of the active worker or child while it still belongs to that run. Use the
+receiving artifact and exit status to confirm completion.
+
+For example, a usage-report job can spend time waiting for its shared lock,
+refreshing the index or rendering the report. An index child with CPU activity
+establishes its stage at the sample time. Only matching stage boundaries
+establish the duration. If the run has exited and only total elapsed time was
+recorded, keep the stage split unknown and use the existing run records.
+
 ## Writing the report
 
 Explain the work in terms the owner can act on. For a process question, use a
