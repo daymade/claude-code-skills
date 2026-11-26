@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-watchdog** (`daymade-macos` v1.34.28 → v1.34.29): Refine `references/alert-discipline.md` § Channel isolation and fingerprint stability and `SKILL.md` routing (entry decision tree + Troubleshooting quick map). Link producer-side terminal stickiness to `references/quiet-watchdog-patterns.md` Pattern 9, cover consumer-side guards across change, recovery, and renotify baseline persistence during fresh in-progress snapshots, and generalize channel isolation across single-operator bot DMs and dedicated ops channels with post-reload cutover verification.
 - **skill-governance** (`daymade-skill` v1.84.1 → v1.84.2) and **read-claude-code-history** (`daymade-claude-code` v5.3.13 → v5.3.14): Reuse a recent successful skill-usage index for watched proposal updates and keep indexing out of telemetry follow-up passes. Match Codex Skill paths without quadratic work on long command arguments.
 - **claude-code-hooks / prior-work-retrieval** (`daymade-claude-code` v5.3.14 → v5.3.15): Add Pitfall 73 requiring hook Python runtimes to resolve to the exact fixed interpreter, and preserve prior-work retrieval behavior across sparse checkpoints and hook follow-ups.
 - **macos-cleaner / macos-permissions / macos-watchdog** (`daymade-macos` v1.34.27 → v1.34.28): Preserve service-private uv cache isolation, accepted FDA reuse boundaries, comparable watchdog A/B windows and probe-cost routing updates.
