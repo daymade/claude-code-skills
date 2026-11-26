@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **prior-work-retrieval** (`daymade-claude-code` v5.3.19 → v5.3.20): Bind the status-only Stop exception to the exact `prompt_id` and marker without accepting `turn_id` as a fallback; fail closed when either binding is missing, stale or cannot be reconciled, and require normal receipt validation instead of allowing a receipt-free Stop.
 - **prior-work-retrieval** (`daymade-claude-code` v5.3.18 → v5.3.19): Document the one-turn Stop exception for standalone status prompts while retaining the write gate and re-arming on the next non-status user prompt or Stop.
 - **macos-watchdog** (`daymade-macos` v1.34.30 → v1.34.31): Remove an unresolved external unit-economics reference from `references/probe-cost.md`; keep the standalone business-window and per-round cost criteria as the contract.
 - **claude-code-hooks** (`daymade-claude-code` v5.3.17 → v5.3.18), `CLAUDE.md`, & `README.zh-CN.md`: Deduplicate multi-host reconciliation steps out of Pitfall 74 (`references/hook_pitfalls.md`) in favor of a single SSOT pointer to `daymade-skill:skill-governance` §8, add `CLAUDE.md` routing pointers for Pitfall 74 and compatibility-alias Skill renames, and collapse redundant per-file `agent-message` reference enumerations in `README.zh-CN.md`.
