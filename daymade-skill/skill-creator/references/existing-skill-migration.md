@@ -231,10 +231,15 @@ uv run --frozen python -m scripts.quick_validate <path/to/skill-folder>
 
 **Write the description as a YAML block scalar** (`description: >-` followed by an indented paragraph) whenever it contains `: ` or ` #` or spans multiple sentences — block scalars tolerate both characters natively — the recommended convention for every new or edited description since the incident above.
 
-**When updating an existing skill**: Scan every existing reference and bundled
-resource for corresponding updates, then pass the migration gate above. Moving a
-contract requires a direct runtime pointer from SKILL.md; an eval or changelog is
-not a replacement.
+**When updating an existing skill**: Before adding a new reference section,
+audit sibling `references/*.md` files in the same bundle so you extend or
+cross-link existing patterns rather than adding a parallel or contradictory
+rule, and scan every existing reference and bundled resource for corresponding
+updates before running the migration gate above. Moving or adding a contract
+requires synchronizing **every** relevant routing surface in `SKILL.md` (for
+example, both an entry decision tree and a troubleshooting quick map) in plain
+symptom phrasing per [Progressive Disclosure](authoring-and-reuse.md#progressive-disclosure);
+an eval, changelog, or a link from an unrelated row is not a replacement.
 
 The next three checks are **escalation probes, not unconditional scope expansion**. If acting on one would add or materially change a capability, workflow branch, output contract, script behavior, dependency, permission, or external write, stop and reclassify to Tier 3 before changing the skill. Tier 1 and Tier 2 may inspect these questions, but they do not acquire new deliverables from them.
 
