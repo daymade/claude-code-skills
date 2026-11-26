@@ -78,7 +78,7 @@ stand down without waiting for a human to disable it.
 | Setting up or recovering an already-authorized persistent calendar job with delivery deadlines | `references/launchd-plist-reference.md` § Calendar deadlines and recovery; check overdue work and actual delivery separately |
 | Cooldown/backoff/notification-throttle patterns + sanitized war stories | `references/quiet-watchdog-patterns.md` |
 | SRE alert layering (page vs ticket, fatigue numbers) | `references/alert-discipline.md` |
-| Choosing an alert destination (bot DM vs shared group) or fixing oscillating `changed_alert` spam | `references/alert-discipline.md` § Channel isolation and fingerprint stability |
+| Watchdog alerts spamming a shared team channel, or repeating every poll despite a cooldown/renotify window | `references/alert-discipline.md` § Channel isolation and fingerprint stability |
 | Monitoring an adaptive/quiet-hours scheduler or preventing silent channel/probe blackouts | `references/alert-discipline.md` § Adaptive cadences, quiet windows, and startup delays & § Primary-channel blackout and probe blindness |
 | A watchdog alert appears under Script Editor or its sender is unclear | `references/alert-discipline.md` § Message content; inspect the delivered card |
 | A local notification was sent but the user cannot see it | `references/alert-discipline.md` § Local notifications are not visible; verify the requested display surface |
@@ -319,6 +319,7 @@ nothing but failure logs for six days.
 | App 一打开就高速开关，或频率高于所有 watchdog 周期 | 将每个候选 watchdog **实际发出** connect/disconnect/relaunch 的日志与时间戳，对齐同一时间窗的系统状态转换；注册、进程存在和“有能力”都不等于正在执行。若 `neagent`/PlugInKit 同时反复报 `Failed to start extension` / `could not acquire startup assertion`，按 `tunnel-doctor` 查 Network Extension 生命周期，不重启全部 watchdog |
 | "It re-launches the app I quit" | URL-scheme/`open` calls missing the process-alive gate (clause 4) |
 | "It spams the same repair every few minutes" | No exhausted-round cool-down (clause 3); also check the ladder's failure path doesn't reset its dead-counter |
+| "Alerts flood a shared group or bypass the renotify timer every poll" | Move ops alerts off shared business channels and stabilize fingerprints across volatile counters and fresh in-progress worker snapshots (`references/alert-discipline.md` § Channel isolation and fingerprint stability; producer fix in `references/quiet-watchdog-patterns.md` Pattern 9) |
 | "It reports healthy through a real outage" | Health check certifies only the path it probes — one green probe ≠ all planes healthy (add the second plane's probe). 同一命令若声称覆盖 DIRECT+proxy，两面都通过才可报整体 healthy/recovered；DIRECT 失败并重新写入失败状态后，不得再宣称 `failure state cleared`（Pattern 5） |
 | "bootout didn't stick / it came back" | Confirm the exact domain/service target and who bootstrapped it again; for a persistent stop follow § Stop semantics |
 | Silent no-runs | `StandardErrorPath` missing → failures invisible; then `log show --predicate 'process == "launchd"' --last 15m` |
