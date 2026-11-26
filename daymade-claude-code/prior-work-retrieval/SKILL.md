@@ -411,6 +411,11 @@ not by whether its own tests pass.
   the receipt; a later explicit retrieval request starts a new requirement.
   Until then, ordinary follow-ups and continuation wording do not automatically
   clear it; use the existing user opt-out for an explicit release.
+- A standalone status prompt such as 「检查现状」or「查看进度」is a one-turn
+  Stop exception for an existing requirement. It does not satisfy or clear the
+  retrieval obligation, and `PreToolUse` still blocks substantial writes. The
+  next non-status real user prompt or Stop ends the exception; machine-generated
+  envelopes neither consume nor extend it.
 
 For a requirement incorrectly armed by current-execution continuity, the operator
 can replay its original event after deploying the reviewed classifier correction.

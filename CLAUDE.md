@@ -701,6 +701,9 @@ For failures while completing a retrieval, enter
 For an existing hook integration or a blocked read-only discovery command, use its
 [companion-hook procedure](daymade-claude-code/prior-work-retrieval/SKILL.md#companion-hooks)
 and [discovery boundaries](daymade-claude-code/prior-work-retrieval/SKILL.md#boundaries).
+Standalone status prompts do not create a retrieval requirement; the one-turn
+Stop exception for an already-active requirement, including its retained write
+gate, is defined there.
 
 ### Local Conversation History Boundary
 
