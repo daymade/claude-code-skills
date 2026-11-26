@@ -257,8 +257,8 @@ orders against the actual consumer, using a distinguishable input in each:
 
 | Order to exercise | Expected result |
 | --- | --- |
-| Complete an event-driven update just before the next periodic refresh. Change an input that only the periodic path refreshes. | The scheduled refresh runs once and the next output includes the changed input, even though the event-driven output was just updated. |
-| Deliver a file event after an active run has read its input, while it still holds its execution lock or is finishing. | The marked change appears in the next output within the delivery window. With valid refresh evidence, the follow-up uses that evidence and makes zero extra expensive refreshes. |
+| Change an input that only the periodic path refreshes. Trigger the scheduled entry once while an event-driven run still holds the lock and once just after that run finishes. | Each scheduled refresh runs once and its downstream output includes the changed input. |
+| Deliver a file event after an active refresh has read its input, while it still holds its execution lock or is finishing. | The follow-up output includes the marked change within the delivery window. With valid refresh evidence, the follow-up uses that evidence and makes zero extra expensive refreshes. |
 
 Read the output content and count refresh invocations for each order. A lock
 that serializes execution also needs a way for contending work to wait or remain

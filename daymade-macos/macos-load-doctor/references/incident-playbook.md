@@ -260,8 +260,10 @@ proves the collection still works. Resource measurements describe the host
 at their sample time. Leave desktop recovery unverified without an actual
 interaction observation.
 
-For a slow round still in progress, capture the job label, run start time and
-target PID with its start time and parent. Read the existing stage timestamps
+### Capture a slow round while it is active
+
+Capture the job label when available, the run start time and the target PID
+with its start time and parent. Read any existing stage timestamps
 for lock acquisition, expensive input work and output generation. If they
 leave the current stage ambiguous, take one bounded stack or progress sample
 of the active worker or child while it still belongs to that run. Use the
