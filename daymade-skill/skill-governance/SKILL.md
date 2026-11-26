@@ -72,7 +72,7 @@ completely before using that workflow.
 | Keep gstack/Lark/IMA/UiPath or another bundle cold behind a router | §2–4, §6, then §11 |
 | Claude marketplace/plugin source or installed-state drift | §2–3, §7, then §11 |
 | Old cache versions | §2 and §7 “Exceptional manual cache repair” |
-| Standalone plugins superseded by a suite | §7–8, then §11 |
+| Standalone plugins superseded by a suite, or a renamed Skill with a compatibility-alias plugin (multi-host hook dedup) | §7–8, then §11 |
 | Project `.claude/skills` vs `.agents/skills` drift | §9, then §11 |
 | Retire loose or duplicate Skill directories | §2–3, §10–11 |
 | Decide which Skills stay model-visible vs user-invocable-only | §15, then §11 |
