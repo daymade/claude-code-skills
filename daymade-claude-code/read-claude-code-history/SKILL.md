@@ -433,6 +433,13 @@ Key invariants:
   `--tool-evidence`, `--verbatim-inputs`, or `--full` needs them.
 - In `--format json`, output exceeding `--max-output-bytes` emits a valid JSON truncation envelope
   (`"status": "truncated"`, `"output_complete": false`) and exits `1` rather than emitting broken JSON.
+- **Output safety-filter false positives (`Prohibited Use policy`)**: If a long `agy` conversation
+  stops with repeated `sensitive words` / `Prohibited Use policy` truncations during routine
+  engineering work (e.g., discussing or running `--admin` / `bypass` commands near a high context
+  fill), inspect the terminal steps via `--session <ID> --step <N:M>` (hydrated from
+  `transcript_full.jsonl`) to confirm a classifier false positive vs. a real tool failure. Do not
+  keep sending "continue" inside the same poisoned long context — hand the verified remaining work
+  to a fresh session instead.
 
 ## Router and legacy compatibility
 
