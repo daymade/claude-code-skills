@@ -339,6 +339,8 @@ For Git inspections whose stdout must not hide a nonzero exit, or dispatcher-own
 environment state, read [hook_pitfalls.md #69/#70](daymade-claude-code/claude-code-hooks/references/hook_pitfalls.md).
 For raw-JSON fast-path filters or PATH-preceding OS command wrappers, read
 [hook_pitfalls.md #71/#72](daymade-claude-code/claude-code-hooks/references/hook_pitfalls.md).
+For duplicate hook firing across a compatibility-alias Skill rename, read
+[hook_pitfalls.md #74](daymade-claude-code/claude-code-hooks/references/hook_pitfalls.md#74-renaming-a-hook-bearing-plugin-while-keeping-a-compatibility-alias-plugin-fires-the-same-hook-twice).
 
 Python entry points registered as synchronous Claude Code/Codex lifecycle hooks or
 background services (LaunchAgents included) must call a fixed direct interpreter
@@ -922,6 +924,10 @@ For Skill authoring in an approved independent Fleet clone, follow the
 For requested local availability, follow
 [source-backed activation and consumed-bundle readback](daymade-skill/skill-governance/references/skill-surface-governance.md#5-reconcile-source-backed-activation)
 and the [fresh-host delivery gate](daymade-skill/skill-governance/references/skill-surface-governance.md#14-verify-a-newly-registered-skill).
+When renaming a Skill while keeping a compatibility shim, follow
+[marketplace-dev's compatibility-shim checklist](daymade-claude-code/marketplace-dev/references/suite_consolidation_workflow.md#renaming-a-skill-while-keeping-a-compatibility-shim)
+for source, README, and cross-repo drift, then reconcile multi-host hook deduplication via
+[skill-governance §8](daymade-skill/skill-governance/references/skill-surface-governance.md#reconcile-a-compatibility-alias-skill-rename).
 For a daemon using a pinned plugin copy, follow the
 [pin-update workflow](daymade-claude-code/claude-switch-models-setup/references/troubleshooting.md#advance-the-pin).
 For a named-target availability verdict, use the
