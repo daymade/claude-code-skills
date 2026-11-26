@@ -412,9 +412,12 @@ not by whether its own tests pass.
   Until then, ordinary follow-ups and continuation wording do not automatically
   clear it; use the existing user opt-out for an explicit release.
 - A standalone status prompt such as 「检查现状」or「查看进度」is a one-turn
-  Stop exception for an existing requirement. It does not satisfy or clear the
-  retrieval obligation, and `PreToolUse` still blocks substantial writes. The
-  next non-status real user prompt or Stop ends the exception; machine-generated
+  Stop exception for an existing requirement, bound to that prompt's `prompt_id`
+  and status marker; `turn_id` alone is not a substitute. It does not satisfy or
+  clear the retrieval obligation, and `PreToolUse` still blocks substantial
+  writes. A non-status real user prompt or Stop consumes the exception. If either
+  binding is missing or belongs to another turn, Stop fails closed, clears the
+  stale exception and performs normal receipt validation; machine-generated
   envelopes neither consume nor extend it.
 
 For a requirement incorrectly armed by current-execution continuity, the operator

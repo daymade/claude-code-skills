@@ -1336,22 +1336,227 @@ class PriorWorkHookTests(unittest.TestCase):
         write = {"session_id": session_id, "tool_name": "Write", "tool_input": {
             "file_path": str(self.root / "status-write.py"), "content": "x" * 300}}
 
-        hook.handle_user_prompt({"session_id": session_id, "prompt": "检查现状"})
-        self.assertIs(prior_work.load_requirement(manifest, session_id)["status_only_stop"], True)
-        self.assertTrue(hook._status_stop_marker(session_id).exists())
-        self.assertIsNotNone(hook.handle_pre_tool(write))
-        for followup in ("继续", "继续，先实现解析器", "接着写", "继续修改", "继续完成实现", "继续吧"):
-            hook.handle_user_prompt({"session_id": session_id, "prompt": "检查现状"})
-            hook.handle_user_prompt({"session_id": session_id, "prompt": followup})
+        for index, followup in enumerate(("继续", "继续，先实现解析器", "接着写", "继续修改", "继续完成实现", "继续吧")):
+            status_prompt_id = f"status-{index}"
+            followup_prompt_id = f"followup-{index}"
+            hook.handle_user_prompt({
+                "session_id": session_id, "prompt_id": status_prompt_id, "prompt": "检查现状"
+            })
+            requirement = prior_work.load_requirement(manifest, session_id)
+            self.assertIs(requirement["status_only_stop"], True)
+            self.assertEqual(requirement["status_only_prompt_id"], status_prompt_id)
+            self.assertTrue(hook._status_stop_marker(session_id).exists())
+            self.assertIsNotNone(hook.handle_pre_tool(write))
+            hook.handle_user_prompt({
+                "session_id": session_id, "prompt_id": followup_prompt_id, "prompt": followup
+            })
             self.assertIs(prior_work.load_requirement(manifest, session_id)["status_only_stop"], False)
             self.assertFalse(hook._status_stop_marker(session_id).exists())
-            self.assertEqual(hook.handle_stop(stop)["decision"], "block")
+            self.assertEqual(
+                hook.handle_stop(dict(stop, prompt_id=followup_prompt_id))["decision"], "block"
+            )
 
-        hook.handle_user_prompt({"session_id": session_id, "prompt": "检查现状"})
-        self.assertIsNone(hook.handle_stop(stop))
+        status_prompt_id = "status-final"
+        hook.handle_user_prompt({
+            "session_id": session_id, "prompt_id": status_prompt_id, "prompt": "检查现状"
+        })
+        self.assertIsNone(hook.handle_stop(dict(stop, prompt_id=status_prompt_id)))
         self.assertIs(prior_work.load_requirement(manifest, session_id)["status_only_stop"], False)
         self.assertFalse(hook._status_stop_marker(session_id).exists())
+        self.assertEqual(hook.handle_stop(dict(stop, prompt_id=status_prompt_id))["decision"], "block")
+
+    def test_status_exception_requires_prompt_binding(self):
+        session_id = "session-status-stop-missing-prompt-id"
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的解析器"})
+        manifest = hook._manifest()
+
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "检查现状"})
+        self.assertIsNot(prior_work.load_requirement(manifest, session_id).get("status_only_stop"), True)
+        result = hook.handle_stop({"session_id": session_id, "stop_hook_active": False})
+        self.assertEqual(result["decision"], "block")
+
+    def test_status_exception_does_not_accept_turn_id_fallback(self):
+        session_id = "session-status-stop-turn-id-only"
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的解析器"})
+        manifest = hook._manifest()
+
+        hook.handle_user_prompt({
+            "session_id": session_id, "turn_id": "turn-only", "prompt": "检查现状"
+        })
+        self.assertIsNot(prior_work.load_requirement(manifest, session_id).get("status_only_stop"), True)
+        result = hook.handle_stop({
+            "session_id": session_id, "turn_id": "turn-only", "stop_hook_active": False
+        })
+        self.assertEqual(result["decision"], "block")
+
+    def test_status_exception_rejects_different_prompt_id(self):
+        session_id = "session-status-stop-wrong-prompt-id"
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的解析器"})
+        manifest = hook._manifest()
+        hook.handle_user_prompt({
+            "session_id": session_id, "prompt_id": "status-turn", "prompt": "检查现状"
+        })
+        self.assertTrue(hook._status_stop_marker(session_id).exists())
+
+        result = hook.handle_stop({
+            "session_id": session_id, "prompt_id": "different-turn", "stop_hook_active": False
+        })
+        self.assertEqual(result["decision"], "block")
+        self.assertIs(prior_work.load_requirement(manifest, session_id)["status_only_stop"], False)
+        self.assertFalse(hook._status_stop_marker(session_id).exists())
+
+    def test_status_only_stop_fails_closed_when_marker_is_lost(self):
+        session_id = "session-status-stop-marker-loss"
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的解析器"})
+        manifest = hook._manifest()
+        status_prompt_id = "status-marker-loss"
+        stop = {"session_id": session_id, "prompt_id": status_prompt_id, "stop_hook_active": False}
+
+        hook.handle_user_prompt({
+            "session_id": session_id, "prompt_id": status_prompt_id, "prompt": "检查现状"
+        })
+        self.assertIs(prior_work.load_requirement(manifest, session_id)["status_only_stop"], True)
+        hook._status_stop_marker(session_id).unlink()
+
+        result = hook.handle_stop(stop)
+        self.assertIsNotNone(result)
+        self.assertEqual(result["decision"], "block")
+        self.assertIs(prior_work.load_requirement(manifest, session_id)["status_only_stop"], False)
+
+    def test_nonstatus_prompt_after_marker_loss_rearms_stop(self):
+        session_id = "session-status-stop-marker-loss-followup"
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的解析器"})
+        manifest = hook._manifest()
+        status_prompt_id = "status-marker-loss-followup"
+        followup_prompt_id = "followup-marker-loss"
+        stop = {"session_id": session_id, "prompt_id": followup_prompt_id, "stop_hook_active": False}
+
+        hook.handle_user_prompt({
+            "session_id": session_id, "prompt_id": status_prompt_id, "prompt": "检查现状"
+        })
+        hook._status_stop_marker(session_id).unlink()
+        hook.handle_user_prompt({
+            "session_id": session_id, "prompt_id": followup_prompt_id, "prompt": "继续实现解析器"
+        })
+
+        result = hook.handle_stop(stop)
+        self.assertIsNotNone(result)
+        self.assertEqual(result["decision"], "block")
+        self.assertIs(prior_work.load_requirement(manifest, session_id)["status_only_stop"], False)
+
+    def test_nonstatus_prompt_consumes_marker_before_manifest_failure(self):
+        session_id = "session-status-stop-transient-manifest"
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的解析器"})
+        manifest = hook._manifest()
+        status_prompt_id = "status-transient-manifest"
+        followup_prompt_id = "followup-transient-manifest"
+        stop = {"session_id": session_id, "prompt_id": followup_prompt_id, "stop_hook_active": False}
+
+        hook.handle_user_prompt({
+            "session_id": session_id, "prompt_id": status_prompt_id, "prompt": "检查现状"
+        })
+        marker = hook._status_stop_marker(session_id)
+        self.assertTrue(marker.exists())
+        with mock.patch.object(
+            hook, "_manifest", side_effect=prior_work.PriorWorkError("transient read failure")
+        ):
+            hook.handle_user_prompt({
+                "session_id": session_id, "prompt_id": followup_prompt_id, "prompt": "继续实现解析器"
+            })
+        self.assertFalse(marker.exists())
+
+        result = hook.handle_stop(stop)
+        self.assertIsNotNone(result)
+        self.assertEqual(result["decision"], "block")
+        self.assertIs(prior_work.load_requirement(manifest, session_id)["status_only_stop"], False)
+
+    def test_unremovable_marker_and_manifest_failure_cannot_authorize_stop(self):
+        session_id = "session-status-stop-unremovable-marker"
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的解析器"})
+        manifest = hook._manifest()
+        status_prompt_id = "status-unremovable-marker"
+        followup_prompt_id = "followup-unremovable-marker"
+        stop = {"session_id": session_id, "prompt_id": followup_prompt_id, "stop_hook_active": False}
+
+        hook.handle_user_prompt({
+            "session_id": session_id, "prompt_id": status_prompt_id, "prompt": "检查现状"
+        })
+        marker = hook._status_stop_marker(session_id)
+        self.assertTrue(marker.exists())
+
+        class UnremovableMarker:
+            def exists(self):
+                return True
+
+            def unlink(self):
+                raise PermissionError("marker is not removable")
+
+        with mock.patch.object(hook, "_status_stop_marker", return_value=UnremovableMarker()), \
+             mock.patch.object(
+                 hook, "_manifest", side_effect=prior_work.PriorWorkError("transient read failure")
+             ):
+            result = hook.handle_user_prompt({
+                "session_id": session_id, "prompt_id": followup_prompt_id, "prompt": "继续实现解析器"
+            })
+        self.assertIsNone(result)
+        self.assertTrue(marker.exists())
+
+        result = hook.handle_stop(stop)
+        self.assertEqual(result["decision"], "block")
+        self.assertIs(prior_work.load_requirement(manifest, session_id)["status_only_stop"], False)
+
+    def test_unremovable_marker_is_harmless_after_flag_clear(self):
+        session_id = "session-status-stop-unremovable-marker-flag-cleared"
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的解析器"})
+        manifest = hook._manifest()
+        status_prompt_id = "status-unremovable-marker-flag-cleared"
+        followup_prompt_id = "followup-unremovable-marker-flag-cleared"
+        stop = {"session_id": session_id, "prompt_id": followup_prompt_id, "stop_hook_active": False}
+
+        hook.handle_user_prompt({
+            "session_id": session_id, "prompt_id": status_prompt_id, "prompt": "检查现状"
+        })
+        marker = hook._status_stop_marker(session_id)
+        self.assertTrue(marker.exists())
+
+        class UnremovableMarker:
+            def exists(self):
+                return True
+
+            def unlink(self):
+                raise PermissionError("marker is not removable")
+
+        with mock.patch.object(hook, "_status_stop_marker", return_value=UnremovableMarker()):
+            result = hook.handle_user_prompt({
+                "session_id": session_id, "prompt_id": followup_prompt_id, "prompt": "继续实现解析器"
+            })
+        self.assertIsNone(result)
+        self.assertIs(prior_work.load_requirement(manifest, session_id).get("status_only_stop"), False)
+        self.assertTrue(marker.exists())
         self.assertEqual(hook.handle_stop(stop)["decision"], "block")
+
+    def test_nonstatus_prior_signal_consumes_status_marker(self):
+        session_id = "session-status-stop-prior-signal"
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的解析器"})
+        manifest = hook._manifest()
+        status_prompt_id = "status-prior-signal"
+        followup_prompt_id = "followup-prior-signal"
+        stop = {"session_id": session_id, "prompt_id": followup_prompt_id, "stop_hook_active": False}
+
+        hook.handle_user_prompt({
+            "session_id": session_id, "prompt_id": status_prompt_id, "prompt": "检查现状"
+        })
+        marker = hook._status_stop_marker(session_id)
+        self.assertTrue(marker.exists())
+        hook.handle_user_prompt({
+            "session_id": session_id, "prompt_id": followup_prompt_id, "prompt": "复用以前的另一个解析器"
+        })
+        self.assertFalse(marker.exists())
+
+        result = hook.handle_stop(stop)
+        self.assertIsNotNone(result)
+        self.assertEqual(result["decision"], "block")
+        self.assertIsNot(prior_work.load_requirement(manifest, session_id).get("status_only_stop"), True)
 
     def test_pending_requirement_is_not_released_by_ordinary_prompt(self) -> None:
         session_id = "session-current-status"
