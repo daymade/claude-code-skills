@@ -96,6 +96,9 @@ At minimum, capture:
 
 Use `df -k` for calculations and `df -h` for the human-readable report. Treat an extension, label, or old report as a hint until the live command confirms it.
 
+If the host has a scheduled read-only storage reporter or governance manifest, start with its latest run status and directory report.
+Treat listings as evidence only. Even when the managed sweep is empty, classify remaining unregistered hotspots from current evidence before proposing cleanup.
+
 Copy a user-supplied free-space or capacity target exactly. A read-only inventory can proceed without one: report the current values and locate the largest occupants within the authorized read scope. Do not delay that diagnosis to ask for a cleanup target. A cleanup without an explicit target cannot claim that the user's capacity goal has been met; report measured release and remaining candidates instead.
 
 Keep this first phase read-only. Do not run `scripts/cleanup_report.py --snapshot` yet: snapshot mode creates a local state directory and file. Its `--inventory <JSON-or->` mode only consumes existing evidence; follow [the diagnosis CLI](references/storage-diagnosis.md) for exact-file metadata or a non-overlapping inventory report. On a remote target, always run measurement commands on that host; a controller's snapshot must not stand in for the target volume.
