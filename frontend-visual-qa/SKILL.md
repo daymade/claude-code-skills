@@ -263,7 +263,8 @@ run final evidence on the original URL. The detailed page-state probe,
 §2–§5. Record the final URL and dimensions before CSS diagnosis, then restore
 the user's expected viewport when finished.
 
-For unstyled-page complaints or shared route-style changes, run the
+For unstyled-page complaints or shared route-style changes (including lazy-loaded
+route CSS chunks), run the
 [cold-entry then warm-return check](references/browser-driving-and-observation-traps.md#cold-entry-before-warm-return)
 before accepting a correctly styled return visit.
 
@@ -670,7 +671,11 @@ produced one:
 - **Shoot the "before" while the defect still exists.** After the rebuild it is
   unreproducible, and a closure report can then only assert the improvement.
   Reuse the identical crop window for the after-shot so the pair differs by one
-  variable.
+  variable. For multi-page or full-surface UX/motion overhauls, freeze matched
+  before-edit baselines across the affected routes, states, and supported
+  viewports declared in the audit contract, and deliver a scale-matched
+  before/after visual comparison alongside the code so reviewers can verify
+  every surface without reconstructing diffs.
 - **Grep a new shared name before introducing it.** A token named after a word
   the file already spent (`rail`, `bar`, `card`) silently overrides or gets
   overridden depending on definition order, changing two subsystems at once
