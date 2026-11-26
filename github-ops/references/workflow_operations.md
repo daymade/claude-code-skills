@@ -82,6 +82,8 @@ gh workflow run workflow-name \
   -f config='{"env":"production","debug":false}'
 ```
 
+`gh workflow run` returns asynchronously before the new run ID is immediately visible via `gh run view` or `gh run watch`. Record the latest existing run ID (`prev_id`) for that workflow before dispatching, wait ~8–10 seconds, then poll `gh run list --workflow=<workflow> --event workflow_dispatch` with a bounded retry loop for a run with `databaseId > prev_id` before attaching `gh run watch`. Never treat an immediate `HTTP 404` on a freshly dispatched run ID as proof the dispatch failed or re-dispatch without listing runs first.
+
 ---
 
 ## Viewing Workflow Runs
@@ -137,14 +139,45 @@ gh run view run-id --json status,conclusion,jobs,createdAt
 ### Real-Time Monitoring
 
 ```bash
-# Watch workflow run in real-time
-gh run watch run-id
+# Watch workflow run in real-time (prefer --interval 15 for multi-minute runs)
+gh run watch run-id --interval 15 --exit-status
 
-# Watch with log output
-gh run watch run-id --exit-status
-
-# Watch interval (check every N seconds)
+# Watch with a shorter interval only for brief (<2 min) runs
 gh run watch run-id --interval 10
+```
+
+Prefer `--interval 15` (or higher) when watching multi-minute runs or chaining several watches in one session: `gh run watch` defaults to a 3-second poll interval, which can exhaust the GitHub REST hourly rate limit (`HTTP 403`) on long pipelines or concurrent jobs.
+
+When watching a run or PR checks (`gh pr checks NUMBER -R OWNER/REPO --watch`) on a repository that routes jobs to **self-hosted runners**, check runner availability before waiting (or as soon as a job stays `QUEUED` for more than ~2 minutes):
+
+```bash
+gh api -X GET 'repos/OWNER/REPO/actions/runners?per_page=100' --paginate \
+  --jq '.runners[] | {id,name,status,busy,labels:[.labels[].name]}'
+```
+
+If every matching runner is `offline` or `busy` on a long-running job, diagnose the runner/queue instead of polling an empty queue.
+
+**Resilient monitoring for long runs (>5 min) and flaky links:** `gh pr checks --watch` and `gh run watch` can hang silently after a transient proxy/API `EOF` or laptop sleep, leaving a failed run unnoticed. Prefer a deadline-bounded polling loop that tolerates single-iteration API errors and matches the exact `headSha` + `status == "completed"`:
+
+```bash
+for attempt in $(seq 1 40); do
+  INFO=$(gh run list -R OWNER/REPO --branch BRANCH --limit 1 \
+    --json databaseId,headSha,status,conclusion \
+    -q '.[0] | "\(.databaseId) \(.headSha) \(.status) \(.conclusion // "-")" ' 2>/dev/null || true)
+  RID=$(awk '{print $1}' <<<"$INFO"); SHA=$(awk '{print $2}' <<<"$INFO"); ST=$(awk '{print $3}' <<<"$INFO")
+  if [ "$SHA" = "EXPECTED_40_CHAR_SHA" ] && [ "$ST" = "completed" ]; then
+    gh run view "$RID" -R OWNER/REPO --json jobs -q '.jobs[] | "\(.name): \(.conclusion)"'
+    break
+  fi
+  sleep 45
+done
+```
+
+For multi-job runs where one shard fails early while siblings are still running, `gh run view --log-failed` blocks until the whole run finishes. Read the completed job's log immediately via its job ID:
+
+```bash
+JOB_ID=$(gh run view RUN_ID -R OWNER/REPO --json jobs -q '.jobs[] | select(.name=="JOB_NAME") | .databaseId')
+gh api "repos/OWNER/REPO/actions/jobs/$JOB_ID/logs" | tail -n 100
 ```
 
 ---
@@ -375,6 +408,26 @@ Classify the observed run before taking action:
 | Queued or in progress | Observe the existing run; do not approve or rerun it to create another attempt. |
 | Failed or never started | Inspect jobs, steps and annotations. Distinguish a test failure from installation, budget or runner admission failures. |
 
+#### Pre-merge local CI equivalence for zero-step budget blocks
+
+When hosted checks fail in seconds with `steps: 0` due to an account spending-limit or
+billing block and an authorized maintainer-bypass merge (`--admin`) is permitted by the
+repository policy:
+
+1. **Enumerate every triggered workflow before merging.** Read `.github/workflows/*.yml`
+   at the exact PR head and match all `pull_request` / `push` `paths` filters against the
+   PR's changed files (`git diff --name-only <base>...<head>`). Do not check only the single
+   workflow you remember by name; path-scoped linters (for example, README or manifest
+   pattern checks) are easy to miss when hosted runs never start.
+2. **Run local equivalence before merge, never after.** Execute the exact commands of each
+   matched workflow locally against the exact immutable PR head SHA before calling
+   `gh pr merge`, and post the verified head SHA plus local pass evidence on the PR. Merging
+   first and running local equivalence afterward lets silent lint or contract failures land
+   on `main`.
+3. **Keep evidence layers separate.** Record hosted CI as `not started (budget-blocked, 0 steps)`
+   alongside the exact-head local equivalence pass; never describe a zero-step hosted run as
+   green.
+
 For a fork-contributor approval, bind the base repository, PR, current reviewed
 full head SHA, run ID and workflow path. Read that workflow and its invoked
 scripts and actions at the reviewed revision; inspect token permissions, secrets,
@@ -482,15 +535,47 @@ gh workflow view workflow-name --yaml
 
 ### Workflow Performance Monitoring
 
+Before adding runners or blaming queue congestion when CI feels slow, break
+observed runs into three durations and bind each job to its actual execution
+pool:
+
+1. **Queue wait** (`job.started_at - job.created_at`) — separates runner
+   saturation from slow execution (a negative value indicates a carried-over
+   job from a partial rerun; exclude it from queue-wait averages).
+2. **Setup, checkout, and post-job cleanup** (`Set up job`, `actions/checkout`,
+   package/system installs, and `Complete job` workspace wipes).
+3. **Workload execution** (serial test loops, single-threaded suites, builds).
+
 ```bash
 # Get average run duration
 gh run list --workflow=ci --limit 50 --json createdAt,updatedAt | \
   jq '[.[] | ((.updatedAt | fromdate) - (.createdAt | fromdate))] | add / length'
 
-# Find longest running jobs
-gh api repos/{owner}/{repo}/actions/runs/{run_id}/jobs | \
-  jq '.jobs | sort_by(.started_at) | reverse | .[0:5]'
+# Break one run down by runner pool, queue wait, total duration, and slowest steps
+gh api -X GET 'repos/OWNER/REPO/actions/runs/RUN_ID/jobs?per_page=100' --paginate \
+  --jq '.jobs[] | {
+    name,
+    runner_name,
+    labels,
+    queue_s: (if .started_at and .created_at then ((.started_at | fromdateiso8601) - (.created_at | fromdateiso8601)) else null end),
+    total_s: (if .completed_at and .started_at then ((.completed_at | fromdateiso8601) - (.started_at | fromdateiso8601)) else null end),
+    top_steps: ([(.steps // [])[] | select(.started_at != null and .completed_at != null) | {
+      name,
+      duration_s: ((.completed_at | fromdateiso8601) - (.started_at | fromdateiso8601))
+    }] | sort_by(-.duration_s) | .[0:5])
+  }'
 ```
+
+Inspect two recurring misdiagnoses from that output before changing capacity:
+
+- **Wrong runner pool:** confirm `runner_name` and `labels`. Jobs running on
+  GitHub-hosted runners or a separate repository's pool gain nothing from adding
+  runners elsewhere.
+- **Shared-host cgroup ceiling:** when multiple self-hosted Linux listeners
+  share a host slice/cgroup and execution steps are slow despite low queue wait,
+  compare effective unit and ancestor `CPUQuota`/`MemoryMax` against actual host
+  cores and available memory before adding more listeners (see
+  [Self-Hosted Runner Capacity and Acceptance](#self-hosted-runner-capacity-and-acceptance)).
 
 ---
 
@@ -558,6 +643,12 @@ operator procedure; no bundled tool enforces its deployment or process boundarie
    deployment inventory. Reuse a compatible profile or prepare a separate one
    within existing setup authorization; do not treat missing registration as
    unavailable hardware or borrow another repository's production listener.
+
+   **Represent replica pools as patterns, not growing exact-name sets.** When the
+   pre-scale allowlist check below finds selector or validation-reuse identity
+   gates, express a homogeneous numbered pool as a validated pattern (for example
+   `private-ci-skills-4090-*` plus `skills-*`). Keep foreign or malformed names
+   fail-closed; adding the next numbered listener then requires no code edit.
 2. **Reuse the deployment owner.** Locate the project's current IaC, runner
    profiles and runbook, then read a successful run of the actual target job.
    Preserve its supported OS, architecture, isolation, resource budget and network
@@ -631,12 +722,36 @@ operator procedure; no bundled tool enforces its deployment or process boundarie
    Set test-worker concurrency from the effective CPU allocation, including
    ancestor quota/period and cpuset/affinity bounds, rather than the host's
    advertised core count or a runtime's parallelism default. Shared-parent
-   capacity is an upper bound, not an exclusive reservation. Use the existing
+   capacity is an upper bound, not an exclusive reservation. Avoid stacking
+   competing low-CPU duplicate check containers on the same physical host; prefer
+   fewer adequately sized listeners matched to real host cores. Use the existing
    test runner's worker controls and verify the original suite under the real
    service limits before increasing timeouts. Keep assertions and timeout
    failure semantics; a lower worker count cannot excuse a genuine regression.
    The repository executor owns worker settings; read cgroup/runtime observations
    and actual suite results to accept the change.
+
+   **Container concurrency caps:** inside cgroup-limited runner containers
+   (`cpus`, `mem_limit`, `pids_limit`), `nproc` often reports host CPUs rather
+   than container limits. Cap parallel build/test flags (such as `make -jN`) to
+   container limits or cgroup `cpu.max` (and `pids_limit`), never raw `$(nproc)`.
+
+   For mixed-architecture pools (for example, Linux ARM64 and X64 runners sharing
+   one checks label), pin architecture-specific checksums for downloaded tool
+   archives instead of a single-architecture hash, and keep tool/provider cache
+   paths partitioned by `${{ runner.os }}-${{ runner.arch }}`. Route heavy
+   target-architecture container builds (such as `linux/amd64` images) to a
+   dedicated native builder profile with strict job/workflow allowlisting rather
+   than slow QEMU emulation on an ARM64 check host. On Linux filesystems mounted
+   with `relatime`, avoid asserting full `os.stat()` equality to prove a file was
+   untouched because `st_atime` can advance on reads; compare inode, mode, size,
+   `st_mtime_ns` and `st_ctime_ns` instead.
+
+   **macOS-to-Linux self-hosted migration traps:**
+   - Service units with `UMask=0077` check out files as `0600`; workflows or tests asserting world-readable (`0o444`/`a+r`) static assets need an explicit permission step or compatible umask.
+   - `actions/setup-python` builds are dynamically linked against `libpython`; child processes that strip `LD_LIBRARY_PATH` can crash by loading a mismatched system `libpython`. When the minor version matches, pass a statically linked system interpreter (such as `/usr/bin/python3`) to isolated subprocesses.
+   - Linux `<6.13` coarse jiffy mtime (~4 ms) can cause same-tick collisions on immediate same-size overwrites in filesystem freshness tests.
+   - When migrating a repository whose hosted CI was previously billing-blocked, reproduce failing tests locally on `origin/main` before debugging the runner — merges landed during the outage often carry pre-existing regressions.
 
    Configure job hooks with the supported `.sh` or `.ps1` entry point: GitHub runs
    Bash with `-e <path>` or PowerShell with `-command ". '<path>'"`. A Python
@@ -651,6 +766,22 @@ operator procedure; no bundled tool enforces its deployment or process boundarie
    does not authorize relabeling, stopping or restarting an existing listener,
    another session's process or a shared service. Diagnose those read-only unless
    the current task explicitly authorizes the exact affected process and impact.
+
+   **Homogeneous latency pools and lane isolation:** avoid mixing significantly
+   slower hosts (such as 2x+ slower VM or WSL2 runners) into the same default
+   label pool as fast hosts — GitHub dispatches randomly across matching runners
+   and degrades p50/p90 latency. Move slower or specialized hosts to distinct
+   labels (such as `*-overflow` or `*-builder`), and keep dedicated
+   release/deploy labels isolated from routine PR check labels to prevent
+   head-of-line blocking.
+
+   **Pre-scale repository allowlist check:** before starting a newly registered
+   replica (such as `-2` or `-3`) for a repository, grep `.github/` and CI
+   scripts for hardcoded runner-name or artifact-profile allowlists (for example,
+   scope selectors, validation-reuse scripts, or `.github/actionlint.yaml` checking
+   exact `RUNNER_NAME`). Land the selector/reuse code and test update first — or
+   keep the new listener stopped until merged — so it does not reject live PR runs
+   on admission.
 5. **Accept the actual job on the intended runner.** Read the run's exact SHA and
    specific job's runner ID/name, labels, steps and terminal conclusion. Registration,
    `online`, a network probe or another runner's successful job cannot establish
@@ -660,6 +791,10 @@ operator procedure; no bundled tool enforces its deployment or process boundarie
    On failure, read the failed job/step and that runner's current Worker diagnostics
    before changing configuration. Report pending, offline, busy and failed states
    separately; stop once the requested workload and capacity claim are evidenced.
+
+   **Valid performance comparisons:** when benchmarking runners or capacity
+   changes, never compare an early-failing run's wall time against a full green
+   run; compare completed successful runs covering the same check scope.
 
 Use these read-only queries with verified repository/run identifiers:
 

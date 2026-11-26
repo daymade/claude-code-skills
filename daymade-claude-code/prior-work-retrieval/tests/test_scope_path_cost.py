@@ -33,7 +33,7 @@ class ScopePathCostTests(unittest.TestCase):
             self.assertEqual(self.paths(names), [])
         tree.assert_not_called()
 
-    def test_prefilter_agrees_with_unoptimized_rg_for_real_scope_shapes(self):
+    def test_scope_globs_are_independent_of_ambient_config(self):
         names = ["file.py", "deep/file.py", "upper.PY", "file.json",
                  "package/SKILL.md", "package/scripts/runner.py",
                  "package/scripts/nested/runner.py", "package/references/topic.md",
@@ -48,10 +48,19 @@ class ScopePathCostTests(unittest.TestCase):
                 self.source["includes"] = includes
                 self.assertEqual(self.paths(names), self.paths(names, config=str(self.config)))
 
-    def test_config_case_rules_keep_original_rg_path(self):
+    def test_case_matching_must_be_declared_in_source_globs(self):
         self.config.write_text("--glob-case-insensitive\n")
         self.source["includes"] = ["**/*.md"]
+        self.assertEqual(self.paths(["README.MD"], config=str(self.config)), [])
+        self.source["includes"] = ["**/*.[mM][dD]"]
         self.assertEqual(self.paths(["README.MD"], config=str(self.config)), ["README.MD"])
+
+    def test_ambient_roots_do_not_escape_the_placeholder_matcher(self):
+        other = self.root / "other"
+        other.mkdir()
+        (other / "outside.md").write_text("outside\n")
+        self.config.write_text(str(other) + "\n")
+        self.assertEqual(self.paths(["inside.md"], config=str(self.config)), ["inside.md"])
 
     def test_unsafe_paths_still_fail_before_filtering(self):
         for path in ("../report.json", "/outside/report.json"):

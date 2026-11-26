@@ -67,3 +67,23 @@ still fails after an observed grant, retain that failure and return to the ownin
 network/application diagnosis. Stop changing permissions when the required
 original-context check succeeds; do not restart a shared service merely to clear
 an old error.
+
+## Container and VM helper Local Network denials
+
+Container and VM runtimes (such as OrbStack or Docker Desktop) route container
+egress through an app helper whose Local Network grant is evaluated separately
+from host CLI tools.
+
+- **Symptom:** host CLI requests through a LAN proxy succeed while container
+  image pulls or container egress fail (for example, `Bad Gateway`), and
+  kernel/unified logs show `NECP` / `error: 65` drops attributed to the helper
+  app's bundle ID.
+- **Action:** within the task's permission-repair authorization, grant Local
+  Network access through the real user session UI — on an authorized remote Mac,
+  use an existing background ARD/remote-control route rather than redirecting a
+  routine Allow prompt to the user. Because a helper or daemon started before
+  the grant may retain the prior denial, **restart the pre-grant app/daemon
+  process** (within the task's process-restart authorization and after checking
+  in-flight work) so the new grant takes effect, handle any follow-up helper
+  admin prompt (such as relinking the Docker socket), and verify through the
+  original failing container command rather than a host CLI probe.

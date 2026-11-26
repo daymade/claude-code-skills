@@ -69,7 +69,7 @@
 | `com.tencent.workbuddy.mac.BundleMigration`（1.0 GB） | 1.0 GB | path-accounted | **PRESERVE**（4 个打开句柄） | 同上 | n/a | 不入动作集 |
 | 5 个 `*-updater`（2.23 GiB） | 2.23 GiB | path-accounted | **USER-DECISION** | "If none exists, verify the owning application is stopped or the directory is otherwise inactive." —— 我完成了 inactive 检查（0 打开文件），**未完成属主是否仍安装的核查** | 下次更新重新下载 | 不入动作集，等你确认 |
 | Docker build cache（21.82 GB） | 21.82 GB | 引擎口径 | **未知记录只报告** | "Missing or ambiguous fields leave it report-only." | 未核具体 builder 与 cache ID；重建缓存 | **不入动作集** |
-| Docker 4 个未引用 `aicms-local-uat` image | 4 × 289.7 MB UNIQUE | UNIQUE = 删除上界 | **USER-DECISION** | "If empty → eligible for an explicit user decision; exact command: `docker rmi <IMAGE_ID>`" | 重新 build/拉取 | 等你逐个确认 |
+| Docker 4 个未引用 `aicms-local-uat` image | 4 × 289.7 MB UNIQUE | UNIQUE = 删除上界 | **USER-DECISION** | "Use `--no-prune` when the authorized boundary is one repository tag or one full image ID." | 重新 build/拉取 | 等你逐个确认 |
 | Docker 45 个已停止 container | 1.66 GB 可写层 | 引擎口径 | **USER-DECISION** | "Do not stop a running container or infer disposal permission from its state." + "Inspect every container; **never classify by stopped status alone**" | 容器内状态丢失 | 等你逐个确认 |
 | Docker 47 个 dangling volume | 含 `supabase_db_YOUR_PROJECT_REF` 83 MB、`act-toolcache` 197 MB、约 40 个匿名 40-50 MB | 引擎卷口径 | **USER-DECISION**（含数据库红旗） | "A volume's opaque name and missing container references do not establish its value." | 可能不可逆丢数据 | 等你确认，且需内容检查 |
 | `~/Library/Logs`（360.2 MB） | 360.2 MB | path-accounted | **USER-DECISION** | "After confirming no active investigation needs the logs, move exact named files/directories through the recoverable Finder Trash path" | 丢失诊断历史 | 等你确认 |
@@ -81,7 +81,7 @@
   - **已知问题实测**：`brew cleanup -s -n`（只读 dry-run）跑出 136 行全是 `Warning: Skipping <formula>: most recent version X not installed`。也就是说 `-s` 在这台机器上会跳过绝大部分条目——2.00 GiB 的 Homebrew 缓存主要是**已安装** formula 的下载，而 `-s` 明确不删这些。**预期释放很小且不可精确预估**，我把它从"2 GB 立得"降级。
 - `pnpm store prune`（未入动作集，仅备案）：pnpm **10.33.2**，`pnpm store prune --help` 原文："Removes unreferenced (extraneous, orphan) packages from the store. Pruning the store is not harmful, but might slow down future installations." 注意这与 `uv cache prune` 的本质差别：pnpm 的"unreferenced"是它自己内容寻址图里的引用关系，uv 的"unreachable"不是 venv 存活关系。因为活跃 store 实际是 `v11`（corepack pnpm 11.7.0/12.3.4 在用），这条我**不**放进方案。
 - `uv`：**0.12.17**（≥0.12.x，所以 symlink-following prune 那个 bug #19542 在此版本已修）。但 `cleanup_targets.md` 写明 `uv cache prune` 不被本 skill 认可："\"Unreachable\" is cache-graph reachability, not venv liveness… **Check `uv --version` before proposing any cache-graph command; prefer the sanctioned `uv cache clean <exact-package>` above.**" 所以我不提 `prune`，只在你解锁 uv 缓存时给 `uv cache clean <exact-package>`。
-- `docker rmi <exact-ID>`：Docker **29.4.0**，逐对象已核 `docker ps -a --filter ancestor=<ID>` 为空（不是类别级命令）。
+- `docker image rm --no-prune <FULL_IMAGE_ID>`：Docker **29.4.0**，逐对象已核 `docker ps -a --filter ancestor=<ID>` 为空（不是类别级命令）。
   - **已知问题**：OrbStack 上主机 `df` 不随对象删除立即变化（稀疏镜像未压缩），且 `du` 对 APFS clone 是 path-accounted 不是物理。
 - Finder Trash 分支：`npm` 11.9.0 为属主权威（`npm config get cache` → `~/.npm`）；`_npx` 属主已验证，inactive 已验证（**0 个 npx 进程、0 个打开文件句柄**）。
 
@@ -104,7 +104,10 @@
 | 1 | `/usr/bin/osascript -e 'on run argv' -e 'tell application "Finder" to delete (POSIX file (item 1 of argv))' -e 'end run' -- "~/.npm/_npx"` | 仅 `_npx` 这一个目录 | 把 npx 临时包缓存移入废纸篓 | 废纸篓可恢复；**未清空废纸篓前不释放物理空间** | ≈4.84 GiB | 下次 `npx <pkg>` 需重新下载那些包 | `ls -d ~/.npm/_npx` 已不在原路径（在废纸篓内）；`_cacache` 12.90 GiB 仍原地未动 |
 | 2 | 同上 Finder 命令，目标 `"~/Library/Caches/pypoetry"` | 仅 pypoetry 缓存目录 | 移入废纸篓 | 废纸篓可恢复 | ≈2.56 GiB | poetry 若回归需重下包与 venv | 目录已不在原路径；`du -sk` 前/后对比 |
 | 3 | `brew cleanup -s` | 整个 Homebrew 缓存（类别级，但 brew 自带护栏） | 删过期下载与已安装 formula 的旧版本 | 仅重下 | **未知，dry-run 显示大量 skip，倾向远小于 2.00 GiB** | 下次装/升级需重下旧版本 | `du -sk "$(brew --cache)"` 前后对比 |
-| 4 | `docker rmi 4c9784ec363d b25d0595013c 9674c22e71fb 82ed507d050e` | 仅这 4 个**未被任何容器引用**的 `aicms-local-uat` tag（保留正在用的 `10235343b373`） | 删除这 4 个镜像 tag | 仅重新 build/拉取 | ≤1.16 GB（UNIQUE 口径上界；VM 内） | 那 4 个 SHA tag 的镜像不再可 `docker run` | `docker images aicms-local-uat` 只剩 1 个 tag；主机 `df -k` **可能不变**，需另行执行 OrbStack 压缩 |
+| 4a | `docker image rm --no-prune sha256:4444444444444444444444444444444444444444444444444444444444444444` | `sha256:4444444444444444444444444444444444444444444444444444444444444444` | 删除 1 个镜像 tag | 仅重新 build/拉取 | ≤0.29 GB（UNIQUE 口径上界；VM 内） | 该镜像不再可 `docker run` | 该完整 ID 不存在；其余候选与保留镜像仍在 |
+| 4b | `docker image rm --no-prune sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb` | `sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb` | 删除 1 个镜像 tag | 仅重新 build/拉取 | ≤0.29 GB（UNIQUE 口径上界；VM 内） | 该镜像不再可 `docker run` | 该完整 ID 不存在；其余候选与保留镜像仍在 |
+| 4c | `docker image rm --no-prune sha256:9999999999999999999999999999999999999999999999999999999999999999` | `sha256:9999999999999999999999999999999999999999999999999999999999999999` | 删除 1 个镜像 tag | 仅重新 build/拉取 | ≤0.29 GB（UNIQUE 口径上界；VM 内） | 该镜像不再可 `docker run` | 该完整 ID 不存在；其余候选与保留镜像仍在 |
+| 4d | `docker image rm --no-prune sha256:8888888888888888888888888888888888888888888888888888888888888888` | `sha256:8888888888888888888888888888888888888888888888888888888888888888` | 删除 1 个镜像 tag | 仅重新 build/拉取 | ≤0.29 GB（UNIQUE 口径上界；VM 内） | 该镜像不再可 `docker run` | 该完整 ID 不存在；保留镜像 `sha256:1111111111111111111111111111111111111111111111111111111111111111` 仍在 |
 | 5 | `pip cache purge` | pip 缓存 | 清空 wheel 缓存 | 仅重下 | ≈301 MiB | 下次装包需重下 | `du -sk ~/Library/Caches/pip` 显著下降 |
 | 6 | （仅在你明确要求后）OrbStack → Settings → Reclaim disk space | 稀疏镜像压缩 | VM 内已释放空间回收到主机 APFS | 不可逆（压缩不可回退） | 承接 #4 的实际主机释放 | 需要 OrbStack 重启/短暂停顿 | `du -k` 稀疏镜像 + `df -k /System/Volumes/Data` 前后对比 |
 

@@ -3,7 +3,11 @@
 Use these recipes when a change touches persisted formats, partial state updates,
 permission-sensitive checks, or output too large for a tool response. Select only the affected recipes. Run
 against an isolated state directory with synthetic values; do not mutate live
-accounts or journals to obtain test evidence. Stop when the changed contract is
+accounts or journals to obtain test evidence. For reusable Skills storing local
+domain/project context profiles outside the bundle, pair the recipes below with
+[context inversion and persistent local state](context-inversion-and-state.md#5-verify-the-inversion-and-persistence-contract)
+(empty-store exit-3 Ask-Once, stale local-pointer liveness alignment, partial
+merge, and malformed/symlinked profile rejection). Stop when the changed contract is
 decided by the checks below; the selected verification tier still governs review.
 
 ## Persisted-format compatibility
@@ -295,3 +299,36 @@ This compatibility anchor retains existing callers; the complete contract lives 
 
 Follow the standalone [hash-bound range procedure](bounded-io.md#planned-ranges-and-whole-file-coverage).
 This compatibility anchor retains existing callers without duplicating that contract.
+
+## Local automation, MCP tools, and LaunchAgent guardrails
+
+When a Skill ships a local MCP server, CLI catalog/loader, or scheduled background runner
+(LaunchAgent/cron) that mutates shared host configs, verify these four contracts before calling
+the change done:
+
+1. **Bounded tool/MCP output & strict input validation**: cap every file/catalog read with an
+   explicit `max_chars` default + hard ceiling + `offset` pagination (never dump an unbounded
+   `SKILL.md` or full catalog into context); return raw Markdown rather than JSON-escaped prose;
+   require an explicit boolean guard (e.g. `confirm_full_scan=true`) for full-catalog scans and
+   parse booleans strictly (never `bool("false") -> True`); validate non-dict JSON-RPC `params`/`arguments`.
+2. **Scheduled runner hygiene (macOS LaunchAgent)**: explicitly resolve a Python 3.11+ binary
+   when relying on stdlib modules like `tomllib` (macOS `/usr/bin/python3` is 3.9.x); fail loud on
+   missing scripts or dependencies rather than degrading to shell `:` no-ops; write a machine-readable
+   `.status` heartbeat (`OK`/`FAIL`, timestamp, elapsed time) so silent stalls are immediately visible;
+   never write non-actionable browse events into a `WatchPaths`-monitored file where cooldown can
+   starve real events.
+3. **Cross-daemon locking & transactional host projection**: use kernel `fcntl.flock` on a shared
+   sidecar lock file across both readers/appenders and rewriters/pruners (never shell `mkdir` PID
+   locks with TOCTOU races); when coordinating with an existing host daemon touching the same
+   config, match its exact lock protocol (for example, `sync-local-skill-sources.py` uses a `0o600`
+   `~/.claude/.daymade-skill-sync.lock.guard` `flock` paired with a `0o700` directory/PID marker at
+   `~/.claude/.daymade-skill-sync.lock` — opening the directory path as a flat file breaks sibling
+   daemons); merge host configs non-destructively
+   (preserving sibling keys and nested rules), validate syntax (JSON/TOML) before replace, auto-roll
+   back atomically on mid-flight error, and keep unchanged `apply` runs a true no-op with bounded
+   backup retention.
+4. **Independent adversarial audit + official host readback**: author unit tests only verify the
+   happy paths the author remembered. Before declaring a multi-host automation change ready, run at
+   least one fresh-context read-only adversarial audit targeting edge cases and token budgets, plus
+   the affected host's official surface probe (e.g. `audit_codex_skill_surface.py`,
+   `audit_claude_skill_surface.py`, or a fresh `agy -p` session).

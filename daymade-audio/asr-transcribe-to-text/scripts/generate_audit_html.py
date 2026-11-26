@@ -1,13 +1,8 @@
 #!/usr/bin/env python3
-"""Generate a self-contained HTML audit page for ASR transcripts.
+"""Refresh an adopted ASR audit dataset or generate an offline audit page.
 
-Reads speaker-labeled CSV/TXT/diarization files produced by speaker_transcribe.py
-and emits a single interactive HTML file with audio playback, per-turn flags/notes,
-speaker alias mapping, and export report.
-
-Usage:
-  uv run generate_audit_html.py PROJECT_DIR [--output OUTPUT_PATH]
-  uv run generate_audit_html.py PROJECT_DIR --manifest MANIFEST.json
+Pass the speaker-transcribe output directory. Use --help for the current
+arguments and the installed Skill's audit export workflow for route selection.
 """
 # /// script
 # dependencies = []
@@ -15,12 +10,15 @@ Usage:
 
 import argparse
 import csv
+import hashlib
 import html
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from datetime import datetime
 
@@ -494,7 +492,7 @@ def rel_to_audit(path: Path | None) -> str | None:
         return None
 
 
-def gather_files() -> list[dict]:
+def gather_files(*, legacy_markup: bool = True) -> list[dict]:
     entries = []
     if CONFIG.manifest_path and CONFIG.manifest_path.exists():
         try:
@@ -571,8 +569,6 @@ def gather_files() -> list[dict]:
         if not diar_path.exists():
             diar_path = CONFIG.diarization_dir / f"{stem}.json"
 
-        reader_html = render_reader_html(stem, csv_rows)
-
         speakers = sorted({r["speaker"] for r in csv_rows})
         folder = str(Path(rel_path).parent) if "/" in rel_path else "(根目录)"
         material_type = classify_material(rel_path)
@@ -583,8 +579,9 @@ def gather_files() -> list[dict]:
             status = "processing"
 
         duration_seconds = info.get("duration_seconds") or 0
-        if not duration_seconds and csv_rows:
-            duration_seconds = max(r["end"] for r in csv_rows)
+        transcript_end = max((r["end"] for r in csv_rows), default=0)
+        if legacy_markup and not duration_seconds:
+            duration_seconds = transcript_end
 
         files.append({
             "stem": stem,
@@ -592,6 +589,7 @@ def gather_files() -> list[dict]:
             "filename": info.get("filename", stem),
             "folder": folder,
             "duration_seconds": duration_seconds,
+            "transcript_end_seconds": transcript_end,
             "duration_formatted": format_time(duration_seconds),
             "size_bytes": info.get("size_bytes", 0),
             "status": status,
@@ -606,10 +604,11 @@ def gather_files() -> list[dict]:
             "diarization_rel_path": rel_to_audit(diar_path),
             "rows": csv_rows,
             "txt_content": txt_content,
-            "reader_html": reader_html,
             "diarization": diarization,
             "speaker_names": diarization.get("speaker_names", {}),
         })
+        if legacy_markup:
+            files[-1]["reader_html"] = render_reader_html(stem, csv_rows)
 
     return files
 
@@ -2598,9 +2597,13 @@ window.addEventListener('keydown', e => {{
     return html_out
 
 
+def viewer_registry():
+    return Path(os.environ.get('MESSAGE_VIEWER_CONFIG', Path.home() / '.config/daymade/message-viewer/service.json'))
+
+
 def dispatch_registered_viewer(args):
     """Honor an explicitly adopted shared-reader project before standalone output."""
-    registry = Path(os.environ.get('MESSAGE_VIEWER_CONFIG', Path.home() / '.config/daymade/message-viewer/service.json'))
+    registry = viewer_registry()
     if not registry.exists():
         return False
     config = json.loads(registry.read_text(encoding='utf-8'))
@@ -2641,19 +2644,73 @@ def dispatch_registered_viewer(args):
     return True
 
 
+def shared_offline_converter():
+    registry = viewer_registry()
+    if not registry.exists():
+        return None
+    service = json.loads(registry.read_text(encoding="utf-8")).get("service_script")
+    if not service:
+        return None
+    converter = Path(service).with_name("convert-dataset.mjs")
+    if not converter.is_file():
+        raise RuntimeError("Shared viewer converter unavailable; check the configured service installation")
+    return converter
+
+
+def write_shared_offline(converter, files):
+    output = CONFIG.output_path
+    namespace = json.dumps([str(CONFIG.project_dir.resolve()), CONFIG.storage_key], ensure_ascii=False)
+    dataset_id = "asr-" + hashlib.sha256(namespace.encode()).hexdigest()[:24]
+    prefix = f"<!-- shared-asr-dataset: {dataset_id} -->\n".encode()
+    try:
+        with output.open("rb") as existing:
+            if existing.read(len(prefix)) != prefix:
+                raise RuntimeError(
+                    "Existing audit page retained for review export. Use --output with a new HTML path."
+                )
+            previous = os.fstat(existing.fileno())
+    except FileNotFoundError:
+        previous = None
+    data = {"files": files, "title": CONFIG.title, "subtitle": CONFIG.subtitle,
+            "speaker_colors": CONFIG.known_speakers}
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".shared-audit-", dir=output.parent) as tmp:
+        temp = Path(tmp)
+        source = temp / "source.json"
+        source.write_text(json.dumps(data, ensure_ascii=False, allow_nan=False), encoding="utf-8")
+        page = temp / "index.html"
+        subprocess.run(["node", str(converter), "--input", str(source), "--output",
+                        str(temp / "data.json"), "--id", dataset_id, "--html-output", str(page)],
+                       check=True)
+        bound_page = temp / "bound.html"
+        with bound_page.open("wb") as final, page.open("rb") as converted:
+            final.write(prefix)
+            shutil.copyfileobj(converted, final)
+        if previous is None:
+            os.link(bound_page, output)
+        else:
+            current = output.stat()
+            signature = lambda st: (st.st_dev, st.st_ino, st.st_ctime_ns, st.st_size)
+            if signature(previous) != signature(current):
+                raise RuntimeError("Audit output changed during generation; existing page retained")
+            os.replace(bound_page, output)
+
+
 def main():
-    ap = argparse.ArgumentParser(description="Generate self-contained HTML audit page for ASR transcripts")
+    ap = argparse.ArgumentParser(description="Refresh an adopted ASR audit dataset or generate an offline audit page")
     ap.add_argument("project_dir", type=Path, help="Directory containing CSV/TXT/diarization outputs")
-    ap.add_argument("--output", type=Path, default=None, help="HTML output path (default: PROJECT_DIR/audit/index.html)")
+    ap.add_argument("--output", type=Path, default=None,
+                    help="Offline HTML path (default: PROJECT_DIR/audit/index.html) or a registered redirect for an adopted project")
     ap.add_argument("--csv-dir", type=Path, default=None, help="Directory containing CSV files (default: PROJECT_DIR)")
     ap.add_argument("--txt-dir", type=Path, default=None, help="Directory containing TXT files (default: PROJECT_DIR)")
     ap.add_argument("--diarization-dir", type=Path, default=None, help="Directory containing diarization JSON files (default: PROJECT_DIR)")
     ap.add_argument("--audio-dir", type=Path, default=None, help="Directory containing audio files (default: PROJECT_DIR)")
-    ap.add_argument("--original-dir", type=Path, default=None, help="Directory containing original media (optional)")
+    ap.add_argument("--original-dir", type=Path, default=None,
+                    help="Directory containing original media (must match the registry for an adopted project)")
     ap.add_argument("--manifest", type=Path, default=None, help="Optional JSON manifest with file metadata")
     ap.add_argument("--title", default=DEFAULT_TITLE, help="Page title")
     ap.add_argument("--subtitle", default=DEFAULT_SUBTITLE, help="Page subtitle")
-    ap.add_argument("--storage-key", default=None, help="localStorage key prefix")
+    ap.add_argument("--storage-key", default=None, help="Offline review storage namespace (unsupported for adopted projects)")
     ap.add_argument("--known-speaker", action="append", default=[], help='Known speaker color mapping, e.g. "张三=#0d6efd" or just "张三" (auto-color)')
     ap.add_argument("--material-final", action="append", default=[], help="Folder-name keywords treated as 成片")
     ap.add_argument("--material-rough", action="append", default=[], help="Folder-name keywords treated as 粗剪")
@@ -2695,11 +2752,15 @@ def main():
         known_speakers=known_speakers,
     )
 
-    files = gather_files()
-    html_out = build_html(files)
-    CONFIG.output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(CONFIG.output_path, "w", encoding="utf-8") as f:
-        f.write(html_out)
+    converter = shared_offline_converter()
+    files = gather_files(legacy_markup=converter is None)
+    if converter is not None:
+        write_shared_offline(converter, files)
+    else:
+        html_out = build_html(files)
+        CONFIG.output_path.parent.mkdir(parents=True, exist_ok=True)
+        with CONFIG.output_path.open("w", encoding="utf-8") as f:
+            f.write(html_out)
     print(f"Generated: {CONFIG.output_path}")
     print(f"Files: {len(files)} (done={sum(1 for f in files if f['status'] == 'done')}, "
           f"processing={sum(1 for f in files if f['status'] == 'processing')}, "

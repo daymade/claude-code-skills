@@ -121,6 +121,13 @@ Treat “unsupported” as a hypothesis and investigate alternative documented p
   condition and verify the original usable result. Skip this route for
   reference-only work or self-sufficient transforms only when no execution
   prerequisite is affected.
+- When a reusable methodology Skill needs user, brand, compliance or workspace
+  context without hardcoding private repos or repeating onboarding every session,
+  follow [context inversion and persistent local state](references/context-inversion-and-state.md)
+  before drafting: keep methodology self-contained inside the bundle, declare
+  blocking vs. optional slots, run `Resolve → Diff → Ask Once → Persist` into
+  user-local storage outside the bundle, and verify live path liveness plus
+  malformed-state rejection.
 - For persisted formats/partial updates, permission-sensitive checks or large
   command output, follow the affected [stateful verification recipe](references/stateful-script-verification.md).
   For resumable writes to human-edited state, include its
@@ -188,9 +195,10 @@ Retirement or changed boundaries require traceable authorization.
 Run compare → classify → verify. Review every unmatched old unit with the owning
 current file, locatable evidence and semantic reason; surviving only in tests,
 evals or an unreachable reference is a gap. Regenerate stale reviews after edits.
-Inspect changed prose pointers and adjacent rule clauses with the migration
-guide's reference/self-application procedure; text survival alone does not prove
-the section's behavior survived.
+Inspect changed prose pointers, sibling references and every affected routing
+surface in `SKILL.md` with the migration guide's validation and
+reference/self-application checks; text survival or a link from one unrelated
+row alone does not prove the section's behavior survived or is reachable.
 Finish this edit only after the
 [static preservation and required task-result gates](references/change-verification.md#fix-required-acceptance-before-selecting-evidence)
 both clear.

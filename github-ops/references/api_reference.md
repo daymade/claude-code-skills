@@ -745,6 +745,14 @@ gh api rate_limit --jq '.resources.graphql'
 Rate limits vary by resource, authentication mode, plan, and platform policy. Read the live
 response rather than persisting copied limits in automation.
 
+### Separate REST vs GraphQL Quotas
+
+`resources.core` (REST) and `resources.graphql` (GraphQL) are tracked in independent buckets.
+When REST returns `403 API rate limit exceeded` (`core.remaining == 0`) while `graphql.remaining > 0`:
+- Query PR status, check-runs, and annotations via `gh api graphql` instead of REST endpoints.
+- Keep `gh pr merge` on GraphQL by omitting `--delete-branch` upfront (avoiding the follow-up REST `DELETE /git/refs` call), and retire the merged remote branch over SSH Git transport (`git push <remote> --force-with-lease=refs/heads/<branch>:<saved-full-sha> --delete <branch>`) with `git ls-remote` readback.
+- Do not retry REST endpoints before `resources.core.reset`.
+
 ### Rate Limit Headers
 
 Every API response includes rate limit headers:

@@ -14,9 +14,12 @@ Keep runtime definitions in their executable owners:
   conditions and job deadlines. Inspect any command-specific timeout there before
   treating the job deadline as a timeout for each command.
 - [test-suites.txt](../scripts/ci/test-suites.txt): admission criteria and registered suites.
+- [select_registered_suites.py](../scripts/ci/select_registered_suites.py): diff-based
+  suite selection and fail-closed on-demand tool flags (`need_*`).
 - [run_registered_tests.sh](../scripts/ci/run_registered_tests.sh): dispatcher commands,
-  file selection and aggregate failure status. This runs the registry, not every
-  workflow step.
+  file selection and aggregate failure status (runs `python-unittest` suites via
+  [run_unittest_parallel.py](../scripts/ci/run_unittest_parallel.py)). This runs the
+  registry, not every workflow step.
 
 ## Repository PII dispatch
 
@@ -26,11 +29,12 @@ runner and guard. Keep those values in the executable owners. The PII stage's
 deadline does not measure or bound the entire Git push. Diagnose completed scan
 receipts through the guard's existing operating SOP before requesting another scan.
 
-When the shared guard exists but its required publication runtime is missing,
-restore that runtime through its installer and retry the normal push. When the
-guard itself is absent, the dispatcher emits a warning and runs only the mainline
-guard; do not report that as a successful PII scan. Preserve that distinction
-when inspecting failures or testing recovery; do not bypass the dispatcher.
+Treat the public PII stage as fail-closed. Missing or non-executable guards,
+missing publication runtimes, repository-controlled guard/runtime paths, and
+missing, malformed, truncated or incomplete repository worktree inventories all
+block the push with exit 2. Restore the external guard or required runtime
+through its owner, then retry the normal push. Do not report a mainline-only run
+as a successful PII scan, weaken the dispatcher, or bypass it.
 
 Use [test_pii_hook_dispatch.py](../scripts/ci/test_pii_hook_dispatch.py) for the
 actual delegation boundary, publication-budget arguments and failure propagation:

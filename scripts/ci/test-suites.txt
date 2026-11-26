@@ -75,8 +75,8 @@ python-unittest  daymade-audio/transcript-fixer/tests
 python-unittest  daymade-audio/stepfun-tts/tests
 python-unittest  feishu-doc-scraper/tests
 python-unittest  ima-copilot/tests
+python-unittest  agent-message/tests
 python-unittest  peer-message/tests
-node-test        peer-message/tests
 python-unittest  setup-notifications-via-wecom/tests
 python-unittest  tibo-reset-codex/tests cookie-copy/
 node-test        tibo-reset-codex/tests cookie-copy/
@@ -89,7 +89,9 @@ python-unittest  ghostty-use/scripts
 python-unittest  report-with-html/tests
 python-unittest  daymade-codex/local-codex/scripts
 python-unittest  frontend-visual-qa/tests
+node-test        frontend-visual-qa/tests/route-census
 python-unittest  competitors-analysis/tests
 python-unittest  scrapling-skill/tests
 python-unittest  marketplace-health-check/tests
 python-unittest  youtube-downloader/tests
+python-unittest  ai-quota-calibrator/tests

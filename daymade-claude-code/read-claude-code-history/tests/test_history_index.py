@@ -8,6 +8,7 @@ explicit smoke run on supported machines, never by the registered Linux suite.
 from __future__ import annotations
 
 import fcntl
+import hashlib
 import importlib.util
 import io
 import json
@@ -18,7 +19,7 @@ import sys
 import tempfile
 import types
 import unittest
-from contextlib import ExitStack, contextmanager, redirect_stderr, redirect_stdout
+from contextlib import ExitStack, closing, contextmanager, redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
@@ -91,6 +92,7 @@ def portable_backend():
     with ExitStack() as stack:
         stack.enter_context(mock.patch.object(history_index, "SCHEMA", portable_schema))
         stack.enter_context(mock.patch.object(history_index, "_connect", plain_connect))
+        stack.enter_context(mock.patch.object(history_index, "_fts_tokenizer_identity", return_value="unicode61"))
         yield
 
 
@@ -749,6 +751,104 @@ class HistoryIndexTests(unittest.TestCase):
             row[0] for row in connection.execute("SELECT fts_text FROM records")
         }
         self.assertEqual(texts, {"old-0", "old-1"})
+        self.assertEqual(connection.execute(
+            "SELECT COUNT(*) FROM records_fts WHERE records_fts MATCH 'old'"
+        ).fetchone()[0], 2)
+        self.assertEqual(connection.execute(
+            "SELECT COUNT(*) FROM records_fts WHERE records_fts MATCH 'new'"
+        ).fetchone()[0], 0)
+        connection.close()
+
+    def test_incremental_fts_keeps_only_current_postings_without_rebuild(self) -> None:
+        fixtures = [
+            ("77777777-7777-4777-8777-777777777771", "keptword"),
+            ("77777777-7777-4777-8777-777777777772", "replacedword"),
+            ("77777777-7777-4777-8777-777777777773", "removedword"),
+            ("77777777-7777-4777-8777-777777777774", "addedword"),
+        ]
+        paths = [(project_dir(self.active, self.workspace) / f"{sid}.jsonl", sid, word)
+                 for sid, word in fixtures]
+        for path, sid, word in paths[:3]:
+            write_jsonl(path, [user_record(sid, self.workspace, word, "2026-08-01T00:00:00Z")])
+        with portable_backend():
+            history_index.update_index(self.db, self.scope(self.active_source), rebuild=True)
+            paths[2][0].unlink()
+            for path, sid, word in (paths[1], paths[3]):
+                text = "replacementword" if word == "replacedword" else word
+                write_jsonl(path, [user_record(sid, self.workspace, text, "2026-08-02T00:00:00Z")])
+            statements = []
+
+            def traced_connect(*args, **kwargs):
+                connection = plain_connect(*args, **kwargs)
+                connection.set_trace_callback(statements.append)
+                return connection
+
+            with mock.patch.object(history_index, "_connect", traced_connect):
+                changes = history_index.update_index(self.db, self.scope(self.active_source))
+                no_changes = history_index.update_index(self.db, self.scope(self.active_source))
+        self.assertEqual([changes[field] for field in ("added", "changed", "removed", "unchanged")],
+                         [1, 1, 1, 1])
+        self.assertEqual(no_changes["unchanged"], 3)
+        self.assertFalse(any("VALUES('rebuild')" in sql for sql in statements))
+        self.assertFalse(any("substr(records.fts_text" in sql for sql in statements))
+        with plain_connect(self.db) as connection:
+            for word, count in (("keptword", 1), ("replacementword", 1), ("addedword", 1),
+                                ("replacedword", 0), ("removedword", 0)):
+                self.assertEqual(connection.execute(
+                    "SELECT COUNT(*) FROM records_fts WHERE records_fts MATCH ?", (word,)
+                ).fetchone()[0], count, word)
+            connection.execute("INSERT INTO records_fts(records_fts, rank) VALUES('integrity-check', 1)")
+
+    def test_tokenizer_change_rebuilds_once_and_preserves_search(self) -> None:
+        sid = "77777777-7777-4777-8777-777777777775"
+        path = project_dir(self.active, self.workspace) / f"{sid}.jsonl"
+        write_jsonl(path, [user_record(sid, self.workspace, "keptword", "2026-08-01T00:00:00Z")])
+        statements = []
+
+        def traced_connect(*args, **kwargs):
+            connection = plain_connect(*args, **kwargs)
+            connection.set_trace_callback(statements.append)
+            return connection
+
+        with portable_backend():
+            history_index.update_index(self.db, self.scope(self.active_source), rebuild=True)
+            with (mock.patch.object(history_index, "_connect", traced_connect),
+                  mock.patch.object(history_index, "_fts_tokenizer_identity", return_value="different")):
+                for _ in range(2):
+                    history_index.update_index(self.db, self.scope(self.active_source))
+        self.assertEqual(sum("VALUES('rebuild')" in sql for sql in statements), 1)
+        connection = plain_connect(self.db, readonly=True)
+        self.assertEqual(connection.execute(
+            "SELECT COUNT(*) FROM records_fts WHERE records_fts MATCH 'keptword'"
+        ).fetchone()[0], 1)
+        connection.close()
+
+    def test_unqualified_write_reconciles_prefix_policy_again(self) -> None:
+        sid = "77777777-7777-4777-8777-777777777776"
+        path = project_dir(self.active, self.workspace) / f"{sid}.jsonl"
+        write_jsonl(path, [user_record(sid, self.workspace, "keptword", "2026-08-01T00:00:00Z")])
+        with portable_backend():
+            history_index.update_index(self.db, self.scope(self.active_source), rebuild=True)
+            connection = plain_connect(self.db)
+            # A writer unaware of the current policy and its receipt can import
+            # data while updating the normal completion timestamp.
+            connection.execute(
+                "INSERT INTO records(session_id,record_key,seq,role,fts_text,segment_sources_json,"
+                "copy_paths_json,source_labels_json) VALUES(?, 'legacy', 2, 'user', ?, '[]', '[]', '[]')",
+                (sid, "<task-notification> removelegacyword"),
+            )
+            connection.execute("INSERT INTO records_fts(records_fts) VALUES('rebuild')")
+            history_index._meta_set(connection, "last_indexed_at", "older-writer")
+            connection.commit()
+            connection.close()
+            receipt = history_index.update_index(self.db, self.scope(self.active_source))
+            unchanged = history_index.update_index(self.db, self.scope(self.active_source))
+        self.assertEqual(receipt["records_pruned"], 1)
+        self.assertEqual(unchanged["records_pruned"], 0)
+        connection = plain_connect(self.db, readonly=True)
+        self.assertEqual(connection.execute(
+            "SELECT COUNT(*) FROM records_fts WHERE records_fts MATCH 'removelegacyword'"
+        ).fetchone()[0], 0)
         connection.close()
 
     def test_same_size_same_mtime_content_change_is_not_fresh(self) -> None:
@@ -778,6 +878,70 @@ class HistoryIndexTests(unittest.TestCase):
             connection.execute("SELECT fts_text FROM records").fetchone()[0],
             "bravo",
         )
+        connection.close()
+
+    def test_cache_writes_and_session_removal_roll_back_together(self) -> None:
+        session_id = "99999999-9999-4999-8999-999999999995"
+        active = project_dir(self.active, self.workspace) / f"{session_id}.jsonl"
+        archive = project_dir(self.archive, self.workspace) / f"{session_id}.jsonl"
+        for path, text in ((active, "active turn"), (archive, "archive turn")):
+            write_jsonl(
+                path,
+                [user_record(session_id, self.workspace, text, "2026-08-01T00:00:00Z")],
+            )
+        scope = self.scope(self.active_source, self.archive_source)
+        table = history_index._SourceFileCache._table
+
+        def snapshot():
+            with closing(plain_connect(self.db, readonly=True)) as connection:
+                return (
+                    connection.execute(
+                        f"SELECT * FROM {table} ORDER BY kind,path"
+                    ).fetchall(),
+                    connection.execute("SELECT fingerprint FROM sessions").fetchall(),
+                    connection.execute("SELECT fts_text FROM records ORDER BY id").fetchall(),
+                )
+
+        original_store = history_index._SourceFileCache.store
+
+        def fail_after_store(cache, connection):
+            original_store(cache, connection)
+            raise RuntimeError("after cache writes")
+
+        with portable_backend():
+            history_index.update_index(self.db, scope)
+            before = snapshot()
+            archive.unlink()
+            with mock.patch.object(history_index._SourceFileCache, "store", fail_after_store):
+                with self.assertRaisesRegex(RuntimeError, "after cache writes"):
+                    history_index.update_index(self.db, scope)
+            self.assertEqual(snapshot(), before)
+            self.assertEqual(history_index.update_index(self.db, scope)["changed"], 1)
+            cache_rows, _, records = snapshot()
+            self.assertTrue(cache_rows)
+            self.assertTrue(all(Path(row["path"]) == active for row in cache_rows))
+            self.assertEqual([row[0] for row in records], ["active turn"])
+
+            active.unlink()
+            self.assertEqual(history_index.update_index(self.db, scope)["removed"], 1)
+            self.assertEqual(snapshot(), ([], [], []))
+
+    def test_tokenizer_change_during_write_keeps_the_previous_index(self) -> None:
+        sid = "77777777-7777-4777-8777-777777777777"
+        path = project_dir(self.active, self.workspace) / f"{sid}.jsonl"
+        with portable_backend():
+            write_jsonl(path, [user_record(sid, self.workspace, "originalword", "2026-08-01T00:00:00Z")])
+            history_index.update_index(self.db, self.scope(self.active_source), rebuild=True)
+            write_jsonl(path, [user_record(sid, self.workspace, "incomingword", "2026-08-02T00:00:00Z")])
+            with (mock.patch.object(history_index, "_fts_tokenizer_identity",
+                                    side_effect=["unicode61", "changed"]),
+                  self.assertRaisesRegex(history_index.IndexError, "tokenizer files changed")):
+                history_index.update_index(self.db, self.scope(self.active_source))
+        connection = plain_connect(self.db, readonly=True)
+        self.assertEqual(connection.execute("SELECT fts_text FROM records").fetchone()[0], "originalword")
+        self.assertEqual(connection.execute(
+            "SELECT COUNT(*) FROM records_fts WHERE records_fts MATCH 'originalword'"
+        ).fetchone()[0], 1)
         connection.close()
 
     def test_chunk_model_binding_precedes_and_survives_partial_chunks(self) -> None:
@@ -1508,6 +1672,103 @@ class MultiProviderIndexTests(unittest.TestCase):
             all_projects=project_path is None,
         )
 
+    def test_warm_index_opens_no_session_bodies_and_picks_up_an_append(self):
+        session_id = "019a0000-0000-7000-8000-000000000011"
+        rollout = self.codex_home / "sessions" / f"rollout-{session_id}.jsonl"
+        codex_rollout(rollout, session_id, self.workspace, [("user", "codex before")])
+        kimi_session_dir = kimi_session(
+            self.kimi_home, "conv-fixture", self.workspace, [("user", "kimi before")]
+        )
+        wire = kimi_session_dir / "agents" / "main" / "wire.jsonl"
+        claude_id = "019a0000-0000-7000-8000-000000000012"
+        transcript = project_dir(self.active, self.workspace) / f"{claude_id}.jsonl"
+        write_jsonl(
+            transcript,
+            [user_record(claude_id, self.workspace, "claude before", "2026-05-01T00:00:00Z")],
+        )
+        scope = self.scope(self.claude_source, self.codex_source, self.kimi_source)
+        blocked = {path.resolve() for path in (transcript, rollout, wire)}
+        original_open = Path.open
+
+        def reject_body_open(path, *args, **kwargs):
+            if path.resolve() in blocked:
+                self.fail(f"Warm index opened a session body: {path.name}")
+            return original_open(path, *args, **kwargs)
+
+        with portable_backend():
+            first = history_index.update_index(self.db, scope)
+            with mock.patch.object(Path, "open", reject_body_open):
+                warm = history_index.update_index(self.db, scope)
+            blocked.remove(rollout.resolve())
+            appended = {
+                "timestamp": "2026-05-01T00:00:02.000Z",
+                "ordinal": 2,
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "codex after"}],
+                },
+            }
+            with rollout.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(appended) + "\n")
+            with mock.patch.object(Path, "open", reject_body_open):
+                increment = history_index.update_index(self.db, scope)
+            blocked.add(rollout.resolve())
+            with mock.patch.object(Path, "open", reject_body_open):
+                rewarmed = history_index.update_index(self.db, scope)
+        self.assertEqual(first["added"], 3)
+        self.assertEqual(warm["unchanged"], 3)
+        self.assertEqual((increment["changed"], increment["unchanged"]), (1, 2))
+        self.assertEqual(rewarmed["unchanged"], 3)
+
+        facts = [{
+            "path": str(rollout.resolve()),
+            "labels": ["codex:active"],
+            "size": rollout.stat().st_size,
+            "mtime_ns": rollout.stat().st_mtime_ns,
+            "sha256": hashlib.sha256(rollout.read_bytes()).hexdigest(),
+        }]
+        canonical = json.dumps(facts, sort_keys=True, separators=(",", ":")).encode()
+        with closing(plain_connect(self.db, readonly=True)) as connection:
+            saved = connection.execute(
+                "SELECT fingerprint, ended FROM sessions WHERE session_id=?", (session_id,)
+            ).fetchone()
+            records = connection.execute(
+                "SELECT fts_text FROM records WHERE session_id=? ORDER BY seq", (session_id,)
+            )
+            self.assertEqual([row[0] for row in records], ["codex before", "codex after"])
+        self.assertEqual(saved["fingerprint"], "sha256:" + hashlib.sha256(canonical).hexdigest())
+        self.assertEqual(saved["ended"], history_index.parse_timestamp(appended["timestamp"]))
+
+    def test_project_scope_retries_failed_discovery_and_keeps_excluded_metadata_out(self):
+        wanted_id = "019a0000-0000-7000-8000-000000000013"
+        outside_id = "019a0000-0000-7000-8000-000000000014"
+        directory = self.codex_home / "sessions"
+        wanted = directory / f"rollout-{wanted_id}.jsonl"
+        outside = directory / f"rollout-{outside_id}.jsonl"
+        codex_rollout(wanted, wanted_id, self.workspace, [("user", "wanted turn")])
+        codex_rollout(outside, outside_id, self.workspace.parent, [("user", "outside turn")])
+        original_open = Path.open
+
+        def fail_wanted(path, *args, **kwargs):
+            if path == wanted:
+                raise OSError("transient fixture read failure")
+            return original_open(path, *args, **kwargs)
+
+        scope = self.scope(self.codex_source, project_path=str(self.workspace.resolve()))
+        with portable_backend():
+            with mock.patch.object(Path, "open", fail_wanted):
+                failed = history_index.update_index(self.db, scope)
+            recovered = history_index.update_index(self.db, scope)
+        self.assertEqual(failed["sessions"], 0)
+        self.assertEqual(recovered["added"], 1)
+        with closing(plain_connect(self.db, readonly=True)) as connection:
+            table = history_index._SourceFileCache._table
+            paths = {Path(row[0]) for row in connection.execute(f"SELECT path FROM {table}")}
+            self.assertEqual(paths, {wanted})
+            self.assertEqual(connection.execute("SELECT session_id FROM sessions").fetchone()[0], wanted_id)
+
     def test_codex_rollouts_index_with_provider_and_skip_injected_preamble(self) -> None:
         session_id = "019a0000-0000-7000-8000-000000000001"
         codex_rollout(
@@ -1820,6 +2081,7 @@ class MultiProviderIndexTests(unittest.TestCase):
                 ),
             )
         legacy.execute("INSERT INTO records_fts(records_fts) VALUES('rebuild')")
+        legacy.execute("DELETE FROM meta WHERE key='injected_prefix_policy_codex'")
         legacy.commit()
         legacy.close()
 
@@ -1958,6 +2220,7 @@ class MultiProviderIndexTests(unittest.TestCase):
                 (session_id, f"legacy-{seq}", seq, text, text, json.dumps([str(path)])),
             )
         legacy.execute("INSERT INTO records_fts(records_fts) VALUES('rebuild')")
+        legacy.execute("DELETE FROM meta WHERE key='injected_prefix_policy_claude'")
         legacy.commit()
         legacy.close()
 

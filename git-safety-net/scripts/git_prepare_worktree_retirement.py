@@ -29,7 +29,8 @@ def require(condition: bool, message: str) -> None:
         raise Unsafe(message)
 
 
-def git(path: Path, *args: str, data: bytes | None = None) -> bytes:
+def git(path: Path, *args: str, data: bytes | None = None,
+        ok_codes: tuple[int, ...] = (0,)) -> bytes:
     env = dict(os.environ)
     for key in list(env):
         if key.startswith("GIT_"):
@@ -40,7 +41,7 @@ def git(path: Path, *args: str, data: bytes | None = None) -> bytes:
          "core.untrackedCache=false", "-C", str(path), *args],
         input=data, capture_output=True, env=env, check=False,
     )
-    if result.returncode:
+    if result.returncode not in ok_codes:
         raise RuntimeError(f"Git {args[0]} failed (exit {result.returncode})")
     return result.stdout
 
@@ -167,6 +168,26 @@ def entry(path: Path) -> dict:
     else:
         raise Unsafe("Unsupported special file in inventory")
     return item
+
+
+def matches_survivor(path: Path, expected: dict) -> bool:
+    try:
+        info = path.lstat()
+    except OSError:
+        # Keep the previous pathlib behavior for missing or indirect ancestors.
+        if not (path.exists() or path.is_symlink()):
+            return False
+        raise
+    require(stat.S_ISREG(info.st_mode) or stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode),
+            "Unsupported special file in inventory")
+    if stat.S_IMODE(info.st_mode) != expected["mode"]:
+        return False
+    kind = expected["type"]
+    if kind == "file":
+        return stat.S_ISREG(info.st_mode) and info.st_size == expected["bytes"] and entry(path) == expected
+    if kind == "directory":
+        return stat.S_ISDIR(info.st_mode)
+    return stat.S_ISLNK(info.st_mode) and os.readlink(path) == expected["target"]
 
 
 def inventory(root: Path, excluded: tuple[str, ...] = ()) -> dict:
@@ -469,7 +490,7 @@ def scope_snapshot(target: Path, base_ref: str, recipes: dict, known_withdrawals
                 value.update(disposition="rebuildable", recipe=recipes[matches[0]])
             else:
                 counterpart = primary / top_relative
-                if (counterpart.exists() or counterpart.is_symlink()) and entry(counterpart) == item:
+                if matches_survivor(counterpart, item):
                     value.update(disposition="retained", survivor=str(counterpart))
                 else:
                     value.update(disposition="copy")
@@ -658,10 +679,113 @@ def prepare(target: Path, out: Path, base_ref: str, recipes: dict, resume: bool,
     return {"status": "prepared", "stages": len(state["completed"]), "next": "Run verify-current before authorized removal; preparation is not removal authority"}
 
 
+LFS_POINTER = re.compile(
+    rb"version https://git-lfs.github.com/spec/v1\noid sha256:([0-9a-f]{64})\nsize ([0-9]+)\n"
+)
+
+
+def verify_lfs_retention(worktree: Path, base_ref: str) -> dict:
+    """Prove that each materialized LFS file has its bytes outside this worktree."""
+    require(Path(text_git(worktree, "rev-parse", "--show-toplevel")) == worktree,
+            "Use the exact worktree root")
+    common = Path(text_git(worktree, "rev-parse", "--path-format=absolute", "--git-common-dir"))
+    admin = Path(text_git(worktree, "rev-parse", "--absolute-git-dir"))
+    require(admin != common and admin.parent == common / "worktrees", "A linked worktree is required")
+    branch = text_git(worktree, "branch", "--show-current")
+    require(base_ref.startswith("refs/") and base_ref != f"refs/heads/{branch}",
+            "Select a retained ref outside the retiring branch")
+    git(worktree, "check-ref-format", base_ref)
+
+    def retained_commit() -> str:
+        rows = git(worktree, f"--git-dir={common}", "for-each-ref",
+                   "--format=%(refname)%00%(symref)%00%(objectname)", base_ref).splitlines()
+        for row in rows:
+            name, symbolic, oid = row.decode("utf-8", "surrogateescape").split("\0")
+            if name == base_ref:
+                require(not symbolic, "Select a direct retained ref in the Git common directory")
+                return text_git(worktree, "rev-parse", "--verify", oid + "^{commit}")
+        raise Unsafe("Select a direct retained ref in the Git common directory")
+
+    head = text_git(worktree, "rev-parse", "HEAD^{commit}")
+    retained = retained_commit()
+    git(worktree, "merge-base", "--is-ancestor", head, retained)
+
+    def regular_file(root: Path, relative: Path) -> Path:
+        require(not relative.is_absolute() and ".." not in relative.parts, "Invalid tracked path")
+        require(not any((root / part).is_symlink() for part in (relative, *relative.parents)),
+                "Indirect LFS path needs manual handling")
+        target = root / relative
+        require(target.is_file(), "Missing or nonregular LFS file")
+        return target
+
+    tracked = git(worktree, "ls-files", "-z")
+    require(tracked, "Worktree index has no tracked files")
+    # A workspace or info attribute can hide a physically materialized pointer.
+    # Search the immutable tree as well as querying active filters on the index.
+    pointer_paths = set()
+    for row in git(worktree, "grep", "-alz", "--no-textconv", "-e",
+                   r"^version https://git-lfs\.github\.com/spec/v1$", head, "--",
+                   ok_codes=(0, 1)).split(b"\0"):
+        if row:
+            pointer_paths.add(row.split(b":", 1)[1])
+    paths = set(tracked.split(b"\0")) - {b""}
+    flags = git(worktree, "ls-files", "-t", "-z").split(b"\0")
+    skipped = {row[2:] for row in flags if row.startswith(b"S ")}
+    config = git(worktree, "config", "--null", "--list").split(b"\0")
+    sparse = b"core.sparsecheckout\ntrue" in config
+    attrs = git(worktree, "check-attr", "--stdin", "-z", "filter",
+                data=b"\0".join(sorted(paths | pointer_paths)) + b"\0").split(b"\0")
+    checked = pointers = payloads = 0
+    for i in range(0, len(attrs) - 1, 3):
+        raw, _, driver = attrs[i:i + 3]
+        if driver in (b"unspecified", b"unset") and raw not in pointer_paths:
+            continue
+        relative = Path(os.fsdecode(raw))
+        require(not relative.is_absolute() and ".." not in relative.parts, "Invalid tracked path")
+        pointer = None
+        if driver in (b"unspecified", b"unset"):
+            pointer = git(worktree, "show", f"{head}:{relative.as_posix()}")
+            if LFS_POINTER.fullmatch(pointer) is None:
+                continue
+        try:
+            (worktree / relative).lstat()
+        except FileNotFoundError:
+            require(sparse and raw in skipped
+                    and not any((worktree / part).is_symlink() for part in relative.parents),
+                    "Missing or indirect filtered file is not a verified sparse omission")
+            continue
+        require(pointer is not None or driver == b"lfs", "Materialized non-LFS filter needs manual handling")
+        source = regular_file(worktree, relative)
+        if pointer is None:
+            pointer = git(worktree, "show", f"{head}:{relative.as_posix()}")
+        match = LFS_POINTER.fullmatch(pointer)
+        require(match is not None and pointer == git(worktree, "show", f"{retained}:{relative.as_posix()}"),
+                "LFS pointer is missing, unsupported, or different at the retained ref")
+        checked += 1
+        if source.stat().st_size == len(pointer) and source.read_bytes() == pointer:
+            pointers += 1
+            continue
+        oid = match[1].decode("ascii")
+        payload = regular_file(common, Path("lfs/objects") / oid[:2] / oid[2:4] / oid)
+        size = int(match[2])
+        require(all(p.stat().st_size == size and digest(p) == oid for p in (source, payload)),
+                "LFS payload differs from the retained pointer or common storage")
+        payloads += 1
+
+    require(checked > 0, "No materialized LFS files were examined")
+    require(text_git(worktree, "rev-parse", "HEAD^{commit}") == head
+            and text_git(worktree, "branch", "--show-current") == branch
+            and retained_commit() == retained,
+            "Worktree head or retained ref moved")
+    return {"status": "lfs_retained", "worktree": str(worktree), "head": head,
+            "base_ref": base_ref, "base_commit": retained, "examined": checked,
+            "identical_pointers": pointers, "shared_payloads": payloads}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("prepare", "verify-current", "verify-recovery"))
-    parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("mode", choices=("prepare", "verify-current", "verify-recovery", "verify-lfs-retention"))
+    parser.add_argument("--out", type=Path, help="checkpoint directory for prepare and checkpoint verification")
     parser.add_argument("--worktree", type=Path)
     parser.add_argument("--base-ref", default="refs/heads/main")
     parser.add_argument("--resume", action="store_true")
@@ -670,7 +794,15 @@ def main() -> int:
     parser.add_argument("--known-withdrawal", action="append", default=[], metavar="OLD=RETAINED",
                         help="explicit withdrawn rebase commit pair; full IDs, exact tip retained and matching nonempty patches required")
     args = parser.parse_args()
+    if args.mode != "verify-lfs-retention" and args.out is None:
+        parser.error("--out is required for checkpoint preparation and verification")
     try:
+        if args.mode == "verify-lfs-retention":
+            require(args.worktree is not None and args.out is None and not args.resume
+                    and not args.rebuildable and not args.known_withdrawal,
+                    "verify-lfs-retention takes only --worktree and --base-ref")
+            print(json.dumps(verify_lfs_retention(args.worktree.resolve(), args.base_ref), sort_keys=True))
+            return 0
         withdrawals = withdrawal_arguments(args.known_withdrawal)
         recipes = {}
         for value in args.rebuildable:

@@ -47,6 +47,12 @@ Stop on `invalid` or `unknown` before writing. An explicit `--repo` cannot overr
 
 For managed local sources, omit `--repo` only when the source-sync owner's inventory can establish the repository identity. An unavailable inventory is `unknown`, not permission to guess. Inventory source paths must be qualified absolute paths; missing, null or blank paths cannot borrow the caller's current directory. Linked worktrees are checked by their Git common directory. Project-local Skills use `--scope project`; reviewing or installing third-party packages does not make their cache an authored source.
 
+An ordinary independent clone of the same remote is **not** an authoring substitute for a registered managed source: its Git common directory differs, so the owner check correctly rejects it. Use independent clones for read-only inspection; use a registered linked worktree for edits, commits, review binding and publication. A same-repository sparse linked worktree preserves the registered common directory and is preferred when the source checkout contains unrelated WIP.
+
+When the source-sync owner rejects its inventory with `source path is missing`, treat the named repository and path as the recovery target—not as a reason to edit the Skill under audit. Read that repository's current branch, full `HEAD`, full fetched `origin/main`, and bounded `git status` for the missing path. If any installed alias already consumes this checkout, or the audit will support an installation/availability claim, do not materialize a single path: use the `claude-switch-models-setup` source owner's host-scoped published-content adoption procedure so the complete consumed distribution, writer handoff, backup, exact tree identity and atomic no-follow controls apply.
+
+Only a sparse-checkout **audit-only** repair may materialize the exact missing tracked path from an immutable ref, and only when no installed alias consumes the checkout and no installed-content claim will be made. Before writing, prove the path is tracked at that ref, no uncommitted/untracked/ignored replacement or wrong-type object occupies it, every parent is a real in-repository directory, and the writer is identified and has explicitly handed off. Without that handoff, stop; a quiet mtime is not ownership evidence. Back up the bounded pre-write state outside the repository, write through a same-directory temporary regular file with the published mode, fsync and atomic rename, then read back the exact blob/mode. Stop on live WIP, another writer, parent symlink, path escape or any drift; do not switch the shared checkout, delete WIP, or redirect installed links to a temporary worktree. Report the result as audit-only, never as installed-content parity.
+
 For an approved independent Fleet clone, follow the source owner's
 [leased-authoring procedure](https://github.com/daymade/claude-code-skills/blob/main/daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md#leased-fleet-authoring-clones).
 Its ordinary online check uses the deployed owner inventory without `--inventory`;
@@ -60,6 +66,13 @@ when the command promises help, JSON or another result. Running only the source 
 does not test entry-point detection or path resolution through the installed form.
 Use a temporary representative entry before publication when the actual installation
 cannot yet contain the candidate; do not claim that probe proves installation.
+
+For local stdio MCP servers or executable entries that invoke external CLIs under a
+GUI host (which typically spawns with a minimal `PATH` such as `/usr/bin:/bin`), also
+run the configured command `argv` under `env -i HOME="$HOME" PATH="/usr/bin:/bin:/usr/sbin:/sbin"`
+and exercise a real protocol handshake plus one read-only tool or probe call. Passing
+only in an interactive login shell misses `exit 127` failures when tools installed in
+`~/.local/bin` or Homebrew paths are absent from the host's minimal `PATH`.
 
 After release and synchronization, run the applicable task smoke through the actual
 installed entry when local use is in scope. Keep source, distribution-form, installed

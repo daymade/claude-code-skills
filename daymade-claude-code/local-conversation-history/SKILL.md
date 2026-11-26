@@ -1,10 +1,10 @@
 ---
 name: local-conversation-history
 description: >-
-  Entry point for local AI conversation history across Claude Code, Codex and Kimi CLI: routes each
-  request to the reader or continuation skill that owns it and keeps the cross-provider inventory.
-  Use when the platform is unknown or plural ("what was I working on", "we discussed this once") and
-  for any Kimi CLI history. When platform and action are already clear, load that skill directly.
+  Entry point for local AI conversation history across Claude Code, Codex, Kimi CLI, and
+  Antigravity (agy): routes each request to its owning reader or continuation skill and keeps
+  cross-provider scope. Use when the platform is unknown or plural ("what was I working on", "we
+  discussed this once") or for Kimi/Antigravity history. Load the owning skill directly when clear.
 argument-hint: "[keywords | session-id | workspace-path]"
 ---
 
@@ -36,17 +36,18 @@ on, and whether the user wants **evidence** (what was said/done) or
 | Claude Code | `daymade-claude-code:read-claude-code-history` | `daymade-claude-code:continue-claude-code-work` |
 | OpenAI Codex | `daymade-claude-code:read-codex-history` | `daymade-claude-code:continue-codex-work` |
 | Kimi CLI | `read-claude-code-history`, with the Kimi scope named — see **Provider scope** | no continuation skill exists |
+| Antigravity (`agy`) | `read-claude-code-history`, with the Antigravity scope named — see **Provider scope** | no continuation skill exists (use `agy --resume <id>` only on explicit user request) |
 
 Resumption always follows a read. The continuation skills require a verified
 read receipt; routing straight to them without one is a defect, not a shortcut.
 
 **When the platform is not stated**, separate an exact identity from a memory
 of content. With a complete session ID, first use the Codex exact-ID locator,
-then the Claude Code exact-session lookup if Codex does not verify it. The
-verified original record decides the provider and continuation skill; an ID
-prefix does not. With only a title, date, quote, or remembered topic, use the
-inventory or content-search route below and verify the original messages before
-assigning a provider.
+then the Claude Code exact-session lookup, and then Antigravity (`read-claude-code-history`)
+if neither verifies it. The verified original record decides the provider and
+continuation skill; an ID prefix does not. With only a title, date, quote, or
+remembered topic, use the inventory or content-search route below and verify
+the original messages before assigning a provider.
 
 ## Provider scope — the job only this entry point routes
 
@@ -56,11 +57,12 @@ cross-provider request.
 
 | Cross-provider need | Route to | Name this scope |
 |---|---|---|
-| **Inventory** — "what have I been working on", "list my recent chats", session titles/dates/IDs | Indexed metadata where available, then exact-session readers | Do not use `list_local_history.py --source all`: its date and output limits are applied after Claude session bodies are read. Report a gap if no indexed inventory exists. |
-| **Content search** — "did we ever discuss X", find a quote, file, or tool result | `read-claude-code-history`, its indexed recall, then exact-session reader | Select the relevant indexed providers; inspect index coverage and freshness. Open only candidate sessions. |
-| **Ranked recall** — wording may have drifted | `read-claude-code-history`, its hybrid recall index | The index states which providers it holds; do not infer coverage for an unindexed provider. |
+| **Inventory** — "what have I been working on", "list my recent chats", session titles/dates/IDs | Indexed metadata where available (Codex and Antigravity have native indexed inventories via their owning readers), then exact-session readers | Do not use `list_local_history.py --source all`: its date and output limits are applied after Claude session bodies are read. Report a gap if no indexed inventory exists for a requested provider. |
+| **Content search** — "did we ever discuss X", find a quote, file, or tool result | `read-claude-code-history` (hybrid recall for Claude/Codex/Kimi; native SQLite FTS5 index for Antigravity), then exact-session reader | Select the relevant indexed providers; inspect index coverage and freshness. Open only candidate sessions. |
+| **Ranked recall** — wording may have drifted | `read-claude-code-history`, its hybrid recall index (plus Antigravity's native FTS5 index when Antigravity is in scope) | Each index states which providers it holds; do not infer coverage for an unindexed provider. |
 
-Indexed recall accepts explicit Claude, Codex, and Kimi provider filters.
+Indexed hybrid recall accepts explicit Claude, Codex, and Kimi provider filters;
+Antigravity uses its own native SQLite index owned by `read-claude-code-history`.
 
 **Use supplied clues before broad discovery.** For a pasted quote with a known
 project, date, or title, use indexed metadata to narrow candidates, then
@@ -77,9 +79,9 @@ do not make that command bounded. If the index is missing, stale, or lacks a
 provider, report that coverage gap; do not fall back to a corpus scan. Ranked
 top-K results cannot support an absence claim.
 
-**Kimi CLI has no other entry anywhere** — no dedicated skill exists for either
-axis, so both routes above land in `read-claude-code-history`, which documents
-its own Kimi home resolution.
+**Kimi CLI and Antigravity (`agy`) have no standalone reader skill** — both
+route to `read-claude-code-history`, which owns Kimi home resolution and
+Antigravity's read-only native SQLite/transcript reader.
 
 Let the executor own exact-session lookup, indexed provider filters, coverage,
 and output format. This skill names which providers are in scope.

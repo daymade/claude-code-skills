@@ -22,6 +22,10 @@ class SelectionTests(unittest.TestCase):
         self.assertFalse(result["html_reader"])
         self.assertFalse(result["feishu_reader"])
         self.assertFalse(result["report"])
+        self.assertFalse(result["need_ripgrep"])
+        self.assertFalse(result["need_zsh"])
+        self.assertFalse(result["need_ffmpeg"])
+        self.assertFalse(result["need_apt_self_test"])
 
     def test_prompt_and_fixture_changes_keep_owner_tests(self):
         for path in ("cookie-copy/SKILL.md", "cookie-copy/tests/fixture.json", "cookie-copy/scripts/copy.py"):
@@ -53,6 +57,29 @@ class SelectionTests(unittest.TestCase):
                 self.assertTrue(result["html_reader"])
                 self.assertTrue(result["feishu_reader"])
                 self.assertTrue(result["report"])
+                self.assertTrue(result["need_ripgrep"])
+                self.assertTrue(result["need_zsh"])
+                self.assertTrue(result["need_ffmpeg"])
+                self.assertTrue(result["need_apt_self_test"])
+
+    def test_runtime_tool_selection_tracks_actual_suite_consumers(self):
+        rg_res = scope.select(["daymade-claude-code/prior-work-retrieval/SKILL.md"])
+        self.assertTrue(rg_res["need_ripgrep"])
+        self.assertTrue(rg_res["need_zsh"])
+        self.assertFalse(rg_res["need_ffmpeg"])
+        self.assertTrue(rg_res["need_apt_self_test"])
+
+        audio_res = scope.select(["daymade-audio/transcript-fixer/SKILL.md"])
+        self.assertTrue(audio_res["need_ffmpeg"])
+        self.assertFalse(audio_res["need_ripgrep"])
+        self.assertFalse(audio_res["need_zsh"])
+        self.assertTrue(audio_res["need_apt_self_test"])
+
+        zsh_res = scope.select(["ghostty-use/SKILL.md"])
+        self.assertTrue(zsh_res["need_zsh"])
+        self.assertFalse(zsh_res["need_ripgrep"])
+        self.assertFalse(zsh_res["need_ffmpeg"])
+        self.assertTrue(zsh_res["need_apt_self_test"])
 
     def test_repository_instructions_keep_shared_contracts_and_real_changed_owner(self):
         contracts = {"tests", "daymade-claude-code/marketplace-dev/tests"}
@@ -77,6 +104,10 @@ class SelectionTests(unittest.TestCase):
         self.assertFalse(result["html_reader"])
         self.assertFalse(result["feishu_reader"])
         self.assertFalse(result["report"])
+        self.assertFalse(result["need_ripgrep"])
+        self.assertFalse(result["need_zsh"])
+        self.assertTrue(result["need_ffmpeg"])
+        self.assertTrue(result["need_apt_self_test"])
 
     def test_extra_jobs_include_source_tests_and_shared_inputs(self):
         for path in ("report-with-html/assets/template.html", "tests/report-with-html/test_regressions.py", "data-visualization-discipline/SKILL.md"):

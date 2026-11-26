@@ -167,6 +167,14 @@ ended the burn without touching the app.
 
 ## Measurement controls
 
+For a confirmed hot preservation or verification script, scope inspection to
+the path and operation attributed to its PID. Measure source reads, potential
+retained-copy reads and final verification separately. First test whether an
+expensive comparison runs after type, mode or size already rules out a match.
+A controlled replay can prove wasted work and show its cost on that input.
+Attribute the original process's CPU to that work only if a runtime trace or
+equivalent evidence from the original run supports it.
+
 Use these controls when snapshot counts or computed CPU rates could change the
 diagnosis. Stop measuring once the mechanism and the next authorized action are
 decided; these controls do not require a new monitor or a fleet-wide replay.
@@ -211,6 +219,61 @@ round) advances. If the application exited, label the probe failed, preserve the
 error and restore the authorized version through its existing service owner.
 Report the interruption and verify recovery before continuing performance work.
 Peer agreement alone does not authorize interrupting another session's work.
+
+## Duplicate scheduled work
+
+When a scheduled job repeatedly conflicts, retries, or times out, trace who
+starts each round and who consumes its result. Use the loaded service
+configuration and the receiver's results to match input identity, destination,
+and observation times across routes. Two different schedulers, possibly on
+different machines, can repeat the same expensive work. A shared executable,
+similar inputs, or one conflict response is insufficient to establish that.
+Stop taking more resource samples when the next decision can be made from
+this evidence.
+
+For example, a hub polls a machine while its timer sends snapshots to the
+same source identity. The hub advances the shared sequence between pushes,
+and the sender re-collects on conflicts. After an authorized cutover, check
+that the redundant timer is inactive and that the receiver publishes a new
+snapshot from the retained route with the task coverage users depend on.
+Two jobs publishing separate candidates or destinations can both be necessary.
+
+One necessary job can still repeat expensive work internally. First establish
+which inputs, outputs, and checks its consumer requires. Attribute the cost of
+full exports, Git LFS object hydration, content identity verification, and
+scanning separately. Before reusing work, prove that the materialized bytes and
+the applicable scan scope, rules, and scanner version still match. Reuse prior
+verified byte evidence when it still binds the current input identities and
+export settings. Re-export only when that identity cannot otherwise be proved.
+
+Compare a cold run, an unchanged rerun, and a run with one changed input. Use
+the same job and scope. Record per-stage time and which inputs were exported,
+hydrated, verified, or scanned. Compare reused and fresh scanner outcomes on
+small synthetic cases for clean input, a known finding, and a scanner error.
+Require the same verdicts and ensure that an error never admits reuse. Verify
+that the changed input gets checked and that the consumer still receives the
+required result. Keep the verdict comparison off the production tree.
+
+Record desktop recovery separately. Verify the original typing, scrolling,
+or window-switching symptom in actual use when available. A fresh snapshot
+proves the collection still works. Resource measurements describe the host
+at their sample time. Leave desktop recovery unverified without an actual
+interaction observation.
+
+### Capture a slow round while it is active
+
+Capture the job label when available, the run start time and the target PID
+with its start time and parent. Read any existing stage timestamps
+for lock acquisition, expensive input work and output generation. If they
+leave the current stage ambiguous, take one bounded stack or progress sample
+of the active worker or child while it still belongs to that run. Use the
+receiving artifact and exit status to confirm completion.
+
+For example, a usage-report job can spend time waiting for its shared lock,
+refreshing the index or rendering the report. An index child with CPU activity
+establishes its stage at the sample time. Only matching stage boundaries
+establish the duration. If the run has exited and only total elapsed time was
+recorded, keep the stage split unknown and use the existing run records.
 
 ## Writing the report
 

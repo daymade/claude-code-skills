@@ -49,8 +49,13 @@ cannot override a newer explicit decision.
 
 ### 2. Validate the explicit source manifest
 
-The manifest is the only discovery scope. No directory exists merely because a
-convention says it should. Validate the selected manifest:
+Treat the manifest as a source inventory, not authorization to read every listed
+directory. Bind each filesystem search to a concrete project directory authorized
+for the current task with `retrieve --filesystem-scope <project-dir>`. Repeat only
+for explicitly relevant projects or bounded asset directories. Never derive these
+arguments by copying every manifest root. Workspace, home and cross-project
+collection roots are not substitutes for a project scope; use an existing index
+to locate the project first. Validate the selected manifest:
 
 Run the commands below from the actual installed Skill directory. When invoking
 them from a project directory, use the bundled scripts' absolute paths.
@@ -84,15 +89,20 @@ inspect only a decision-bearing gap or changed state. Answer a recurrence
 question from the old action/result and current identities, rather than
 substituting a new remedy for the explanation requested.
 
-The hook currently re-arms on an explicit strong historical signal even when
-an earlier receipt was valid; weak recall can reuse a valid receipt. If `check`
-reports an older prompt, complete the current requirement through this workflow.
-Do not edit receipt identities, call scope reclassification for a genuine
-history request, or remove required sources to avoid that pass. A repeat query
-is not itself evidence of a hook bug: distinguish an exact replay, a clarified
-question using the same evidence, and a request for different historical work
-before proposing any trigger change. Trigger changes require the hook owner's
-real-history false-positive and recall calibration.
+The hook strips supported machine envelopes before classifying the human
+request. It recognizes specific phrasing for current-code follow-ups and
+reuse of verified digests or cached results for the current task. Recognized
+current-task follow-ups leave the existing requirement untouched.
+An explicit historical request still re-arms retrieval, including a human
+request after a supported envelope has been stripped. Weak recall can reuse
+a valid receipt.
+If `check` reports an older prompt, complete the current requirement through
+this workflow. Preserve receipt identities and required sources. Scope
+reclassification applies only to a proven false-positive requirement.
+Distinguish an exact replay, a clarification using the same evidence, and a
+request for different historical work before proposing a trigger change.
+Trigger changes require the hook owner's real-history false-positive and
+recall calibration.
 
 Write the user-world outcome separately from the proposed implementation. Then
 provide:
@@ -111,6 +121,7 @@ not pass generic verbs such as “做 / 优化 / 系统” alone.
 
 ```bash
 uv run --no-project python scripts/prior_work.py retrieve \
+  --filesystem-scope '<absolute-authorized-project-directory>' \
   --business-outcome 'the observable result the user actually needs' \
   --outcome-term 'accepted artifact, entity, event, or date' \
   --query 'the implementation or workflow currently being considered' \
@@ -139,7 +150,15 @@ When a normally optional live carrier is material to the request, promote it
 explicitly: `--require-source live-wechat`. The receipt cannot complete until
 that manual route is recorded.
 
-The command searches filesystem carriers with `rg`, calls explicitly declared
+Without a matching task scope, filesystem sources report `manual_required` with
+`filesystem_scope_required` or `filesystem_scope_mismatch` before any search or
+Git freshness probe starts. A child project does not authorize its parent source:
+use a source rooted inside that project or its existing index, and retain the
+coverage gap. Neither `required=true`, a timeout nor a missing receipt authorizes
+widening the scope. Record actual scoped/indexed work with `--manual-complete`;
+do not claim an unsearched collection was searched or rerun it to satisfy a gate.
+
+The command searches task-scoped filesystem carriers with `rg`, calls explicitly declared
 command adapters (for example the formal Claude-history finder), and surfaces
 manual routes such as live WeChat. Content search is always bounded by declared
 globs; full path enumeration runs only when an outcome/implementation term is
@@ -392,6 +411,14 @@ not by whether its own tests pass.
   the receipt; a later explicit retrieval request starts a new requirement.
   Until then, ordinary follow-ups and continuation wording do not automatically
   clear it; use the existing user opt-out for an explicit release.
+- A standalone status prompt such as 「检查现状」or「查看进度」is a one-turn
+  Stop exception for an existing requirement, bound to that prompt's `prompt_id`
+  and status marker; `turn_id` alone is not a substitute. It does not satisfy or
+  clear the retrieval obligation, and `PreToolUse` still blocks substantial
+  writes. A non-status real user prompt or Stop consumes the exception. If either
+  binding is missing or belongs to another turn, Stop fails closed, clears the
+  stale exception and performs normal receipt validation; machine-generated
+  envelopes neither consume nor extend it.
 
 For a requirement incorrectly armed by current-execution continuity, the operator
 can replay its original event after deploying the reviewed classifier correction.

@@ -34,6 +34,22 @@ class SharedViewerDispatchTests(unittest.TestCase):
         with patch.object(audit.subprocess,'run') as run:
             self.assertFalse(audit.dispatch_registered_viewer(self.args));run.assert_not_called()
         self.registry.unlink();self.assertFalse(audit.dispatch_registered_viewer(self.args))
+
+    def test_unregistered_project_preserves_previous_page_when_shared_viewer_is_installed(self):
+        output = self.project / 'audit' / 'index.html'
+        output.parent.mkdir()
+        output.write_text('legacy page with browser review state')
+        self.config['datasets'] = []
+        self.write()
+        converter = self.root / 'convert-dataset.mjs'
+        converter.write_text('')
+        with patch.object(audit, 'CONFIG', audit.Config(self.project)):
+            self.assertEqual(audit.shared_offline_converter(), converter)
+            with patch.object(audit.subprocess, 'run') as run:
+                with self.assertRaisesRegex(RuntimeError, 'Existing audit page retained'):
+                    audit.write_shared_offline(converter, [])
+                run.assert_not_called()
+        self.assertEqual(output.read_text(), 'legacy page with browser review state')
     def test_unavailable_bridge_and_failed_handoff_never_fall_back_to_old_ui(self):
         self.bridge.unlink()
         with self.assertRaises(RuntimeError):audit.dispatch_registered_viewer(self.args)

@@ -98,7 +98,16 @@ the plan, SKU rules and account budget before reporting exhaustion or a forecast
 If billing access fails, retain unknown; job annotations still prove the named
 run was blocked. See [GitHub billing](https://docs.github.com/en/actions/concepts/billing-and-usage).
 
+On private repositories that use self-hosted runners — or whenever remaining
+hosted allowance is unverified — do not treat switching jobs to GitHub-hosted
+runners (such as `ubuntu-latest`) as a default unblocking or speedup option.
+Inspect live self-hosted runner inventory, concurrency locks, and idle owned
+hardware first, and confirm remaining private allowance before adding hosted
+jobs.
+
 ## 3. Remove unnecessary demand before moving execution
+
+Audit and remove dead demand **before** scaling self-hosted runners: retired workflows still targeting hosted runners, redundant `push` triggers already enforced by `strict: true` PR branch protection, duplicate reusable CI jobs re-run inside every release workflow, sequential targets that execute the same unit-test suite twice (for example, `make verify` and `make test` both running the full suite), and closed one-off incident tests that add runtime without protecting active contracts. Adding workers to a bloated CI hides contention instead of fixing it. Conversely, once per-run work is lean, measure **queue wait time against host idle capacity** — a single self-hosted runner on a mostly idle multi-core host still produces multi-PR head-of-line queues until scaled to match concurrent PR/main demand.
 
 For each expensive job, name the behavior it protects and the inputs that can
 change it. Use actual historical diffs for both directions: unrelated business
@@ -109,11 +118,54 @@ executable prompt or application input; file extension alone is not a safe rule.
 Prefer a repository-owned change selector with a conservative full-check outcome
 for unknown paths, missing/truncated diff information or unsupported events.
 Selector failure must remain visible and cannot make a required check succeed.
+When adding path-filtered domain suites inside a single required check job, verify
+three recurring failure modes before merge:
+
+1. **Tool-setup `if:` parity**: every conditional runtime/package-manager step
+   (such as `setup-uv`, `setup-node`, `setup-go`, or CLI installers) must enable
+   whenever **any** downstream domain step that invokes it is enabled.
+2. **Cross-domain and naming blind spots**: replay real file paths across shared
+   modules, IaC roots, and kebab-case vs snake-case script/test pairs to ensure
+   editing a production file triggers every suite that parses or validates it.
+3. **CI self-change full fallback**: edits to the workflow file itself, root
+   `Makefile`, or shared quality task definitions should force all domain suites
+   to run rather than partially validating a changed selector.
+4. **Canonical derivation and fail-closed shared-fixture handling**: derive
+   test-module-to-group mappings directly from the canonical step/group table
+   rather than hand-maintained substring heuristics, and scan cross-file imports
+   or module-name references so edits to shared test fixtures or production
+   modules fail closed to the full suite (or full parallel shards).
+5. **Expression-injection and `$GITHUB_OUTPUT` hygiene**: never interpolate
+   `${{ ... }}` expressions or raw git filenames into `run:` shell commands or
+   `$GITHUB_OUTPUT` values. Emit fixed constant enum reason codes, reject
+   newlines/shell metacharacters before writing `$GITHUB_OUTPUT`, and pass
+   workflow outputs into `run:` blocks strictly via `env:`.
+
 Inspect branch rules and required check names before filtering. Workflow-level
 path skips can leave required checks pending; use job selection or an always
 reported aggregate where that contract needs a terminal result. Do not weaken
 protection to work around a pending check. See [GitHub path filtering and skipped
 checks](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onpushpull_requestpull_request_targetpathspaths-ignore).
+
+Two selector-level patterns eliminate recurring overhead without weakening
+coverage:
+
+- **Sparse checkout for selector jobs:** On large repositories — especially
+  self-hosted runners whose post-job hook wipes the workspace after each job —
+  configure the lightweight selector job with `sparse-checkout` covering only CI
+  scripts, workflow files, and selector tests instead of checking out and
+  deleting the entire tree on every run. When the selector must enumerate
+  repository roots (such as packages or skills), read the Git tree directly
+  (`git ls-tree -r --name-only HEAD`) rather than walking a full working tree.
+- **Fail-closed boolean flags for heavy system tools and self-calibration:**
+  Emit explicit selector flags (defaulting to `true` on full-check runs, unknown
+  paths, or diff errors) to gate expensive system-package installs (such as
+  `ffmpeg`, browsers, or document toolchains) and CI self-calibration suites so
+  routine docs or unrelated changes skip them while every unconditional security
+  and impacted-target check still runs. Keep any runtime setup action (such as
+  `setup-uv`, `setup-node`, or `setup-python`) unconditional whenever an
+  unconditional step in the same job invokes that runtime, matching
+  **Tool-setup `if:` parity** above.
 
 Map duplicate workflows by actual commands, fixtures and assertions. Preserve
 distinct suites while reusing a build only when its SHA, dependencies, environment
@@ -174,8 +226,15 @@ CI implementation must enforce the comparison and fallback.
 
 Cancel superseded validation within the same relevant branch/PR when its existing
 contract permits; preserve release single-writer behavior and do not cancel a
-deployment to save minutes. Use the repository's deployment owner and the
-[concurrency contract](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency).
+deployment to save minutes. Avoid collapsing unrelated release traffic behind one
+global lock: route genuinely read-only operations (checks, plans, inspections) to
+a per-run concurrency group so they never block writes or each other, and scope
+write locks by target environment (for example, staging vs production). When a
+caller workflow invokes a reusable multi-environment release workflow, give the
+caller job its own serialization group and lock each inner deployment job on its
+matching target-environment group rather than nesting the same concurrency group
+across caller and callee (which deadlocks). Use the repository's deployment owner
+and the [concurrency contract](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency).
 
 After demand selection, use workflow_operations.md's **Self-Hosted Runner Capacity
 and Acceptance** procedure before changing `runs-on`. Registration scope, labels,
@@ -195,9 +254,11 @@ authorization boundary, not merely an unmatched label or another repository's ru
 For an agent-owned change, the executing agent reads the exact checks before
 declaring delivery. It resolves authorized defects or reports a concrete blocker
 with the next executor and recovery condition. Do not hand the user dozens of raw
-failure emails as the work queue. A supported local CI entry can verify a budget-
-blocked job, but preserve the distinction between local evidence and GitHub's
-observed status; follow the repository's existing merge and reporting contract.
+failure emails as the work queue. For a zero-step spending-limit or billing block
+before an authorized bypass merge, follow
+[pre-merge local CI equivalence](workflow_operations.md#pre-merge-local-ci-equivalence-for-zero-step-budget-blocks);
+preserve the distinction between local evidence and GitHub's observed status, and
+follow the repository's existing merge and reporting contract.
 
 Before reducing notification delivery, verify how failure handling remains
 available: the active task's executor, an existing maintenance process or an

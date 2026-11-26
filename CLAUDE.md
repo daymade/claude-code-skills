@@ -217,6 +217,9 @@ observations separate; this file does not define another batch recipe.
 For tunnel/proxy-path failures or slow throughput, enter
 [tunnel-doctor](tunnel-doctor/SKILL.md) first. For unresolved protocol, streaming or
 throughput investigations, use [debugging-network-issues](debugging-network-issues/SKILL.md).
+For Tailscale online/DERP with ordinary SSH/TCP timeout, use
+[DERP userspace recovery](tunnel-doctor/SKILL.md#step-2b-1-tailscale-onlinederp-but-ordinary-ssh-tcp-times-out);
+its Step 6 DERP-userspace acceptance branch is the authority for that recovery.
 For a container healthcheck or internal RPC failure while the host probe succeeds,
 use tunnel-doctor's [container consumer path](tunnel-doctor/SKILL.md#2g-4-deploy-scripts-and-container-healthchecks-probe-localhost-through-proxy).
 For named Peer Relay trials or network speed claims, use
@@ -231,6 +234,7 @@ For Shadowrocket module activation or database rule-order claims, use the same
 proxy-conflict reference; keep its dated build observations separate from current write acceptance.
 When a watchdog is suspected, first align the actual actor and state transitions through
 [macos-watchdog troubleshooting](daymade-macos/macos-watchdog/SKILL.md#troubleshooting-quick-map).
+For an interrupted batch collector, follow [interrupted-batch recovery](daymade-macos/macos-watchdog/references/interrupted-batches.md). For intermittent network evidence, use the [collection and recovery acceptance SOP](debugging-network-issues/references/intermittent-evidence-collection.md).
 For unresolved tunnel packet-loss
 localization, read the [capture procedure](debugging-network-issues/references/packet-capture-recipes.md#four-boundary-tunnel-captures).
 For same-provider node failures with a working subscription, enter
@@ -277,7 +281,7 @@ For missing page files or attachments, follow
 
 For HTML report creation or updates, enter
 [report-with-html's Define success workflow](report-with-html/SKILL.md#workflow)
-for reader/use, evidence precision, delivery location and investigation acceptance.
+for reader/use, live-cockpit vs static-report boundary, evidence precision, delivery location and investigation acceptance.
 Its [technical comparison reading order](report-with-html/references/visualization-patterns.md)
 owns concrete plans, cost boundaries and next-verification choices; do not turn a research
 shortlist into purchase or deployment approval.
@@ -312,6 +316,9 @@ when verifying an existing baseline; consult
 [source snapshot archives](daymade-skill/skill-creator/references/source-snapshot-archives.md)
 before archiving or restoring it.
 
+Before remote bulk SSH copies, enter
+[tunnel-doctor's transfer preflight](tunnel-doctor/references/transfer-path-preflight.md).
+
 For hook creation, consolidation, Skill-entry enforcement, registration or recovery, load
 [`daymade-claude-code:claude-code-hooks`](daymade-claude-code/claude-code-hooks/SKILL.md)
 and follow its Build order and installer-owned recovery contract. Follow that
@@ -319,7 +326,7 @@ Skill's loop and reminder contract; keep current thresholds in the
 owning implementation.
 For an owner crash, historical replay timeout or recovery that remains pending,
 use the Skill's [recovery failure triage](daymade-claude-code/claude-code-hooks/references/recovery-failure-triage.md).
-For an existing hook's usefulness, duplicate execution or latency, follow the
+For an existing hook's usefulness, repeated work, verdict reuse or latency, follow the
 [effect and cost audit](daymade-claude-code/claude-code-hooks/references/effect-and-cost-audit.md).
 For shared selection, source refresh, deadlines, status or rollback changes, load
 the Skill's [lifecycle regression template](daymade-claude-code/claude-code-hooks/references/shared-engine-lifecycle.md).
@@ -328,6 +335,12 @@ For hook model-context delivery claims or ordinary-interface notification visibi
 for current-version/partial-structure SQLite upgrades, use that file's #59.
 Before accepting persisted evidence that releases a hook block, read
 [release-evidence failure handling](daymade-claude-code/claude-code-hooks/references/hook_pitfalls.md#68-invalid-release-evidence-can-escape-into-an-outer-fail-open-handler).
+For Git inspections whose stdout must not hide a nonzero exit, or dispatcher-owned
+environment state, read [hook_pitfalls.md #69/#70](daymade-claude-code/claude-code-hooks/references/hook_pitfalls.md).
+For raw-JSON fast-path filters or PATH-preceding OS command wrappers, read
+[hook_pitfalls.md #71/#72](daymade-claude-code/claude-code-hooks/references/hook_pitfalls.md).
+For duplicate hook firing across a compatibility-alias Skill rename, read
+[hook_pitfalls.md #74](daymade-claude-code/claude-code-hooks/references/hook_pitfalls.md#74-renaming-a-hook-bearing-plugin-while-keeping-a-compatibility-alias-plugin-fires-the-same-hook-twice).
 
 Python entry points registered as synchronous Claude Code/Codex lifecycle hooks or
 background services (LaunchAgents included) must call a fixed direct interpreter
@@ -353,6 +366,8 @@ For persistent Python service installation, environment reuse or startup, follow
 
 For acceptance of rendered UI and visible behavior, enter
 [frontend-visual-qa](frontend-visual-qa/SKILL.md) and follow its current entry route.
+For reader consolidation, nested message actions, or changes to large-list
+navigation, follow [Refactor Preservation](frontend-visual-qa/references/journey-and-page-contracts.md#refactor-preservation).
 For publication-wide clutter or AI Slop despite passing local checks, including
 controls, deks and expanded summaries, use its
 [publication journey calibration](frontend-visual-qa/references/publication-journey-cases.md).
@@ -383,7 +398,7 @@ For audits of asset-ledger hierarchy, row selection or issue resolution, follow 
 For shared controls or help mounted outside the workspace's style scope, use its
 [scoped-style and portal checks](frontend-visual-qa/references/journey-and-page-contracts.md#scoped-styles-and-portal-content).
 For embedded-reader sizing, surrounding navigation, overlays, zoom, reading/return,
-focus or filtered-selection changes, use its
+focus, filtered selection or changes to how the list identifies the reader's record, use its
 [reader journey](frontend-visual-qa/references/journey-and-page-contracts.md#embedded-readers-and-semantic-zoom).
 For long-document outlines, active-section cues or source sidebars, follow its
 [reading-position recipe](frontend-visual-qa/references/journey-and-page-contracts.md#long-document-reading-positions).
@@ -496,6 +511,8 @@ Process exit alone does not establish the measured result.
 
 A `tests/` directory under a Skill does **not** automatically run in CI.
 [The registry](scripts/ci/test-suites.txt) owns suite admission and membership;
+[the selector](scripts/ci/select_registered_suites.py) owns diff-based suite selection
+and on-demand tool flags;
 [the dispatcher](scripts/ci/run_registered_tests.sh) owns their execution commands.
 [The workflow](.github/workflows/ci.yml) owns job environments, dependency installation,
 timeouts and additional test steps. For required-check readback, bootstrap mismatches, installation stalls,
@@ -505,6 +522,8 @@ For CI demand, notification overload, exhausted allowance or repeated validation
 enter [github-ops' CI demand workflow](github-ops/references/ci-demand-and-notifications.md).
 For missing PR checks or fork runs awaiting approval, follow
 [the run-state diagnosis](github-ops/references/workflow_operations.md#resolve-missing-checks-and-fork-approval).
+For zero-step spending-limit or billing blocks before an authorized bypass merge, follow
+[pre-merge local CI equivalence](github-ops/references/workflow_operations.md#pre-merge-local-ci-equivalence-for-zero-step-budget-blocks).
 For self-hosted routing, resource limits, checkout-dependent cache resolution or cache persistence, follow its
 [runner acceptance](github-ops/references/workflow_operations.md#self-hosted-runner-capacity-and-acceptance).
 For failed jobs whose workspace is cleaned, follow its
@@ -522,7 +541,7 @@ For stopping or persistently disabling a job, follow its
 [stop semantics](daymade-macos/macos-watchdog/SKILL.md#stop-semantics-the-deprecated-trap).
 Before replacing an existing launchd job, enter its
 [authorized unload and replacement procedure](daymade-macos/macos-watchdog/references/event-driven-observers.md#wait-for-an-authorized-unload-before-replacement).
-Before choosing or changing any periodic observer's cadence, follow
+Before deploying or integrating a periodic observer, or choosing or changing its cadence, follow
 [macos-watchdog's observation contract](daymade-macos/macos-watchdog/references/probe-cost.md).
 Before choosing an observer's failure-notification threshold, follow
 [observation-failure timing](daymade-macos/macos-watchdog/references/alert-discipline.md#observation-failure-timing).
@@ -537,11 +556,17 @@ For idle Node/Vite previews, enter its
 For memory pressure or suspected child-process leaks, enter that Skill's
 [triage](daymade-macos/macos-load-doctor/SKILL.md#triage-read-do-in-order) and
 [memory evidence](daymade-macos/macos-load-doctor/SKILL.md#memory-evidence) before attributing the cause.
+For a confirmed hot preservation or verification script, use
+[measurement controls](daymade-macos/macos-load-doctor/references/incident-playbook.md#measurement-controls).
+For repeated work inside or across scheduled jobs, use the
+[duplicate-work procedure](daymade-macos/macos-load-doctor/references/incident-playbook.md#duplicate-scheduled-work).
 The observation contract above owns delayed-sampling acceptance; keep its tests
 and the diagnostic stop conditions in those Skills.
 For changed operating defaults or thresholds in an already-required review,
 or behavior-replay dispatch and coverage claims, use
 [skill-creator's independent-review protocol](daymade-skill/skill-creator/references/independent-review-protocol.md).
+For metadata-keyed digest reuse in that review, use
+[file identity and cached content proofs](daymade-skill/skill-creator/references/independent-review-protocol.md#file-identity-and-cached-content-proofs).
 Keep decision criteria and verification details in those owners.
 
 ### Acoustic diagnostics
@@ -550,6 +575,9 @@ For waveform, speech-cut or tail-level diagnosis, enter
 [audio-router's acoustic workflow](daymade-audio/audio-router/references/acoustic-diagnostics.md).
 
 ### Transcript Correction
+
+For refreshing an adopted audit dataset, generating offline review HTML, or
+migrating browser-local review reports, enter [ASR audit export](daymade-audio/asr-transcribe-to-text/SKILL.md#offline-audit-export).
 
 For local audio listening, speaker decisions, word edits and recovery of saved
 judgments, use [Listening Desk](daymade-audio/asr-transcribe-to-text/references/review_workbench.md).
@@ -594,8 +622,7 @@ authoring, enter the [Domain Context Guide](daymade-audio/transcript-fixer/refer
 For project-bound queue appends or domain-only metadata repair, enter
 [queue domain admission and repair](daymade-audio/transcript-fixer/references/queue_domain_repair.md).
 For remaining pending rows or a received occurrence-specific human verdict on an
-already reviewed file, enter [pending continuation](daymade-audio/transcript-fixer/references/pending-continuation.md)
-for queue resolution and its finalization, learning and propagation owners.
+already reviewed file, enter [pending continuation](daymade-audio/transcript-fixer/references/pending-continuation.md).
 For source-audio export, identity and timeline pairing, follow
 [the audio setup SOP](daymade-audio/transcript-fixer/references/review_queue_dashboard.md#source-audio-and-timeline-pairing)
 and its [audio helper](daymade-audio/transcript-fixer/scripts/fetch_minute_audio.py).
@@ -661,7 +688,8 @@ Wiki Base/Sheets capture uses
 
 For an explicit prior-work, reuse or history request, follow the
 [Prior Work operating contract](daymade-claude-code/prior-work-retrieval/SKILL.md).
-For follow-ups after a completed retrieval, use its
+For follow-ups after a completed retrieval or a request to reuse current
+execution results, use its
 [receipt reuse and rearm procedure](daymade-claude-code/prior-work-retrieval/SKILL.md#3-retrieve-across-declared-carriers).
 Requests to repeat a previously successful method or reuse/improve an older rendered artifact enter its
 [candidate verification](daymade-claude-code/prior-work-retrieval/SKILL.md#4-verify-candidates-at-authority).
@@ -675,6 +703,9 @@ For failures while completing a retrieval, enter
 For an existing hook integration or a blocked read-only discovery command, use its
 [companion-hook procedure](daymade-claude-code/prior-work-retrieval/SKILL.md#companion-hooks)
 and [discovery boundaries](daymade-claude-code/prior-work-retrieval/SKILL.md#boundaries).
+Standalone status prompts do not create a retrieval requirement; the one-turn
+Stop exception for an already-active requirement, including its retained write
+gate, is defined there.
 
 ### Local Conversation History Boundary
 
@@ -693,6 +724,8 @@ For input appended after an operation's current-thread request, use [read-codex-
 
 For conversation-backup health checks or recent unfinished-request inventories, follow
 [`local-conversation-history`](daymade-claude-code/local-conversation-history/SKILL.md).
+For scheduled history refresh, repeat-read investigations, or index recovery, use
+[build and refresh](daymade-claude-code/read-claude-code-history/references/hybrid_history_recall.md#build-and-refresh).
 
 For the latest Codex conversation about a topic across continuations, enter
 [latest-topic discovery](daymade-claude-code/read-codex-history/SKILL.md#latest-topic-across-continuations).
@@ -724,6 +757,11 @@ For Claude history discovery without a known Session, use
 [read-claude-code-history's indexed search entry](daymade-claude-code/read-claude-code-history/SKILL.md#indexed-content-search).
 Keep executable examples and coverage requirements in that owner.
 
+For Antigravity (`agy`) indexed inventory, FTS5 search, exact-session evidence, or
+locating recently interrupted or resumed sessions whose SQLite timestamps lagged, use
+[Antigravity (agy)](daymade-claude-code/read-claude-code-history/SKILL.md#antigravity-agy).
+Keep commands and stale-timestamp handling in that owner.
+
 For Codex session inventory, launch-source interpretation or task clustering, use
 [Recent inventory](daymade-claude-code/read-codex-history/SKILL.md#recent-inventory).
 Edit shared reader code in `daymade-claude-code/_conversation_core/`, then run
@@ -737,43 +775,44 @@ for candidate selection and commands; keep the detailed rules in those owners.
 ### Local Agent Messaging
 
 For local transport selection or accepted/consumed delivery interpretation, enter
-[peer-message](peer-message/SKILL.md), starting with
-[current-host tool discovery](peer-message/references/local-coordination.md#先发现完整工具面再选通信通道).
+[agent-message](agent-message/SKILL.md) (supersedes `peer-message`), starting with
+[current-host tool discovery](agent-message/references/local-coordination.md#先发现完整工具面再选通信通道).
 For independent work starts, scope changes or Fork handoff, use the
-[work-entry procedure](peer-message/references/local-coordination.md#开工范围变化和退出).
+[work-entry procedure](agent-message/references/local-coordination.md#开工范围变化和退出).
 For independent-session preflight and request lifecycle, follow the
-[local coordination workflow](peer-message/references/local-coordination.md#原生跨会话通信).
+[local coordination workflow](agent-message/references/local-coordination.md#原生跨会话通信).
 For a native payload limit or a rejected preparation, use its
-[complete-envelope preflight and recovery](peer-message/references/local-coordination.md#完整信封限制与失败收口).
+[complete-envelope preflight and recovery](agent-message/references/local-coordination.md#完整信封限制与失败收口).
 Keep native-guard installation, recovery and actual-host acceptance in that workflow;
 do not duplicate its parameters here. Reply lookup, transport and discovery
-details belong in [the transport and receiver-evidence SOP](peer-message/references/protocol-and-discovery.md).
+details belong in [the transport and receiver-evidence SOP](agent-message/references/protocol-and-discovery.md).
 Enter that SOP when diagnosing delayed Codex coordination or comparing live and queued receipts.
 Before a diagnostic pause, marker-only reply or no-tools request to a running session, enter
-[diagnostic coordination](peer-message/references/coordination-and-learning-loop.md#诊断消息与执行隔离).
+[diagnostic coordination](agent-message/references/coordination-and-learning-loop.md#诊断消息与执行隔离).
 Before asking about mutable ownership or a publication window, use the
-[fresh-state preflight](peer-message/references/coordination-and-learning-loop.md#51-发现别人的在制品先核实再问等一个有界窗口).
+[fresh-state preflight](agent-message/references/coordination-and-learning-loop.md#51-发现别人的在制品先核实再问等一个有界窗口).
 For an inbound coordination envelope, a native reply, original-input capture or a receive-integrity error, follow
-[receive, reply and closure](peer-message/references/local-coordination.md#收件回信和关闭).
+[receive, reply and closure](agent-message/references/local-coordination.md#收件回信和关闭).
 For a known inbound script or native coordination envelope ID in Codex, use the
-[original-envelope receive recipe](peer-message/references/local-coordination.md#从-codex-入站原件接收).
+[original-envelope receive recipe](agent-message/references/local-coordination.md#从-codex-入站原件接收).
 If that cache does not cover the known inbound, use its
-[original host-event recovery](peer-message/references/local-coordination.md#入站缓存缺失时读取原始宿主事件).
+[original host-event recovery](agent-message/references/local-coordination.md#入站缓存缺失时读取原始宿主事件).
 For oversized discovery responses or complete-title export, use its
-[discovery-output contract](peer-message/references/protocol-and-discovery.md#发现输出的范围).
+[discovery-output contract](agent-message/references/protocol-and-discovery.md#发现输出的范围).
 Current product availability, provenance, and inbound-control mechanics belong in
-`peer-message/references/official-feature.md`; reply addressing, payload structure,
+`agent-message/references/official-feature.md`; reply addressing, payload structure,
 delivery-status language, what to do when you find another session's in-flight work on a
 shared resource, and the verification contracts that decide what a peer assertion or a
 peer denial is worth belong in
-`peer-message/references/coordination-and-learning-loop.md`. Keep implementation, CLI help,
+`agent-message/references/coordination-and-learning-loop.md`. Keep implementation, CLI help,
 tests, and those owners aligned; README and changelog entries should point to
 them instead of restating volatile protocol facts.
 
 ### Ghostty Terminal Sessions
 
-For pre-reboot snapshots of local Claude Code / Codex CLI sessions across terminals,
-or restoring and reconciling their IDs in Ghostty, enter [`ghostty-use`](ghostty-use/SKILL.md).
+For pre-reboot snapshots of local Claude Code / Codex / Antigravity (`agy`) CLI sessions
+across terminals, or restoring and reconciling their IDs in Ghostty, enter
+[`ghostty-use`](ghostty-use/SKILL.md).
 Unmanaged/legacy manual Codex account
 switches start at its
 [account-owner selection](ghostty-use/references/codex-account-switch.md#choose-the-account-owner-first).
@@ -781,10 +820,13 @@ For blocked/delegated reopening, follow its
 [original-set route](ghostty-use/references/codex-account-switch.md#reopen-the-original-recorded-set-not-a-blank-session).
 Before selecting a recovery set or assessing completeness, follow the
 [recovery entry decision tree](ghostty-use/SKILL.md#entry-decision-tree).
-For observer freshness, follow
-[observation-health verification](ghostty-use/references/automatic-snapshots.md#verify-observation-health).
+For observer upgrades and deployment freshness, follow
+[upgrade an existing observer](ghostty-use/references/automatic-snapshots.md#upgrade-an-existing-observer), then
+[verify observation health](ghostty-use/references/automatic-snapshots.md#verify-observation-health).
 Before a restore or retry, follow its
 [current-set reconciliation](ghostty-use/references/restore_mechanics.md#reconcile-the-current-wanted-set).
+For recorded relative tab order and custom-title restoration, follow
+[recorded tab layout restoration](ghostty-use/references/restore_mechanics.md#restore-recorded-tab-order-and-titles).
 After process reconciliation, and before a complete GUI acceptance pass that must
 not foreground Ghostty, follow
 [history-readiness acceptance](ghostty-use/references/restore_mechanics.md#verify-history-readiness-after-process-reconciliation).
@@ -806,8 +848,9 @@ That SOP owns the shell/executable binding and the limits of identity evidence.
 For Codex model-request failures, including `400 Bad Request`, enter
 [model-request diagnostics](daymade-codex/local-codex/references/model-request-diagnostics.md).
 
-For Codex component updates, native updater eligibility or an authorized shared
-backend restart, enter
+For a general local Codex upgrade, enter the
+[coordinated CLI and App Server procedure](daymade-codex/local-codex/references/shared-daemon-maintenance.md#upgrade-the-cli-and-shared-app-server-together).
+For native updater eligibility or an authorized shared backend restart, enter
 [shared daemon maintenance](daymade-codex/local-codex/references/shared-daemon-maintenance.md).
 
 ### Codex Quota and Account Checks
@@ -874,6 +917,8 @@ For installed-Skill and fresh-host acceptance, enter
 For maintainer source-backed activation, source-watcher deployment, or authorized plugin-to-personal
 Skill conversion, follow
 [Local Source Sync Architecture](daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md).
+For published-content adoption into a live canonical checkout with WIP, use its
+[adoption procedure](daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md#adopt-published-content-into-a-canonical-checkout-with-wip); ordinary dry-run/apply does not replace host-scoped identity, writer handoff, backup/atomic-write or pre-apply drift controls. If HEAD must advance, use the guarded reconciliation route instead.
 For shared-helper or required-launch preparation changes, use its
 [fixture verification route](daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md#verification-checklist).
 Intentional same-name source variants follow that owner's
@@ -884,6 +929,10 @@ For Skill authoring in an approved independent Fleet clone, follow the
 For requested local availability, follow
 [source-backed activation and consumed-bundle readback](daymade-skill/skill-governance/references/skill-surface-governance.md#5-reconcile-source-backed-activation)
 and the [fresh-host delivery gate](daymade-skill/skill-governance/references/skill-surface-governance.md#14-verify-a-newly-registered-skill).
+When renaming a Skill while keeping a compatibility shim, follow
+[marketplace-dev's compatibility-shim checklist](daymade-claude-code/marketplace-dev/references/suite_consolidation_workflow.md#renaming-a-skill-while-keeping-a-compatibility-shim)
+for source, README, and cross-repo drift, then reconcile multi-host hook deduplication via
+[skill-governance §8](daymade-skill/skill-governance/references/skill-surface-governance.md#reconcile-a-compatibility-alias-skill-rename).
 For a daemon using a pinned plugin copy, follow the
 [pin-update workflow](daymade-claude-code/claude-switch-models-setup/references/troubleshooting.md#advance-the-pin).
 For a named-target availability verdict, use the
@@ -946,7 +995,7 @@ For staged-set inspection, deletions or entries outside this task, follow
 [commit-scope hygiene](git-safety-net/references/prevention_practices.md#commit-scope-hygiene-dont-sweep-unrelated-staged-work).
 
 For inbound coordination during delivery or closeout, use
-[peer-message's receiving route](peer-message/SKILL.md#收到消息先分流).
+[agent-message's receiving route](agent-message/SKILL.md#收到-peer-消息先分流再核前提).
 
 For first-push route selection, branch publication or PR creation, read
 [the publication preflight and recipe](github-ops/references/pr_operations.md#basic-pr-creation)
@@ -954,13 +1003,15 @@ before preparing the task checkout, including sparse and `--no-checkout` worktre
 
 For repository recovery or convergence under concurrent work, enter
 [git-safety-net's Outcome contract](git-safety-net/SKILL.md#outcome-contract--keep-the-safety-net-subordinate-to-the-users-job).
+For branch or ref retirement, follow
+[Preservation before retirement](git-safety-net/references/merge_verification.md#preservation-before-retirement).
 For consolidating completed-task evidence, enter
 [task evidence closeout](daymade-macos/macos-cleaner/references/task-evidence-closeout.md).
 For stash export or independent recovery, follow the
 [stash recovery procedure](git-safety-net/references/recovery_playbook.md#export-and-recover-selected-stashes).
 For final resource readback against the original inventory, follow the
 [terminal-state procedure](git-safety-net/references/merge_verification.md#5-prove-the-user-visible-terminal-state).
-For a failed fast-forward or a partly synchronized checkout, use its
+For a failed fast-forward, a partly synchronized checkout, or a shared-checkout sync blocked by dirty or diverged state, use its
 [guarded checkout recovery procedure](git-safety-net/references/prevention_practices.md#guarded-checkout-recovery).
 For local snapshot failures involving an index lock or commit-hook refusal, use its
 [snapshot recovery procedure](git-safety-net/references/recovery_playbook.md#blocked-local-snapshots).
@@ -986,7 +1037,8 @@ follow the contributor entry's route to [github-review-pr](github-review-pr/SKIL
 For behavioral changes and review-led repairs, the review Skill's
 [impact procedure](github-review-pr/references/behavioral-impact-review.md) owns
 consumer tracing, preservation evidence and finding closure.
-Before expensive checks on a concurrently edited base, follow GitHub Operations'
+Before expensive checks on a concurrently edited base, when release logs conflict,
+or when local entries block post-merge synchronization, follow
 [publication coordination](github-ops/references/pr_operations.md#coordinate-publication-before-expensive-checks).
 Before diagnosing conflicts or differing local and hosted merge results, use its
 [fresh-base verification](github-ops/references/pr_operations.md#fresh-base-verification).
@@ -1022,12 +1074,16 @@ local `main` guarantees divergence the moment its PR merges. These rules keep
 Before pushing shipped Skill changes, follow
 [skill release readiness](daymade-skill/skill-creator/references/release-readiness.md).
 The existing pre-push entry checks committed current-review evidence for the exact head.
+Local installed-content adoption is a post-publication gate only when local availability
+is authorized; do not make it a pre-push prerequisite or claim parity from publication alone.
 
 `.githooks/pre-commit` and `.githooks/pre-push` dispatch to
 `scripts/git-mainline-guard.mjs`, which rejects direct local-main work and stale
 marketplace manifests or reused plugin versions against current main. The
 shared PII delegate's runtime, deadline and recovery procedure live in
-[repository PII dispatch](references/ci-operations.md#repository-pii-dispatch). Activate this
+[repository PII dispatch](references/ci-operations.md#repository-pii-dispatch).
+The public PII stage is fail-closed: missing guard/runtime, repository-controlled
+runtime paths or incomplete worktree evidence block the push. Activate this
 repository **from the canonical primary main checkout** with
 `git config core.hooksPath "$(pwd -P)/.githooks"`. The absolute path matters:
 `core.hooksPath` is shared by linked worktrees, so a relative path would let a
@@ -1080,9 +1136,9 @@ claiming the whole checkout is current.
 
 For divergent local `main`, recovery-material selection or branch/worktree retirement,
 follow [git-safety-net](git-safety-net/SKILL.md).
-For named linked-worktree retirement, retained recovery refs after squash, interrupted preparation
-or dependency-cache declarations, follow its complete
-[worktree retirement procedure](git-safety-net/references/merge_verification.md#worktree-retirement--prove-the-checkout-is-disposable-before-removal).
+For named linked-worktree retirement, including a materialized Git LFS file, follow the
+[worktree retirement procedure](git-safety-net/references/merge_verification.md#worktree-retirement--prove-the-checkout-is-disposable-before-removal)
+for preparation, recovery and current-state verification.
 If local Skill release receipts reference the review checkout being retired, first use
 [review archive relocation](daymade-skill/skill-creator/references/release-readiness.md#retire-a-temporary-review-checkout),
 then resume the worktree retirement procedure.
@@ -1126,7 +1182,7 @@ Skills for public distribution must NOT contain:
 4. **gitleaks** (`.gitleaks.toml`) — deep scan with custom rules for this repo
 5. **AI semantic read-through** — pattern-based scans only match patterns someone listed, and are blind to private content with **no keyword** — a real name in another language (gitleaks doesn't cover CJK), a verbatim line from a real transcript, a real example dropped into an illustration. Before publishing, **read the whole skill yourself and judge each concrete name/example/snippet semantically** ("generic placeholder / public entity, or lifted from a real project / person / transcript?"). A green scan is **not** a clean bill of health; "grep found nothing" only means your word list didn't fire. Method: [`daymade-skill/skill-creator/references/sanitization_checklist.md`](./daymade-skill/skill-creator/references/sanitization_checklist.md).
 
-Most repositories enable PII Guard via `~/scripts/git-pii-guard/manage.sh enable <repo-path>`. This repository instead points `core.hooksPath` at the canonical primary checkout's absolute `.githooks` directory: its versioned dispatchers run the repository mainline guard and then delegate to the same shared PII guard when installed.
+Most repositories enable PII Guard via `~/scripts/git-pii-guard/manage.sh enable <repo-path>`. This repository instead points `core.hooksPath` at the canonical primary checkout's absolute `.githooks` directory: its versioned dispatchers run the repository mainline guard and then require an external shared PII guard and publication runtime. Missing dependencies block the push; they do not degrade to a mainline-only success.
 For repo-specific additions:
 - `.pii-patterns` — extra content regexes
 - `.pii-path-patterns` — extra forbidden path regexes

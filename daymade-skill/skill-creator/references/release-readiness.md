@@ -135,6 +135,75 @@ shared `scripts/packaging_policy.py` for the distributed dependency set. Source 
 dependency observations belong in the review; a `passed` metadata field alone
 does not establish them.
 
+## Exact-head release preflight
+
+Complete this checklist before the first public push of a reviewed candidate. It
+binds the source review, private evidence and repository hook inputs to one
+immutable frame. Local installation is a separate post-publication gate and is
+required only when local availability is part of the authorized delivery.
+
+| Check | Required evidence | Stop condition |
+|---|---|---|
+| Candidate and base | Full candidate SHA, full fetched base SHA, clean or declared WIP state | Base moved into a version collision or conflict |
+| Version progression | Repository checker passes for the exact index/commit and projected merge | Any regression, missing bump or stale suite version |
+| Review block | Private review contains `<!-- skill-release-review ... -->` with the exact candidate and every shipped Skill root | Missing, malformed, stale or narrowed block |
+| Review source | Review path is committed and unchanged at the recorded review commit; a temporary review worktree is clean | Dirty, replaced, uncommitted or ambiguous review path |
+| Receipt binding | `release_readiness.py attest` succeeds for the exact candidate and review commit | Missing receipt, wrong scope or candidate changed after attestation |
+| Sparse hook closure | Materialize every repository-managed pre-commit/pre-push dependency before invoking hooks | Missing module, validator or helper; never bypass the hook |
+| Publication audit | PII/sanitization and repository-required checks pass for the exact pushed range | New blocking finding, missing required scanner or unavailable evidence |
+| LFS audit context | For an LFS-bearing repository, the publication worktree uses the registered source's LFS storage and the exact base evidence is prepared there | Independent clone has an empty/different LFS store, required objects are absent, or `GIT_LFS_SKIP_SMUDGE` would be needed to make the audit run |
+
+For an LFS-bearing repository, prefer a sparse linked worktree of the registered source over an ordinary independent clone for publication. Linked worktrees share the repository's LFS object storage; clones do not. Do not bulk-copy `.git/lfs/objects`, disable smudge with `GIT_LFS_SKIP_SMUDGE`, or treat an empty clone store as acceptable audit evidence. Check free space before any explicit object materialization.
+
+When the normal push reports `rebuild-required` with `base_evidence_unavailable`, prepare the exact full base OID through the guard's existing background entry from the registered publication worktree, then retry the same normal push:
+
+```bash
+python3 <git-pii-guard>/prepare-base.py --repo <registered-publication-worktree> --ref <full-base-oid>
+```
+
+A completed `base-prepared:` receipt may exit nonzero for inherited findings; inspect it and let the normal push compare inherited versus new findings. Missing objects, unsupported LFS environment, disk exhaustion or an incomplete preparation are not permission to bypass the audit.
+
+For this marketplace's sparse publication worktree, the hook closure currently
+includes `$REPO_ROOT/scripts/git-mainline-guard.mjs`,
+`$REPO_ROOT/scripts/ci/check_version_progression.py`,
+`$REPO_ROOT/scripts/ci/git_projection.py`, and
+`$REPO_ROOT/scripts/ci/check_skill_release.py`, plus the repository's `.githooks`
+dispatcher and the Skill Creator scripts used by the release checker. Treat this
+list as a current observation, not a substitute for reading the live hook imports.
+
+### Post-publication local adoption
+
+Run this gate only after the reviewed candidate is reachable at the published ref
+and the user authorized local availability. A source-only or package-only release
+stops at publication; it must not modify activation state merely to satisfy a
+pre-push checklist.
+
+When local adoption is authorized, invoke `skill-governance` and the
+`claude-switch-models-setup` source owner. Require separate readback of:
+
+- the complete distribution for the authorized host scope against the published
+  commit — whole owning plugin for Claude, suite or multi-host delivery; individual
+  Skill bundle for an explicitly Codex-only direct link — including bidirectional
+  paths, modes, types, blob identities and symlink targets;
+- the actual installed file or source-backed alias;
+- the requested fresh-host catalog under the existing host policy;
+- task behavior only when it is part of the delivery.
+
+A valid link or visible catalog entry with stale or unknown consumed bytes is not
+complete. Preserve host disables and unrelated WIP, and report publication,
+installed-content, discovery and behavior as separate observations.
+
+When the private archive's maintained checkout has unrelated WIP, create a clean
+sparse review worktree at the exact review commit and use that as `--review-repo`.
+Unrelated archive WIP does not invalidate the helper's path check; the clean
+temporary worktree is an operator policy that keeps the evidence source
+unambiguous. Keep that worktree while any schema-1 or schema-2 receipt can reopen
+it. `rebind` does not release the original `review_repo` path: the verifier still
+opens the original receipt's archive. Retire the temporary checkout only after all
+dependent receipts are retired, or after the existing review-locator migration
+below has preserved every dependent proof. Re-attest after any candidate, version
+or review-evidence change.
+
 ## Commit the current review first
 
 Keep the review in the private knowledge repository's permitted directory. Preserve
@@ -180,7 +249,25 @@ Before removing a review worktree, inspect the affected source repository's loca
 release receipts for its exact `review_repo` path. Prefer the private archive's
 maintained checkout for the durable binding; a receipt pointing at a temporary
 checkout keeps that checkout in use even after publication. Keep private receipt
-paths and review content out of the public distribution.
+paths and review content out of the public distribution. A review report's
+historical mention of a source checkout is not itself a machine binding; classify
+it separately from an actual receipt `review_repo` or another live consumer.
+
+If the maintained archive cannot safely converge, a clean existing review
+worktree that already contains the exact review commits may instead be moved to
+a durable archive path with `git worktree move`. This is relocation, not deletion
+or a substitute for publication. Before moving, freeze its HEAD, branch, clean
+status, review blobs and receipt bytes, and resolve scheduler, process and known
+consumer occupancy. After moving, prove old-path absence and new-path identity,
+then use that retained checkout for the same attestation below. Do not manufacture
+a fresh archive with missing refs or rewrite the review to match a different HEAD.
+
+A locator-only migration is **not a new review**. Reuse the original committed
+review metadata and candidate binding; never create a fresh reviewer, rewrite the
+review's candidate, or treat the migration as evidence that the changed Skill was
+independently reviewed again. The terminal closeout is zero task-owned temporary
+review worktrees and zero live receipts pointing to them. Renaming a temporary
+checkout `durable` does not remove its consumers and is not a closeout state.
 
 1. Record each affected receipt's candidate, exact Skill scope, review commit,
    path and blob, plus its current verification outcome. Separate a currently

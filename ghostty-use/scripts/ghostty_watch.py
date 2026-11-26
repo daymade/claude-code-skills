@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Observe Ghostty descendants on a calendar; save complete manifests only on change.
 
-Runtime shares the manual inventory's bounded process/cwd/start identity resolver.
-Only candidate transcript metadata is read; no liveness, GUI or restore API is used.
+Runtime shares the manual inventory's bounded identity resolver (cwd/start-time
+transcript metadata for Claude/Codex; read-only conversation_summaries.db + lsof-brain
+for agy). No liveness, GUI or restore API is used.
 Every attempt leaves timestamped telemetry, independently of snapshot changes.
 """
 import argparse
@@ -134,6 +135,13 @@ CODEX_REQUIRED = set("-c --config --enable --disable --remote --remote-auth-toke
 CODEX_VARIADIC = set("-i --image".split())
 CODEX_BOOLEAN = set("--strict-config --oss --approve-for-me --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust --worktree --search --no-alt-screen --no-daemon --last --all --include-non-interactive --full-auto -h --help -V --version".split())
 CODEX_OTHER_COMMANDS = set("agents exec e review login logout mcp plugin app-server remote-control app completion update doctor sandbox debug apply queue archive delete migrate-rollouts unarchive cloud exec-server features help mcp-server daemon companion".split())
+AGY_REQUIRED = set("--add-dir --agent --conversation --effort -i --prompt-interactive --input-format --json-schema --log-file --mode --model --output-format --print-timeout --project -r --resume --settings".split())
+AGY_OPTIONAL = set()
+AGY_VARIADIC = set()
+AGY_BOOLEAN = set("-c --continue --dangerously-skip-permissions --disable-slash-commands --new-project -p --print --prompt --remote-agent --remote-control --sandbox -h --help -v --version".split())
+AGY_OTHER_CONTEXT = set("-p --print --prompt -h --help -v --version".split())
+AGY_OTHER_COMMANDS = set("acp agent agents changelog help install mcp mic-serve models plugin plugins remote-control update".split())
+SUPPORTED_TOOLS = ("codex", "claude", "agy")
 
 
 def cli_identity(row):
@@ -141,9 +149,9 @@ def cli_identity(row):
     if not raw:
         return None
     first = Path(raw[0]).name
-    if first not in ("codex", "claude", "node", "nodejs"):
+    if first not in ("codex", "claude", "agy", "node", "nodejs"):
         return None
-    if first in ("node", "nodejs") and (len(raw) < 2 or Path(raw[1]).name not in ("codex", "claude")):
+    if first in ("node", "nodejs") and (len(raw) < 2 or Path(raw[1]).name not in SUPPORTED_TOOLS):
         return None
     index = 1 if first in ('node', 'nodejs') else 0
     try:
@@ -153,10 +161,12 @@ def cli_identity(row):
         # Preserve the row as opaque evidence; never infer argv, SID or profile.
         return Path(raw[index]).name, None, None, index
     tool = Path(tokens[index]).name
-    required = CLAUDE_REQUIRED if tool == 'claude' else CODEX_REQUIRED
-    optional = CLAUDE_OPTIONAL if tool == 'claude' else set()
-    variadic = CLAUDE_VARIADIC if tool == 'claude' else CODEX_VARIADIC
-    boolean = CLAUDE_BOOLEAN if tool == 'claude' else CODEX_BOOLEAN
+    if tool == 'claude':
+        required, optional, variadic, boolean = CLAUDE_REQUIRED, CLAUDE_OPTIONAL, CLAUDE_VARIADIC, CLAUDE_BOOLEAN
+    elif tool == 'codex':
+        required, optional, variadic, boolean = CODEX_REQUIRED, set(), CODEX_VARIADIC, CODEX_BOOLEAN
+    else:
+        required, optional, variadic, boolean = AGY_REQUIRED, AGY_OPTIONAL, AGY_VARIADIC, AGY_BOOLEAN
     tail = tokens[index + 1:]
     if tool == 'claude' and (tail[:1] in (['code-mode'], ['chrome'], ['--chrome-native-host'])
                              or tail[:2] == ['Computer', 'Use']):
@@ -182,6 +192,8 @@ def cli_identity(row):
                 if tool == 'claude' and option in CLAUDE_OTHER_CONTEXT:
                     return None
                 if tool == 'codex' and option in ('-h', '--help', '-V', '--version'):
+                    return None
+                if tool == 'agy' and option in AGY_OTHER_CONTEXT:
                     return None
                 if option in boolean:
                     if option == '--fork-session':
@@ -210,6 +222,15 @@ def cli_identity(row):
                         ids.add(value)
                     else:
                         ambiguous = True
+                if tool == 'agy' and option in ('-r', '--resume', '--conversation'):
+                    if value and gs.UUID_RE.fullmatch(value):
+                        ids.add(value)
+                    else:
+                        ambiguous = True
+                if tool == 'agy' and option in ('-i', '--prompt-interactive'):
+                    # Initial prompt text loses quoting in ps output; stay interactive
+                    # without trusting argv selectors and never match subcommands.
+                    ambiguous = True
             if ambiguous:
                 break
             continue
@@ -227,6 +248,11 @@ def cli_identity(row):
                     ambiguous = True
             elif command == 'resume' and ids:
                 ambiguous = True  # trailing positional prompt is not replay-safe
+        elif tool == 'agy':
+            if command is None and not positional_only and not ids and token in AGY_OTHER_COMMANDS:
+                return None
+            ambiguous = True
+            break
         else:
             # ps loses argv quoting: prompt-bearing Claude invocations are
             # unresolved even when an earlier selector looked valid.
@@ -251,7 +277,7 @@ def parse_cwds(text, pids):
     return {pid: values[0] for pid, values in paths.items()}
 
 
-def observe(deadline=None, *, include_terminals=False, scope='ghostty'):
+def observe(deadline=None, *, include_terminals=False, scope='ghostty', preserve_duplicates=False):
     if scope not in ('ghostty', 'all-cli'):
         raise ValueError('scope must be ghostty or all-cli')
     deadline = deadline or time.monotonic() + DEADLINE_SECONDS
@@ -291,7 +317,7 @@ def observe(deadline=None, *, include_terminals=False, scope='ghostty'):
         if (wrapper and wrapper[0] == tool and wrapper[3] == 1
                 and parent['tty'] == row['tty'] and (sid is None or sid == wrapper[1])):
             continue  # native vendor child of the same Node TUI
-        if sid is not None and (tool, sid) in seen:
+        if not preserve_duplicates and sid is not None and (tool, sid) in seen:
             continue
         if sid is not None:
             seen.add((tool, sid))
@@ -323,6 +349,8 @@ def observe(deadline=None, *, include_terminals=False, scope='ghostty'):
             entry = {'tool': tool, 'cwd': cwds[row['pid']], 'cmdline': row['cmdline'],
                      'profile': 'unknown' if tokens is None else gs._detect_profile(row['cmdline']),
                      'tty': row['tty']}
+            if preserve_duplicates:
+                entry['pid'] = row['pid']
             if scope == 'all-cli':
                 ancestry, parent_pid = [], row['ppid']
                 while parent_pid in procs and parent_pid not in ancestry:
@@ -368,7 +396,7 @@ def canonical(sessions, mapping):
     for row in sessions:
         if not isinstance(row, dict):
             raise ValueError('snapshot session must be an object')
-        if row.get('tool') not in ('codex', 'claude') or not gs.UUID_RE.fullmatch(str(row.get('sid', ''))):
+        if row.get('tool') not in SUPPORTED_TOOLS or not gs.UUID_RE.fullmatch(str(row.get('sid', ''))):
             raise ValueError('invalid snapshot session identity')
         identity = (row['tool'], row['sid'])
         if identity in identities:
@@ -400,7 +428,7 @@ def observe_resolved(deadline=None):
     live = gs.list_sessions(deadline=deadline or time.monotonic() + DEADLINE_SECONDS)
     result = dict(live.observation, sessions=list(live), unresolved=live.unresolved)
     result['counters'] = dict(result['counters'], identity_resolution='bounded-cwd-start-metadata',
-                              uuidless_resolved=sum(row.get('anchor') == 'transcript' for row in live))
+                              uuidless_resolved=sum(row.get('anchor') in ('transcript', 'lsof-brain') for row in live))
     return result
 
 
@@ -456,6 +484,7 @@ def finish_attempt(state, attempt, result=None, *, error=None, timeout=False):
     completed = datetime.now(timezone.utc).isoformat()
     record = dict(attempt, completed_at=completed)
     if error is not None:
+        record['deploy'] = deploy_freshness(state)
         record.update(state='timeout' if timeout else 'failure', error=str(error)[:2048],
                       counters=None)
     else:
@@ -546,6 +575,8 @@ def cycle(state, observer=None, *, attempt=None):
 def _cycle(state, observer):
     state = Path(state)
     started = time.monotonic()
+    from ghostty_windows import (canonical_layout, capture_window_structure,
+                                 join_windows_to_sessions)
     with snapshot_lock(state):
         result = observer(started + DEADLINE_SECONDS)
         if result['ghostty_processes'] == 0:
@@ -557,11 +588,12 @@ def _cycle(state, observer):
         mapping = profile_mapping(state)
         latest = state / 'snapshots' / 'latest.json'
         previous = None
-        old_rows, old_unknown = [], []
+        old_rows, old_unknown, old_layout = [], [], None
         if latest.exists():
             previous = read_manifest(latest)
             old_rows = canonical(previous['sessions'], mapping)
             old_unknown = canonical_unresolved(previous.get('unresolved', []))
+            old_layout = canonical_layout(previous.get('windows'))
             if previous.get('kind') == AUTO_KIND and (
                 'canonical_inventory' in previous or 'canonical_unresolved' in previous
             ) and (
@@ -594,11 +626,20 @@ def _cycle(state, observer):
                         if row.get('membership') == 'retained-unverified'}
         old_retained_ids = {(row['tool'], row['sid']) for row in (previous or {}).get('sessions', [])
                             if row.get('membership') == 'retained-unverified'}
-        if (previous is not None and previous.get('kind') == AUTO_KIND and rows == old_rows
-                and unknown == old_unknown and retained_ids == old_retained_ids):
-            return dict(summary, state='unchanged')
+        capture_budget = max(0.2, min(15.0, DEADLINE_SECONDS - (time.monotonic() - started) - 0.5))
+        windows = capture_window_structure(timeout=capture_budget)
+        current_layout = None
+        if windows.get('captured'):
+            windows = join_windows_to_sessions(windows, observed)
+            current_layout = canonical_layout(windows)
         if time.monotonic() - started >= DEADLINE_SECONDS:
-            raise ValueError('observation deadline expired before snapshot publish')
+            raise ValueError('observation deadline expired during window capture')
+        layout_unchanged = current_layout is None or (
+            current_layout == old_layout and previous.get('window_tab_mapping') == 'known'
+            and not previous.get('windows', {}).get('carried_forward'))
+        if (previous is not None and previous.get('kind') == AUTO_KIND and rows == old_rows
+                and unknown == old_unknown and retained_ids == old_retained_ids and layout_unchanged):
+            return dict(summary, state='unchanged')
         sessions = []
         by_id = {(row['tool'], row['sid']): row for row in rows}
         for row in observed:
@@ -613,13 +654,16 @@ def _cycle(state, observer):
         doc['window_tab_mapping'] = 'unknown'
         if 'terminal_inventory' in result:
             doc['terminal_inventory'] = result['terminal_inventory']
-        from ghostty_windows import capture_window_structure, join_windows_to_sessions
-        capture_budget = max(0.2, min(15.0, DEADLINE_SECONDS - (time.monotonic() - started) - 0.5))
-        windows = capture_window_structure(timeout=capture_budget)
         if windows.get('captured'):
-            windows = join_windows_to_sessions(windows, sessions)
             doc['window_tab_mapping'] = 'known'
-        doc['windows'] = windows
+            doc['windows'] = windows
+        elif previous and isinstance(previous.get('windows'), dict) and previous['windows'].get('captured'):
+            inherited = dict(previous['windows'])
+            inherited['carried_forward'] = True
+            inherited['capture_error'] = windows.get('reason', 'window capture unavailable')[:300]
+            doc['windows'] = inherited
+        else:
+            doc['windows'] = windows
         archive = latest.parent / ('snapshot-auto-' + datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f') + '-' + uuid.uuid4().hex[:8] + '.json')
         atomic_manifest(archive, doc, replace=False)
         atomic_manifest(latest, doc)

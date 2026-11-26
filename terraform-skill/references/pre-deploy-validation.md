@@ -408,6 +408,37 @@ duplicate; unchanged target must remain a no-op. Test the actual SSH option cons
 valid, malformed, missing and empty settings. After the normal hostname TLS and SSH probes pass,
 resume the original application journey; infrastructure readiness alone does not close acceptance.
 
+### Relocate a running application on existing compute
+
+Decide which surfaces the request changes: compute, public origin, application revision, database
+schema/data, and object storage. For a placement-only move, reuse the running image by immutable
+identity when the destination supports it. Bind the destination runtime to the intended existing
+database and storage, verify schema compatibility, and retain the old deployment and routing for
+rollback. Decide which deployment owns scheduled jobs and singleton workers across cutover, and
+verify that each shared-state job has just one active owner. An unrelated source upgrade, schema
+replay, or data copy needs its own reason.
+
+Before starting a large transfer or activating an ingress, run the smallest distinguishing probe
+from the consumer that will execute the step:
+
+| Consumer | Verify with that consumer |
+| --- | --- |
+| Destination host fetching the artifact | Fetch a bounded byte range from the proposed route, measure it, and estimate the full transfer. Compare a destination-region cache when geography or routing dominates. Keep objects private, content-addressed and immutable, and verify size and digest after the real download. |
+| Deployment runner and cloud command agent | Check runner egress and job capacity independently of the target agent's control-plane reachability. Round-trip a nonsecret sample through the actual command envelope, interpreter and agent. A queued invocation alone does not establish delivery. |
+| Certificate issuer and shared gateway | Check authoritative DNS and resolution from the certificate host, plus the actual challenge path. Validate the effective gateway configuration and probe existing neighbors. If an unrelated legacy upstream prevents loading the entire configuration, isolate the exact dependency and its owner before any change or reload. |
+| Container engine | After rendering Compose, exercise the affected runtime option on the actual engine with a disposable container, isolated from production data and application jobs. A rendered model can be valid while mount options or other runtime arguments fail at container creation. |
+
+After a failure, identify the last verified boundary and inspect the specific stage's native error
+and live state. Resume from already-verified outputs when their identities still match. For shared
+Compose projects, include stopped containers and their project/service labels in the mutation
+inventory. A targeted service command can remove stopped siblings with the same labels.
+
+Record request acceptance, artifact readiness, public deployment and the affected authenticated
+user journey on separate timestamps. Start-to-journey elapsed time includes waits and retries.
+Report deployment and business verification separately, including untested writes or missing data.
+Check media playback with decoded frames and original downloads with exact bytes when those
+outcomes are part of the release. A signed URL or a moving playhead does not establish either.
+
 ## Primary contracts
 
 - Alibaba Cloud: SLS evaluate-expression operators and evaluation behavior:

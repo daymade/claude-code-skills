@@ -1,12 +1,12 @@
 ---
 name: read-claude-code-history
 description: >-
-  Reads, searches and exports local Claude Code and Kimi CLI history without resuming work:
-  timelines, verbatim user input, keyword or fuzzy recall, file recovery from transcripts, and
-  which session ran a given command in a known time window. Use when the user asks what was
-  said, wants a session ID or original context, needs proof of what a session contained, or
-  needs past-session runtime evidence about commands, tool calls and hook runs — query this
-  index instead of raw-scanning transcript files. Not for Codex (use read-codex-history); with no
+  Reads, searches and exports local Claude Code, Kimi CLI, and Antigravity (agy) history without
+  resuming work: timelines, verbatim user input, keyword or fuzzy recall, file recovery from
+  transcripts, and which session ran a given command in a known time window. Use when the user asks
+  what was said, wants a session ID or original context, needs proof of what a session contained, or
+  needs past-session runtime evidence about commands, tool calls and hook runs — query this index
+  instead of raw-scanning transcript files. Not for Codex (use read-codex-history); with no
   platform or several named, start at local-conversation-history.
 argument-hint: "[session-id | keywords | workspace-path]"
 ---
@@ -38,6 +38,7 @@ hand the verified evidence to `daymade-claude-code:continue-claude-code-work`.
 | An old HTML page whose images, media, data or temporary paths may also be gone | Recover its checkpoint first, then follow [page and attachment recovery](references/page-and-attachment-recovery.md) |
 | How often each Skill ran and who started it (user command, model after the user named it, model unprompted), e.g. to decide model-visible vs user-invocable-only | `scripts/skill_usage_ledger.py index`, then `report` (Claude and Codex together); see **Skill usage ledger** below |
 | Kimi CLI sessions | `history_index.py recall --provider kimi`, then read the named session's `wire.jsonl`; see **Kimi CLI** below |
+| Antigravity (`agy`) conversations, FTS5 search, or exact-session briefing / verbatim inputs / subagents / tool evidence | `scripts/read_antigravity_session.py --list \| --query '<text>' \| --session <ID>`; see **Antigravity (agy)** below |
 | Continue a verified Claude session | Stop reading and invoke `daymade-claude-code:continue-claude-code-work` |
 
 ## 找「我们之前做的那个 X」（产物类目标）的判据
@@ -303,9 +304,11 @@ Read these limits into every conclusion:
   session that edits or audits X's SKILL.md with plain shell reads looks the
   same. Several SKILL.md files read by one command are recorded as `bulk_read`
   and excluded.
-- Not covered: Skills invoked inside Claude subagents, Kimi CLI, and Codex
-  Skills followed from memory without a read. Zero recorded use means "not seen
-  in the covered stores", not "never used".
+- Not covered: Skills invoked inside Claude subagents, Kimi CLI, Antigravity
+  (collected separately by `skill-governance/scripts/evolve_skill_surface.py`
+  from installed-skill reads and runtime telemetry), and Codex Skills followed
+  from memory without a read. Zero recorded use means "not seen in the covered
+  stores", not "never used".
 
 ## Read-result contract
 
@@ -380,11 +383,69 @@ correctness task, not a test failure — update `observed`/`last_verified`/
 `evidence` or fix the implementation, and name the drifted claim(s) in the
 CHANGELOG.
 
+## Antigravity (agy)
+
+Antigravity (`agy`) stores local conversation history under `~/.gemini/antigravity-cli`
+(overridable via `--app-data-dir` or `ANTIGRAVITY_APP_DATA_DIR`), with a native SQLite index
+(`conversation_summaries.db` + `conversations_fts` FTS5 table) and per-conversation transcripts
+under `brain/<conversation-id>/.system_generated/logs/{transcript,transcript_full}.jsonl` plus
+subagent manifests in `.system_generated/subagents/*.json`.
+
+Use the bundled zero-dependency reader `scripts/read_antigravity_session.py` — do not sweep
+`brain/*/transcript.jsonl` raw files:
+
+```text
+# Indexed inventory (read-only SQLite; reports unindexed brain/ gap and stale DB timestamps)
+<skill-dir>/scripts/read_antigravity_session.py --list [--sort db|activity] [--project <dir>] [--exclude-current <ID>]
+
+# Native SQLite FTS5 + bounded summary metadata search (never scans raw transcripts)
+<skill-dir>/scripts/read_antigravity_session.py --query '<terms>' [--project <dir>] [--exclude-current <ID>]
+
+# Exact conversation briefing (USER_INPUT, CHECKPOINT compaction, subagents, files, terminal reply)
+<skill-dir>/scripts/read_antigravity_session.py --session <CONVERSATION_ID>
+
+# Targeted evidence views (selectively hydrate truncated_fields from transcript_full.jsonl)
+<skill-dir>/scripts/read_antigravity_session.py --session <CONVERSATION_ID> --verbatim-inputs
+<skill-dir>/scripts/read_antigravity_session.py --session <CONVERSATION_ID> --subagents [--full]
+<skill-dir>/scripts/read_antigravity_session.py --session <CONVERSATION_ID> --step <N[:M]>
+<skill-dir>/scripts/read_antigravity_session.py --session <CONVERSATION_ID> --tool-evidence [--tool <NAME>] [--contains <TEXT>]
+```
+
+Key invariants:
+
+- Opens `conversation_summaries.db` strictly read-only (`?mode=ro`) and refuses to fall back to a
+  raw corpus scan when the DB is missing or conversations are unindexed; always read the reported
+  `unindexed_brain_dirs`, `stale_db_timestamp_count`, and `fts_indexed_conversations` coverage numbers.
+- `conversation_summaries.last_modified_time` can lag behind actual writes when an older session is
+  resumed or an `agy` process is killed abruptly. `--list` performs a `stat`-only check (never reads
+  transcript bodies) to surface `stale_db_timestamp_count`; pass `--sort activity` to rank by
+  `max(last_modified_time, stat(transcript.jsonl).st_mtime)` so resumed older sessions are not missed.
+- **Finding recently killed / non-running `agy` sessions** (e.g., after a terminal or remote-host
+  disconnect): (1) run `--list --sort activity --limit 20 --exclude-current <CURRENT_ID>` (top-level
+  parents only; subagents are excluded by `nesting_depth > 0`), (2) subtract live `agy` processes by
+  matching `antigravity-cli/brain/<UUID>` in `lsof -a -p <agy-pids> -Fpn`, and (3) verify each
+  candidate's final turns with `--session <ID> --step <N:M>` before handing out
+  `agy --conversation=<ID>` (or `agy --resume <ID>`). Do not trust DB `last_modified_time` alone.
+- `conversations_fts` uses `unicode61` tokenization, so CJK phrases may require shorter terms or
+  exact Conversation ID lookup; zero hits never prove absence.
+- Exact-session reads parse compact `transcript.jsonl` first and hydrate only `step_index` records
+  with `truncated_fields` from `transcript_full.jsonl` when `--step`, `--subagents`,
+  `--tool-evidence`, `--verbatim-inputs`, or `--full` needs them.
+- In `--format json`, output exceeding `--max-output-bytes` emits a valid JSON truncation envelope
+  (`"status": "truncated"`, `"output_complete": false`) and exits `1` rather than emitting broken JSON.
+- **Output safety-filter false positives (`Prohibited Use policy`)**: If a long `agy` conversation
+  stops with repeated `sensitive words` / `Prohibited Use policy` truncations during routine
+  engineering work (e.g., discussing or running `--admin` / `bypass` commands near a high context
+  fill), inspect the terminal steps via `--session <ID> --step <N:M>` (hydrated from
+  `transcript_full.jsonl`) to confirm a classifier false positive vs. a real tool failure. Do not
+  keep sending "continue" inside the same poisoned long context — hand the verified remaining work
+  to a fresh session instead.
+
 ## Router and legacy compatibility
 
 `daymade-claude-code:local-conversation-history` is the cross-provider router. It
-sends Claude reads and every Kimi CLI request here, and does not replace this
-Skill's identity or evidence contract. New Codex requests route to
+sends Claude reads, Kimi CLI requests, and Antigravity (`agy`) reads here, and does
+not replace this Skill's identity or evidence contract. New Codex requests route to
 `daymade-claude-code:read-codex-history`.
 
 **Kimi CLI is a live surface of this Skill, not a legacy one.** It has no reader

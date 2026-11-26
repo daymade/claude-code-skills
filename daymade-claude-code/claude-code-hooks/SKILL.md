@@ -346,8 +346,22 @@ the layout is:
 ~/.claude/hooks/<name>.sh             # symlink → SSOT
 
 ```
+A synchronous prompt/tool hook must not resolve Python through a package manager
+or environment dispatcher. For a `.py` entry, `--python` being absolute and
+executable is insufficient: probe that it really executes Python 3, requires
+`sys.executable` to resolve to the same file, and rejects `uv`, `uvx`, `env`,
+`pip`, direct `.py` command paths and non-Python executables. A
+committed direct-runtime shim is acceptable only when it is the machine's
+declared behavior SSOT. See
+[references/hook_pitfalls.md](references/hook_pitfalls.md) #73 for the failure
+shape and bidirectional fixtures.
+
 After a reinstall, restore only the entries the current installer declares active;
 do not reconstruct registrations from old filenames or reinstall retired aliases.
+When renaming a hook-bearing plugin while keeping a compatibility-alias plugin on
+disk, disable the alias plugin (or strip its hooks) so the same event does not
+fire twice; see
+[references/hook_pitfalls.md](references/hook_pitfalls.md#74-renaming-a-hook-bearing-plugin-while-keeping-a-compatibility-alias-plugin-fires-the-same-hook-twice).
 Preserve independent rule state and authorization writers when migrating entries.
 Verify the consumed entrypoint, modules and effective settings, then exercise a
 real matching event in a fresh native session. A dangling link can silently disarm
@@ -387,6 +401,14 @@ a guard; use bounded deployment/liveness checks (rule 4; Pattern C in
   [ConfigChange contract](https://code.claude.com/docs/en/hooks#configchange)
   allows settings changes to be applied to a running session; it does not prove
   this particular registration has fired.
+- **Cover every active agent host on the machine, not just one.** A guard enforced
+  only in Claude Code (or Claude Code + Codex) still leaves unguarded hosts such as
+  Antigravity (`~/.gemini/config/hooks.json`, which reads camelCase `toolCall` JSON
+  on stdin and expects `{"decision":"allow"|"deny"}` on stdout) wide open to the
+  same failure. Keep one SSOT classifier behind thin per-host adapters instead of
+  duplicating detection logic, note that already-running sessions may not hot-reload
+  newly added hook files, and verify interception in a fresh process of each target
+  host (for Antigravity, a fresh `agy -p` run).
 - **If the guard needs a release valve, make it a *human* gate, not an env var.**
   A static `GUARD_OK=1` escape hatch is no gate — the model can set the env var
   itself. Use a native macOS dialog (`osascript` — the model can't click);
@@ -1147,6 +1169,18 @@ consent never unlocks the hard-blocked rule. A stateful selftest (it creates
 the consent file) must back up and restore any real consent file around itself.
 
 ## Build order (in sequence)
+
+For recurring remote-transfer path mistakes, reuse tunnel-doctor's
+[transfer preflight owner](https://github.com/daymade/claude-code-skills/blob/main/tunnel-doctor/references/transfer-path-preflight.md).
+Load the separate `tunnel-doctor` Skill for its bundled helper; an absent dependency
+uses the Skill installation workflow, never a guessed sibling plugin-cache path.
+Gate evidence freshness, target/options and observed underlay, not `100.*` addresses
+or the word `direct`. Before activation, replay real missed-transfer calls and
+healthy probes/copies, then verify a native blocked call and an allowed retry after
+preflight. Parser tests and a source registration do not establish host enforcement.
+Shared runtime fields or external helper dependencies also require the
+[registered-consumer regression](references/shared-engine-lifecycle.md#registered-capture-and-projection-consumers)
+before producer activation.
 
 Before writing or registering another hook, inspect existing engines by mechanism
 and host event. Prefer an in-process rule module that shares input parsing and

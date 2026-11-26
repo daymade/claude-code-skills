@@ -17,16 +17,27 @@ class DispatchTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
+        self.repo = self.root / 'repo'
+        self.repo.mkdir()
         self.bin = self.root / 'bin'
         self.bin.mkdir()
         self.guard = self.root / 'scripts' / 'git-pii-guard'
         self.guard.mkdir(parents=True)
         self.log = self.root / 'receipt.json'
         self.env = dict(os.environ, HOME=str(self.root), PATH=str(self.bin) + ':' + os.environ['PATH'],
-                        TEST_ROOT=str(self.root), TEST_LOG=str(self.log), TEST_EXIT='0', MAINLINE_EXIT='0')
+                        TEST_REPO=str(self.repo), TEST_LOG=str(self.log), TEST_EXIT='0', MAINLINE_EXIT='0')
         self.env.pop('PII_PRE_PUSH_TIMEOUT_SECONDS', None)
         self.env.pop('GIT_PII_GUARD_DIR', None)
-        self.script(self.bin / 'git', '#!/bin/sh\nprintf "%s\\n" "$TEST_ROOT"\n')
+        self.script(self.bin / 'git',
+                    '#!/bin/sh\n'
+                    'if [ "$1" = worktree ] && [ "$2" = list ]; then\n'
+                    '  [ "${TEST_WORKTREE_EXIT:-0}" = 0 ] || exit "$TEST_WORKTREE_EXIT"\n'
+                    '  if [ "${TEST_WORKTREE_MALFORMED:-0}" = 1 ]; then printf "malformed\\0";\n'
+                    '  elif [ "${TEST_WORKTREE_TRUNCATED:-0}" = 1 ]; then printf "worktree %s\\0" "$TEST_REPO";\n'
+                    '  else printf "worktree %s\\0HEAD 0000000000000000000000000000000000000000\\0branch refs/heads/topic\\0\\0" "$TEST_REPO"; fi\n'
+                    '  exit 0\n'
+                    'fi\n'
+                    'printf "%s\\n" "$TEST_REPO"\n')
         self.script(self.bin / 'node', '#!/bin/sh\nexit "$MAINLINE_EXIT"\n')
         self.script(self.guard / 'pre-push', '#!/bin/sh\nexit "$TEST_EXIT"\n')
         python = self.root / '.local' / 'bin' / 'python3.12'
@@ -58,12 +69,54 @@ class DispatchTests(unittest.TestCase):
                 self.assertEqual(receipt['stdin'], 'refs/heads/topic abc refs/heads/topic def\n')
                 self.assertEqual(receipt['args'], ['--pass-through', '--timeout', '300',
                                  '--max-timeout', '300', '--term-grace', '3', '--',
-                                 str(self.guard / 'pre-push'), 'origin', 'synthetic-remote'])
+                                 str((self.guard / 'pre-push').resolve()), 'origin', 'synthetic-remote'])
 
     def test_missing_runtime_fails_before_guard(self):
         self.runner.unlink()
         result = self.run_hook()
         self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertFalse(self.log.exists())
+
+    def test_missing_guard_fails_closed(self):
+        result = self.run_hook(GIT_PII_GUARD_DIR=str(self.root / 'missing-guard'))
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn('shared PII pre-push guard is unavailable', result.stderr)
+        self.assertFalse(self.log.exists())
+
+    def test_repository_dispatcher_cannot_masquerade_as_guard(self):
+        result = self.run_hook(GIT_PII_GUARD_DIR=str(HOOK.parent))
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn('resolves to the repository dispatcher itself', result.stderr)
+        self.assertFalse(self.log.exists())
+
+    def test_repository_owned_guard_in_another_directory_is_rejected(self):
+        guard_dir = self.repo / 'scripts' / 'git-pii-guard'
+        guard_dir.mkdir(parents=True)
+        self.script(guard_dir / 'pre-push', '#!/bin/sh\nexit 0\n')
+        runner = self.repo / 'scripts' / 'claude-hooks' / 'bounded-hook-runner.py'
+        runner.parent.mkdir(parents=True)
+        runner.write_text('raise SystemExit(0)\n')
+        result = self.run_hook(GIT_PII_GUARD_DIR=str(guard_dir))
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn('PII guard resolves inside the repository', result.stderr)
+        self.assertFalse(self.log.exists())
+
+    def test_worktree_inventory_failure_fails_closed(self):
+        result = self.run_hook(TEST_WORKTREE_EXIT='1')
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn('could not enumerate repository worktrees', result.stderr)
+        self.assertFalse(self.log.exists())
+
+    def test_malformed_worktree_inventory_fails_closed(self):
+        result = self.run_hook(TEST_WORKTREE_MALFORMED='1')
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn('repository worktree inventory is malformed', result.stderr)
+        self.assertFalse(self.log.exists())
+
+    def test_truncated_worktree_inventory_fails_closed(self):
+        result = self.run_hook(TEST_WORKTREE_TRUNCATED='1')
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn('malformed or truncated', result.stderr)
         self.assertFalse(self.log.exists())
 
     def test_mainline_refusal_remains_first(self):

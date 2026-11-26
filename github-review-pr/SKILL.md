@@ -204,9 +204,24 @@ Choose the isolated carrier before fetching. Read the current base's repository
 instructions for registered source ownership, hook installation and exposure-tier
 requirements. A matching remote URL alone does not establish those identities.
 
-- For read-only object inspection, prefer an independent temporary clone. Reuse
-  the current clone only when its remote matches the base repository, its worktree
-  is safe, and namespaced review refs cannot interfere with ongoing work.
+- For read-only object inspection, prefer zero-clone inspection via `git show`
+  and `git merge-tree --write-tree` in the existing repository when its remote
+  matches the base repository, its worktree is safe, and namespaced review refs
+  cannot interfere with ongoing work. Create an independent temporary clone only
+  when isolated test/check execution or an untrusted/conflicting carrier requires it.
+- Prevent LFS media hydration and leftover temp clones on disk. For every
+  temporary review clone or read-only checkout, set `GIT_LFS_SKIP_SMUDGE=1` and
+  prefer `--no-checkout` (or sparse checkout / `--filter=blob:none` when full
+  working-tree blobs are unneeded). When the PR diff touches an LFS-tracked file
+  or a required verification check reads that asset, fetch only the needed ref
+  and path with `git lfs fetch origin refs/review-pr/$PR_NUMBER/head --include="<exact-path>"`
+  (do not run bare `git lfs pull --include=...` in a `--no-checkout` or
+  base-checked-out clone: it silently no-ops or hydrates the base version instead
+  of the PR head); only materialize a working-tree file via sparse-checkout +
+  `git lfs checkout -- "<exact-path>"` when a check requires it on disk. Bind
+  teardown to the review lifecycle (for example, `trap 'rm -rf "$REVIEW_TMP"' EXIT`
+  for disposable clones, or explicit `git worktree remove` for linked worktrees)
+  and verify the temporary carrier is absent before reporting the verdict.
 - Before an authorized repair, run the repository's actual source-owner check.
   For Skill edits, load `skill-creator` and follow its source-location procedure.
   Use a linked worktree of the registered source or an explicitly approved,
@@ -295,6 +310,50 @@ no-op/superseded candidate rather than pretending its old patch still needs to l
 Treat conflicts as evidence, not as a reason to update or rebase the branch
 automatically. Report the conflicting paths and determine whether base drift, the PR,
 or both own the required resolution.
+
+#### Base advanced since the prior review — narrow merge-delta recheck
+
+When only the base moved, re-read the live base and head before reusing any prior review. Read
+`REVIEWED_HEAD_SHA`, `OLD_BASE_SHA`, and `PRIOR_MERGE_TREE` from the prior snapshot ledger. Require
+the live head to equal `REVIEWED_HEAD_SHA`, the old base to be an ancestor of the new base, and a
+nonempty recorded tree OID; otherwise review the changed head or history discontinuity under the
+full workflow. If the prior Git/attribute/merge-driver environment is unknown or changed, do not
+narrow the review.
+
+Recompute both immutable prospective merge results and require the old result to equal the tree
+actually reviewed before inspecting only the new merge increment and changed interaction surface:
+
+```bash
+if old_output=$(git merge-tree --write-tree --messages "$OLD_BASE_SHA" "$HEAD_SHA"); then
+  old_rc=0
+else
+  old_rc=$?
+fi
+if new_output=$(git merge-tree --write-tree --messages "$CURRENT_BASE_SHA" "$HEAD_SHA"); then
+  new_rc=0
+else
+  new_rc=$?
+fi
+if [ "$old_rc" -ne 0 ] || [ "$new_rc" -ne 0 ]; then
+  echo "merge-tree failed; return to full landing/conflict review" >&2
+  exit 1
+fi
+OLD_MERGE_TREE=${old_output%%$'\n'*}
+NEW_MERGE_TREE=${new_output%%$'\n'*}
+test "$OLD_MERGE_TREE" = "$PRIOR_MERGE_TREE" || {
+  echo "recomputed old merge tree differs from the reviewed tree; full re-review required" >&2
+  exit 1
+}
+git diff "$OLD_MERGE_TREE" "$NEW_MERGE_TREE"
+git diff "$CURRENT_BASE_SHA" "$NEW_MERGE_TREE"
+```
+
+Review paths and hunks changed by the base advance, new conflicts, and consumers or checks whose
+inputs changed; reuse prior evidence only for contribution code and behavior proved unchanged. If
+either merge conflicts, the old tree does not match the prior ledger, or the compared inputs cannot
+be stabilized, return to the full landing/conflict review. Bind the final verdict and snapshot
+ledger to the new `HEAD_SHA`, `CURRENT_BASE_SHA`, and `NEW_MERGE_TREE`; never carry the old verdict
+forward under the old base.
 
 #### When local and hosted merge results disagree
 
@@ -471,6 +530,15 @@ Remember that `gh pr checks` exits with code `8` while checks are pending. Where
 needed, query check-runs and legacy commit statuses for `HEAD_SHA` so a green result is
 bound to the reviewed commit rather than an older run. Distinguish "no checks reported"
 from a failed check; the former is absence of CI evidence, not a red build.
+
+When a required job fails, inspect its job steps and check-run annotations before
+classifying the result. A zero-step job whose annotation reports failed account payments
+or a spending limit is **hosted CI not started**, not a test failure; load the `github-ops`
+Skill and follow its CI demand and notification diagnosis. Compare the same check on
+the current base and run the repository's complete CI definition locally on the exact
+prospective tree under the applicable budget exception, and record the tested tree OID.
+Report hosted and local evidence separately: a local pass never converts the hosted check
+to green.
 
 After inspecting untrusted changes, run the current-base repository's prescribed tests
 in the isolated clone. For a clean merge, validate the prospective merged state when

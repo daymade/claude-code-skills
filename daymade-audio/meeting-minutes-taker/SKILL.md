@@ -94,6 +94,8 @@ Reconcile each fact within its stated scope. A later explicit participant correc
 
 Bind each TODO/DONE to its exact action, owner, conditions and supporting source. Preserve unknown owners, deadlines and completion evidence as unknown. A note's author is not automatically the task owner. An invitation sent does not establish that the meeting occurred; finding an available account does not establish that someone switched accounts. Separate agreed responsibility from work delivered or a hypothesis verified.
 
+**Check transcript ASR provenance before quoting load-bearing facts.** Inspect any frontmatter/header notes (`asr_note`, draft/pending markers, or "audio not verified" notices) before promoting a transcript line into a Decision, Action Owner, commitment, date/budget, or personnel/contract conclusion. Whenever a key phrase is marked pending/unverified or looks pragmatically incoherent in context (an off-topic Q&A confirmation/echo, an intra-turn causal inversion, a verb–object/scene mismatch, or an ambiguous surname/owner), do **not** silently smooth it into fluent prose and do **not** state it as settled fact: verify it via `transcript-fixer` (including rung 7 source audio/frame checks when authorized) first, or retain the exact wording with an explicit uncertainty marker (e.g., `[unverified ASR — check audio]`) and route it to Open Questions.
+
 Analyze the transcript to identify:
 - Meeting topic and attendees
 - Key decisions with supporting quotes
@@ -382,6 +384,7 @@ Completeness Checklist:
 - [ ] Verify each decision's evidence against Step 1?
 - [ ] All speakers attributed correctly?
 - [ ] Task owners checked against source assignments and unresolved fields?
+- [ ] Load-bearing quotes and owners checked against transcript `asr_note`/pending markers and pragmatic coherence (no unverified or suspect ASR phrasing promoted as settled fact)?
 - [ ] Numerical values preserved (ranges, counts)?
 - [ ] Each completion status applies only to the sourced action, with final effective conditions preserved?
 - [ ] Entity relationships captured?

@@ -214,7 +214,7 @@ These skills are bundle-only under `daymade-codex`.
 claude plugin install daymade-claude-code@daymade-skills
 ```
 
-This suite bundles the skills that extend Claude Code itself — cross-project prior-work retrieval across code, docs, Skills, meetings, WeChat archives, and conversation history; fast local conversation discovery across Claude Code and Codex; session recovery; CLAUDE.md tuning; troubleshooting; statusline configuration; export repair; marketplace development and suite consolidation; terminal screenshot rendering; usage analysis; and multi-provider model switching:
+This suite bundles the skills that extend Claude Code itself — cross-project prior-work retrieval across code, docs, Skills, meetings, WeChat archives, and conversation history; fast local conversation discovery across Claude Code and Codex; session recovery; CLAUDE.md tuning; troubleshooting; permission-prompt and Agent Team teammate triage; statusline configuration; export repair; marketplace development and suite consolidation; terminal screenshot rendering; usage analysis; and multi-provider model switching:
 
 ```text
 /daymade-claude-code:claude-code-ops-router
@@ -228,6 +228,7 @@ This suite bundles the skills that extend Claude Code itself — cross-project p
 /daymade-claude-code:statusline-generator
 /daymade-claude-code:fixing-claude-export-conversations
 /daymade-claude-code:marketplace-dev
+/daymade-claude-code:claude-code-permission-triage
 /daymade-claude-code:terminal-screenshot
 /daymade-claude-code:claude-usage-analyst
 /daymade-claude-code:claude-switch-models-setup
@@ -274,8 +275,8 @@ claude plugin install github-ops@daymade-skills
 # Teams communication
 claude plugin install teams-channel-post-writer@daymade-skills
 
-# Local Claude/Codex agent messaging
-claude plugin install peer-message@daymade-skills
+# Local Claude/Codex/Antigravity agent messaging (replaces peer-message)
+claude plugin install agent-message@daymade-skills
 
 # Ghostty terminal session snapshot/restore
 claude plugin install ghostty-use@daymade-skills
@@ -334,6 +335,8 @@ claude plugin install windows-remote-desktop-connection-doctor@daymade-skills
 
 # Product analysis and optimization
 claude plugin install product-analysis@daymade-skills
+# Required companion for product-analysis ux/full rendered audits
+claude plugin install frontend-visual-qa@daymade-skills
 
 # Scrapling CLI extraction and troubleshooting
 claude plugin install scrapling-skill@daymade-skills
@@ -468,7 +471,15 @@ Extracts Mermaid diagrams from markdown and generates high-quality PNG images.
 
 > **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:claude-code-ops-router`)
 
-Routes plugin and Skill repair, marketplace work, statusline, model profiles and source sync, 1M context-window repair, usage and quota timers, memory migration, and exported `.txt` repair to one bundled specialist. The selected Skill's full instructions are read at use time; its original slash command remains available for manual use.
+Routes plugin and Skill repair, marketplace work, permission-prompt and Agent Team teammate triage, MCP startup context, statusline, model profiles and source sync, 1M context-window repair, usage and quota timers, memory migration, and exported `.txt` repair to one bundled specialist. The selected Skill's full instructions are read at use time; its original slash command remains available for manual use.
+
+---
+
+### **claude-code-permission-triage** - Claude Code Permission Triage
+
+> **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:claude-code-permission-triage`)
+
+Diagnose unexpected, missing, delayed, parked, or misdelivered permission prompts for subagents, background workers, and Agent Team teammates. Separates card type, delivery state, worker type, and effective mode timeline; matches known upstream issues; and produces a sanitized bug report. Does not edit permission rules, author or change hooks, handle MCP OAuth, or read history.
 
 ---
 
@@ -522,27 +533,34 @@ Creates educational Teams channel posts for internal knowledge sharing.
 
 ---
 
-### **peer-message** - Local Claude/Codex Agent Communication
+### **agent-message** - Local Claude/Codex/Antigravity Agent Communication
 
-Follow the [local coordination workflow](peer-message/references/local-coordination.md)
-for task/resource declarations, native preflight installation, recovery and receiver checks.
+Replaces `peer-message` (retained as a thin compatibility alias/forwarder shim). Follow the [local coordination workflow](agent-message/references/local-coordination.md)
+for task/resource declarations, soft TTL leases, native preflight installation, recovery and receiver checks.
 
-An experimental [paired-network route](peer-message/references/network-preview.md) adds invitations and cited answers from owner-selected documents through existing Claude/Codex hosts. It requires an operator-provided relay; the public hosted network and user-adoption claims are not part of this preview.
+The former cross-machine paired-network preview has been retired; for cross-machine or cross-user zero-trust agent messaging, use **Agent Use** (`https://useagent.app`).
 
-> **Install**: `claude plugin install peer-message@daymade-skills`
+> **Install**: `claude plugin install agent-message@daymade-skills`
 
-Follow the [routing contract](peer-message/SKILL.md) for native communication and transport gaps.
+Follow the [routing contract](agent-message/SKILL.md) for native communication and transport gaps.
 
 **When to use:**
-- Sending a dependency, pause, handoff, or completion notice to an independently identified target outside the current native tools' scope
+- Sending a dependency, pause, handoff, or completion notice to an independently identified Claude Code, Codex, or Antigravity (`agy`) target outside the current native tools' scope
+- One-command replies (`reply <id>`), OS-level zero-polling waiting (`wait`), and unified 3-provider inbox (`inbox`)
 - Finding replies to a specific coordination message without manually inspecting local message stores
-- Reaching a Claude inbox from a script or another product when native tools do not cover it; a third-party provider alone is not a reason to use the fallback
+- Reaching a Claude/Codex/Antigravity inbox from a script or another product when native tools do not cover it; a third-party provider alone is not a reason to use the fallback
 - Unblocking messages held for per-message manual approval on an unattended endpoint (`crossSessionInbound`)
 - An inbound peer message asserting facts about your session or shared state, or asking you to pause/release — verify the premise against its own authority before acting
 - Another session's uncommitted edits, lock, or branch is in your way on a shared checkout — verify it is live, then ask the owner before waiting or working around it
 - Broadcasting one explicit coordination message to a reviewed target list
 
-📚 [Execution entry and detailed SOPs](./peer-message/SKILL.md).
+📚 [Execution entry and detailed SOPs](./agent-message/SKILL.md).
+
+---
+
+### **peer-message** - Compatibility Alias
+
+Deprecated compatibility alias and executable forwarder shim for **`agent-message`**; see [migration and compatibility notice](./peer-message/SKILL.md).
 
 ---
 
@@ -1660,13 +1678,17 @@ Audit UX, API, architecture and selected competitor implementations using parall
 **Key features:**
 - Auto-detects tool context (project stack + optional `codex` availability)
 - Select the applicable [audit scope](product-analysis/SKILL.md#scope-modes)
+- `ux` and `full` scopes require the separately installed `frontend-visual-qa` companion and a rendered evidence stream before synthesis
+- Keeps source estimates separate from rendered-verified first-screen control counts and launch-to-first-value steps
+- Records source, interaction/action, and target-mutation authority independently
 - Evidence verification and priority selection through the [synthesis method](product-analysis/references/synthesis_methodology.md)
 - Built-in comparison hooks with `competitors-analysis`
 
 **Example usage:**
 ```bash
-# Install the skill
+# Install the skill and its required ux/full rendered-audit companion
 claude plugin install product-analysis@daymade-skills
+claude plugin install frontend-visual-qa@daymade-skills
 
 # Then ask Claude for analysis
 "Run product-analysis in full mode for launch audit"
@@ -1681,7 +1703,7 @@ claude plugin install product-analysis@daymade-skills
 
 📚 **Documentation**: See [product-analysis/SKILL.md](./product-analysis/SKILL.md) and [product-analysis/references/analysis_dimensions.md](./product-analysis/references/analysis_dimensions.md) for dimension definitions and workflow guidance.
 
-**Requirements**: Optional `codex` CLI (for multi-model parallel mode). Skill runs with Claude only if `codex` is not installed.
+**Requirements**: Optional `codex` CLI (for multi-model parallel mode). Skill runs with Claude only if `codex` is not installed. `ux` and `full` also require `frontend-visual-qa@daymade-skills`; when that companion is absent, the rendered gate is explicitly blocked rather than replaced by source inspection.
 
 ---
 
@@ -2815,6 +2837,8 @@ Audit the UI users can actually see, with explicit evidence levels and no source
 - A–D evidence ladder that prevents headless, renderer-only, or handler-only checks from masquerading as real GUI proof
 - State/viewport-first workflow, including authenticated-but-role-less branches and exact projection/deck canvases, plus inspected screenshots and DOM geometry
 - Hardened Playwright-powered sweep for navigation status, effective mobile viewport, overflow, clipping, custom-control focusability, images, and section evidence
+- Sitemap-derived whole-site route census for repeatable structural errors, explicitly separated from visual acceptance
+- Required journey coverage for optional-asset collapse, cross-entry return context, and localized 404 behavior
 - Conditional references for core visual checks, complex journeys/page contracts, and data visualization—including units/source/time/freshness, dense collisions, runtime-label truth, and real file-dialog boundaries
 - Public behavior and trigger evals with self-contained fixtures
 
@@ -3766,6 +3790,24 @@ Specialist retrieval and video Skills are optional; no bundled runtime dependenc
 
 ---
 
+### **ai-quota-calibrator** - Calibrate Black-Box AI Subscription Quotas
+
+> **Install**: `claude plugin install ai-quota-calibrator@daymade-skills`
+
+Estimate the true API-dollar capacity, weekly-to-5h multiplier, remaining runway, and zero-compression lossless savings of percentage-based AI subscriptions (Antigravity Gemini/Claude pools, Codex, custom percentage caps) by reconciling local `tokscale` spend against live provider quota fractions—with an optional zero-CDN live HTML business cockpit and same-machine Codex standby monitoring.
+
+**When to use:** Answer how much API value a 5-hour or weekly subscription pool equals, diagnose why a pool hit rate limit (including `< 1%` soft lockout, `MID_HOUR_RESET_OVERCOUNT`, `CONTEXT_SNOWBALL` top burning sessions, concurrent subagents, 5-minute Prompt Cache TTL `20×` cold resends, reset countdown, and alternate open pools), or calibrate burn rate with directional stability checks and cache-write sensitivity bounds.
+
+```text
+Use ai-quota-calibrator to calibrate my current Antigravity Gemini and Claude quota pools with tokscale.
+```
+
+**Requirements**: `tokscale` CLI (`antigravity-cli` / `codex` / other local clients), `agy` CLI for Antigravity, and Python 3.9+ standard library (zero pip dependencies).
+
+📚 **Documentation**: [ai-quota-calibrator](./ai-quota-calibrator/SKILL.md).
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -3808,7 +3850,7 @@ Use **pdf-creator** to convert markdown to print-ready PDFs with proper Chinese 
 Use **teams-channel-post-writer** to share knowledge and **statusline-generator** to track costs while working.
 
 ### For Local Agent Coordination
-Use the current host's native communication tools for reachable agents and sessions. Use **peer-message** only for uncovered local targets, cross-product/script transport, or coordination evidence that needs verification. Follow its [routing contract](./peer-message/SKILL.md); a denied or Held message is not a reason to switch transports.
+Use the current host's native communication tools for reachable agents and sessions. Use **agent-message** (supersedes `peer-message`) only for uncovered local targets, cross-product/script transport, or coordination evidence that needs verification. Follow its [routing contract](./agent-message/SKILL.md); a denied or Held message is not a reason to switch transports.
 
 ### For Repository Management & Security
 Use **repomix-unmixer** to extract and validate repomix-packed skills or repositories. Use **repomix-safe-mixer** to package codebases securely, automatically detecting and blocking hardcoded credentials before distribution.
@@ -3956,7 +3998,7 @@ Each skill includes:
 - **mermaid-tools**: See `daymade-docs/mermaid-tools/references/setup_and_troubleshooting.md` for setup guide
 - **statusline-generator**: See `daymade-claude-code/statusline-generator/references/color_codes.md` for customization
 - **teams-channel-post-writer**: See `teams-channel-post-writer/references/writing-guidelines.md` for quality standards
-- **peer-message**: [Execution entry](peer-message/SKILL.md)
+- **agent-message**: [Execution entry](agent-message/SKILL.md) (supersedes `peer-message`)
 - **repomix-unmixer**: See `repomix-unmixer/references/repomix-format.md` for format specifications
 - **skill-creator**: See `daymade-skill/skill-creator/SKILL.md` for complete skill creation workflow
 - **skill-evolver**: See [skill-evolver/SKILL.md](./skill-evolver/SKILL.md) for target-specific research, implementation and result verification

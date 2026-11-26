@@ -120,6 +120,33 @@ use bypass privileges without an `--admin` argument. Follow the
 Switching account, credential, host or interface invalidates earlier identity
 evidence. Recheck before the next write; do not reuse a prior session's pass.
 
+For a read-only landing observation, use the same helper without a trailing `gh`
+command:
+
+```bash
+python3 <github-ops-dir>/scripts/checked_gh.py \
+  --expected-login EXPECTED_LOGIN --host HOST \
+  --landing-preflight OWNER/REPO#NUMBER \
+  --head FULL_SHA --base main --local-repo PATH \
+  --remote origin --proxy-source auto --deadline-seconds 240
+```
+
+`--landing-preflight` is mutually exclusive with `--publication-preflight`,
+`--ack-merge-bypass` and a trailing command. It verifies the actor, fresh remote
+base, PR target/state/draft/base/head, `merge-tree`, commit-scoped check runs and
+statuses for the exact reviewed head, and a final mergeability read. Check rows
+whose `head_sha`/`sha` differs from `--head` are `unknown`, never rebound to the
+PR; the receipt records `checks_provenance=commit_scoped`. stdout is one
+schema-version-2 JSON receipt; unknown evidence stays `null`.
+Exit `0` is `ready`, `2` is `unknown`/input/transport, `3` is `blocked`, and `4`
+is `pending`. `auto` accepts only an explicit `HTTPS_PROXY`/`ALL_PROXY` (either
+case) and otherwise fails closed with `proxy_missing`; `none` removes all proxy
+variables. Proxy endpoints and tokens never enter the receipt or stderr. A
+`ready` receipt is not merge authorization: merge still goes through the
+guarded `pr merge --match-head-commit` entry and must be reread immediately
+before the write. See
+[landing preflight](references/pr_operations.md#landing-preflight).
+
 Reference examples show native `gh` operation syntax. Execute hosted-state
 mutations by passing those arguments after the helper's `--`, with an explicit
 repository or account scope; bare `gh` remains suitable for readback and
@@ -238,6 +265,16 @@ Reuse the current, already-authorized credential when it has been verified for t
 use a temporary local Docker configuration and remove that configuration after the operation.
 GHCR publication has its own preflight and digest readback; load
 `references/ghcr_publishing.md` before building or pushing an image.
+
+### 9. GitHub API rate-limit fallback
+
+When `gh`/REST/GraphQL is rate-limited, read `gh api rate_limit` before choosing another
+interface. If reset is near and the write is not urgent, schedule the exact operation for
+after reset. If the user explicitly identifies an already-authenticated browser session as
+the intended identity, a new tab in that existing browser may complete the same narrow write:
+verify the visible account, host, repository and exact PR head/base first; never select a
+different saved credential because it is convenient. After the UI write, verify through Git
+or API independently (merge commit, `ls-remote`, `git show --stat`) exactly as for `gh`.
 
 ## High-impact boundaries
 

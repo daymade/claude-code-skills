@@ -280,6 +280,15 @@ files and empty output directories need an explicit classification. Cleanup keep
 exceeded and its small final receipt needs additional bytes. Do not delete evidence
 to manufacture a green outcome.
 
+Once the receipt reaches `state=finished` and every consumer has finished, the
+whole task root may be moved to a durable archive under the existing artifact
+retention authority. Move rather than recursively delete it, keep the receipt and
+all retained evidence together, and read back the finished state and retained
+files at the new path. The receipt's original `root` remains a historical source
+field; do not edit it and do not rerun `run`, `recover` or `finish` from the moved
+root. Any later lifecycle work belongs to a new explicitly authorized task, not a
+rewrite of the completed receipt.
+
 After an uncatchable runner death, a stale lock can remain. Once the recorded
 runner PID and child group are confirmed absent, use:
 

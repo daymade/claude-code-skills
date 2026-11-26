@@ -68,12 +68,24 @@ only to obtain diagnostics its completed receipt already provides.
 
 For an authorized optimization, freeze the same input and policy for old and new
 paths, compare complete normalized finding sets, and retain clean, dangerous and
-unavailable controls on cold and reused paths. Check the real dispatcher's argv,
-stdin, exit propagation and total deadline; a fast helper does not establish a
-bounded ordinary commit/push. Run scanner-heavy verification sequentially with
-isolated fixture state and resource namespaces; retain the owner's concurrency
-limits. Stop when the selected fallback or stage is explained and the affected
-decision and cost claims have deciding evidence.
+unavailable controls. For verdict reuse, run the actual host action twice on a
+small isolated fixture. Check the first run starts the required work and the
+repeat preserves its decision and diagnostics while the expensive stages are absent
+from stage logs or child-process evidence. Include completed allow and block
+decisions. Change a decision input and verify the affected stage runs again.
+Scanner or setup errors and interruptions before a completed decision supply no
+reusable verdict. A synthetic `git push` to a local bare repository exercises
+Git's hook environment, including `GIT_EXEC_PATH`. After a successful push,
+reseed the disposable destination to its original base before repeating. Verify
+that both runs reach the guard decision with the same nonempty outgoing ref
+records. Direct script invocation can miss the environment change that sends
+the real push through fallback.
+
+Check the real dispatcher's argv, stdin, exit propagation and total deadline.
+Run scanner-heavy verification sequentially with isolated fixture state and
+resource namespaces under the owner's concurrency limits. Stop when evidence
+resolves the affected decision and shows whether the repeat skipped the claimed
+work.
 
 ## Localize repeated startup and lookup work
 
@@ -162,6 +174,33 @@ duration meaning in its producer. A journal with `start`, `module_complete`,
 not a universal host protocol. Missing call IDs, child observations, startup time
 or legacy handler completions remain separate unknowns. Do not manufacture host
 wall time from internal timings.
+
+Read the producer before filtering phases. A `start` row written before event
+collection may lack the session identity present on `complete`; select the current
+session's `complete`, then join its other phases by the producer's invocation key
+(such as `pid + event_sha256`) instead of dropping every unidentified start. For a
+bundle, `module_complete` may use each member's group name rather than the bundle
+name; match the same invocation across groups and enumerate the actual member
+rows. A start without its corresponding completion is incomplete execution, not a
+healthy quiet pass.
+
+## Compare registration shapes
+
+For an authorized consolidation A/B, freeze old and new registration snapshots
+while holding the consumed source bytes, event payload and relevant environment
+constant. Execute every matched real handler with journal and other task state
+redirected to isolated temporary locations. Use warmups plus paired trials in
+alternating old/new order; reproduce the host's parallel handler semantics when
+that is what production uses. A registration-only comparison does not prove that
+a historical source revision had the same behavior or cost.
+
+Report configured entry counts, observed host wall time and child CPU separately,
+with sample counts and dispersion. Label `RUSAGE_CHILDREN` as the measured child
+reaping scope; if descendants or detached grandchildren are not tracked, their
+process count and CPU remain unknown. A median CPU reduction is not evidence of a
+wall-time improvement, and a faster harmless probe does not establish the cost of
+a representative dangerous branch. Verify the adopted registration in the actual
+current or fresh host before claiming a user-visible effect.
 
 ## Replay both directions
 

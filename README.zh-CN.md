@@ -208,7 +208,7 @@ codex plugin add daymade-codex@daymade-skills
 claude plugin install daymade-claude-code@daymade-skills
 ```
 
-一次安装即可获得扩展 Claude Code 本体的全部 power-user 技能——跨代码、项目文档、Skill/SOP、会议、微信归档与对话历史的已有工作检索；跨 Claude Code/Codex 的快速本地对话发现；会话恢复；CLAUDE.md 调优；故障诊断；statusline 配置；导出修复；marketplace 开发与 suite 收敛；终端截图渲染；用量分析；以及多 Provider 模型切换：
+一次安装即可获得扩展 Claude Code 本体的全部 power-user 技能——跨代码、项目文档、Skill/SOP、会议、微信归档与对话历史的已有工作检索；跨 Claude Code/Codex 的快速本地对话发现；会话恢复；CLAUDE.md 调优；故障诊断；权限提示与 Agent Team teammate 分诊；statusline 配置；导出修复；marketplace 开发与 suite 收敛；终端截图渲染；用量分析；以及多 Provider 模型切换：
 
 ```text
 /daymade-claude-code:claude-code-ops-router
@@ -222,6 +222,7 @@ claude plugin install daymade-claude-code@daymade-skills
 /daymade-claude-code:statusline-generator
 /daymade-claude-code:fixing-claude-export-conversations
 /daymade-claude-code:marketplace-dev
+/daymade-claude-code:claude-code-permission-triage
 /daymade-claude-code:terminal-screenshot
 /daymade-claude-code:claude-usage-analyst
 /daymade-claude-code:claude-switch-models-setup
@@ -268,8 +269,8 @@ claude plugin install github-ops@daymade-skills
 # Teams 通信
 claude plugin install teams-channel-post-writer@daymade-skills
 
-# 本机 Claude/Codex Agent 通讯
-claude plugin install peer-message@daymade-skills
+# 本机 Claude/Codex/Antigravity Agent 通讯（替代 peer-message）
+claude plugin install agent-message@daymade-skills
 
 # Repomix 提取
 claude plugin install repomix-unmixer@daymade-skills
@@ -325,6 +326,8 @@ claude plugin install windows-remote-desktop-connection-doctor@daymade-skills
 
 # 产品审计与优化
 claude plugin install product-analysis@daymade-skills
+# product-analysis 的 ux/full 渲染审计所需的伴随插件
+claude plugin install frontend-visual-qa@daymade-skills
 
 # Scrapling CLI 抽取与故障排查
 claude plugin install scrapling-skill@daymade-skills
@@ -478,7 +481,15 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 > **安装**：`claude plugin install daymade-claude-code@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-claude-code:claude-code-ops-router`）
 
-按任务读取一个专用 Skill：插件和 Skill 故障、marketplace、状态栏、模型 Profile 与源码同步、1M 上下文提前压缩、用量和额度定时器、memory 迁移、导出 `.txt` 修复。原有专用斜杠命令仍可手动调用。
+按任务读取一个专用 Skill：插件和 Skill 故障、marketplace、权限提示与 Agent Team teammate 分诊、MCP 启动上下文、状态栏、模型 Profile 与源码同步、1M 上下文提前压缩、用量和额度定时器、memory 迁移、导出 `.txt` 修复。原有专用斜杠命令仍可手动调用。
+
+---
+
+### **claude-code-permission-triage** - Claude Code 权限提示分诊
+
+> **安装**：`claude plugin install daymade-claude-code@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-claude-code:claude-code-permission-triage`）
+
+诊断 subagent、后台 worker 与 Agent Team teammate 出现的异常、缺失、延迟、卡住或错投权限提示。区分卡片类型、投递状态、worker 类型和有效模式时间线，匹配已知上游 issue，并生成脱敏反馈。不修改权限规则、不编写或修改 hook、不处理 MCP OAuth，也不负责读取历史会话。
 
 ---
 
@@ -532,26 +543,33 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 ---
 
-### **peer-message** - 本机 Claude/Codex Agent 通讯
+### **agent-message** - 本机 Claude/Codex/Antigravity Agent 通讯
 
-内置本机共享协调记录，维护任务与资源声明、重复请求抑制和短时窗口有效期。
+替代原 `peer-message`（原包保留为兼容别名与可执行转发层）。内置本机共享协调记录，维护任务与资源声明、软租约（`--ttl` / `coord renew`）、重复请求抑制和短时窗口有效期。
 首次调用自动初始化，不依赖 Agent Fleet 或常驻进程；原生通信仍走原生工具，
-按[协调流程](peer-message/references/local-coordination.md)执行发送前检查与收件分流。
+按[协调流程](agent-message/references/local-coordination.md)执行发送前检查与收件分流。
 
-实验性的[配对网络入口](peer-message/references/network-preview.md)支持邀请、联系人和获准文档问答，通过现有 Claude/Codex 宿主返回带引用的答案。预览需要操作者提供 relay，不代表公共托管网络已经上线或用户采用已获验证。
+原跨机器配对预览已退役；跨机器或跨用户零信任 Agent 通信请改用 **Agent Use**（`https://useagent.app`）。
 
-> **安装**：`claude plugin install peer-message@daymade-skills`
+> **安装**：`claude plugin install agent-message@daymade-skills`
 
-当前宿主原生工具能覆盖目标时，直接使用其发现、发送、回传和等待机制。仅为原生工具未覆盖的本机 Claude Code/Codex 目标补齐脚本通信，或在协调证据需要核实时加载本 Skill。
+当前宿主原生工具能覆盖目标时，直接使用其发现、发送、回传和等待机制。仅为原生工具未覆盖的本机 Claude Code / Codex / Antigravity（`agy`）目标补齐脚本通信，或在协调证据需要核实时加载本 Skill。
 
 **使用场景：**
 - 向已确认、原生工具未覆盖的独立目标发送依赖、暂停、交接或完成通知
+- 一键回复（`reply <id>`）、基于 `kqueue` 的零轮询等待（`wait`）与三产品统一收件箱（`inbox`）
 - 按原消息查询对应回复，无需手工检查本地消息存储
-- 从脚本或其他产品访问原生工具未覆盖的 Claude inbox；第三方 provider 本身不是使用补缺通道的依据
+- 从脚本或其他产品访问原生工具未覆盖的 Claude/Codex/Antigravity inbox；第三方 provider 本身不是使用补缺通道的依据
 - 共享 checkout 上别人的未提交改动、锁或分支挡住了你——先核实它是否真在飞，再问属主，别自己停手或绕开
 - 向经过确认的目标清单广播同一条协调消息
 
-📚 **文档与命令**：[peer-message/SKILL.md](./peer-message/SKILL.md) 拥有路由、稳定运行前置与“peer 不得代替用户授权”的边界；`peer-message/scripts/peer.py --help` 拥有 CLI 语法；[protocol-and-discovery.md](./peer-message/references/protocol-and-discovery.md) 拥有寻址、信封与送达证据；[official-feature.md](./peer-message/references/official-feature.md) 拥有会随产品变化的运行要求与具体机制；[coordination-and-learning-loop.md](./peer-message/references/coordination-and-learning-loop.md) 拥有回传寻址、正文与送达状态措辞、发现共享资源上有别人在制品时怎么核实、怎么开口、等多久、等不到怎么继续，判定一条 peer 断言与一组 peer 否认各值多少的两份核验合同，以及证据闸门下的改进循环。
+📚 [执行入口与详细 SOP](./agent-message/SKILL.md)。
+
+---
+
+### **peer-message** - 兼容别名
+
+**`agent-message`** 的兼容别名与可执行转发壳，迁移说明见[兼容通告](./peer-message/SKILL.md)。
 
 ---
 
@@ -1706,14 +1724,18 @@ claude plugin install windows-remote-desktop-connection-doctor@daymade-skills
 **主要功能：**
 - 自动识别项目类型和 `codex` 可用性
 - 按任务选择[审计范围](product-analysis/SKILL.md#scope-modes)
+- `ux` 与 `full` 范围在综合前必须安装独立的 `frontend-visual-qa` 伴随插件并取得真实渲染证据流
+- 将源码估计与渲染实测的首屏控件数、启动到首次价值的步数分开记录
+- 源码授权、交互/动作授权与目标变更授权三权分立
 - Claude 与可选 Codex 代理并行探索
 - 按[综合判断方法](product-analysis/references/synthesis_methodology.md)核对证据和选择优先级
 - 输出可落地的优化方案（行动项 + 依据）
 
 **示例用法：**
 ```bash
-# 安装技能
+# 安装技能及 ux/full 渲染审计所需的伴随插件
 claude plugin install product-analysis@daymade-skills
+claude plugin install frontend-visual-qa@daymade-skills
 
 # 然后请求审计
 "用 full 模式做一轮产品上线前审计"
@@ -1728,7 +1750,7 @@ claude plugin install product-analysis@daymade-skills
 
 📚 **文档**：参见 [product-analysis/SKILL.md](./product-analysis/SKILL.md) 与 [product-analysis/references/analysis_dimensions.md](./product-analysis/references/analysis_dimensions.md) 了解审计维度与工作流。
 
-**要求**：可选 `codex` CLI（用于多模型并行模式）。未安装时自动降级为纯 Claude 分析。
+**要求**：可选 `codex` CLI（用于多模型并行模式）。未安装时自动降级为纯 Claude 分析。`ux` 与 `full` 还需要 `frontend-visual-qa@daymade-skills`；缺少该伴随插件时，渲染门禁明确标记为 blocked，不得用源码检查替代。
 
 ---
 
@@ -2836,6 +2858,8 @@ claude plugin install frontend-visual-qa@daymade-skills
 - A–D 证据阶梯，禁止用 headless、renderer 或 handler 结果冒充真实 GUI 验证
 - 先确认 state/viewport（含已登录但无角色状态与精确投影/演示画布），再结合已打开的截图与 DOM 几何取证
 - 加固后的 Playwright 机械扫描：HTTP/final URL、有效移动端视口、溢出、裁切、自定义控件焦点候选、图片和 section 证据
+- 基于 sitemap 的全站路由结构普查，可重复发现结构性错误，并明确不与视觉验收混为一谈
+- 强制覆盖可选视觉资产塌缩、跨入口返回上下文与本地化 404 旅程
 - 核心视觉、复杂旅程/页面类型、data-viz 三类按需 reference，覆盖单位/来源/时间/新鲜度、密集碰撞、runtime 文案真实性和真实文件选择器边界
 - 自包含公开 fixture 的行为 eval 与触发 eval
 
@@ -3730,6 +3754,24 @@ Daymade Skill Evolver 组装已有 Skills，为指定现有 Skill 完成一轮�
 
 ---
 
+### **ai-quota-calibrator** - 黑盒 AI 订阅配额实证反推
+
+> **安装**：`claude plugin install ai-quota-calibrator@daymade-skills`
+
+将本地 `tokscale` 真实消耗与平台实时配额比例（Antigravity Gemini/Claude 池、Codex 及其他百分比订阅）按窗口起点精确对齐，反推 5 小时池与周池的等效 API 美元规模、周÷5h 倍率与当前火力下的剩余续航。
+
+**适用场景**：查询黑盒订阅 5 小时/周额度大概相当于多少 API 美元、排查池子为什么触发限流（含 `< 1%` 预扣软锁死、Top 烧钱与长上下文滚雪球会话归因、重置倒计时与同订阅可切换替代池），并用方向感知稳态采样与 Cache Write 敏感度区间校准真实消耗。
+
+```text
+用 ai-quota-calibrator 结合 tokscale 校准我当前的 Antigravity Gemini 和 Claude 配额池。
+```
+
+**要求**：`tokscale` CLI（`antigravity-cli` / `codex` 等本地客户端）、Antigravity 另需 `agy` CLI，以及 Python 3.9+ 标准库（零第三方 pip 依赖）。
+
+📚 **文档**：[ai-quota-calibrator](./ai-quota-calibrator/SKILL.md)。
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
@@ -3766,7 +3808,7 @@ review 后修复/落地时，使用 **github-review-pr**。
 使用 **teams-channel-post-writer** 分享知识，使用 **statusline-generator** 在工作时跟踪成本。
 
 ### 本机 Agent 协调
-联系当前原生工具能覆盖的 agent 或 session 时，直接使用宿主通信机制。只有未覆盖的本机目标、跨产品／脚本通信，或需要核实协调证据时，才使用 **peer-message**；详见其[路由合同](./peer-message/SKILL.md)。消息被拒绝或 Held 不构成换通道的理由。
+联系当前原生工具能覆盖的 agent 或 session 时，直接使用宿主通信机制。只有未覆盖的本机目标、跨产品／脚本通信，或需要核实协调证据时，才使用 **agent-message**（替代原 `peer-message`）；详见其[路由合同](./agent-message/SKILL.md)。消息被拒绝或 Held 不构成换通道的理由。
 
 ### 仓库管理与安全
 使用 **repomix-unmixer** 提取和验证 repomix 打包的技能或仓库。使用 **repomix-safe-mixer** 安全地打包代码库，在分发前自动检测和阻止硬编码凭据。
@@ -3912,7 +3954,7 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 - **mermaid-tools**：参见 `daymade-docs/mermaid-tools/references/setup_and_troubleshooting.md` 了解设置指南
 - **statusline-generator**：参见 `daymade-claude-code/statusline-generator/references/color_codes.md` 了解自定义
 - **teams-channel-post-writer**：参见 `teams-channel-post-writer/references/writing-guidelines.md` 了解质量标准
-- **peer-message**：参见 `peer-message/SKILL.md` 了解路由、稳定运行前置与安全边界；运行 `peer-message/scripts/peer.py --help` 查看 CLI 语法；参见 `peer-message/references/protocol-and-discovery.md` 了解传输与验证；参见 `peer-message/references/official-feature.md` 了解会变化的产品要求与机制；参见 `peer-message/references/coordination-and-learning-loop.md` 了解 parent/worker 回传与证据闸门下的改进循环
+- **agent-message**（替代原 `peer-message`）：参见 `agent-message/SKILL.md`（路由与安全边界）及 `agent-message/scripts/peer.py --help`（CLI 语法）
 - **repomix-unmixer**：参见 `repomix-unmixer/references/repomix-format.md` 了解格式规范
 - **skill-creator**：参见 `daymade-skill/skill-creator/SKILL.md` 了解完整的技能创建工作流
 - **skill-evolver**：参见 [skill-evolver/SKILL.md](./skill-evolver/SKILL.md) 了解针对指定目标的研究、实施与结果验证

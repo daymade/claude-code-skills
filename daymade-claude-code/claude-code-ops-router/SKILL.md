@@ -1,10 +1,10 @@
 ---
 name: claude-code-ops-router
 description: >-
-  plugin/Skill repair, marketplace, statusline, model profiles/source sync,
-  1M/[1m] context, usage/quota reset ping, memory→docs, .txt repair, MCP startup context.
-  Routes Claude Code to one bundled specialist, including turning auto memory off.
-  History, hooks, and Lark keep their own entries.
+  plugin/Skill repair,marketplace,permission-triage,statusline,model sync,1M/[1m],
+  usage/quota ping,memory→docs,.txt repair,MCP startup context. Routes to one
+  bundled Claude Code specialist, including auto-memory off. History, hooks,
+  and Lark keep their own entries.
 ---
 
 # Claude Code operations router
@@ -32,6 +32,7 @@ frontmatter. The export-repair directory `claude-export-txt-better` exposes
 | Install, change, or repair the Claude Code statusline | `../statusline-generator/SKILL.md` |
 | Repair line wrapping, tables, paths, or tool output in an exported Claude Code `.txt` conversation | `../claude-export-txt-better/SKILL.md` |
 | Create or maintain a Claude Code plugin marketplace, suite membership, or marketplace manifest | `../marketplace-dev/SKILL.md` |
+| Diagnose unexpected, missing, delayed, parked, or misdelivered Claude Code permission prompts/cards for subagents, background workers, or Agent Team teammates | `../claude-code-permission-triage/SKILL.md` |
 | Analyze Claude Code/Desktop Code token use, cost, cache, quota burn, or 5-hour blocks | `../claude-usage-analyst/SKILL.md` |
 | Configure isolated Claude Code model-provider profiles, aliases, source-backed Claude/Codex Skill activation, or context-window size; reduce preloaded MCP schema context after active-profile and provider checks, or safely suppress selected MCP servers; repair early compaction, `[1m]` display, or `CLAUDE_CODE_MAX_CONTEXT_TOKENS` | `../claude-switch-models-setup/SKILL.md` |
 | Migrate existing Claude personal memory into tool-agnostic AGENTS.md reference documents, or retire a project's auto memory so documents own everything it held | `../claude-migrate-memory-to-doc/SKILL.md` |
@@ -41,7 +42,12 @@ Route by the requested operation, not by the word “Claude.” For example,
 usage diagnosis selects `claude-usage-analyst`; a requested future reset ping
 selects `claude-code-ping-start-5h-quota`. A Skill count, discovery-policy
 audit, or cold-catalog change belongs to `skill-governance` when installed;
-plugin activation repair is the narrower troubleshooting row here.
+plugin activation repair is the narrower troubleshooting row here. Requests
+to change `allow`, `ask`, `deny`, or `defaultMode` belong to `update-config`.
+Authoring or changing PermissionRequest/PreToolUse hook behavior belongs to
+`claude-code-hooks`; using expected hook events as evidence for a missing,
+parked, or misdelivered permission request remains permission triage. MCP
+OAuth is not permission triage.
 
 This router does not replace the direct entries for conversation-history
 reading and continuation, prior-work retrieval, hooks, CLAUDE.md editing,

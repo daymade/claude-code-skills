@@ -18,6 +18,8 @@ Choose sections by the requested delivery: public sanitization before public dis
 
 **Scope the pass by destination, not by topic.** Only the artifact that ships publicly — the skill bundle itself — gets sanitized. Companion documents that stay in a private repo (the incident report the skill was distilled from, internal runbooks, the project's CLAUDE.md) keep their real hostnames, paths, and timestamps: redacting those destroys their audit value, and you will end up reverting it. One distillation session went through three rounds of rework precisely because the redaction pass was applied to everything the source material touched instead of just the public skill.
 
+**Exception — private independent-review archives.** A review archive stored in a team-readable private repository follows the review-archive redaction rule in [sanitization_checklist.md](sanitization_checklist.md#include-tests-fixtures-and-private-review-artifacts): preserve commit SHAs, evidence coordinates and failure shape, but replace personal absolute paths and operational identifiers with role placeholders and run that repository's PII guard. Other private companion documents retain the owner-controlled policy above; do not generalize this exception to them.
+
 **Check the destination first.** Run
 `gh repo view --json isPrivate` on the repo the skill will live in (or read the note
 `quick_validate` already printed).
@@ -35,7 +37,7 @@ publication. The cost is not cosmetic — a real path is what lets the next read
 check the value; "the project's own token file" cannot be opened.
 
 So make it a lookup, not a judgment: **read `isPrivate` for the destination, and if it
-is `true`, sanitizing requires the owner to ask for it.** A private→private move is a
+is `true`, sanitizing requires the owner to ask for it, except for private independent-review archives, which follow their explicit redaction contract above.** A private→private move is a
 move, not a release. **When neither probe answers** (no remote yet, `quick_validate` not
 run), you have no lookup — fall back to treating it as public *and say so*, because the
 asymmetry runs that way: an unnecessary question costs a sentence, an unnecessary leak

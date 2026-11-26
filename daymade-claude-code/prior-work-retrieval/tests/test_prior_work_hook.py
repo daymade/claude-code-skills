@@ -28,6 +28,81 @@ hook = load_module("prior_work_hook_under_test", SCRIPTS_DIR / "prior_work_hook.
 
 
 class PriorWorkHookTests(unittest.TestCase):
+    def test_current_code_followups_do_not_rearm_or_read_receipts(self):
+        prompts = [
+            "194个正则分支都保留了吗？当前已有代码为什么这么慢？",
+            "Gitleaks不必要扫描导致卡死，你直接优化当前实现。",
+            "你直接优化呀",
+            "这些 keywords 会复用缓存吗？",
+            "Independent safety review: reuse verified digests in the current implementation.",
+            "Check receipt reuse/retained detection on the current patch.",
+            "Reuse existing passed checks where inputs unchanged.",
+            "Reuse valid qualified retained proof before Git archive/LFS.",
+            "Optimize publication-pair predict archive reuse.",
+        ]
+        with mock.patch.object(hook, "_manifest", side_effect=AssertionError("unexpected manifest read")):
+            for prompt in prompts:
+                with self.subTest(prompt=prompt):
+                    for receipt_valid in (False, True):
+                        self.assertEqual(hook.classify_prompt(prompt, receipt_valid), "none")
+                    self.assertIsNone(hook.handle_user_prompt({
+                        "hook_event_name": "UserPromptSubmit", "session_id": "current-code",
+                        "prompt": prompt,
+                    }))
+
+    def test_machine_envelopes_cannot_create_or_clear_history_requirements(self):
+        sid = "machine-followups"
+        with mock.patch.object(hook, "_receipt_error", return_value="missing"):
+            hook.handle_user_prompt({"session_id": sid, "prompt": "请复用以前的解析器"})
+        manifest = hook._manifest()
+        before = prior_work.load_requirement(manifest, sid)
+        for prompt in [
+            "hook_prompt: 复用以前的代码",
+            "<hook_prompt>复用以前的代码</hook_prompt>",
+            "<codex_delegation>复用以前的代码</codex_delegation>",
+            '[peer-coordination: {"kind":"notice"}]\n复用以前的代码',
+            "<codex_delegation>不用查历史</codex_delegation>",
+            hook.HOOK_GUIDANCE_MARKER + ": required_prior_signal; reuse previous work",
+        ]:
+            with self.subTest(prompt=prompt):
+                with mock.patch.object(hook, "_manifest", side_effect=AssertionError("unexpected manifest read")):
+                    self.assertIsNone(hook.handle_user_prompt({"session_id": sid, "prompt": prompt}))
+                self.assertEqual(prior_work.load_requirement(manifest, sid), before)
+
+    def test_current_code_filter_preserves_explicit_history_requests(self):
+        for prompt in [
+            "查找我们之前做过的配置方案",
+            "请复用以前的解析器",
+            "当前已有代码很慢，请检索我们以前的方案。",
+            "这些 keywords 会复用缓存吗？另外找回我们之前的决定。",
+            "Find our previous work and reuse verified digests in the current implementation.",
+            "Reuse existing passed checks where inputs unchanged, and find our previous work.",
+            "Check receipt reuse/retained detection. 请检索我们之前的方案。",
+            "<hook_prompt>复用缓存</hook_prompt>\n请检索我们之前的方案。",
+            "<codex_delegation>复用以前的代码</codex_delegation>\n请找回我们之前的决定。",
+            "hook_prompt: 复用缓存\n请检索我们以前的代码。",
+        ]:
+            with self.subTest(prompt=prompt):
+                for valid in (False, True):
+                    self.assertEqual(hook.classify_prompt(prompt, valid), "required_prior_signal")
+        with mock.patch.object(hook, "_receipt_error", return_value="missing"):
+            sid = "explicit-history"
+            hook.handle_user_prompt({"session_id": sid, "prompt": "请复用以前的解析器"})
+            before = prior_work.load_requirement(hook._manifest(), sid)
+            hook.handle_user_prompt({"session_id": sid, "prompt": "你直接优化呀"})
+            self.assertEqual(prior_work.load_requirement(hook._manifest(), sid), before)
+            self.assertIsNotNone(hook.handle_stop({"session_id": sid}))
+            hook.handle_user_prompt({"session_id": sid, "prompt": "查找我们之前做过的配置方案"})
+            self.assertNotEqual(prior_work.load_requirement(hook._manifest(), sid)["requirement_id"],
+                                before["requirement_id"])
+
+    def test_empty_or_missing_prompt_has_no_state_or_io(self):
+        with mock.patch.object(hook, "_manifest", side_effect=AssertionError("unexpected manifest read")):
+            for event in ({}, {"prompt": ""}, {"prompt": "  "}, {"prompt": None},
+                          {"prompt": {}}, {"prompt": []}):
+                with self.subTest(event=event):
+                    self.assertIsNone(hook.handle_user_prompt(event))
+
     def history_command(self, script: str, arguments: str) -> str:
         reader = SKILL_DIR.parent / "read-codex-history" / "scripts" / script
         return f'python3 "{reader}" {arguments}'
@@ -193,7 +268,8 @@ class PriorWorkHookTests(unittest.TestCase):
             encoding="utf-8",
         )
         self.env = mock.patch.dict(
-            os.environ, {"PRIOR_WORK_MANIFEST": str(self.manifest_path)}
+            os.environ, {"PRIOR_WORK_MANIFEST": str(self.manifest_path),
+                         "XDG_STATE_HOME": str(self.root / "xdg-state")}
         )
         self.env.start()
 
@@ -604,6 +680,50 @@ class PriorWorkHookTests(unittest.TestCase):
             },
         }
         self.assertTrue(hook.substantial_tool_use(named_scratch)[0])
+
+    def test_only_host_read_only_explore_agent_skips_production_receipt(self) -> None:
+        prompt = "Read-only exploration of the existing hook registration and tests. " * 8
+        explore = {
+            "hook_event_name": "PreToolUse",
+            "session_id": "session-explore-read-only",
+            "tool_name": "Agent",
+            "tool_input": {"subagent_type": "Explore", "prompt": prompt},
+        }
+        self.assertEqual(
+            hook.substantial_tool_use(explore),
+            (False, "Agent:read_only_explore"),
+        )
+        prior_work.mark_requirement(
+            hook._manifest(),
+            "session-explore-read-only",
+            prompt="请复用以前的解析器",
+            trigger="required_prior_signal",
+            required=True,
+        )
+        self.assertIsNone(hook.handle_pre_tool(explore))
+        for tool_name, subagent_type in (
+            ("Agent", "general-purpose"),
+            ("Agent", None),
+            ("Task", "Explore"),
+            ("functions.Agent", "Explore"),
+            ("mcp__example__Agent", "Explore"),
+            ("other.Agent", "Explore"),
+        ):
+            with self.subTest(tool_name=tool_name, subagent_type=subagent_type):
+                event = {
+                    "hook_event_name": "PreToolUse",
+                    "session_id": "session-explore-read-only",
+                    "tool_name": tool_name,
+                    "tool_input": {"prompt": prompt},
+                }
+                if subagent_type is not None:
+                    event["tool_input"]["subagent_type"] = subagent_type
+                self.assertTrue(hook.substantial_tool_use(event)[0])
+                denied = hook.handle_pre_tool(event)
+                self.assertEqual(
+                    denied["hookSpecificOutput"]["permissionDecision"],
+                    "deny",
+                )
 
     def test_tool_input_and_names_normalize_across_hosts(self) -> None:
         raw_patch = {
@@ -1145,7 +1265,7 @@ class PriorWorkHookTests(unittest.TestCase):
             "reuse provider",
             ["provider contract"],
             "session-3",
-        )
+         filesystem_scopes=[str(self.source)])
         candidate = run["candidates"][0]
         prior_work.complete(
             manifest,
@@ -1184,7 +1304,7 @@ class PriorWorkHookTests(unittest.TestCase):
             "reuse provider",
             ["provider contract"],
             session_id,
-        )
+         filesystem_scopes=[str(self.source)])
         candidate = run["candidates"][0]
         prior_work.complete(
             manifest,
@@ -1207,6 +1327,236 @@ class PriorWorkHookTests(unittest.TestCase):
             prior_work.check_receipt(manifest, session_id, None)["status"],
             "valid",
         )
+
+    def test_status_only_stop_is_single_turn_and_keeps_write_gate(self):
+        session_id = "session-status-stop"
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的解析器"})
+        manifest = hook._manifest()
+        stop = {"session_id": session_id, "stop_hook_active": False}
+        write = {"session_id": session_id, "tool_name": "Write", "tool_input": {
+            "file_path": str(self.root / "status-write.py"), "content": "x" * 300}}
+
+        for index, followup in enumerate(("继续", "继续，先实现解析器", "接着写", "继续修改", "继续完成实现", "继续吧")):
+            status_prompt_id = f"status-{index}"
+            followup_prompt_id = f"followup-{index}"
+            hook.handle_user_prompt({
+                "session_id": session_id, "prompt_id": status_prompt_id, "prompt": "检查现状"
+            })
+            requirement = prior_work.load_requirement(manifest, session_id)
+            self.assertIs(requirement["status_only_stop"], True)
+            self.assertEqual(requirement["status_only_prompt_id"], status_prompt_id)
+            self.assertTrue(hook._status_stop_marker(session_id).exists())
+            self.assertIsNotNone(hook.handle_pre_tool(write))
+            hook.handle_user_prompt({
+                "session_id": session_id, "prompt_id": followup_prompt_id, "prompt": followup
+            })
+            self.assertIs(prior_work.load_requirement(manifest, session_id)["status_only_stop"], False)
+            self.assertFalse(hook._status_stop_marker(session_id).exists())
+            self.assertEqual(
+                hook.handle_stop(dict(stop, prompt_id=followup_prompt_id))["decision"], "block"
+            )
+
+        status_prompt_id = "status-final"
+        hook.handle_user_prompt({
+            "session_id": session_id, "prompt_id": status_prompt_id, "prompt": "检查现状"
+        })
+        self.assertIsNone(hook.handle_stop(dict(stop, prompt_id=status_prompt_id)))
+        self.assertIs(prior_work.load_requirement(manifest, session_id)["status_only_stop"], False)
+        self.assertFalse(hook._status_stop_marker(session_id).exists())
+        self.assertEqual(hook.handle_stop(dict(stop, prompt_id=status_prompt_id))["decision"], "block")
+
+    def test_status_exception_requires_prompt_binding(self):
+        session_id = "session-status-stop-missing-prompt-id"
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的解析器"})
+        manifest = hook._manifest()
+
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "检查现状"})
+        self.assertIsNot(prior_work.load_requirement(manifest, session_id).get("status_only_stop"), True)
+        result = hook.handle_stop({"session_id": session_id, "stop_hook_active": False})
+        self.assertEqual(result["decision"], "block")
+
+    def test_status_exception_does_not_accept_turn_id_fallback(self):
+        session_id = "session-status-stop-turn-id-only"
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的解析器"})
+        manifest = hook._manifest()
+
+        hook.handle_user_prompt({
+            "session_id": session_id, "turn_id": "turn-only", "prompt": "检查现状"
+        })
+        self.assertIsNot(prior_work.load_requirement(manifest, session_id).get("status_only_stop"), True)
+        result = hook.handle_stop({
+            "session_id": session_id, "turn_id": "turn-only", "stop_hook_active": False
+        })
+        self.assertEqual(result["decision"], "block")
+
+    def test_status_exception_rejects_different_prompt_id(self):
+        session_id = "session-status-stop-wrong-prompt-id"
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的解析器"})
+        manifest = hook._manifest()
+        hook.handle_user_prompt({
+            "session_id": session_id, "prompt_id": "status-turn", "prompt": "检查现状"
+        })
+        self.assertTrue(hook._status_stop_marker(session_id).exists())
+
+        result = hook.handle_stop({
+            "session_id": session_id, "prompt_id": "different-turn", "stop_hook_active": False
+        })
+        self.assertEqual(result["decision"], "block")
+        self.assertIs(prior_work.load_requirement(manifest, session_id)["status_only_stop"], False)
+        self.assertFalse(hook._status_stop_marker(session_id).exists())
+
+    def test_status_only_stop_fails_closed_when_marker_is_lost(self):
+        session_id = "session-status-stop-marker-loss"
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的解析器"})
+        manifest = hook._manifest()
+        status_prompt_id = "status-marker-loss"
+        stop = {"session_id": session_id, "prompt_id": status_prompt_id, "stop_hook_active": False}
+
+        hook.handle_user_prompt({
+            "session_id": session_id, "prompt_id": status_prompt_id, "prompt": "检查现状"
+        })
+        self.assertIs(prior_work.load_requirement(manifest, session_id)["status_only_stop"], True)
+        hook._status_stop_marker(session_id).unlink()
+
+        result = hook.handle_stop(stop)
+        self.assertIsNotNone(result)
+        self.assertEqual(result["decision"], "block")
+        self.assertIs(prior_work.load_requirement(manifest, session_id)["status_only_stop"], False)
+
+    def test_nonstatus_prompt_after_marker_loss_rearms_stop(self):
+        session_id = "session-status-stop-marker-loss-followup"
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的解析器"})
+        manifest = hook._manifest()
+        status_prompt_id = "status-marker-loss-followup"
+        followup_prompt_id = "followup-marker-loss"
+        stop = {"session_id": session_id, "prompt_id": followup_prompt_id, "stop_hook_active": False}
+
+        hook.handle_user_prompt({
+            "session_id": session_id, "prompt_id": status_prompt_id, "prompt": "检查现状"
+        })
+        hook._status_stop_marker(session_id).unlink()
+        hook.handle_user_prompt({
+            "session_id": session_id, "prompt_id": followup_prompt_id, "prompt": "继续实现解析器"
+        })
+
+        result = hook.handle_stop(stop)
+        self.assertIsNotNone(result)
+        self.assertEqual(result["decision"], "block")
+        self.assertIs(prior_work.load_requirement(manifest, session_id)["status_only_stop"], False)
+
+    def test_nonstatus_prompt_consumes_marker_before_manifest_failure(self):
+        session_id = "session-status-stop-transient-manifest"
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的解析器"})
+        manifest = hook._manifest()
+        status_prompt_id = "status-transient-manifest"
+        followup_prompt_id = "followup-transient-manifest"
+        stop = {"session_id": session_id, "prompt_id": followup_prompt_id, "stop_hook_active": False}
+
+        hook.handle_user_prompt({
+            "session_id": session_id, "prompt_id": status_prompt_id, "prompt": "检查现状"
+        })
+        marker = hook._status_stop_marker(session_id)
+        self.assertTrue(marker.exists())
+        with mock.patch.object(
+            hook, "_manifest", side_effect=prior_work.PriorWorkError("transient read failure")
+        ):
+            hook.handle_user_prompt({
+                "session_id": session_id, "prompt_id": followup_prompt_id, "prompt": "继续实现解析器"
+            })
+        self.assertFalse(marker.exists())
+
+        result = hook.handle_stop(stop)
+        self.assertIsNotNone(result)
+        self.assertEqual(result["decision"], "block")
+        self.assertIs(prior_work.load_requirement(manifest, session_id)["status_only_stop"], False)
+
+    def test_unremovable_marker_and_manifest_failure_cannot_authorize_stop(self):
+        session_id = "session-status-stop-unremovable-marker"
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的解析器"})
+        manifest = hook._manifest()
+        status_prompt_id = "status-unremovable-marker"
+        followup_prompt_id = "followup-unremovable-marker"
+        stop = {"session_id": session_id, "prompt_id": followup_prompt_id, "stop_hook_active": False}
+
+        hook.handle_user_prompt({
+            "session_id": session_id, "prompt_id": status_prompt_id, "prompt": "检查现状"
+        })
+        marker = hook._status_stop_marker(session_id)
+        self.assertTrue(marker.exists())
+
+        class UnremovableMarker:
+            def exists(self):
+                return True
+
+            def unlink(self):
+                raise PermissionError("marker is not removable")
+
+        with mock.patch.object(hook, "_status_stop_marker", return_value=UnremovableMarker()), \
+             mock.patch.object(
+                 hook, "_manifest", side_effect=prior_work.PriorWorkError("transient read failure")
+             ):
+            result = hook.handle_user_prompt({
+                "session_id": session_id, "prompt_id": followup_prompt_id, "prompt": "继续实现解析器"
+            })
+        self.assertIsNone(result)
+        self.assertTrue(marker.exists())
+
+        result = hook.handle_stop(stop)
+        self.assertEqual(result["decision"], "block")
+        self.assertIs(prior_work.load_requirement(manifest, session_id)["status_only_stop"], False)
+
+    def test_unremovable_marker_is_harmless_after_flag_clear(self):
+        session_id = "session-status-stop-unremovable-marker-flag-cleared"
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的解析器"})
+        manifest = hook._manifest()
+        status_prompt_id = "status-unremovable-marker-flag-cleared"
+        followup_prompt_id = "followup-unremovable-marker-flag-cleared"
+        stop = {"session_id": session_id, "prompt_id": followup_prompt_id, "stop_hook_active": False}
+
+        hook.handle_user_prompt({
+            "session_id": session_id, "prompt_id": status_prompt_id, "prompt": "检查现状"
+        })
+        marker = hook._status_stop_marker(session_id)
+        self.assertTrue(marker.exists())
+
+        class UnremovableMarker:
+            def exists(self):
+                return True
+
+            def unlink(self):
+                raise PermissionError("marker is not removable")
+
+        with mock.patch.object(hook, "_status_stop_marker", return_value=UnremovableMarker()):
+            result = hook.handle_user_prompt({
+                "session_id": session_id, "prompt_id": followup_prompt_id, "prompt": "继续实现解析器"
+            })
+        self.assertIsNone(result)
+        self.assertIs(prior_work.load_requirement(manifest, session_id).get("status_only_stop"), False)
+        self.assertTrue(marker.exists())
+        self.assertEqual(hook.handle_stop(stop)["decision"], "block")
+
+    def test_nonstatus_prior_signal_consumes_status_marker(self):
+        session_id = "session-status-stop-prior-signal"
+        hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的解析器"})
+        manifest = hook._manifest()
+        status_prompt_id = "status-prior-signal"
+        followup_prompt_id = "followup-prior-signal"
+        stop = {"session_id": session_id, "prompt_id": followup_prompt_id, "stop_hook_active": False}
+
+        hook.handle_user_prompt({
+            "session_id": session_id, "prompt_id": status_prompt_id, "prompt": "检查现状"
+        })
+        marker = hook._status_stop_marker(session_id)
+        self.assertTrue(marker.exists())
+        hook.handle_user_prompt({
+            "session_id": session_id, "prompt_id": followup_prompt_id, "prompt": "复用以前的另一个解析器"
+        })
+        self.assertFalse(marker.exists())
+
+        result = hook.handle_stop(stop)
+        self.assertIsNotNone(result)
+        self.assertEqual(result["decision"], "block")
+        self.assertIsNot(prior_work.load_requirement(manifest, session_id).get("status_only_stop"), True)
 
     def test_pending_requirement_is_not_released_by_ordinary_prompt(self) -> None:
         session_id = "session-current-status"
@@ -1246,7 +1596,7 @@ class PriorWorkHookTests(unittest.TestCase):
         hook.handle_user_prompt({"session_id": session_id, "prompt": "复用以前的 provider contract"})
         manifest = hook._manifest()
         run = prior_work.retrieve(manifest, "Reuse the verified provider contract.",
-            ["provider contract"], "reuse provider", ["provider contract"], session_id)
+            ["provider contract"], "reuse provider", ["provider contract"], session_id, filesystem_scopes=[str(self.source)])
         prior_work.complete(manifest, run["run_id"], session_id,
             [run["candidates"][0]["candidate_id"] + "=reuse current contract"], [], [], [], None)
         stop = {"session_id": session_id, "stop_hook_active": False}
@@ -1457,7 +1807,7 @@ class PriorWorkHookTests(unittest.TestCase):
             "reuse provider",
             ["provider contract"],
             session_id,
-        )
+         filesystem_scopes=[str(self.source)])
         candidate = run["candidates"][0]
         prior_work.complete(
             manifest,

@@ -39,6 +39,21 @@ Distinguish delivery stages separately: **attempted** → **API or transport acc
 - **Unknown sends retain their identity and must not auto-replay** — an unacknowledged send is reconciled explicitly, not blindly re-sent, or one transport hiccup multiplies into repeat pages.
 - **Recovery pairs to the prior accepted failure** — old or unknown successes do not clear a current incident; a recovery notice means nothing unless the failure notice it answers actually reached the channel.
 
+### Adaptive cadences, quiet windows, and startup delays
+
+When a watched job uses adaptive backoff, quiet hours, or a delayed first run after restart, checking only downstream work-ledger timestamps guarantees false stall alerts (or, if widened naively, hides a dead scheduler for a full day).
+
+- **Use dual-layer liveness.** Make the primary check verify scheduler heartbeats (idle, quiet-window, skipped, completed, and startup `started` lines) within a short window (e.g. `2.5×` the base heartbeat interval), and widen the downstream work-ledger idle floor to cover worst-case backoff plus the quiet window whenever the scheduler heartbeat is confirmed healthy.
+- **Include startup heartbeats.** If the scheduler intentionally delays its first round by one full interval after container or process restart, include the startup event in the heartbeat pattern so deployments do not trigger a false missing-heartbeat page during the first interval.
+- **Suppress during known standdown states.** Suppress missing-heartbeat and stall alerts when the job is intentionally paused or legitimately stopped by an expected daily budget cap.
+
+### Primary-channel blackout and probe blindness
+
+A watchdog whose primary notification transport or remote probe fails silently becomes indistinguishable from a healthy system.
+
+- **Never swallow delivery failures silently.** When sending an alert or recovery notice fails, write a clear diagnostic line to `stderr` (never exit `0` with an empty error log) and, when authorized on the host, emit a bounded local fallback notification so outages in a remote messaging relay do not create a silent blackout.
+- **Alert on consecutive probe blindness.** Persist a consecutive `unreachable_streak` counter across runs whenever a remote target (SSH/HTTP) cannot be reached; reset it on the next healthy probe, and raise an explicit unreachable alert once the streak crosses the configured threshold instead of silently skipping target log checks.
+
 ## Notification throttling
 
 The measurable harm is fatigue, not the notification itself: teams receiving >120 alerts/day showed 46% slower response and 23% lower resolution accuracy; an alert-to-actionable ratio below ~20% means you have a noise problem, and noise trains the human to ignore the channel that matters.
@@ -48,6 +63,29 @@ Rate pattern for repeated identical failures (from the published dynamic rate-li
 - **Critical**: notify immediately, then exponential backoff per identical failure — 5 min → capped at 30 min.
 - **Lower severity**: initial 15-min delay, backoff capped at 2 h.
 - **Entering cool-down**: exactly one notification saying "standing down for X, will retry then, silence until then" — this single message is what makes the silence trustworthy rather than indistinguishable from a dead watchdog.
+
+### Channel isolation and fingerprint stability
+
+Two common causes of alert fatigue happen even when a cooldown or renotify timer exists:
+
+- **Isolate ops alerts from shared business channels.** Infrastructure and scheduler health alerts do not belong in a shared collaboration or document-update group where periodic cards drown out team updates. Route single-operator alerts to a dedicated **bot 1:1 direct message** where the messaging transport supports bot DMs (or a dedicated ops-only channel/webhook or local surface otherwise), and route multi-operator or shared-on-call alerts to a dedicated ops channel rather than one person's DM. Prefer an app/bot identity over a personal user OAuth token for unattended senders (avoids periodic user-token refresh outages and separates alert threads from personal chat), and pin the resolved destination ID in config so misrouted sends fail closed. After switching destinations, confirm **recipient-side delivery** per `## Delivery stages, cooldown, and recovery` when a read-only recipient probe exists: verify the new target displays the delivered card, and after at least one post-reload alert-emitting cycle confirm the retired group has zero new ops alerts after cutover.
+- **Keep incident fingerprints stable across volatile counters and in-progress worker snapshots.** Incident fingerprints must capture the actionable failure class, never counters or totals that jitter across runs (such as round counts, elapsed hours, or fluctuating per-source completion tallies). When a watched periodic worker overwrites its health file at cycle start with a fresh in-progress status that omits terminal fields, prefer fixing the producer first so terminal fields remain sticky across heartbeats (`references/quiet-watchdog-patterns.md` Pattern 9). When you cannot modify the producer, guard the consumer state machine across **all three** transition paths while an in-progress snapshot is fresh (within its stuck-running timeout):
+  1. **Change transitions:** suppress same-severity change alerts caused only by omitted terminal fields, while still alerting immediately when a brand-new orthogonal failure cause or severity escalation appears.
+  2. **Recovery transitions:** suppress recovery notices until a completed non-in-progress cycle confirms the fault cleared.
+  3. **Scheduled renotify and baseline persistence:** keep scheduled renotify and stuck-running alerts active, and preserve the last emitted terminal fingerprint and issue set when renotifying during an in-progress snapshot — overwriting the baseline with the transient in-progress shape causes a spurious change alert on the very next terminal poll.
+
+## Queue throughput and issue cardinality
+
+A notifier has a measurable drain rate. Before enabling per-issue notifications, compare the number of distinct active issues with `backlog_horizon / send_interval`. In a hypothetical 42-issue burst with a 6-second send interval and a 180-second horizon, only 30 messages can leave the queue; 12 remain. With continued arrivals, the oldest still-pending item will exceed the threshold even when every send succeeds.
+
+When active issue cardinality exceeds drain capacity:
+
+- aggregate issues that share one operator action or root cause into one message;
+- keep per-issue detail in the durable state/event log, not the chat channel;
+- treat a notification-backlog signal as a ticket about the notification system, not another page that re-enters the same unthrottled queue;
+- suppress or coalesce the backlog alert itself until the queue is below the measured capacity.
+
+**War story.** A capture inspector exposed more distinct active issues than the notifier could drain inside its backlog horizon. The queue therefore declared backlog even while sends were succeeding, and that alert became another queued message that amplified the condition it described.
 
 ## Message content
 

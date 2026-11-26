@@ -453,7 +453,7 @@ For full Tailscale compatibility with proxy tools, apply all four fixes:
 
 ### Quick Verification
 
-After any fix, always verify:
+For direct-path fixes, always verify:
 
 ```bash
 # Route should go through Tailscale utun, not en0
@@ -471,6 +471,11 @@ curl -s -o /dev/null -w "%{http_code}" http://<tailscale-ip>:<port>/
 
 # Browser must work (open in Chrome, no 503)
 ```
+
+**DERP-userspace exception:** If the main Skill's
+[Step 2B-1](../SKILL.md#step-2b-1-tailscale-onlinederp-but-ordinary-ssh-tcp-times-out) applies,
+do not use the direct-path checks above as recovery gates; follow its
+[Step 6 DERP-userspace acceptance](../SKILL.md#step-6-verify-end-to-end).
 
 ### SSH Non-Login Shell Pitfall
 

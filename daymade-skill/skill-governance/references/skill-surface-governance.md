@@ -170,22 +170,82 @@ can be selected without copying its computed membership into a per-Skill list.
 Keep the host-specific policy in the source owner's manifest; do not add
 third-party cold bundles merely to explain why they exist on disk.
 
+### Case: stale deployment-worktree symlinks or a worktree holding `main`
+
+When a PR has merged to `origin/main` yet `~/.agents/skills/<name>` or
+`~/.claude/skills/<name>` still serves older content, check for two common
+local drift states before blaming the host cache:
+
+1. **Drifted symlink targets**: inspect `readlink` across user Skill roots for
+   aliases pointing into temporary or retired deployment worktrees (for example
+   `*-deploy` or disposable review worktrees) instead of the canonical source
+   checkout. Re-point them through the source owner's syncer (dry-run, then
+   apply) rather than hand-editing individual links into temporary directories.
+2. **Stale worktree holding `main`**: if `git worktree list` shows an old
+   linked worktree still holding `[main]` and blocking the canonical checkout
+   from switching to or fast-forwarding `main`, audit that worktree's
+   `git status` first. Back up any uncommitted WIP to a timestamped archive
+   with hashes before detaching (`git checkout --detach HEAD`) or removing the
+   stale worktree; never discard unbacked work.
+
+After reconciling the canonical `main` checkout and re-running the source
+syncer, verify consumed-path readback against the published commit SHA.
+
+When a host deliberately uses clean detached deployment mirrors (`*-deploy`) across
+multiple skill repositories so active WIP in primary checkouts is never disturbed:
+
+- advance **every** affected mirror (for example both public and private `*-deploy`
+  checkouts) to the verified merged commit SHAs rather than only the primary repo;
+- inspect `git -C <primary-checkout> status --short -- <skill-dir>` for each
+  affected skill before redirecting `~/.agents/skills/<name>`: re-point clean
+  downstream skills to the updated `-deploy` mirror, and leave any skill with
+  active uncommitted WIP in the primary checkout untouched while reporting it
+  explicitly as retained WIP.
+
 ### Case: the source alias resolves into concurrent work
 
 The delivery executor resolves the installed alias at readback time and compares
-the files the host will consume with the intended immutable published bundle.
-A merged PR, a matching plugin version or a valid source link cannot establish
-that content match. Compare the shipped entry, references and required helpers;
-checking only the file changed in this release can miss a different dependency.
+the complete distribution the host will consume with the intended immutable
+published bundle. For a Claude plugin, suite installation or multi-host claim,
+that means the whole owning plugin source tree, every suite member and plugin
+helper, plus the plugin's exact marketplace entry. A single-Skill comparison
+cannot establish that scope. For a Codex-only direct Skill link with no Claude or
+suite claim, the individual Skill bundle and registered identity may be compared;
+label the verdict `Codex-only` and do not extend it to the plugin. A merged PR,
+matching plugin version, valid source link or partial comparison cannot establish
+the claimed scope.
 
 For example, an alias may point into the canonical checkout while another session
 has it on a feature branch. The branch name alone is neither success nor failure:
-if the expected shipped bundle matches, retain that content evidence; if it differs,
+if the expected distribution matches, retain that content evidence; if it differs,
 local adoption is still unverified even though publication succeeded. Identify the
-actual differing files and coordinate with the writer, preserving their work.
-Use the existing source-sync owner and approved activation policy for any needed
-reconciliation; do not switch their branch, copy a new cache or redirect the alias
-into a disposable review worktree to manufacture a match.
+actual differing paths and coordinate with the writer, preserving their work.
+When adoption is authorized, follow the source owner's
+[published-content adoption procedure](https://github.com/daymade/claude-code-skills/blob/a5dc7829ef3222e1234df08bbbc5de5cbccb48ad/daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md#adopt-published-content-into-a-canonical-checkout-with-wip);
+do not switch their branch, copy a new cache or redirect the alias into a
+disposable review worktree to manufacture a match.
+
+**Installed-content readback checklist.** Resolve the installed alias, then read
+the target checkout's current branch, full HEAD, index fingerprint and bounded
+working-tree status as diagnostic context. Enumerate the published tree for the
+claimed host scope and the current tree in both directions. Bind every path's
+mode, object type
+and Git blob identity; for symlinks bind the link text without following it. Check
+added, deleted, renamed and unchanged paths, and compare the target marketplace
+entry with the published object. At least one version-specific marker is useful
+for human orientation, but it is not a substitute for complete identity.
+
+Report `installed-content=match` only when that complete distribution matches.
+Any consumed-path difference, incomplete enumeration or unknown identity is
+`installed-content=stale|unknown`. Within the packaging-policy distribution, a
+staged delta or novel/ambiguous unstaged, untracked or ignored content inside the
+adoption unit blocks content-only adoption. Excluded runtime artifacts do not
+enter this comparison. A worktree difference that exactly matches a recorded
+published ref, with no staged delta, is prior adoption residue: record its
+provenance and the old-index state. Unrelated WIP outside the unit may remain. After an authorized
+adoption, an old index can intentionally leave adopted paths unstaged: report
+that state and require owner reconciliation before any commit. Do not overwrite
+the worktree ad hoc.
 
 Then run the requested fresh-host catalog check and, when task behavior is part
 of delivery, observe the host consume the Skill and check its result separately.
@@ -281,17 +341,94 @@ Before any removal:
 
 Never delete every version except the numerically latest as routine hygiene.
 
+### Choose the installation source before repair
+
+A local Marketplace path is not automatically the published source. Before any
+install, update or Marketplace switch, resolve its `source` and compare the
+complete host-scoped distribution with the intended immutable published ref,
+using §5's installed-content readback checklist. Prefer the official GitHub
+Marketplace for durable use. A checkout with unrelated WIP, a feature branch,
+or a HEAD behind the published merge is not an installation source merely
+because it is convenient or already declared.
+
+`claude plugin marketplace add <owner/repo>` registers the repository's current
+default branch; it does not pin a commit. After registration or update, read the
+Marketplace checkout's full HEAD and compare the complete host-scoped
+distribution with the intended published commit. If the default branch has moved
+or the cache is stale, do not call the result an immutable-ref installation.
+When exact bytes are required, use a detached checkout or external artifact at
+that commit, record its full SHA, and keep the temporary path out of the final
+adoption claim.
+
+After temporary-source use, restore the durable official source with the current
+CLI's in-place source replacement when it supports the same Marketplace name.
+Do not assume a bare `add` refuses a collision: current Claude Code can replace a
+same-name directory source in place. Determine the installed version's behavior
+from its help, release notes or an isolated disposable-profile probe before
+migrating. Prefer in-place `add`/update because it retains installed-plugin
+records, options and persistent data; never use remove-and-restore merely because
+the old and new source paths differ.
+
+When the installed CLI does not support in-place replacement, or managed policy
+blocks it, stop at a reversible plan. `marketplace remove` from the last relevant
+scope can uninstall its plugins and delete saved options, secrets and data. That
+path is a destructive exception, not an ordinary source switch. It requires
+explicit authorization for the affected data plus a verified backup and restore
+path for every affected plugin's options, secrets, persistent data and user
+configuration. If any state cannot be preserved and restored, retain the current
+source and report the blocker; do not proceed on the strength of reinstall
+commands alone.
+
+After either supported path, update or reinstall the affected plugins, repeat the
+same complete host-scoped comparison and fresh-host catalog check, and verify the
+plugin-state layers below.
+
 ### Marketplace source changes
 
-Do not blindly run remove-then-add. Removing a marketplace from its last scope
-can uninstall its plugins. For Daymade maintainer local-source switching, route
-to the current `claude-switch-models-setup` workflow. For any other marketplace:
+Do not blindly run remove-then-add. First capture a migration receipt that binds
+all of these layers, not only the two CLI inventories:
 
-1. inventory installed plugins and scopes;
+- `claude plugin list --json` and `claude plugin marketplace list --json`;
+- the read-only install ledger (`installed_plugins.json`) for each affected
+  plugin's `gitCommitSha`, scope, projectPath, version and installPath;
+- the Marketplace declarations in `extraKnownMarketplaces` and `enabledPlugins`
+  across user, project and local settings, so declaration scopes and effective
+  enablement remain visible;
+- each affected plugin's ordinary options and userConfig; sensitive options
+  require the CLI's supported secure backup/restore path, never plaintext export;
+- the exact persistent-data directories and other plugin-owned state, with a
+  recoverable copy or move and a post-migration existence/content check.
+
+The current CLI list outputs alone are insufficient: Marketplace JSON omits
+declaration scope and plugin JSON omits the install ledger's `gitCommitSha`.
+Keep registry reads read-only; do not hand-edit install records to simulate a
+successful migration. Record the old source, intended source identity, published
+commit, affected plugin/scope set and rollback command before changing anything.
+
+For an in-place migration, add the intended source with the current CLI, update
+or reinstall affected plugins, then compare the complete before/after receipt:
+source and Marketplace entry, exact install commit and host-scoped distribution,
+all declaration scopes, enabled state, options/userConfig, and persistent data.
+Prove the final Marketplace list contains the intended durable source and no
+temporary alias. A successful source-change message does not prove plugin state
+survived.
+
+Only use remove-and-restore when in-place migration is unavailable and the
+separate destructive authorization and complete state-restore path above are
+satisfied. After restoring, run the same complete receipt comparison and restore
+every unintentionally removed plugin. Missing state evidence keeps adoption
+unverified.
+
+For Daymade maintainer local-source switching, route to the current
+`claude-switch-models-setup` workflow. For any other marketplace:
+
+1. inventory installed plugins, declaration scopes and plugin-owned state;
 2. freeze the intended replacement source identity;
-3. define how installs survive or are restored;
+3. select in-place migration, or document why the destructive exception is
+   unavoidable and authorized;
 4. perform the source change with current official commands;
-5. verify marketplace source, plugin installs, scopes, and a fresh session.
+5. verify Marketplace source, exact install identity, plugin state, scopes, and a
+   fresh session.
 
 ## 8. Reconcile a suite migration
 
@@ -313,6 +450,27 @@ design belongs to `marketplace-dev`.
 6. Uninstall each superseded standalone identity only after its replacement
    passes all checks.
 7. Read back plugin state and, where relevant, the fresh model catalog.
+
+### Reconcile a compatibility-alias Skill rename
+
+When a published Skill rename keeps the old plugin as a thin compatibility alias
+(so legacy callers do not break immediately), reconcile all active host surfaces
+so hooks and discovery do not duplicate:
+
+1. **Deduplicate Claude plugin hooks:** enable `<new>@<marketplace>` and set
+   `"<old>@<marketplace>": false` in `~/.claude/settings.json` (keeping the alias
+   directory/scripts available for CLI fallbacks without running its plugin hooks
+   a second time).
+2. **Migrate sibling-host hook and hot-catalog configs:** update the host's hot
+   catalog (for example `~/.gemini/config/skills.json`) and hook registry (for
+   example `~/.gemini/config/hooks.json`) from the old entry name to the canonical
+   name while preserving unrelated hooks.
+3. **Rebind external runtime pointers:** check `~/.config/<old>/` (or equivalent
+   guard/helper config files) for script paths still pointing at the old skill
+   directory, update them to the canonical script path, and run one live synthetic
+   negative probe proving the guard fires once on the new path.
+4. **Read back end-to-end:** verify the resolved symlink targets, effective host
+   configs, and single-fire behavior independently before reporting activation.
 
 ## 9. Audit project dual roots
 
@@ -460,6 +618,9 @@ audit when the user asks.
   either copy can be deleted without identifying the owner and replacement.
 - **Current session still shows retired entries:** restart; startup metadata is
   not retroactively rewritten.
+- **A renamed Skill's hook fires twice after migration:** both the canonical plugin
+  and its compatibility-alias plugin (or sibling-host hook entries) are still active;
+  reconcile via §8 "Reconcile a compatibility-alias Skill rename" and re-probe.
 
 ## 14. Verify a newly registered Skill
 
@@ -594,6 +755,11 @@ does anyone other than a typed slash command start it?
 Record the thresholds, the per-Skill decision, and the backup path in the change
 report. Never hide a batch selected by install location, marketplace, or name
 pattern without running steps 1–5 on each member.
+
+### Host-specific enforcement boundaries (verified)
+
+- **Claude Code `2.1.x` plugin boundary**: `skillOverrides` (`"user-invocable-only"` / `"off"`) only governs personal (`~/.claude/skills`), project, built-in, and `anthropic-skills:*` Skills. Skills bundled inside enabled non-Anthropic marketplace plugins bypass `skillOverrides` and remain `"on"`. To hide a standalone cold plugin from Claude's model prompt, disable it in `enabledPlugins` (keeping `~/.agents/skills/<name>` intact for on-demand lookup via `skills-search`). Suite plugins that bundle a hot Router alongside cold children stay enabled in `enabledPlugins` unless split at source.
+- **Antigravity (`agy`) projection & transcript collection**: Antigravity has no `user-invocable-only` mode and enforces a strict `<skills>` context budget (~144 items). Project the Hot Set into `~/.gemini/config/skills.json` using `include_only` (non-destructively preserving sibling entries/keys) and keep cold Skills discoverable via Agent-native `local-skills-search` MCP browsing. When parsing Antigravity `transcript.jsonl`, unwrap JSON-quoted `Path` strings in `read_file`, count only installed paths (`/.agents/skills/`, `/.claude/skills/`, `/.codex/skills/`) to avoid workspace dev/audit pollution, and do not double-count `call_mcp_tool(ToolName="get_local_skill")` calls already logged in `telemetry.jsonl`.
 
 
 ## 16. Audit an explicit delivery contract

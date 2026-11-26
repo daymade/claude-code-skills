@@ -78,6 +78,27 @@ stdout and stderr, and distinguish a budget-ended transfer with received payload
 from a DNS, authentication or connection failure. Do not turn a failed probe's
 zero bytes into a low-throughput sample.
 
+## Recover a live LAN copy with uneven streams
+
+Read the existing copy's receiver-side progress first, including growing
+partial files. If the rate still threatens delivery, compare one bounded fresh
+connection in the same direction over the verified LAN route. Keep the
+existing transfer's rate and the new connection's rate tied to their observed
+intervals. Two SSH streams can guide a recovery choice on that route. Use
+independent stacks when the investigation needs to isolate application behavior.
+
+In a direct LAN copy, the ongoing transfer moved about 19 MB/s shortly before a
+small fresh SSH sample reached about 75 MB/s. The resumed copy later slowed
+again. Two streams handling disjoint manifest batches finished the copy. The
+wireless slowdown's cause remained unknown.
+
+If a resumed copy still threatens delivery and the bounded comparison supports
+trying two streams, use the original tool's resume mode. Reuse the valid
+partials, assign each remaining path to one writer and keep both streams on the
+verified route. Check net progress across both streams and end probing when the
+actual copy is advancing acceptably. Verify the receiver against the agreed
+manifest at completion.
+
 ## Budget the protected experiment and verify recovery
 
 Before any disruptive change, resolve **tunnel-doctor** and load its

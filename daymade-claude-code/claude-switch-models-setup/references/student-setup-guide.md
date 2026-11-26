@@ -77,7 +77,6 @@ Example for Kimi:
     "CLAUDE_CODE_SUBAGENT_MODEL": "kimi-k2.7-code",
     "DISABLE_GROWTHBOOK": "1",
     "DISABLE_TELEMETRY": "1",
-    "DISABLE_AUTOUPDATER": "1",
     "ENABLE_TOOL_SEARCH": "false"
   }
 }

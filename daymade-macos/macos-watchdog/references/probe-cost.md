@@ -60,7 +60,19 @@ No workflow's default interval is a global minimum: short-lived states may requi
    business timestamp, error exit and duration. Interactive speed or launchctl
    registration alone does not pass. Respect other active workloads when a test
    would pause the host. Treat simulated interruption and real sleep/wake
-   continuity as separate acceptance evidence.
+   continuity as separate acceptance evidence. Bind every health verdict to the
+   exact completed attempt's `attempted_at`, `completed_at` or `attempt_id`. A
+   later round can supersede an earlier timeout or success while other closeout
+   work is still running; report the earlier state only as history. One
+   successful round establishes that attempt's health, not permanent future health.
+7. When the job runs installed byte-copies instead of the source in place, also
+   verify the reverse direction: healthy or merged source does not prove the
+   runtime was refreshed. Stamp the declared managed files with their selected
+   source location and content hashes; report `current`, `stale`,
+   `source-unavailable` or `no-stamp` from status and each completed round's
+   health record. Exercise unchanged and source-advanced inputs, then require a
+   real completed native round to report `current`. An install receipt, missing
+   stamp or corrupt stamp is not freshness evidence.
 
 Execute these checks as the deploying operator. Use workload-specific counters
 and regression tests; this Skill supplies no universal scan detector. Keep

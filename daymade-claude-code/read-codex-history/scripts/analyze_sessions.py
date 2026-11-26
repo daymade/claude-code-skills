@@ -33,7 +33,11 @@ from collections import Counter, defaultdict
 # script's own dir importable regardless of how it is invoked, then import.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _core.claude import scan_claude_session  # noqa: E402
-from _core.codex import codex_meta_from_rollout, codex_session_id  # noqa: E402
+from _core.codex import (  # noqa: E402
+    codex_meta_from_rollout,
+    codex_session_id,
+    iter_codex_rollout_files,
+)
 from _core.native_output import native_command_segments, distinct_result_segments  # noqa: E402
 from _core.kimi import (  # noqa: E402
     iter_kimi_session_dirs,
@@ -394,7 +398,7 @@ def discover_codex_rollouts(
     rollouts: List[Path] = []
     sessions_dir = codex_home / "sessions"
     if sessions_dir.is_dir():
-        for path in sessions_dir.rglob("*.jsonl"):
+        for path in iter_codex_rollout_files(sessions_dir, "*.jsonl"):
             rollouts.append(path)
             if on_progress is not None and len(rollouts) % 256 == 0:
                 on_progress(len(rollouts))
@@ -426,7 +430,7 @@ def locate_codex_rollouts(codex_home: Path, session_id: str) -> List[Dict[str, A
     sessions_dir = codex_home / "sessions"
     if sessions_dir.is_dir():
         candidates.update(
-            sessions_dir.glob(f"*/*/*/rollout-*-{normalized}.jsonl")
+            iter_codex_rollout_files(sessions_dir, f"rollout-*-{normalized}.jsonl")
         )
     archived_dir = codex_home / "archived_sessions"
     if archived_dir.is_dir():

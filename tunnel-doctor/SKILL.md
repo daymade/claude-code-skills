@@ -44,6 +44,10 @@ probe to verify that it stopped.
 
 ## Disruptive network changes
 
+Before a remote bulk copy, load [transfer path preflight](references/transfer-path-preflight.md).
+It owns the executable checks for LAN availability, actual Tailscale underlay,
+fresh evidence and bounded throughput sampling; an address or `direct` label is insufficient.
+
 Before any authorized VPN disconnect, app termination, route cutover, or service restart,
 read [network_change_recovery.md](references/network_change_recovery.md). Validate prerequisites
 before interruption, arm bounded recovery before the first disruptive action, and verify both
@@ -92,7 +96,7 @@ Determine which scenario applies:
 - **Browser returns HTTP 503, but `curl` and SSH both work** → System proxy bypass conflict (Step 2C)
 - **`local.<domain>` fails in browser/default `curl`, but direct/no-proxy request works** → Local vanity domain proxy interception (Step 2C-1)
 - **Tailscale ping works, SSH works, but curl/HTTP times out** → HTTP proxy env var conflict (Step 2A)
-- **Tailscale ping works, SSH/TCP times out** → Check route ownership (Step 2B); a matching symptom alone does not prove a route conflict.
+- **Tailscale ping works, SSH/TCP times out** → Check route ownership (Step 2B); if the peer is online only via DERP and ordinary TCP 22 still times out, use Step 2B-1. A matching symptom alone does not prove a route conflict.
 - **Tailscale IPv4 SSH times out, or an alternate peer address triggers host-key verification** → Read [same-peer IPv4/IPv6 SSH recovery](references/tailscale_address_family_ssh.md) before declaring the host offline or changing trust/network state.
 - **Remote dev server auth redirects to `localhost` → browser can't follow** → SSH tunnel needed (Step 2D)
 - **`make status` / scripts curl to localhost fail with proxy** → localhost proxy interception (Step 2E)
@@ -103,6 +107,7 @@ Determine which scenario applies:
 - **`docker build` can't fetch base images** → VM/container proxy propagation (Step 2G)
 - **`docker pull` works but `docker build` still dies fetching base-image tokens (TLS/i-o timeout) on a WSL2 + Docker Desktop host, or every runbook proxy port on a Windows+v2rayN host silently died after a v2rayN upgrade** → buildkit direct-dials past the DD proxy override / v2rayN ≥7.17 LAN-port split (references/windows_host_tun_wsl_cascade.md §2026-08-23)
 - **`git clone` fails with `Connection closed by 198.18.x.x`** → two different mechanisms produce this; Step 2H separates them
+- **`gh api` / GitHub Actions reads fail with EOF or reset, or a proxy-generated 403 while ordinary HTTPS works** → first consult `~/.claude/references/site-access-matrix.md`; `gh` does not inherit the system proxy, so use its recorded explicit proxy and bounded retry. Treat remote Actions `pending/queued` as remote queue state, not proof of a local tunnel failure. A GitHub-origin `403`/`429` is separate: inspect rate-limit headers, error text, authentication and permissions before retrying or changing network path.
 - **Every domestic/DIRECT-rule site fails at once (TLS `unexpected EOF` mid-handshake, proxy-port CONNECT returns 503, Node CLIs report `UNKNOWN_CERTIFICATE_VERIFICATION_ERROR`) while proxied overseas sites keep working** → TUN DIRECT split-brain (Step 2J)
 - **One hostname fails after a DNS/delegation move while other sites work** → read [single-host DNS migration](references/single-host-dns-migration.md) before diagnosing a broken forwarding plane or restarting a shared tunnel.
 - **Everything on macOS fails at once — domestic AND overseas, and even Step 2J's real-IP probe fails** → do not declare an outage yet; run the physical-interface discriminator in "TUN full-stall vs genuine outage" (above Step 2A)
@@ -118,6 +123,13 @@ Determine which scenario applies:
 - **Windows+WSL host: everything offline at once (domestic AND overseas), WSL dead too, "even Tailscale won't come online" — and/or the user tried several recovery actions (switched NICs, toggled TUN) and can't tell which one fixed it** → Windows host TUN cascade + event-log forensics (Step 5C)
 - **Tailscale, DNS, route ownership, and proxy reachability all pass, but large transfers remain slow and switching the active proxy node changes throughput** → proxy node / exit / chain capacity workflow in [references/proxy_node_chain_throughput.md](references/proxy_node_chain_throughput.md)
 - **You want one app's bulk traffic (BaiduNetdisk downloads, Feishu/Lark uploads) off the metered proxy — or out of the status-bar counter entirely** → not a conflict; a splitting task. Use the existing local traffic-splitting workflow if one is installed and verified; this skill does not bundle a splitter, target list, replay helper or subscription-wipe guard. For mechanism diagnosis, read [references/proxy_conflict_reference.md](references/proxy_conflict_reference.md) § "Per-app traffic splitting on macOS" — which of the three mechanisms (DIRECT rule / `tun-excluded-routes` / `always-real-ip`) can work for the app depends on whether it connects to literal IPs or the system resolver, and the DNS-layer keys are inert on the macOS Catalyst build.
+
+### GitHub API and Actions under TUN
+
+- The site-access matrix is the authority for `api.github.com`; do not infer the route from a fake IP or from one successful browser request. When it specifies an explicit proxy, set it on the `gh` process itself and keep retries bounded.
+- A local EOF does not establish that a GitHub Actions run stopped. Query the exact run through the working API path, or from a clean observer, and separate `queued`, `in_progress`, `completed/failure` from transport failure.
+- A GitHub-origin `403` or `429` is not a transport symptom. Read `x-ratelimit-*`, `retry-after`, the error message and the authenticated identity first; back off or correct auth/permissions instead of reflexively switching tunnel route.
+- An unauthenticated request to a private repository API can return `404`; that is an identity/coverage result, not evidence that the run or repository object is absent.
 
 **Key distinctions**:
 - SSH does NOT use `http_proxy`/`NO_PROXY` env vars. If SSH works but HTTP doesn't → Layer 2.
@@ -334,6 +346,31 @@ Two competing routes indicate a conflict:
 
 **Root cause**: On macOS, `UGSc` (Static Gateway) takes priority over `UCSI` (Cloned Static Interface) for the same prefix length.
 
+### Step 2B-1: Tailscale online/DERP but ordinary SSH TCP times out
+
+`tailscale status` and `tailscale ping` prove control-plane or peer reachability, not that
+ordinary TCP 22 is usable. If ping reports `via DERP(...)` with no direct path and SSH times
+out, do not call the host offline. First preserve the observed route and verify that the
+target is an authorized machine.
+
+When tailscaled's userspace path works, use the standalone Tailscale binary as the SSH
+`ProxyCommand`:
+
+```sshconfig
+Host <approved-tailnet-host>
+  HostName <tailnet-ip>
+  HostKeyAlias <existing-trusted-host-key-alias>
+  StrictHostKeyChecking=yes
+  ProxyCommand /Applications/Tailscale.app/Contents/MacOS/Tailscale nc <tailnet-ip> 22
+```
+
+Use the absolute executable path in Ansible, launchd and other non-interactive callers;
+interactive shell aliases are not loaded there. Keep strict host-key verification and use a
+small bounded retry count for transient banner timeouts. Retries absorb a bad connection
+window; they do not prove host health. Verify the original authenticated command (for
+example, `hostname; id -un`) and then the original workload. `tailscale nc` carries a TCP
+stream only; it does not establish UDP or arbitrary application connectivity.
+
 ### Step 2C: Fix System Proxy Bypass (Browser 503)
 
 **Symptom**: Browser shows HTTP 503 for `http://<tailscale-ip>:<port>`, but both `curl --noproxy '*'` and `curl` (with proxy env var) return 200. SSH also works.
@@ -362,6 +399,16 @@ skip-proxy = 192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12, 100.64.0.0/10, localhost
 **Why `skip-proxy` works but `tun-excluded-routes` doesn't**:
 - `skip-proxy`: Bypasses the HTTP proxy layer only. Traffic still flows through the TUN interface and Tailscale utun handles it. Safe.
 - `tun-excluded-routes`: Removes the CIDR from the TUN routing entirely. This creates a competing `en0` route that overrides Tailscale. Breaks everything.
+
+#### Step 2C-0: Private IPv6 ULA Overlay Domains (e.g., LazyCat `*.heiyu.space`) and macOS Python `getproxies()`
+
+Private overlay clients such as LazyCat MicroServer (`*.heiyu.space`, `*.lzcapp`, `*.lzcx`, routing through a local IPv6 ULA tunnel like `fc00::/7`) exhibit a clean three-stage proxy signature:
+
+1. **Missing both `DIRECT` rule and `skip-proxy`**: `curl --noproxy '*'` succeeds in tens of milliseconds via the local `fc00::/7` tunnel, while requests sent to the local HTTP proxy (`127.0.0.1:<port>`) get forwarded to a remote exit node that cannot reach the local ULA tunnel and fail with `SSL_ERROR_SYSCALL` or TLS handshake timeout.
+2. **`DIRECT` rule present, `skip-proxy` missing**: requests forced through `127.0.0.1:<port>` fail immediately (<50 ms) with HTTP `503` — the same mechanism as Tailscale `100.64.0.0/10` above, because the proxy process cannot route into the client's private tunnel.
+3. **Both `DIRECT` and `skip-proxy` (`heiyu.space`, `*.heiyu.space`) present**: macOS `scutil --proxy` lists the domain in `ExceptionsList`, `python3 -c "import urllib.request; print(urllib.request.proxy_bypass('file.<box>.heiyu.space'))"` returns `True`, and default clients connect directly through the OS routing stack.
+
+**macOS Python `urllib.request.getproxies()` caveat**: See [proxy conflict reference](references/proxy_conflict_reference.md) for how Python `urllib` falls back to macOS SystemConfiguration even when shell proxy variables are unset. CLI tools that mix public and private targets should honor `proxy_bypass` / `NO_PROXY` and unconditionally bypass loopback, RFC 1918, Tailscale (`*.ts.net`, `100.64.0.0/10`), private IPv6 ULA (`fc00::/7`, `*.heiyu.space`, `*.lzcapp`, `*.lzcx`), fake-IP (`198.18.0.0/15`), and IPv4-mapped IPv6 equivalents of those private ranges (e.g., `::ffff:100.64.0.0/106`, `::ffff:127.0.0.1`).
 
 #### Step 2C-1: Fix Local Vanity Domain Interception (`local.<domain>`)
 
@@ -1193,19 +1240,24 @@ distributed through the App Store or TestFlight.
 2. Download the Standalone build from https://pkgs.tailscale.com/stable/#macos
 3. Install to /Applications
 
-**Post-install CLI setup**: The standalone `tailscale` CLI binary is embedded inside the app bundle. Add an alias to your shell config:
+**Post-install CLI setup**: The standalone `tailscale` CLI binary is embedded inside the app bundle. An alias is optional for interactive shells:
 
 ```bash
-# ~/.zshrc
+# ~/.zshrc — interactive shells only
 alias tailscale="/Applications/Tailscale.app/Contents/MacOS/Tailscale"
 ```
 
-Verify:
+Ansible, launchd, scripts and non-interactive SSH callers must use the absolute binary path;
+they do not load this alias. Verify through the same entry the caller will use:
 
 ```bash
+# Interactive shell
 source ~/.zshrc
 tailscale version
 tailscale ssh <user>@<hostname>   # Should work now
+
+# Non-interactive caller
+/Applications/Tailscale.app/Contents/MacOS/Tailscale version
 ```
 
 ### Step 5C: Windows Host TUN Proxy Takes Down the Whole Machine (Including WSL and Its Tailscale)
@@ -1237,7 +1289,9 @@ ssh -T -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes <appro
 
 Resolve the approved alias against the selected live peer. When changing its address family, preserve its verified host-key identity using the [same-peer SSH recovery](references/tailscale_address_family_ssh.md) procedure; do not disable host-key checking. An unknown or changed key requires an independent identity check before continuing.
 
-All three must pass. If step 1 fails, revisit Step 3. If step 1 shows wrong utun (e.g., Shadowrocket's utun with MTU 4064 instead of Tailscale's with MTU 1280), that is also a route conflict. If step 2 passes but step 3 fails with `kex_exchange_identification`, revisit Step 5A (Tailscale SSH proxy intercept). If step 2 fails, check WSL sshd or firewall. If step 3 fails with other errors, revisit Steps 4-5.
+For a direct-path repair, all three must pass. If step 1 fails, revisit Step 3. If step 1 shows wrong utun (e.g., Shadowrocket's utun with MTU 4064 instead of Tailscale's with MTU 1280), that is also a route conflict. If step 2 passes but step 3 fails with `kex_exchange_identification`, revisit Step 5A (Tailscale SSH proxy intercept). If step 2 fails, check WSL sshd or firewall. If step 3 fails with other errors, revisit Steps 4-5.
+
+**DERP-userspace exception (Step 2B-1):** If ordinary TCP 22 is unavailable and you intentionally used the `tailscale nc` `ProxyCommand`, do not require the direct route or `nc -z` checks to pass and do not claim the ordinary network path was healed. Instead verify that `ssh -G <approved-ssh-alias>` resolves the expected `ProxyCommand`, run the authenticated identity command through that same alias, and run the original workload. Report ordinary TCP 22, UDP and non-SSH application reachability as still unavailable; only the SSH/workload path through Tailscale's userspace stream is verified.
 
 **For DNS-related fixes (Step 2I)**, the three steps above are not sufficient — they don't cover system-DNS recovery. Use the four-dimensional verification at the end of Step 2I instead: daemon health, per-resolver `dig`, `dscacheutil`, and the original failing command run **without** any workaround.
 

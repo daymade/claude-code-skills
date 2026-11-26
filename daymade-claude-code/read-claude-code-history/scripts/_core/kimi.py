@@ -50,7 +50,7 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from .model import Conversation, ProviderResult
 from .parse import TimestampRange, parse_timestamp, workspace_matches
@@ -196,10 +196,12 @@ def load_kimi_state(session_dir: Path) -> Optional[dict[str, Any]]:
     return value if isinstance(value, dict) else None
 
 
-def kimi_wire_time_range(path: Path) -> TimestampRange:
+def kimi_wire_time_range(
+    path: Path, *, on_io_error: Optional[Callable[[], None]] = None
+) -> TimestampRange:
     """Exact internal bounds from wire ``time`` fields (+ metadata created_at)."""
     timestamps = TimestampRange()
-    for record in iter_jsonl(path):
+    for record in iter_jsonl(path, on_io_error=on_io_error):
         timestamps.observe(record.get("time"))
         if record.get("type") == "metadata":
             timestamps.observe(record.get("created_at"))

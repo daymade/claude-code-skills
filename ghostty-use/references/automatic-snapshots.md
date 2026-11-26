@@ -82,6 +82,15 @@ A refreshed install writes `watcher/install-source.json`; `status` reports
 `stale` once the source moves on — treat a merged watcher change as delivered only
 when a completed native round reports `deploy: current`.
 
+Bind the deployment to the maintained primary checkout before retiring a
+temporary one. If a shared primary checkout temporarily blocks installation, a
+clean fallback worktree may own `install-source.json` only until that checkout
+becomes available. Rerun the same enabled-job upgrade command from the maintained
+primary checkout, read back `status.source_dir`, and require a completed native
+round with `deploy: current` before retiring the fallback. Freshness compares
+bytes with the recorded source; `current` alone does not prove that this source
+is the maintained checkout.
+
 The default suits recovery metadata for long-lived sessions: IDs, working
 directories and launch parameters. Chat-body persistence belongs to the conversation
 application. Request a shorter interval when new or replaced sessions need faster
@@ -93,8 +102,10 @@ The supervisor bounds each observation and kills its process group on timeout.
 Failed observations exit nonzero. With Ghostty absent, stand down quietly and retain
 the backup. With Ghostty present but observation empty or failed, report unknown
 and retain the backup. A process graph and batched cwd query select candidate CLI
-processes. UUID-less identities use the manual inventory's bounded cwd/start-time
-resolver and internal session-ID verification; ambiguous matches remain unresolved.
+processes. UUID-less identities use the shared bounded resolver in
+[ghostty_session.py](../scripts/ghostty_session.py) (cwd/start-time transcript
+verification for Claude/Codex; `lsof-brain` filtered by read-only
+`conversation_summaries.db` for `agy`); ambiguous or unindexed matches remain unresolved.
 Do not replace this with an unrestricted history search or index refresh.
 
 ## Verify observation health
@@ -120,10 +131,14 @@ background permissions, sleep/wake continuity or power savings.
 
 Compare the complete restore inventory by tool, session UUID, cwd, profile and
 actual shell-quoted reopen command, including the relevant profile-env prefix.
-Ignore PID, TTY, process order, activity timestamps and age. Automatic snapshots
-freeze their reopen command so a later profile-map edit cannot silently change
-that backup's restoration context. The next observation detects the new mapping
-and saves a new version when it affects a covered session.
+Ignore PID, TTY, process order, activity timestamps and age. Independently compare
+the captured layout projection: native window/tab indexes, ordered session IDs and
+**tab-level** `title_override` values. Ignore automatic titles, selected state,
+window/tab IDs and terminal metadata. A failed or unknown layout capture cannot
+create a layout diff. Automatic snapshots freeze their reopen command so a later
+profile-map edit cannot silently change that backup's restoration context. The
+next observation detects the new mapping and saves a new version when it affects
+a covered session.
 
 Save a small complete manifest on change, not a transcript copy or a chain of
 deltas. Atomic private files and a shared nonblocking writer lock protect manual
@@ -139,14 +154,17 @@ an automatic manifest once. Later equal observations write health only. The defa
 remain available. Restore selection and retry options follow the
 [canonical quick start](../SKILL.md#quick-start).
 
-Each published automatic manifest also records the Ghostty window/tab tree with
-tab titles, `name override` values and TTY-to-session anchors
-(`window_tab_mapping: known` on success); the tree refreshes only when a change
-triggers a publish, so the pre-reboot manual snapshot stays authoritative for
-tab order and titles. The launchd runtime needs one-time Automation
-(Apple-events) authorization for its Python to control Ghostty; without it the
-capture degrades to `captured: false` with that reason, and the last manual
-archive keeps the authoritative manual tree.
+Each completed observation captures the Ghostty window/tab tree with tab titles,
+`name override` values and TTY-to-session anchors when authorized. A new manifest
+is published for either an inventory change or a layout-projection change, including
+setting, editing, clearing or reordering custom tab titles; equal observations
+write health only. On a publish whose current capture fails, the manifest carries
+forward the last captured tree with `carried_forward: true`, `capture_error` and
+`window_tab_mapping: unknown`; a later successful capture refreshes that provenance
+even when the layout itself is unchanged. The pre-reboot manual snapshot remains
+authoritative for changes after the last completed observation. The launchd runtime
+needs one-time Automation (Apple-events) authorization for its Python to control
+Ghostty; without it the capture degrades to `captured: false` with that reason.
 
 ## Partial UUID coverage
 
@@ -156,14 +174,16 @@ Non-Ghostty or missing/empty provenance stays in the original manual archive;
 an unresolved Ghostty observation cannot promote it into automatic scope.
 
 Only Ghostty descendants are observed; unrelated Terminal sessions are excluded.
-Some native Codex TUIs do not expose a session UUID in argv. Resolve them with the
+Some native Codex and Antigravity (`agy`) TUIs do not expose a session UUID in argv.
+Resolve them with the
 shared bounded inventory resolver before recording remaining ambiguities as
 `unresolved`, with their captured flags, profile and cwd. Never guess an ID from
 the newest rollout or an unrelated history row. A Node wrapper and its native
 vendor child count as one TUI. Noninteractive CLI workers are excluded.
 
 Identity parsing consumes known option values before recognizing selectors.
-Unknown option arity, Claude positional prompts, fork selectors and prompts
+Unknown option arity, Claude/`agy` positional prompts, `agy` `-i`/`--prompt-interactive`
+prompts, fork selectors and prompts
 following a Codex resume ID do not establish the current ID from argv. Parseable
 unresolved TUIs use the shared bounded metadata resolver; retain `unresolved`
 when verification cannot settle the identity. `ps` flattens argv and loses quoting: a quoted
@@ -197,9 +217,11 @@ not resumable sessions; use explicit indexed reconstruction and identity
 verification if their session IDs must be recovered. Partial snapshots may retain
 already-closed sessions conservatively; follow
 [current-set reconciliation](restore_mechanics.md#reconcile-the-current-wanted-set)
-before selecting or retrying them. Window grouping remains unknown. Automatic and
-manual inventories share UUID-less identity resolution (session file born after
-process start, same cwd, identity verified); unresolved or ambiguous identities
+before selecting or retrying them. When a captured tree is available, follow
+[recorded tab layout restoration](restore_mechanics.md#restore-recorded-tab-order-and-titles);
+unknown or unsupported grouping retains the legacy process-only boundary. Automatic and
+manual inventories share the bounded UUID-less identity resolver in
+[ghostty_session.py](../scripts/ghostty_session.py); unresolved or ambiguous identities
 remain explicit partial coverage. Calendar observation also cannot capture a
 change that occurs and vanishes between scheduled rounds.
 

@@ -327,6 +327,10 @@ does not lock the repository or freeze another writer.
    repository's update/check policy before claiming readiness.
    Read back the landed commit and owned paths, then release the agreed window.
 
+When both branches add entries to the same changelog or project log, use the fetched base's entries and keep the candidate's distinct additions. Inspect the three-way diff for unrelated deletions or rewrites. Compare the final reviewed files and validation inputs against the previously reviewed candidate and follow the repository's exact-release binding rules. When the affected inputs are unchanged, reuse their evidence and review the integration delta. Apply the repository's normal checks for any changed inputs.
+
+After landing, sync the shared checkout through its supported workflow. If it stops on an uncommitted log entry, preserve that entry and reconcile it against the landed log before resuming the supported sync. Verify that the working copy retains the uncommitted entry and the tracking branch contains the PR. Keep the uncommitted entry outside the PR.
+
 Check repository capability before choosing automatic merge:
 
 ```bash
@@ -374,15 +378,93 @@ real integration issue. When local and hosted results disagree, follow
 [the merge-semantics diagnostic](https://github.com/daymade/claude-code-skills/blob/main/github-review-pr/SKILL.md#when-local-and-hosted-merge-results-disagree)
 before attributing the discrepancy to a cache; local attributes and drivers can
 change merge semantics. Preserve required checks and wait for confirmed mergeability.
-Do not close/reopen the PR or push an empty commit merely to refresh
-that state. A later base/head change invalidates this observation; repeat the
-preflight against the new objects. These are executor checks, not a server-side
-lock on the base branch.
+Except for the single bounded recomputation permitted by
+[Independently green candidate with stale hosted mergeability](#independently-green-candidate-with-stale-hosted-mergeability),
+do not close/reopen the PR or push an empty commit merely to refresh that state.
+A later base/head change invalidates this observation; repeat the preflight against
+the new objects. These are executor checks, not a server-side lock on the base branch.
+
+### Independently green candidate with stale hosted mergeability
+
+A narrow exception exists when all of the following are independently true: the
+remote base was refreshed twice and stayed fixed; the exact PR head did not
+change; `git merge-tree --write-tree <head> <verified-base>` exits `0` with a
+tree; every required check is bound to that exact head and passed; and the
+landing preflight still reports `DIRTY`/`CONFLICTING` from the hosted API. In
+that case, record the pre-reopen API state and perform at most one close/reopen
+solely to force GitHub to recompute mergeability. Re-read the exact head, base,
+checks and mergeability afterward. If it remains dirty, stop and use the
+merge-semantics diagnostic; do not bounce the API, push an empty commit, or
+treat the local tree as permission to bypass a real conflict. This exception
+does not relax exact-head, required-check, review or branch-protection gates.
+
+### Landing preflight
+
+Use the checked helper when one machine-readable observation of landing
+readiness is needed. This is a read-only preflight, not a merge, rebase, branch
+update, CI rerun or authorization:
+
+```bash
+python3 "<github-ops-dir>/scripts/checked_gh.py" \
+  --expected-login EXPECTED_LOGIN --host HOST \
+  --landing-preflight OWNER/REPO#NUMBER \
+  --head FULL_REVIEWED_SHA --base main --local-repo REPO \
+  --remote origin --proxy-source auto --deadline-seconds 240
+```
+
+`--base` and `--head` are required in this mode; `--remote` defaults to `origin`,
+`--proxy-source` to `auto`, and the deadline to 240 seconds (hard maximum). The
+mode is mutually exclusive with `--publication-preflight`,
+`--ack-merge-bypass`, and a trailing `gh` command. It performs, in order:
+`ls-remote` → fetch the explicit base into `refs/remotes/<remote>/<base>` →
+`rev-parse` → a second `ls-remote`; a PR read bound to the exact repository,
+number, URL, open/non-draft state, base and head; `git merge-tree --write-tree`
+without touching HEAD or the worktree; commit-scoped check-runs and statuses for
+the exact reviewed head; and a final PR mergeability read. Check rows are bound
+by their own `head_sha`/`sha`, so an A→B→A PR-head window cannot transfer B's
+check evidence to A; any mismatched row is `unknown/checks_head_mismatch`.
+The receipt records `checks_provenance=commit_scoped`. `skipping` is never a
+pass.
+
+Git child processes set `GIT_NO_REPLACE_OBJECTS=1`, so repository `refs/replace/*`
+cannot silently change the local merge-tree object graph. Local Git version,
+attributes/drivers, partial or shallow state can still differ from GitHub's
+merge semantics. When local and hosted results disagree, follow the
+[merge-semantics diagnostic](https://github.com/daymade/claude-code-skills/blob/main/github-review-pr/SKILL.md#when-local-and-hosted-merge-results-disagree);
+Except for the single bounded recomputation permitted by
+[Independently green candidate with stale hosted mergeability](#independently-green-candidate-with-stale-hosted-mergeability),
+do not close/reopen the PR or push a refresh commit merely to force agreement.
+
+stdout is exactly one schema-version-2 JSON receipt. Exit `0` means `ready`, `2`
+means `unknown` (including input, proxy and transport), `3` means `blocked`, and
+`4` means `pending`; argparse errors in this mode also emit an `unknown` receipt.
+Ordinary reads retry at most three times (20s timeout, 2s/5s backoff); check
+reads use 30s timeout and 30s/60s backoff. HTTP 403/429, malformed JSON and a
+merge-tree conflict are not retried. The deadline stops new calls while keeping
+already observed evidence.
+
+`--proxy-source auto|environment` uses only an explicitly present
+`HTTPS_PROXY` or `ALL_PROXY` (case-insensitive) and records
+`transport.source=environment` without an endpoint. With neither variable it
+returns `unknown/proxy_missing`; it never assumes direct access.
+`--proxy-source none` explicitly selects direct access and removes every proxy
+variable from child environments. Tokens, proxy URLs, raw HTTP bodies and raw
+child stderr are not printed.
+
+A `ready` receipt freezes nothing and grants no merge authority. Re-read the
+live PR and continue through the guarded
+[merge entry](#merging-prs) with the same full `--match-head-commit`; any base,
+head, check or mergeability change invalidates the receipt.
 
 ### Merging PRs
 
 For missing checks or a fork run awaiting approval, first follow
 [the run-state diagnosis](workflow_operations.md#resolve-missing-checks-and-fork-approval).
+When a required or path-matched check fails with zero steps due to a spending-limit/budget
+block and an authorized bypass merge applies, complete
+[pre-merge local CI equivalence](workflow_operations.md#pre-merge-local-ci-equivalence-for-zero-step-budget-blocks)
+for every path-matched workflow at the exact head **before** merging rather than backfilling
+afterward.
 For a disclosed service-initialization failure followed by an explicit instruction
 to merge, follow the [task-level exception case](ci-demand-and-notifications.md#explicit-merge-after-a-service-initialization-failure).
 Before a squash merge, follow the existing
@@ -391,8 +473,17 @@ Before a squash merge, follow the existing
 Before merging, observe the checks required by the task/repository at the exact
 candidate; use `gh pr checks NUMBER -R OWNER/REPO --watch` and inspect its exit
 status, then perform [fresh-base verification](#fresh-base-verification) and reread
-the exact PR head and mergeability. `--auto` follows the requirements actually
-configured on GitHub. If none
+the exact PR head and mergeability. Read the repository's current merge-method
+policy before choosing `--merge`, `--squash`, or `--rebase`; a locally clean
+three-way merge does not imply that GitHub permits merge commits. Repository-level
+`mergeCommitAllowed`, `squashMergeAllowed` and `rebaseMergeAllowed` values are not
+sufficient: the target branch's `pull_request.parameters.allowed_merge_methods` can
+impose a narrower list. Read the repository settings, active rulesets and the effective
+target-branch rule through the [branch protection owner](branch_protection.md),
+and select a method permitted by their intersection. If the chosen strategy is
+rejected, diagnose the repository policy and reviewed-head contract
+instead of switching API or forcing a different strategy. `--auto` follows the
+requirements actually configured on GitHub. If none
 block the merge, it can merge immediately while other CI is still queued. It is
 not a replacement for this check or a way to satisfy a stricter task contract.
 
@@ -416,6 +507,18 @@ checks fresh effective approval and merge state, and then invokes `gh pr merge`.
 It rejects raw REST `PUT .../pulls/NUMBER/merge` and GraphQL `mergePullRequest`
 writes; normal API reads and unrelated mutations remain supported. A rejected
 merge is not permission to change API, retarget the PR or create a refresh commit.
+
+When the base branch enforces `strict: true` required status checks and `mergeStateStatus` is
+`BEHIND`, GitHub can reject even an authorized `--admin` merge with a missing required-check
+error. Instead of pushing a manual refresh commit or disturbing a shared local worktree, update
+the PR branch server-side (via `checked_gh.py` for the mutation), wait for required checks on
+the new head, and re-read `HEAD_SHA` before merging:
+
+```bash
+gh pr update-branch NUMBER -R OWNER/REPO
+gh pr checks NUMBER -R OWNER/REPO --watch --interval 15
+HEAD_SHA=$(gh pr view NUMBER -R OWNER/REPO --json headRefOid --jq .headRefOid)
+```
 
 Use the helper's fixed rejection code and safe next step. The
 [checked-invocation implementation](../scripts/checked_gh.py) owns the reason
@@ -451,7 +554,14 @@ branch protection; a missing response or a legacy API 404 proves neither. Reconc
 the check evidence or obtain the ordinary effective approval rather than changing
 API. Auto-merge and cancellation remain explicit `gh`
 operations; do not combine auto-merge with bypass or infer scheduling authority
-from an ordinary merge request.
+from an ordinary merge request. Keep an authorized `--admin` merge as a single,
+isolated command rather than chaining it with local cleanup (`git branch -D`,
+`git worktree remove`, or multi-step scripts), because compound scripts carrying
+`--admin` can trip host pre-tool safety gates. Note also that under a
+`REVIEW_REQUIRED` ruleset where the actor is a bypass actor, GitHub computes
+`mergeStateStatus` asynchronously right after a push (`UNKNOWN` → `BLOCKED`);
+an ordinary merge that slips through while `UNKNOWN` does not mean the ruleset
+changed, and once `BLOCKED` is computed `gh pr merge` requires `--admin`.
 
 When reporting protection compliance after a merge, inspect the rule suite for
 the exact landed SHA, in addition to checking merged state and landed content:
@@ -645,11 +755,27 @@ interface lacks leases, use the native Git sequence above. Plain legacy
 
 - **A merged PR can still leave its head branch behind.** When a local branch is checked out
   in a linked worktree, `gh pr merge --delete-branch` can report a local deletion failure after
-  the merge succeeded; the hosted branch can also remain. Read the PR state and remote ref
-  independently before retrying anything. Retire a surviving hosted branch through the
+  the merge succeeded; the hosted branch can also remain (for example when the
+  GraphQL merge succeeds but the follow-up REST branch deletion hits an `HTTP 403`
+  rate limit). Read the PR state and remote ref independently before retrying
+  anything (using Git `fetch` / `ls-remote` when REST is rate-limited). Retire a
+  surviving hosted branch through the
   [exact-tip workflow above](#4-retire-remote-branches-only-against-an-exact-saved-tip),
   preserving its current tip first. A failed query remains unknown; local worktree retirement
   stays with `git-safety-net`.
+
+- **When `gh api rate_limit` already shows REST `core` exhausted while `graphql` quota remains**,
+  read check-runs/annotations via `gh api graphql` and omit `--delete-branch` upfront on
+  `gh pr merge` before retiring the ref over SSH Git (see
+  [Separate REST vs GraphQL Quotas](api_reference.md#separate-rest-vs-graphql-quotas)).
+
+- **On a fast-moving public base, repeated `update-branch` can cost more than it preserves.**
+  If a publication/PII guard compares the candidate tree with the old hosted PR head,
+  integrating newer `main` can make already-public base content look newly introduced
+  and block the push. After the reviewed change is unchanged, prefer closing the stale
+  PR and opening one single commit on a stable fetched `main`; a new remote ref is then
+  compared with the verified default branch. Keep the old head until the replacement
+  PR exists, and do not add per-finding PII exceptions for content inherited from `main`.
 
 - **A strict require-up-to-date ruleset can leave the next PR behind after another lands.**
   Read the current base and head, then integrate the new base under the repository's history

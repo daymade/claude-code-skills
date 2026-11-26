@@ -100,7 +100,7 @@ Skills 描述常驻正文按需、以及 **Claude Code 的动态工具选择（�
 
 对不可逆且只能语义判断的规则，保留必要的常驻授权句；现有注入机制可以提醒，但不替代授权或阻断。规则正文保留唯一现行来源，历史记录明确标为历史。
 
-**宿主区别**：Claude 的 `@import` 是展开加载，`.claude/rules/` 无条件规则也常驻；`paths:` 规则依赖匹配文件的读取，不能当作所有工具事件的触发器。Codex 的 AGENTS 层级、override/fallback 与加载预算另行核对。用当前官方文档与真实宿主读回裁决，不把一个宿主的行为外推给另一个，也不自动开启 memory。
+**宿主区别**：Claude 的 `@import` 是展开加载，`.claude/rules/` 无条件规则也常驻；`paths:` 规则依赖匹配文件的读取，不能当作所有工具事件的触发器。Codex 的 AGENTS 层级、override/fallback 与加载预算另行核对。Antigravity（`agy`）的全局规则位于 `~/.gemini/config/GEMINI.md` 及 `~/.gemini/config/rules/*.md`（不会自动读取 `~/.claude/CLAUDE.md` 或 `~/.codex/AGENTS.md`），且会加载工作区根目录的 `AGENTS.md`（含指向 `CLAUDE.md` 的软链）；全局与项目级规则文件均受**单文件 24,000 字节硬截断**（展开 `@[label](path)` 后按行截断）与 **20,000 tokens 总规则预算**（`defaultRulesBudget`，超预算规则降级为路径指针）约束。用当前官方文档与真实宿主读回裁决，不把一个宿主的行为外推给另一个，也不自动开启 memory。
 
 **核查替代机制时**：先读真实注册与实现，再用无副作用的健康输入和危险形态样例双向校准，记录事件/matcher、结果与覆盖边界。周期性机制还须核对最近成功时间。详细 payload、shell 陷阱和探针模板见 [references/verification-recipes.md](references/verification-recipes.md) 的“替代机制探针”；未完成实证时不得缩成“已由 X 覆盖”。
 
@@ -148,7 +148,7 @@ Skills 描述常驻正文按需、以及 **Claude Code 的动态工具选择（�
    Claude 的 `/context` 把 auto memory 的 `MEMORY.md` 与 CLAUDE.md 一并计入 Memory files。官方 memory 文档写明它每次会话加载前 200 行或 25KB（先到为准），开关是设置项 `autoMemoryEnabled` 或环境变量 `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`。它由模型自己写入，常与用户写的指令重复或矛盾（例如用户规定经验落文档，auto memory 却仍开着），按冲突处理。把 memory 条目迁进文档是另一个 Skill 的职责，经 `claude-code-ops-router` 路由到 `claude-migrate-memory-to-doc`；本 Skill 只负责把它列为加载面和冲突来源。
 2. **分节字节表**：按 heading 统计 bytes/lines；父节包含子节，只在同层比较，不能相加当总量。体积用于定位，不直接决定改动顺序；优先级仍由当前失败、错误代价、任务相关性与可验证收益决定。
 3. **行长分布**：>1KB 的巨型行是「规则+战例焊死在一个 bullet」的签名（实战：4.4% 的行承载 35.6% 的字节）
-4. **载入语义与上限**：逐宿主实测，禁把历史版本的默认值当当前不变量。当前 Codex 的 `project_doc_max_bytes` 是**项目层级文档的累计预算**；全局用户指令可走另一条加载路径，不能拿该值推断它是否截断。先查 `~/.codex/config.toml`，再以同 cwd 的 `codex debug prompt-input` 实际字节为裁决。历史上确有 96 KiB 配置配合旧加载行为导致 164KB 文件尾部 41% 不可见的事故，但它只证明「必须实测」，不证明今天仍按 32 KiB 或同一路径截断。确认真截断后，在当前授权内选择能恢复所需内容可见的最小修复；修改预算、重组文件、增加监控是不同动作，不自动捆绑。
+4. **载入语义与上限**：逐宿主实测，禁把历史版本的默认值当当前不变量。当前 Codex 的 `project_doc_max_bytes` 是**项目层级文档的累计预算**；全局用户指令可走另一条加载路径，不能拿该值推断它是否截断。先查 `~/.codex/config.toml`，再以同 cwd 的 `codex debug prompt-input` 实际字节为裁决。Antigravity（`agy`）对每条规则文件施加 24,000 字节硬上限，覆盖全局与项目两层：① 若把单一全局 `CLAUDE.md` 同时软链给 Claude Code、Codex 与 `~/.gemini/config/GEMINI.md`，须确保该文件低于 24,000 字节（否则超出部分会被静默截断，须改拆为多个 `≤24 KB` 的 `~/.gemini/config/rules/*.md`）；② 若项目仓将 `AGENTS.md` 软链到 `CLAUDE.md` 供多宿主共享，单文件超过 24,000 UTF-8 字节同样会在 Antigravity 尾部静默截断——推荐在 `CLAUDE.md` 只保留跨任务铁律与任务触发索引表，把分域细则原样拆入版本化 `docs/` SSOT，并在仓库单测/CI 守卫三条机械不变量（`CLAUDE.md` UTF-8 字节数 `≤ 24,000`、必含规则编号在 SSOT 中齐全、相对 Markdown 链接目标全部存在；只读检查脚本见 [references/verification-recipes.md](references/verification-recipes.md)）。改后用全新 `agy -p`（禁调工具读文件）抽查首/中/末句确认零截断。历史上确有 96 KiB 配置配合旧加载行为导致 164KB 文件尾部 41% 不可见的事故，但它只证明「必须实测」，不证明今天仍按 32 KiB 或同一路径截断。确认真截断后，在当前授权内选择能恢复所需内容可见的最小修复；修改预算、重组文件、增加监控是不同动作，不自动捆绑。
 5. **常驻触发器审计**：Skill frontmatter `description` 会进入常驻 catalog；generic 纠偏句、普通质量词或维护动作若写成触发词，会让 Skill 和 Stop hook 自激活。逐条查描述是否只声明**明确任务意图**，并检查 hook 是否会在最终回答阶段临时创造一个开工前本不存在的新 obligation。描述按官方上限保持 ≤1024 字符；不用列完整方法论。
 
 Claude 侧若某些 instruction 文件对当前项目永远无关，可用官方 `claudeMdExcludes` 显式排除；它是 scope 配置，不是拿 `@import` 假装省上下文。路径相关规则优先放 `.claude/rules/` 的 `paths:` 条件载体。

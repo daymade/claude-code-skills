@@ -348,7 +348,7 @@ source-inspection checks still decide original-content fidelity and misbinding.
 
 #### Reader usability counterexamples
 
-When reader sizing, surrounding navigation or overlays change, use these observed
+When reader sizing, surrounding navigation, selection or overlays change, use these observed
 failure shapes to choose the affected checks. Retention alone does not establish
 reader usability; neither build success nor a matching iframe resolves these failures.
 
@@ -357,6 +357,7 @@ reader usability; neither build success nor a matching iframe resolves these fai
 | The document, Find and scroll survive return, but the body has zero height or only a clipped sliver beneath a long title. | Inspect the ordinary, populated page with its actual navigation and title; read the body and use its controls. Measure the body rather than the iframe shell. A larger frame is not a pass if the prose remains unreadable. |
 | A status bar outside the Reader's bounded layout preserves the document, Find and scroll but pushes the final record beyond the parent clip. | With the failure visible, ordinarily scroll the actual body to its end and read the final prose and footnote through the parent clipping boundary. Check the same state after recovery; hiding the failure or retaining the iframe alone does not establish usability. |
 | A new global action changes the mobile grid, or a relationship overlay stays above the original-text control. | Inspect the complete header and reader together, then use the ordinary visible control. Compare the hit owner at the pointer with the promised action; DOM presence or a forced/programmatic click cannot clear an intercepted control. |
+| The original-text request succeeds, but the reader closes when the list and the reader identify the same record by different handles. | Open the ordinary list item and check that the correct body remains readable after the response and selection update settle. Return and reopen the same item. In isolation, pair the same-record alias with a real source change and verify that only the new source can supply the current body. |
 | Returning appears to recreate the reader, but the driver changed viewport or emulation between observations. | Mark that comparison inconclusive, bind the same settled viewport and repeat only the affected journey before attributing the recreation to the product. Refresh element references after a driver operation invalidates them. |
 
 Keep a healthy same-target reading/return control alongside the failure case.
@@ -419,6 +420,20 @@ capabilities or decide data preservation. A copy-only edit does not require it.
    healthy near-boundary control. Inspect the same affected journey on the real
    current page at Level A/B; source, build, and handler assertions alone cannot
    close the rendered finding. Leave unavailable page or write evidence explicit.
+
+For a message reader, use one archived reply whose source contains an attachment
+or a forwarded bundle. Follow the reply to its source, open the nested item,
+verify the actual attachment opens or plays, then close the detail and confirm
+return to the originating message. If the reader offers a thread view, repeat
+from that reply and reconcile the discussion root, original content, and reply
+relationships against the source. Include the original link or media card when
+it starts the discussion.
+
+For a virtualized list or a list performance fix, pick a target near the end of a
+representative real large list from authoritative data. Open its deep link and
+find it through ordinary search. Check the same item identity and visible content
+after both actions. Measure any claimed speedup from the user action until the
+correct item is usable. Report an isolated function timing as a component measure.
 
 For a catalog or topology refactor, apply the same preservation recipe to these
 representative reading tasks:

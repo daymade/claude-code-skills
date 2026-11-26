@@ -114,13 +114,49 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         run: echo '::notice::Deleted-target scan unrun because this event supplies no baseline. Regression tests still run; use the documented exact-commit command for a selected comparison.'
 
+      - name: Select skill-validation scope
+        id: skill_scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          skills_search=true
+          skill_creator=true
+          baseline=""
+          case "$EVENT_NAME" in
+            pull_request) baseline="$PR_BASE_SHA" ;;
+            push) baseline="$PUSH_BEFORE" ;;
+          esac
+          if [ -n "$baseline" ] && [ "$baseline" != "0000000000000000000000000000000000000000" ] \
+            && changed="$(git diff --no-renames --name-only "$baseline" HEAD 2>/dev/null)"; then
+            skills_search=false
+            skill_creator=false
+            while IFS= read -r path; do
+              [ -z "$path" ] && continue
+              case "$path" in
+                daymade-skill/skills-search/*|scripts/*|.github/*) skills_search=true ;;
+              esac
+              case "$path" in
+                daymade-skill/skill-creator/*|scripts/*|.github/*|references/bounded-io.md|tests/test_bounded_io.py) skill_creator=true ;;
+              esac
+            done <<< "$changed"
+          fi
+          echo "skills_search=${skills_search}" >> "$GITHUB_OUTPUT"
+          echo "skill_creator=${skill_creator}" >> "$GITHUB_OUTPUT"
+          echo "skill-validation scope: skills_search=${skills_search} skill_creator=${skill_creator}"
+
       - name: Configured local Skill repository search
+        if: ${{ steps.skill_scope.outcome != 'success' || steps.skill_scope.outputs.skills_search != 'false' }}
         run: python3 -m unittest discover -s daymade-skill/skills-search/tests -v
 
       - name: Source ownership and initialization contract
+        if: ${{ steps.skill_scope.outcome != 'success' || steps.skill_scope.outputs.skill_creator != 'false' }}
         run: python3 -m unittest discover -s daymade-skill/skill-creator/tests -p test_source_contract.py
 
       - name: Fixed skill-creator command entry
+        if: ${{ steps.skill_scope.outcome != 'success' || steps.skill_scope.outputs.skill_creator != 'false' }}
         run: |
           python3 scripts/sync_bounded_io.py --check
           python3 -m unittest discover -s tests -p test_bounded_io.py
@@ -128,11 +164,13 @@ jobs:
           python3 -m unittest discover -s daymade-skill/skill-creator/tests -p test_capture_command.py
 
       - name: Immutable review rebind and persisted receipt compatibility
+        if: ${{ steps.skill_scope.outcome != 'success' || steps.skill_scope.outputs.skill_creator != 'false' }}
         run: |
           python3 -m unittest discover -s daymade-skill/skill-creator/tests -p test_release_rebind.py
           python3 -m unittest discover -s daymade-skill/skill-creator/tests -p test_persisted_receipt_roundtrip.py
 
       - name: Selected inputs and cumulative disk budget
+        if: ${{ steps.skill_scope.outcome != 'success' || steps.skill_scope.outputs.skill_creator != 'false' }}
         working-directory: daymade-skill/skill-creator
         run: python3 -m unittest tests.test_materialize
 
@@ -259,26 +297,33 @@ jobs:
       # slow-but-alive response can evade per-request timeouts. Exercise the
       # fixture-only deadline contract before using this one-shot hosted VM.
       - name: Install registered-suite runtime tools
+        if: ${{ steps.scope.outcome != 'success' || steps.scope.outputs.need_apt_self_test != 'false' || steps.scope.outputs.need_ripgrep != 'false' || steps.scope.outputs.need_zsh != 'false' || steps.scope.outputs.need_ffmpeg != 'false' }}
+        env:
+          NEED_RIPGREP: ${{ steps.scope.outputs.need_ripgrep }}
+          NEED_ZSH: ${{ steps.scope.outputs.need_zsh }}
+          NEED_FFMPEG: ${{ steps.scope.outputs.need_ffmpeg }}
         run: |
           scripts/ci/apt_install_bounded.sh --self-test
           packages=()
-          if ! command -v rg >/dev/null 2>&1; then
+          if [ "${NEED_RIPGREP:-true}" != "false" ] && ! command -v rg >/dev/null 2>&1; then
             packages+=(ripgrep)
           fi
-          if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v ffprobe >/dev/null 2>&1; then
+          if ! command -v ssh >/dev/null 2>&1; then
+            packages+=(openssh-client)
+          fi
+          if [ "${NEED_FFMPEG:-true}" != "false" ] && { ! command -v ffmpeg >/dev/null 2>&1 || ! command -v ffprobe >/dev/null 2>&1; }; then
             packages+=(ffmpeg)
           fi
-          if [ ! -x /bin/zsh ]; then
+          if [ "${NEED_ZSH:-true}" != "false" ] && [ ! -x /bin/zsh ]; then
             packages+=(zsh)
           fi
           if [ "${#packages[@]}" -gt 0 ]; then
             scripts/ci/apt_install_bounded.sh "${packages[@]}"
           fi
-          rg --version
-          ffmpeg -version
-          ffprobe -version
-          test -x /bin/zsh
-          /bin/zsh --version
+          if [ "${NEED_RIPGREP:-true}" != "false" ]; then rg --version; fi
+          ssh -V
+          if [ "${NEED_FFMPEG:-true}" != "false" ]; then ffmpeg -version && ffprobe -version; fi
+          if [ "${NEED_ZSH:-true}" != "false" ]; then test -x /bin/zsh && /bin/zsh --version; fi
 
       # Suites shell out to git; without an identity, commit-creating fixtures fail with an
       # error that looks like a product bug.
@@ -347,6 +392,28 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Check whether scanner self-calibration is needed
+        id: calibrate_scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          calibrate=true
+          if [ "$EVENT_NAME" = "pull_request" ] && [ -n "$PR_NUMBER" ] \
+            && changed="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" --jq '.[].filename' 2>/dev/null)"; then
+            calibrate=false
+            while IFS= read -r path; do
+              [ -z "$path" ] && continue
+              case "$path" in
+                daymade-skill/skill-creator/*|.gitleaks.toml|.github/workflows/ci.yml) calibrate=true ;;
+              esac
+            done <<< "$changed"
+          fi
+          echo "calibrate=${calibrate}" >> "$GITHUB_OUTPUT"
+          echo "scanner self-calibration scope: calibrate=${calibrate}"
+
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           version: '0.12.17'
@@ -410,8 +477,10 @@ jobs:
         run: gitleaks detect --no-git --config .gitleaks.toml --redact --verbose
 
       - name: Calibrate code detection and packaging gates
+        if: ${{ steps.calibrate_scope.outcome != 'success' || steps.calibrate_scope.outputs.calibrate != 'false' }}
         working-directory: daymade-skill/skill-creator
         run: uv run --frozen python -m pytest tests/test_code_scan.py tests/test_security_scan.py tests/test_package_skill.py -q
 
       - name: Check registered Skill code and repository scripts
-        run: python3 daymade-skill/skill-creator/scripts/creator.py code_scan "${{ github.workspace }}" --marketplace
+        working-directory: daymade-skill/skill-creator
+        run: uv run --frozen python -m scripts.code_scan "${{ github.workspace }}" --marketplace

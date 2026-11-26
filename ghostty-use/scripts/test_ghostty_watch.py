@@ -433,6 +433,20 @@ class SnapshotTest(unittest.TestCase):
         with mock.patch('ghostty_windows.capture_window_structure', return_value=stub):
             return watch.cycle(self.state, lambda deadline: observation(rows, unresolved))
 
+    def layout(self, rows, titles=None, order=None):
+        titles = titles or {}
+        order = order or rows
+        tabs = []
+        for index, row in enumerate(order, 1):
+            tabs.append({'tab_id': 'tab-' + row['sid'][:8], 'index': index,
+                         'selected': index == 1, 'title_override': titles.get(row['sid'], ''),
+                         'title': 'Automatic title', 'terminals': [{
+                             'tty': '/dev/' + row['tty'], 'pid': str(100 + index),
+                             'cwd': row['cwd'], 'title_override': '', 'title': 'Automatic title'}]})
+        return {'captured': True, 'capture_channel': 'ghostty-applescript-dictionary',
+                'windows': [{'id': 'window-1', 'name': 'Window', 'tabs': tabs}],
+                'coverage': {'tabs': len(tabs), 'terminals': len(tabs)}}
+
     def archive_count(self):
         return len(list((self.state / 'snapshots').glob('snapshot-*.json')))
 
@@ -694,6 +708,62 @@ class SnapshotTest(unittest.TestCase):
         self.assertEqual(doc['window_tab_mapping'], 'unknown')
         record = json.loads((self.latest.parent.parent / 'watcher' / 'last-cycle.json').read_text())
         self.assertIn('deploy', record)
+
+    def test_title_set_edit_and_clear_each_publish_once(self):
+        rows = [session(S1)]
+        first = self.layout(rows, {S1: 'Synthetic group'})
+        self.assertEqual(self.run_cycle(rows, capture=first)['state'], 'changed')
+        self.assertEqual(self.run_cycle(rows, capture=first)['state'], 'unchanged')
+        renamed = self.layout(rows, {S1: 'Renamed group'})
+        self.assertEqual(self.run_cycle(rows, capture=renamed)['state'], 'changed')
+        self.assertEqual(self.run_cycle(rows, capture=renamed)['state'], 'unchanged')
+        cleared = self.layout(rows)
+        self.assertEqual(self.run_cycle(rows, capture=cleared)['state'], 'changed')
+        self.assertEqual(self.run_cycle(rows, capture=cleared)['state'], 'unchanged')
+        self.assertEqual(self.archive_count(), 3)
+        self.assertEqual(json.loads(self.latest.read_text())['windows']['windows'][0]['tabs'][0]['title_override'], '')
+
+    def test_reorder_publishes_but_ephemeral_window_metadata_does_not(self):
+        rows = [session(S1), dict(session(S2), tty='ttys002')]
+        first = self.layout(rows)
+        self.run_cycle(rows, capture=first)
+        ephemeral = json.loads(json.dumps(first))
+        ephemeral['windows'][0]['id'] = 'replacement-window'
+        ephemeral['windows'][0]['tabs'][0]['tab_id'] = 'replacement-tab'
+        ephemeral['windows'][0]['tabs'][0]['selected'] = False
+        ephemeral['windows'][0]['tabs'][0]['title'] = 'Different automatic title'
+        ephemeral['windows'][0]['tabs'][0]['terminals'][0]['pid'] = '999'
+        self.assertEqual(self.run_cycle(rows, capture=ephemeral)['state'], 'unchanged')
+        reordered = self.layout(rows, order=[rows[1], rows[0]])
+        self.assertEqual(self.run_cycle(rows, capture=reordered)['state'], 'changed')
+        saved_tabs = json.loads(self.latest.read_text())['windows']['windows'][0]['tabs']
+        self.assertEqual([tab['terminals'][0]['session']['sid'] for tab in saved_tabs], [S2, S1])
+
+    def test_capture_failure_never_erases_layout_and_recovery_refreshes_provenance(self):
+        first_row = session(S1)
+        second_row = dict(session(S2), tty='ttys002')
+        known = self.layout([first_row], {S1: 'Synthetic group'})
+        self.run_cycle([first_row], capture=known)
+        before = self.latest.read_bytes()
+        self.assertEqual(self.run_cycle([first_row], capture={'captured': False})['state'], 'unchanged')
+        self.assertEqual(self.latest.read_bytes(), before)
+        self.assertEqual(self.run_cycle([first_row, second_row], capture={'captured': False, 'reason': 'synthetic unavailable'})['state'], 'changed')
+        inherited = json.loads(self.latest.read_text())
+        self.assertEqual(inherited['window_tab_mapping'], 'unknown')
+        self.assertTrue(inherited['windows']['carried_forward'])
+        self.assertEqual(inherited['windows']['windows'][0]['tabs'][0]['title_override'], 'Synthetic group')
+        self.assertEqual(self.run_cycle([first_row, second_row], capture=known)['state'], 'changed')
+        refreshed = json.loads(self.latest.read_text())
+        self.assertEqual(refreshed['window_tab_mapping'], 'known')
+        self.assertNotIn('carried_forward', refreshed['windows'])
+        self.assertEqual(self.run_cycle([first_row, second_row], capture=known)['state'], 'unchanged')
+        self.assertEqual(self.archive_count(), 3)
+
+    def test_successful_capture_backfills_layout_without_inventory_change(self):
+        rows = [session(S1)]
+        self.run_cycle(rows)
+        self.assertEqual(self.run_cycle(rows, capture=self.layout(rows))['state'], 'changed')
+        self.assertEqual(json.loads(self.latest.read_text())['window_tab_mapping'], 'known')
 
     def test_automatic_full_selection_manual_active_default_unchanged(self):
         self.run_cycle([session(S1), session(S2)])
@@ -994,6 +1064,63 @@ class DeployFreshnessTest(unittest.TestCase):
             (self.state / 'watcher' / 'scripts' / name).write_bytes(b'same')
         self.assertEqual(watch.deploy_freshness(self.state)['deploy'], 'current')
 
+    def test_failed_and_timed_out_rounds_persist_current_deploy(self):
+        for name in ('ghostty_watch.py', 'ghostty_windows.py'):
+            (self.source / name).write_bytes(b'same')
+            (self.state / 'watcher' / 'scripts' / name).write_bytes(b'same')
+        records = []
+        for error, expected in ((ValueError('synthetic failure'), 'failure'),
+                                (subprocess.TimeoutExpired('synthetic ps', 15), 'timeout')):
+            with self.subTest(expected=expected):
+                attempt = watch.begin_attempt(self.state)
+                with mock.patch.object(watch, '_cycle', side_effect=error), \
+                        self.assertRaises(type(error)):
+                    watch.cycle(self.state, attempt=attempt)
+                record = json.loads((self.state / 'watcher' / 'last-cycle.json').read_text())
+                self.assertEqual(record['state'], expected)
+                self.assertEqual(record['deploy'], {
+                    'deploy': 'current', 'source_dir': str(self.source), 'differing': []})
+                records.append(record)
+        logged = [json.loads(line) for line in
+                  (self.state / 'watcher' / 'cycles.jsonl').read_text().splitlines()]
+        self.assertEqual(logged, records)
+
+    def test_supervisor_failures_persist_current_deploy(self):
+        for name in ('ghostty_watch.py', 'ghostty_windows.py'):
+            (self.source / name).write_bytes(b'same')
+            (self.state / 'watcher' / 'scripts' / name).write_bytes(b'same')
+        expected_deploy = {'deploy': 'current', 'source_dir': str(self.source), 'differing': []}
+        records = []
+
+        with self.subTest(expected='missing-runtime'):
+            with self.assertRaisesRegex(ValueError, 'owned watcher runtime missing'):
+                watch.supervise(self.state)
+            record = json.loads((self.state / 'watcher' / 'last-cycle.json').read_text())
+            self.assertEqual(record['state'], 'failure')
+            self.assertEqual(record['deploy'], expected_deploy)
+            records.append(record)
+
+        interpreter = watch.owned_interpreter(self.state)
+        interpreter.parent.mkdir(parents=True)
+        interpreter.write_text('synthetic runtime')
+        process = mock.Mock(pid=999, returncode=1)
+        process.communicate.side_effect = [
+            subprocess.TimeoutExpired('synthetic worker', 15), ('', '')]
+        with self.subTest(expected='supervisor-deadline'):
+            with mock.patch.object(watch.subprocess, 'Popen', return_value=process), \
+                    mock.patch.object(watch.os, 'killpg') as kill, \
+                    self.assertRaisesRegex(ValueError, 'supervisor deadline expired'):
+                watch.supervise(self.state)
+            self.assertEqual(kill.call_count, 1)
+            record = json.loads((self.state / 'watcher' / 'last-cycle.json').read_text())
+            self.assertEqual(record['state'], 'timeout')
+            self.assertEqual(record['deploy'], expected_deploy)
+            records.append(record)
+
+        logged = [json.loads(line) for line in
+                  (self.state / 'watcher' / 'cycles.jsonl').read_text().splitlines()]
+        self.assertEqual(logged, records)
+
     def test_stale_lists_differing_files(self):
         (self.source / 'ghostty_watch.py').write_bytes(b'new')
         (self.state / 'watcher' / 'scripts' / 'ghostty_watch.py').write_bytes(b'old')
@@ -1068,6 +1195,128 @@ class DeployFreshnessHardeningTest(unittest.TestCase):
                 mock.patch.object(watch, '__file__', str(self.state / 'watcher' / 'scripts' / 'ghostty_watch.py')), \
                 self.assertRaisesRegex(ValueError, 'self-referential'):
             watch.install(self.state, apply=True)
+
+
+class AgyObserverTest(unittest.TestCase):
+    def test_cli_identity_for_agy_interactive_and_non_interactive(self):
+        self.assertEqual(
+            watch.cli_identity({'cmdline': f'agy --dangerously-skip-permissions --conversation={S1}'})[:2],
+            ('agy', S1),
+        )
+        self.assertEqual(
+            watch.cli_identity({'cmdline': f'/usr/local/bin/agy -r {S2}'})[:2],
+            ('agy', S2),
+        )
+        self.assertEqual(
+            watch.cli_identity({'cmdline': f'agy --resume {S3}'})[:2],
+            ('agy', S3),
+        )
+        self.assertEqual(
+            watch.cli_identity({'cmdline': 'agy --dangerously-skip-permissions'})[:2],
+            ('agy', None),
+        )
+        for non_tui in (
+            'agy -p hello',
+            'agy --print hello',
+            'agy acp',
+            'agy mcp list',
+            'agy remote-control status',
+            'agy --help',
+            'agy -h',
+        ):
+            self.assertIsNone(watch.cli_identity({'cmdline': non_tui}), non_tui)
+
+        # Interactive initial-prompt flags (-i/--prompt-interactive), -- positional separator,
+        # and explicit conversation selector with a trailing prompt matching a subcommand name
+        # must stay interactive (not None), while marking sid=None (ambiguous) so lsof-brain
+        # anchors them safely instead of trusting unquoted ps argv.
+        for interactive_cmd in (
+            'agy -i "help"',
+            'agy --prompt-interactive="mcp"',
+            'agy --prompt-interactive acp',
+            'agy -- "mcp"',
+            f'agy --conversation={S1} help',
+            f'agy -r {S2} acp',
+        ):
+            ident = watch.cli_identity({'cmdline': interactive_cmd})
+            self.assertIsNotNone(ident, interactive_cmd)
+            self.assertEqual(ident[:2], ('agy', None), interactive_cmd)
+
+    def test_observe_resolved_and_cycle_with_uuidless_agy(self):
+        import sqlite3
+        import ghostty_session as gs
+
+        with tempfile.TemporaryDirectory(prefix='ghostty-agy-cycle-') as tmp:
+            state = Path(tmp) / 'state'
+            app_dir = Path(tmp) / 'agy-store'
+            app_dir.mkdir(parents=True)
+            conn = sqlite3.connect(str(app_dir / 'conversation_summaries.db'))
+            conn.execute('CREATE TABLE conversation_summaries (conversation_id TEXT, nesting_depth INTEGER, parent_conversation_id TEXT)')
+            conn.execute('INSERT INTO conversation_summaries VALUES (?, ?, ?)', (S1, 0, ''))
+            conn.commit()
+            conn.close()
+            tpath = app_dir / 'brain' / S1 / '.system_generated' / 'logs' / 'transcript.jsonl'
+            tpath.parent.mkdir(parents=True, exist_ok=True)
+            tpath.write_text('{"step_index": 0, "created_at": "2026-11-26T00:00:00Z"}\n')
+
+            graph = '\n'.join([
+                '1 0 ?? /Applications/Ghostty.app/Contents/MacOS/ghostty',
+                '10 1 ttys001 agy --dangerously-skip-permissions',
+            ])
+            brain = app_dir / 'brain'
+            def run(command, deadline, counters):
+                counters['commands'] += 1
+                if command[0] == '/bin/ps':
+                    return graph
+                if '-d' in command:
+                    return 'p10\nn/tmp/demo\n'
+                return f'p10\nn{brain / S1 / ".system_generated"}\n'
+
+            with mock.patch.object(watch, 'run_bounded', side_effect=run), \
+                 mock.patch.object(gs, '_proc_start', return_value=1000.0), \
+                 mock.patch.object(gs, 'AGY_APP_DATA_DIR_OVERRIDE', str(app_dir)), \
+                 mock.patch('ghostty_windows.capture_window_structure', return_value={'captured': False}):
+                resolved = watch.observe_resolved()
+                self.assertEqual(resolved['unresolved'], [])
+                self.assertEqual([(s['tool'], s['sid'], s['anchor']) for s in resolved['sessions']],
+                                 [('agy', S1, 'lsof-brain')])
+
+                result = watch.cycle(state)
+                self.assertEqual(result['state'], 'changed')
+                snap = json.loads((state / 'snapshots' / 'latest.json').read_text())
+                self.assertEqual(len(snap['sessions']), 1)
+                self.assertEqual(snap['sessions'][0]['tool'], 'agy')
+                self.assertEqual(snap['sessions'][0]['sid'], S1)
+                self.assertIn(f'--conversation={S1}', snap['sessions'][0]['restore_command'])
+
+    def test_observe_and_canonical_support_agy_across_scopes(self):
+        graph = '\n'.join([
+            '1 0 ?? /Applications/Ghostty.app/Contents/MacOS/ghostty',
+            f'10 1 ttys001 agy --dangerously-skip-permissions --conversation={S1}',
+            '11 1 ttys002 agy --dangerously-skip-permissions',
+            '12 1 ttys003 agy mcp list',
+            f'30 0 ?? /Applications/UURemote.app/Contents/Helpers/tmux/uuyc-mux -S /tmp/tmux.sock',
+            f'31 30 ttys004 agy --dangerously-skip-permissions --conversation={S2}',
+        ])
+        def run(command, deadline, counters):
+            counters['commands'] += 1
+            return graph if command[0] == '/bin/ps' else ''.join(
+                'p' + pid + '\nn/tmp/demo\n' for pid in command[3].split(','))
+
+        with mock.patch.object(watch, 'run_bounded', side_effect=run):
+            ghostty_only = watch.observe(scope='ghostty', include_terminals=True)
+            all_cli = watch.observe(scope='all-cli', include_terminals=True)
+
+        self.assertEqual([(r['tool'], r['sid']) for r in ghostty_only['sessions']], [('agy', S1)])
+        self.assertEqual([(r['tool'], r['pid']) for r in ghostty_only['unresolved']], [('agy', 11)])
+        self.assertEqual({r['sid'] for r in all_cli['sessions']}, {S1, S2})
+        uu_row = next(r for r in all_cli['sessions'] if r['sid'] == S2)
+        self.assertEqual(uu_row['terminal_owner'], 'non-ghostty')
+
+        canon = watch.canonical(all_cli['sessions'], {})
+        self.assertEqual([r['sid'] for r in canon], [S1, S2])
+        self.assertIn(f'--conversation={S1}', canon[0]['restore_command'])
+        self.assertIn(f'--conversation={S2}', canon[1]['restore_command'])
 
 
 if __name__ == '__main__':

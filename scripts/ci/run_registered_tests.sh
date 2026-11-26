@@ -50,7 +50,7 @@ while read -r runner target _rest; do
   fi
 
   case "$runner" in
-    python-unittest) command=(python3 -m unittest discover -s "$target" -v) ;;
+    python-unittest) command=(python3 scripts/ci/run_unittest_parallel.py "$target") ;;
     # Bare-directory `node --test <dir>` is broken on Node 22 and 24 alike (dir
     # resolved as a CJS entry → MODULE_NOT_FOUND; measured on 22.23.2 and 24.14.0).
     # Glob conventional test-file names instead;

@@ -48,6 +48,16 @@ baseline and the working files independently. A path-limited checkout alone
 can leave an incomplete index and stage every unselected baseline file as a
 deletion. Sparse configuration success does not prove files were materialized.
 
+For an LFS-bearing repository, a linked worktree shares the registered repository's common Git directory and LFS object storage; an independent clone has a separate store. Prefer the linked worktree when publication or verification requires existing LFS objects. Do not bulk-copy a large `.git/lfs/objects` tree as a setup shortcut: check `df` first and preserve the existing store identity. Missing LFS objects remain an environment gap, not permission to disable smudge or bypass the owning audit.
+
+New files authored inside an owned directory are not automatically added to a
+literal sparse-checkout definition. Ordinary `git add -- <new-file>` can refuse
+them with “matched paths ... outside of your sparse-checkout definition.” For
+those exact task-owned new files, use `git add --sparse -- <new-file>`; this
+updates the index without widening the working-tree selection. Then run the same
+complete-index and scope verification below. Do not disable sparse checkout or
+restage unselected baseline paths to work around the refusal.
+
 After staging explicit owned paths, run the read-only scope check before the
 repository's normal staged-diff inspection and commit:
 
@@ -75,6 +85,22 @@ command removes a worktree, bypasses hooks or supplies deletion authority.
 If a later hook reports a missing dependency, preserve the task worktree and
 return to repository setup to extend its sparse selection with that exact tracked
 dependency. Do not rerun initialization or replace the index to address missing files.
+
+If the sparse worktree will run tests, typecheck or a build, include the tracked
+consumer configuration in the initial `--path` set: root test/build config,
+package-local setup files, fixture manifests and any tracked files those entrypoints
+read. A collection failure caused by a missing config or setup file is an environment
+gap, not evidence that the code fails. The repository setup owner extends the existing
+selection by unioning the exact tracked paths with
+`git sparse-checkout set --no-cone --no-sparse-index --stdin`, preserving the complete
+index. Rerun `git_prepare_sparse_worktree.py verify` with only the paths this task is
+actually authorized to change; omit `--allow-path` when there is no owned change. Adding
+a selected config/dependency does not itself authorize editing it. Confirm each added
+dependency exists with `test -f` or an equivalent bounded check, then rerun the same
+consumer. Do not rerun `init` or replace the index. Ignored `node_modules` and local-only
+assets are not copied by a worktree, so use the repository's normal install/workspace path
+and verify the package-level dependency location before treating module resolution as a
+defect.
 
 ## Shared checkout and concurrent sessions: one writer
 
@@ -803,9 +829,15 @@ The executor uses the repository's existing synchronization and ownership contra
    from these immutable commits; a stale status snapshot cannot classify a deletion.
    Coordinate any active writer before changing this checkout.
 2. Preserve unique staged, working-tree, untracked and ignored content before alignment.
-   Compare each affected path's real index entry and disk state with `OLD`, `TIP` and
-   retained landed versions. An unfamiliar staged entry, unexplained delta or branch
-   drift stops the in-place write path until ownership and preservation are resolved.
+   Compare each affected path's real index entry and disk state (via blob hash and patch
+   equivalence, not `git status` count alone) against `OLD`, `TIP`, retained landed versions,
+   and other local/remote branches or open PR heads. Dirty paths disjoint from the `OLD..TIP`
+   diff do not block a path-scoped guarded synchronizer; overlapping paths whose entire delta
+   is proven already committed on another branch or open PR can be backed up outside the repo
+   and aligned after verifying no active writer is mutating them (notifying the peer owner if
+   a session is live). An unfamiliar staged entry, unexplained uncommitted delta overlapping
+   `OLD..TIP`, or unverified branch drift stops the in-place write path until ownership and
+   preservation are resolved.
 3. Locate the project's verified guarded synchronization entry and read its actual
    preview/apply and recovery contract. It must check the affected path set before
    writes, preserve unrelated WIP, and reconcile the intended branch, real index and
@@ -830,6 +862,15 @@ The executor uses the repository's existing synchronization and ownership contra
    successful no-op, proves no more than that observed condition; it does not establish
    index/working-tree synchronization. Claim task-scoped closure only when the required
    layers match the intended result, with any retained valid WIP explicitly attributed.
+
+#### No verified guarded synchronizer available
+
+Do not manually fast-forward a dirty canonical checkout with an ad hoc patch/hold transaction.
+Ignored files, staged/index state and incoming tracked paths can collide in ways that exit code 0
+does not report, so a byte comparison after the merge can detect loss without being able to undo
+it. Wait for the WIP owner, or use a verified guarded synchronizer that preserves staged,
+unstaged, untracked and ignored content and reconciles HEAD, index and working tree as one
+transaction. A stash-free manual recipe is not a sanctioned substitute.
 
 ## Set a wider reflog safety window once
 

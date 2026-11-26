@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import heapq
 import importlib.util
 import json
 import os
@@ -322,8 +323,7 @@ def _source_paths(
     # A simple final component gives a necessary (not sufficient) condition.
     # Avoid materializing ignored output files that cannot match any include;
     # ripgrep still decides directory/glob semantics for every retained name.
-    # Config can alter case/glob behavior, so keep the original path then.
-    if source["includes"] and not os.environ.get("RIPGREP_CONFIG_PATH"):
+    if source["includes"]:
         suffixes = []
         basenames = {".gitignore", ".ignore", ".rgignore"}
         for pattern in source["includes"]:
@@ -354,7 +354,7 @@ def _source_paths(
             target = root / path
             target.parent.mkdir(parents=True, exist_ok=True)
             target.touch()
-        command = ["rg", "--files", "--hidden", "--no-ignore", "--null"]
+        command = ["rg", "--no-config", "--no-follow", "--files", "--hidden", "--no-ignore", "--null"]
         for pattern in source["includes"]:
             command.extend(["--glob", pattern])
         for pattern in source["excludes"]:
@@ -555,6 +555,11 @@ def _filesystem_candidates(
     maximum = source["max_results"]
     command = [
         rg,
+        "--no-config",
+        # Adapters already run in parallel; do not multiply their worker budget.
+        "--threads",
+        "1",
+        "--no-follow",
         "--json",
         "--fixed-strings",
         "--ignore-case",
@@ -645,7 +650,7 @@ def _filesystem_candidates(
         entries_by_path.setdefault(candidate_path, []).append(entry)
     path_output = ""
     if path_search_terms:
-        files_command = [rg, "--files", "--no-messages"]
+        files_command = [rg, "--no-config", "--threads", "1", "--no-follow", "--files", "--no-messages"]
         for pattern in source["includes"]:
             files_command.extend(["--glob", pattern])
         for pattern in source["excludes"]:
@@ -714,7 +719,11 @@ def _filesystem_candidates(
             source["id"], f"{entry['path']}:{entry['line']}"
         )
         rows.append(entry)
-    rows.sort(
+    # Inspect every candidate before selecting: max_results limits output, not
+    # coverage. nsmallest preserves sorted(... )[:maximum] including stable ties.
+    limited = heapq.nsmallest(
+        maximum,
+        rows,
         key=lambda item: (
             AUTHORITY_ORDER[item["authority"]],
             -len(item["matched_terms"]),
@@ -722,7 +731,6 @@ def _filesystem_candidates(
             item["line"],
         )
     )
-    limited = rows[:maximum]
     git_cache: dict[Path, str | None] = {}
     if source_state is not None:
         _verify_source_scope(source, source_state)
@@ -910,6 +918,7 @@ def retrieve(
     terms: Sequence[str],
     session_id: str,
     required_sources: Sequence[str] = (),
+    filesystem_scopes: Sequence[str] = (),
 ) -> dict[str, Any]:
     retrieval_started = time.perf_counter()
     if not session_id:
@@ -937,6 +946,20 @@ def retrieve(
         raise PriorWorkError(
             f"Unknown --require-source IDs: {sorted(unknown_required)}"
         )
+    # A source inventory is not task authorization. Resolve these bounds before
+    # any adapter, including Git scope/freshness discovery, can touch a source.
+    search_scopes = []
+    for value in filesystem_scopes:
+        if not isinstance(value, str) or not value.strip():
+            raise PriorWorkError("--filesystem-scope must be a non-empty project path")
+        scope = _absolute_path(value, "--filesystem-scope")
+        home = Path.home().resolve()
+        if scope == home or scope in home.parents:
+            raise PriorWorkError("--filesystem-scope cannot be home or a filesystem ancestor")
+        if not scope.is_dir():
+            raise PriorWorkError(f"--filesystem-scope directory is unavailable: {scope}")
+        if scope not in search_scopes:
+            search_scopes.append(scope)
     current_requirement = load_requirement(manifest, session_id)
     if current_requirement is None or not current_requirement.get("required"):
         current_requirement = mark_requirement(
@@ -950,8 +973,24 @@ def retrieve(
     candidates = []
     implementation_carriers = {"code", "skills"}
     automatic_specs = []
+    scope_gaps = {}
     for source in manifest["sources"]:
         if source["mode"] == "manual":
+            continue
+        if source["mode"] == "filesystem" and not any(
+            Path(source["root"]).is_relative_to(scope) for scope in search_scopes
+        ):
+            scope_gaps[source["id"]] = {
+                "status": "manual_required",
+                "error": "filesystem_scope_mismatch" if search_scopes else "filesystem_scope_required",
+                "route": "task-scoped filesystem search or existing index",
+                "instruction": (
+                    "Do not scan this source. Bind a concrete project directory authorized "
+                    "for this task with --filesystem-scope; a parent collection root is "
+                    "not covered by a child project. Use a scoped source or index and "
+                    "record the remaining coverage gap. required=true does not widen scope."
+                ),
+            }
             continue
         if source["carrier"] in implementation_carriers:
             automatic_specs.append(
@@ -997,6 +1036,9 @@ def retrieve(
                 "route": source["route"],
                 "instruction": source.get("instruction", ""),
             }
+        elif source["id"] in scope_gaps:
+            found = []
+            detail = scope_gaps[source["id"]]
         else:
             found, detail = automatic_results[source["id"]]
             candidates.extend(found)
@@ -1036,6 +1078,7 @@ def retrieve(
         "implementation_query": query,
         "query": query,
         "terms": cleaned_terms,
+        "filesystem_scopes": [str(scope) for scope in search_scopes],
         "created_at": utc_now(),
         "elapsed_ms": round((time.perf_counter() - retrieval_started) * 1000, 1),
         "manifest_path": manifest["manifest_path"],
@@ -1211,6 +1254,8 @@ def set_prompt_scope(
     manifest: dict[str, Any], session_id: str, *, active: bool,
     expected_requirement: dict[str, Any] | None = None,
     reclassification: dict[str, Any] | None = None,
+    status_only_stop: bool | None = None,
+    status_only_prompt_id: str | None = None,
 ) -> None:
     """Change enforcement scope without invalidating the retrieval receipt."""
     requirement = load_requirement(manifest, session_id)
@@ -1219,6 +1264,9 @@ def set_prompt_scope(
     if requirement is None:
         return
     requirement["active_for_prompt"] = active
+    if status_only_stop is not None:
+        requirement["status_only_stop"] = status_only_stop
+        requirement["status_only_prompt_id"] = status_only_prompt_id
     if reclassification is not None:
         requirement["scope_reclassification"] = reclassification
     _atomic_json(requirement_path(manifest, session_id), requirement)
@@ -1710,6 +1758,11 @@ def build_parser() -> argparse.ArgumentParser:
     retrieve_parser.add_argument("--query", required=True)
     retrieve_parser.add_argument("--term", action="append", default=[])
     retrieve_parser.add_argument("--require-source", action="append", default=[])
+    retrieve_parser.add_argument(
+        "--filesystem-scope", action="append", default=[], metavar="PROJECT_DIR",
+        help="Task-authorized project directory; repeat for explicit additional projects. "
+             "Filesystem sources outside these bounds are not scanned.",
+    )
     retrieve_parser.add_argument("--session-id", default=os.environ.get("CODEX_SESSION_ID"))
     retrieve_parser.add_argument("--json", action="store_true")
 
@@ -1849,6 +1902,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.term,
                 args.session_id,
                 args.require_source,
+                args.filesystem_scope,
             )
         elif args.command == "complete":
             payload = complete(

@@ -22,6 +22,14 @@ python3 "$SKILL_ROOT/scripts/git_prepare_worktree_retirement.py" verify-current 
   --out "<same-external-evidence-directory>"
 ```
 
+In an actively written shared repository, prefer a fixed task recovery ref over
+a moving branch such as `refs/heads/main` as `--base-ref`. Create it only for
+the exact authorized target after the content-containment check. The helper
+freezes that ref's object ID, and later movement of the selected ref makes
+`verify-current` fail closed. If a moving base changes, preserve the existing
+evidence and prepare a new checkpoint against a newly verified fixed ref; do not
+edit the old checkpoint.
+
 Read `state.json`'s `snapshot.root_carrier`: `retained-ref` means the selected ref reaches
 every root HEAD/reflog commit being retired and needs no root-history pack. A ref at HEAD
 is insufficient when the reflog holds a unique commit outside HEAD's ancestry; the helper
@@ -62,6 +70,32 @@ these files. A materialized filtered file, a dangling link or an unproven omissi
 still requires manual preservation; `skip-worktree` alone is not permission to
 discard a payload. `verify-current` repeats the same checks before retirement.
 
+### Materialized files in the shared LFS store
+
+If the checkpoint stops on a materialized LFS file tracked by the linked
+superproject, run this read-only proof against the exact worktree and retained
+ref. For files in initialized submodules, use the manual module procedure.
+
+```bash
+python3 "<skill-root>/scripts/git_prepare_worktree_retirement.py" verify-lfs-retention \
+  --worktree "<exact-linked-worktree>" --base-ref "<fully-qualified-retained-ref>"
+```
+
+Use a direct ref in the Git common directory that will remain after retirement
+and reaches the exact worktree HEAD. Require `status=lfs_retained` and a positive
+`examined` count. The proof checks committed LFS pointers even if current
+attributes hide them. For each materialized LFS path, the retained commit must
+have the same pointer. When the physical file is the pointer itself, the result
+covers those pointer bytes. For an expanded payload, the worktree file and the
+object under the Git common directory's `lfs/objects` must both match the
+pointer's size and SHA-256. The proof reads local storage. For objects held only
+in a custom `lfs.storage` location, verify that retained copy separately. If no
+verified copy is available, preserve the payload before proceeding. Unsupported filters, inaccessible
+or indirect paths, missing shared objects and differing bytes stop this check.
+The result covers the LFS portion of manual retirement.
+For new sparse worktrees, materialize the required policy files and specific
+edit and verification paths to limit LFS expansion.
+
 An `lfs` directory in a retiring Git/admin directory is supported only when `lstat`
 identifies a real, empty directory. Its presence and mode are frozen in metadata
 and preserved for recovery. Missing and empty remain distinct; later creation,
@@ -71,9 +105,14 @@ manual handling. This exception does not support an LFS object store or bypass
 the tracked-content-filter gate.
 
 All ignored paths, entry types, modes, sizes, file hashes and symlink targets are
-frozen. Byte-identical entries at the same relative primary path use that retained
-carrier; other entries are copied with their relative paths. To exclude a known
-rebuildable directory, add an exact target-relative declaration, repeated on resume:
+frozen. A primary-path candidate with different type, mode or size cannot retain
+a regular file. Read and hash its contents only if these checks match. Reuse a
+byte-identical candidate and copy the source if it differs. A missing path,
+non-directory ancestor or symlink loop also leaves the source to be copied.
+An access error that pathlib reports is an error, not evidence of absence.
+The preparation recheck and standalone `verify-current` read source bytes again.
+To exclude a known rebuildable directory, add an exact target-relative
+declaration, repeated on resume:
 
 ```text
 --rebuildable 'node_modules=pnpm install --frozen-lockfile from tracked package.json and pnpm-lock.yaml'

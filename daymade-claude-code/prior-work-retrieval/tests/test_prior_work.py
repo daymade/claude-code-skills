@@ -145,6 +145,7 @@ class PriorWorkTests(unittest.TestCase):
             "reuse the Mercury provider pipeline",
             ["Mercury", "existing pipeline", "North Star"],
             "session-A",
+            filesystem_scopes=[str(self.root)],
         )
         carriers = {candidate["carrier"] for candidate in run["candidates"]}
         self.assertTrue({"docs", "code", "meeting", "conversation"} <= carriers)
@@ -209,6 +210,7 @@ class PriorWorkTests(unittest.TestCase):
             "reuse Mercury provider",
             ["Mercury"],
             "session-B",
+            filesystem_scopes=[str(self.root)],
         )
         candidate = next(
             item for item in run["candidates"] if item["source_id"] == "docs"
@@ -262,6 +264,7 @@ class PriorWorkTests(unittest.TestCase):
             "unseen subject",
             ["unseen"],
             "session-bad",
+            filesystem_scopes=[str(self.root)],
         )
         coverage = {row["source_id"]: row for row in run["coverage"]}
         self.assertEqual(coverage["conversation"]["status"], "failed")
@@ -347,6 +350,7 @@ class PriorWorkTests(unittest.TestCase):
             "reuse the Mercury provider pipeline",
             ["Mercury"],
             "session-stale",
+            filesystem_scopes=[str(self.root)],
         )
         coverage = {row["source_id"]: row for row in run["coverage"]}
         self.assertEqual(coverage["conversation"]["status"], "searched")
@@ -430,6 +434,7 @@ class PriorWorkTests(unittest.TestCase):
             "Mercury",
             ["Mercury"],
             "session-git",
+            filesystem_scopes=[str(self.root)],
         )
         candidate = next(
             item for item in run["candidates"] if item["source_id"] == "docs"
@@ -462,6 +467,7 @@ class PriorWorkTests(unittest.TestCase):
             "new subject",
             ["never-present"],
             "session-C",
+            filesystem_scopes=[str(self.root)],
         )
         with self.assertRaisesRegex(prior_work.PriorWorkError, "verified mismatch"):
             prior_work.complete(
@@ -495,6 +501,7 @@ class PriorWorkTests(unittest.TestCase):
             "Mercury",
             ["Mercury"],
             "session-D",
+            filesystem_scopes=[str(self.root)],
         )
         candidate = next(
             item for item in run["candidates"] if item["source_id"] == "docs"
@@ -525,6 +532,7 @@ class PriorWorkTests(unittest.TestCase):
             "Mercury",
             ["Mercury"],
             "session-optional",
+            filesystem_scopes=[str(self.root)],
         )
         candidate = next(
             item for item in run["candidates"] if item["source_id"] == "docs"
@@ -559,6 +567,7 @@ class PriorWorkTests(unittest.TestCase):
             "existing pipeline",
             ["existing pipeline"],
             "session-E",
+            filesystem_scopes=[str(self.root)],
         )
         candidate = next(
             item for item in run["candidates"] if item["source_id"] == "code"
@@ -598,6 +607,7 @@ class PriorWorkTests(unittest.TestCase):
             "Implement Flowzero long-audio checkpoint retry",
             ["flowzero_checkpoint"],
             "session-outcome-first",
+            filesystem_scopes=[str(self.root)],
         )
         self.assertEqual(run["candidates"][0]["search_phase"], "business_outcome")
         self.assertIn(
@@ -613,6 +623,7 @@ class PriorWorkTests(unittest.TestCase):
             "Mercury",
             ["Mercury"],
             "session-legacy-receipt",
+            filesystem_scopes=[str(self.root)],
         )
         candidate = next(
             item for item in run["candidates"] if item["source_id"] == "docs"

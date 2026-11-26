@@ -5,8 +5,8 @@
     "email": "daymadev89@gmail.com"
   },
   "metadata": {
-    "description": "Professional Claude Code and Codex skills marketplace — production-ready skills spanning GitHub and git operations (including current-base contributor PR review), document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, evidence-backed HTML reports and data-visualization judgment, prompt and skill engineering, product growth diagnosis, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, local inter-agent messaging, Claude Code operations, technology selection and build-vs-buy decisions, and model-aware Codex workstation setup. Suite plugins bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
-    "version": "3.27.0"
+    "description": "Professional Claude Code and Codex skills marketplace — production-ready skills spanning GitHub and git operations (including current-base contributor PR review), document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, evidence-backed HTML reports and data-visualization judgment, prompt and skill engineering, product growth diagnosis, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, local inter-agent messaging, Claude Code operations and permission triage, technology selection and build-vs-buy decisions, and model-aware Codex workstation setup. Suite plugins bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
+    "version": "3.30.5"
   },
   "plugins": [
     {
@@ -14,7 +14,7 @@
       "description": "Routes Feishu/Lark/Doubao operations through the version-matched guides embedded in lark-cli. Use for documents, wiki, sheets, Base, minutes, meetings, calendar, messaging, mail, tasks, approval, authentication, permissions and lark-cli troubleshooting.",
       "source": "./lark-cli-router",
       "strict": false,
-      "version": "1.0.4",
+      "version": "1.0.6",
       "category": "productivity",
       "keywords": [
         "feishu",
@@ -32,7 +32,14 @@
       "strict": false,
       "version": "1.0.0",
       "category": "utilities",
-      "keywords": ["cookies", "chrome", "session-migration", "login", "backup", "restore"]
+      "keywords": [
+        "cookies",
+        "chrome",
+        "session-migration",
+        "login",
+        "backup",
+        "restore"
+      ]
     },
     {
       "name": "floorplan-finder",
@@ -41,7 +48,13 @@
       "strict": false,
       "version": "1.0.0",
       "category": "utilities",
-      "keywords": ["floor-plan", "property-search", "layout-verification", "户型图", "房源"]
+      "keywords": [
+        "floor-plan",
+        "property-search",
+        "layout-verification",
+        "户型图",
+        "房源"
+      ]
     },
     {
       "name": "app-evolver",
@@ -98,7 +111,7 @@
       "name": "kimi-use",
       "source": "./kimi-use",
       "strict": false,
-      "version": "1.8.6",
+      "version": "1.8.7",
       "category": "developer-tools",
       "keywords": [
         "kimi",
@@ -113,18 +126,21 @@
       ]
     },
     {
-      "name": "peer-message",
-      "description": "Bridge local Claude Code and Codex sessions only when the current host's native communication tools do not cover the target. Use for cross-product messages, hooks/scripts posting to sessions, fallback reply lookup and delivery verification, or diagnosing Held peer messages. Also use its coordination guidance when shared-work ownership or an inbound peer assertion needs verification. For ordinary parent/subagent, teammate, or independent-session communication, first discover and use available native tools; do not load this skill merely to send a native message. The bundled network preview for cross-machine pairing is deprecated (existing deployments only; invitations use the peer-message:v1 format). Never bypass a denied or Held message with another transport. Not for spawning agents, moving full history, or granting user approval. Triggers: 跨产品通信、原生工具未覆盖的会话、脚本回帖、peer 送达排查、共享在制品归属核实、peer-message:v1 邀请（既有部署）。",
-      "source": "./peer-message",
+      "name": "agent-message",
+      "description": "Bridges local Claude Code, Codex, and Antigravity (agy) sessions when native tools can't reach the target (replaces peer-message). Use for cross-product messaging, one-command reply, kqueue event-driven wait, unified 3-provider inbox, delivery verification (Held included), shared-work ownership leases, or inbound peer assertions. Not for same-product/subagent messaging (use native tools), spawning agents, full history, or cross-machine messaging (use Agent Use: https://useagent.app). Triggers: agent-message、peer-message、跨产品通信、原生工具未覆盖的会话、脚本回帖、peer 送达排查、共享在制品归属核实、Antigravity/agy 跨会话通信。",
+      "source": "./agent-message",
       "strict": false,
-      "version": "1.27.4",
+      "version": "2.0.1",
       "category": "communication",
       "keywords": [
+        "agent-message",
         "agent-communication",
         "cross-session",
         "peer-message",
         "claude-code",
         "codex",
+        "antigravity",
+        "agy",
         "codex-queue",
         "uds",
         "multi-agent",
@@ -132,6 +148,20 @@
         "session-coordination",
         "crossSessionInbound",
         "inbound-assertions"
+      ]
+    },
+    {
+      "name": "peer-message",
+      "description": "Deprecated compatibility alias for agent-message (replaces peer-message). Local Claude Code, Codex, and Antigravity messaging and coordination now live in agent-message; scripts in this package forward to agent-message when installed. The cross-machine network preview is retired (use Agent Use: https://useagent.app).",
+      "source": "./peer-message",
+      "strict": false,
+      "version": "1.30.1",
+      "category": "communication",
+      "keywords": [
+        "peer-message",
+        "agent-message",
+        "compatibility-alias",
+        "deprecated"
       ]
     },
     {
@@ -188,10 +218,10 @@
     },
     {
       "name": "daymade-claude-code",
-      "description": "Claude Code operations suite that bundles cross-project prior-work retrieval across code, docs, Skills, meetings, WeChat archives, and conversation history; provider-separated Claude Code and Codex history readers; identity- and lineage-gated continuation workflows; plugin/skill troubleshooting; CLAUDE.md progressive disclosure optimization; statusline configuration; exported .txt repair; full claude.ai conversation extraction with tool-call rendering and file download; plugin marketplace development and suite consolidation; writing/testing/debugging Claude Code hooks; multi-provider profile isolation; personal-memory migration into tool-agnostic AGENTS.md reference docs; one-shot local timers that ping Claude right after subscription quota reset to start a fresh 5-hour usage window; working web search installed on an agent whose relayed model backend cannot execute the built-in one; and terminal-output-to-PNG rendering for visual CLI verification under one shared namespace. Install once to get the full Claude Code power-user toolkit.",
+      "description": "Claude Code operations suite that bundles cross-project prior-work retrieval across code, docs, Skills, meetings, WeChat archives, and conversation history; provider-separated Claude Code and Codex history readers; identity- and lineage-gated continuation workflows; plugin/skill troubleshooting; CLAUDE.md progressive disclosure optimization; statusline configuration; exported .txt repair; full claude.ai conversation extraction with tool-call rendering and file download; plugin marketplace development and suite consolidation; writing/testing/debugging Claude Code hooks; permission-prompt triage for subagents, background workers, and Agent Team teammates; multi-provider profile isolation; personal-memory migration into tool-agnostic AGENTS.md reference docs; one-shot local timers that ping Claude right after subscription quota reset to start a fresh 5-hour usage window; working web search installed on an agent whose relayed model backend cannot execute the built-in one; and terminal-output-to-PNG rendering for visual CLI verification under one shared namespace. Install once to get the full Claude Code power-user toolkit.",
       "source": "./daymade-claude-code",
       "strict": false,
-      "version": "5.1.24",
+      "version": "5.3.20",
       "category": "suite",
       "keywords": [
         "suite",
@@ -206,6 +236,9 @@
         "statusline",
         "troubleshooting",
         "marketplace-dev",
+        "permission-triage",
+        "permissions",
+        "agent-teams",
         "local-source-sync",
         "codex",
         "terminal-screenshot",
@@ -227,6 +260,7 @@
         "./statusline-generator",
         "./claude-export-txt-better",
         "./marketplace-dev",
+        "./claude-code-permission-triage",
         "./terminal-screenshot",
         "./claude-usage-analyst",
         "./claude-switch-models-setup",
@@ -244,7 +278,7 @@
       "description": "OpenAI Codex operations and design exploration suite bundling model-aware long-context workstation setup, local Codex delegation, generated-image review, static visual-direction selection, and runnable HTML interaction Design Boards under one shared namespace.",
       "source": "./daymade-codex",
       "strict": false,
-      "version": "2.4.15",
+      "version": "2.4.24",
       "category": "suite",
       "keywords": [
         "suite",
@@ -274,7 +308,7 @@
       "description": "Word/PDF/PPTX/HTML→MD;MD/Word→PDF;new Word;PDF HTML/translate;Excel/xlsm/Mac;photo/signed scan;Mermaid;DOCX review;doc cleanup Reads one bundled Daymade specialist. New slide decks use deck-creator when installed; generic PDF reading/editing and spreadsheet analysis stay with their own Skills. Retired ppt-creator stays manual-only.",
       "source": "./daymade-docs",
       "strict": false,
-      "version": "1.29.7",
+      "version": "1.29.9",
       "category": "suite",
       "keywords": [
         "suite",
@@ -349,7 +383,7 @@
       "description": "Apple-platform development and operations suite for macOS window capture, TCC and Keychain dialog diagnosis, Full Disk Access repair, iOS/macOS app development, disk cleanup, and launchd watchdogs.",
       "source": "./daymade-macos",
       "strict": false,
-      "version": "1.34.7",
+      "version": "1.34.32",
       "category": "suite",
       "keywords": [
         "suite",
@@ -376,7 +410,7 @@
       "description": "Audio processing suite covering the full speech pipeline: ASR transcription (Qwen3, StepFun) with batch-mode guards against music-only repetition-loop hallucinations, speaker diarization and CAM++ voiceprint identification for multi-speaker recordings, transcript error correction, structured meeting minutes generation, and TTS voice synthesis (StepFun). Install once for the complete audio workflow.",
       "source": "./daymade-audio",
       "strict": false,
-      "version": "1.65.1",
+      "version": "1.65.10",
       "category": "suite",
       "keywords": [
         "suite",
@@ -400,10 +434,10 @@
     },
     {
       "name": "daymade-skill",
-      "description": "Daymade skills core suite. Bundles skill creation, quality review, real Claude/Codex Skill-surface governance, suite-migration reconciliation, and marketplace development tooling under one shared namespace. Skill governance separates canonical source, installed inventory, discovery policy, the fresh model-visible catalog, and router-resolved cold resources instead of optimizing cache counts; it preserves Claude's official versioned-cache lifecycle and verifies selected entries in the real host prompt. Skill verification separates risk classification from evaluation spend: bounded fixes use targeted checks, narrow behavior changes use sampled replays, and paired baselines, graders, benchmarks, or a viewer run only after explicit user authorization or a decision-bearing evidence plan plus opt-in; that authorization does not change the risk tier. Existing-skill edits retain an old-vs-new capability audit and content-bound packaging attestation so prompt compression cannot silently delete runtime contracts. When the official skill-creator plugin is also installed, skill-creator detects the coexistence and offers a consent-based, reversible SessionStart routing hook so the daymade edition wins deterministically; on machines without the official plugin nothing is ever installed.",
+      "description": "Daymade skills core suite. Bundles skill creation, quality review, real Claude/Codex Skill-surface governance, suite-migration reconciliation, and marketplace development tooling under one shared namespace. Skill governance separates canonical source, installed inventory, discovery policy, the fresh model-visible catalog, and router-resolved cold resources instead of optimizing cache counts; it preserves Claude's official versioned-cache lifecycle and verifies selected entries in the real host prompt. It distinguishes in-place Marketplace source replacement from destructive remove-and-restore, preserves plugin options/secrets/data, and requires install-ledger commit identity plus declaration-scope and plugin-state readback. Skill verification separates risk classification from evaluation spend: bounded fixes use targeted checks, narrow behavior changes use sampled replays, and paired baselines, graders, benchmarks, or a viewer run only after explicit user authorization or a decision-bearing evidence plan plus opt-in; that authorization does not change the risk tier. Existing-skill edits retain an old-vs-new capability audit and content-bound packaging attestation so prompt compression cannot silently delete runtime contracts. When the official skill-creator plugin is also installed, skill-creator detects the coexistence and offers a consent-based, reversible SessionStart routing hook so the daymade edition wins deterministically; on machines without the official plugin nothing is ever installed.",
       "source": "./daymade-skill",
       "strict": false,
-      "version": "1.81.2",
+      "version": "1.84.5",
       "category": "suite",
       "keywords": [
         "suite",
@@ -507,7 +541,7 @@
       "description": "Ships pull requests to open-source projects you don't maintain — CONTRIBUTING compliance, PR-size/scope checks, minimal-diff implementation, AI-disclosure PR descriptions, and rebase or bot-review replies. Use for 提 PR / 上游 PR / 贡献代码, \"open a PR\", \"fix this upstream\", \"rebase against main\", \"respond to the bot review\". Not for reviewing PRs as maintainer (use github-review-pr) or general GitHub CRUD (use github-ops).",
       "source": "./github-contributor",
       "strict": false,
-      "version": "1.3.3",
+      "version": "1.3.4",
       "category": "developer-tools",
       "keywords": [
         "github",
@@ -529,7 +563,7 @@
       "description": "Operates GitHub via gh CLI and REST/GraphQL — PRs, issues, Actions, self-hosted Runner inventory/capacity, repos, collaborators, org permissions, 2FA — with explicit target, authorization, and independent readback. Use when a write reports success but state didn't change, or choosing gh/REST/GraphQL/UI-only. Not for local Git recovery (use git-safety-net), maintainer PR review (use github-review-pr), or upstream contribution (use github-contributor).",
       "source": "./github-ops",
       "strict": false,
-      "version": "1.17.1",
+      "version": "1.20.5",
       "category": "developer-tools",
       "keywords": [
         "github",
@@ -548,7 +582,7 @@
       "description": "Reviews PRs against the live base with immutable objects and three-way merges. Use for PR review/merge readiness, main changed, closed-PR reconsideration, open-PR sweeps, review-led repair, or explicitly requested independent review of your own contribution. Not for GitHub CRUD (use github-ops), authoring/maintaining your PR (use github-contributor), or merging without fresh review.",
       "source": "./github-review-pr",
       "strict": false,
-      "version": "1.4.7",
+      "version": "1.4.10",
       "category": "developer-tools",
       "keywords": [
         "github",
@@ -568,7 +602,7 @@
       "description": "Audits, preserves and recovers local Git state before cleanup: unpushed or wrong-branch commits, dirty worktrees, duplicate clones, stashes, dangling commits, squash-merge uncertainty. Use when the user fears lost work, wants to recover a commit, asks if a branch is actually merged, asks whether a branch, worktree or clone is safe to delete, or wants one clean main (误删分支 / 还有没有丢的东西). Not for GitHub PR operations.",
       "source": "./git-safety-net",
       "strict": false,
-      "version": "1.28.9",
+      "version": "1.30.7",
       "category": "developer-tools",
       "keywords": [
         "git",
@@ -670,10 +704,10 @@
     },
     {
       "name": "product-analysis",
-      "description": "Multi-path parallel product analysis with cross-model test-time compute scaling. Spawns parallel agents (Claude Code + Codex CLI) for multi-perspective exploration, then synthesizes findings into actionable optimization plans. Supports self-audit, UX audit, API audit, architecture review, and competitive benchmarking via competitors-analysis skill",
+      "description": "Multi-path parallel product analysis with cross-model test-time compute scaling. Spawns parallel agents (Claude Code agent teams + Codex CLI) to explore product from multiple perspectives, then synthesizes findings into actionable optimization plans. Can invoke competitors-analysis for competitive benchmarking. Use when \"product audit\", \"self-review\", \"发布前审查\", \"产品分析\", \"analyze our product\", \"UX audit\", or \"信息架构审计\".",
       "source": "./product-analysis",
       "strict": false,
-      "version": "1.0.3",
+      "version": "1.0.6",
       "category": "productivity",
       "keywords": [
         "product-analysis",
@@ -831,7 +865,7 @@
       "description": "Diagnoses and designs safe Terraform releases, provisioners (remote-exec/local-exec/file, cloud-init, Compose, Caddy), multi-environment isolation, and fresh-host bootstrap. Use when writing or reviewing plan/apply wrappers or provisioners; when staging/production config may differ; when a rollout can mutate a shared gateway; or debugging drift, TLS, container restarts, DNS duplication, or snapshot contamination.",
       "source": "./terraform-skill",
       "strict": false,
-      "version": "1.5.16",
+      "version": "1.5.17",
       "category": "developer-tools",
       "keywords": [
         "terraform",
@@ -849,7 +883,7 @@
       "description": "MUST be used first for tunnel / proxy-path connectivity failures or slow throughput (网络故障 / 连不上 / 代理或隧道下超时). Diagnoses Tailscale, proxy, TUN, DNS and SSH-tunnel problems on macOS and Windows/WSL, e.g. Tailscale ping works but SSH fails, curl works but browser gets 503, Git/Docker fails behind the proxy, or downloads crawl despite a reachable proxy. Not for application-layer bugs (use debugging-network-issues).",
       "source": "./tunnel-doctor",
       "strict": false,
-      "version": "1.17.19",
+      "version": "1.18.6",
       "category": "developer-tools",
       "keywords": [
         "tailscale",
@@ -877,7 +911,7 @@
       "description": "Fetch Twitter/X post content including long-form Articles with full images and metadata. Use when Claude needs to retrieve tweet/article content, author info, engagement metrics (likes, retweets, bookmarks), and embedded media. Supports individual posts and X Articles (long-form content). Automatically downloads all images to local attachments folder and generates complete Markdown with proper image references. Preferred over Jina for X Articles with images.",
       "source": "./twitter-reader",
       "strict": false,
-      "version": "1.4.0",
+      "version": "1.4.1",
       "category": "utilities",
       "keywords": [
         "twitter",
@@ -978,7 +1012,7 @@
       "description": "Investigates network, streaming and protocol failures with falsification-first layered experiments, the general fallback for unknown root causes. Use for ECONNRESET / RST_STREAM / SSE stalls, CDN/CGNAT timeouts or certificate errors, throughput collapse where everything returns 200 but transfers crawl, or LAN identity/topology mysteries. Not for known Tailscale/TUN/DNS/proxy-path conflicts (use tunnel-doctor).",
       "source": "./debugging-network-issues",
       "strict": false,
-      "version": "1.12.3",
+      "version": "1.12.5",
       "category": "developer-tools",
       "keywords": [
         "debugging",
@@ -1008,7 +1042,7 @@
       "description": "Evidence-driven repository setup, repair, handoff, and safe Git workflow for Claude Code or Codex. Detects the actual stack from project instructions and manifests instead of assuming Python, ffmpeg, uv, or .env; preserves local work during sync/conflict handling; diagnoses repeated SessionStart output before editing config; and defaults routine startup behavior to AGENTS.md/CLAUDE.md or a normal Agent request. Lifecycle hooks are an explicit pre-prompt exception with guarded, idempotent Claude Code setup and runtime-specific Codex verification.",
       "source": "./auto-repo-setup",
       "strict": false,
-      "version": "2.2.3",
+      "version": "2.2.4",
       "category": "developer-tools",
       "keywords": [
         "repo-setup",
@@ -1119,10 +1153,10 @@
     },
     {
       "name": "frontend-visual-qa",
-      "description": "Audits rendered UI and specific task/object-link handoffs; excludes ordinary source citations alone. Audits already-rendered UI and Markdown/Obsidian image layout — web app, deck/slide, dashboard, design-system, or Electron/native app — via real-browser/native-app journeys and a Playwright sweep. Use after UI implementation to find typography, overflow, responsive, routing, data-viz, browser-output, or native-shell defects, or to compare a render against a reference. Not for greenfield UI design (use ui-designer) or QA-program setup (use qa-expert).",
+      "description": "Audits rendered UI, whole-site route censuses and task/object-link handoffs in web apps, decks, dashboards, design systems, Markdown/Obsidian and Electron. Uses real-browser journeys and Playwright for typography, overflow, responsive, routing, data-viz, browser-output or native-shell defects and reference comparisons. Excludes source-only citation checks, greenfield design (ui-designer) and QA setup (qa-expert).",
       "source": "./frontend-visual-qa",
       "strict": false,
-      "version": "1.21.50",
+      "version": "1.22.7",
       "category": "design",
       "keywords": [
         "frontend",
@@ -1320,10 +1354,10 @@
     },
     {
       "name": "report-with-html",
-      "description": "Produces the reader-facing HTML artifact — report, dashboard, architecture view, data browser, or review workbench — evidence-backed, browser-verified. Use when the deliverable IS a visual HTML report, or the user asks for an HTML/web presentation. Load data-visualization-discipline for chart judgment. Not for chat status or Markdown prose unless asked to become a report; not for PowerPoint (deck-creator Route C).",
+      "description": "Produces standalone reader-facing HTML reports/dashboards and review workbenches — evidence-backed, browser-verified. Use for a visual HTML report or requests for “可视化报告”“图表报告” or a standalone HTML dashboard; load data-visualization-discipline before charts. Not for product UI, chat or Markdown unless asked to become a report, or PowerPoint.",
       "source": "./report-with-html",
       "strict": false,
-      "version": "1.7.3",
+      "version": "1.7.6",
       "category": "documentation",
       "keywords": [
         "HTML报告",
@@ -1349,10 +1383,10 @@
     },
     {
       "name": "ghostty-use",
-      "description": "Snapshots local Codex/Claude CLI sessions across terminals and restores IDs in Ghostty after reboot (保存会话/重启前备份/恢复窗口), audits survivors, and makes change-only automatic backups (定期增量快照). Handles unmanaged Codex account switches (额度耗尽换号); Minions native_runtime uses Account Manager. Not --resume help, screenshots or tmux.",
+      "description": "Snapshots local Codex/Claude/agy CLI sessions across terminals and restores IDs in Ghostty after reboot (保存会话/重启前备份/恢复窗口), audits survivors, and makes change-only automatic backups (定期增量快照). Handles unmanaged Codex account switches (额度耗尽换号); Minions native_runtime uses Account Manager. Supports background /compact and targeted Ghostty terminal input (批量压缩 Ghostty 会话). Not --resume help, screenshots or tmux.",
       "source": "./ghostty-use",
       "strict": false,
-      "version": "1.14.2",
+      "version": "1.17.1",
       "category": "developer-tools",
       "keywords": [
         "ghostty",
@@ -1364,7 +1398,10 @@
         "codex",
         "终端会话",
         "会话恢复",
-        "重启恢复"
+        "重启恢复",
+        "background /compact",
+        "targeted terminal input",
+        "批量压缩 Ghostty 会话"
       ]
     },
     {
@@ -1383,6 +1420,26 @@
         "causal-inference",
         "增长",
         "留存"
+      ]
+    },
+    {
+      "name": "ai-quota-calibrator",
+      "description": "Calibrates black-box AI subscription quotas into API dollars, runway, and top burning sessions by reconciling tokscale spend against live provider fractions (Antigravity, Codex, custom caps). Use when asked how big a 5h/weekly quota is, why a pool hit rate limit, or 额度相当于多少钱/反推配额/谁烧光了额度. Not for ccusage audits (claude-usage-analyst) or Codex reset news (tibo-reset-codex).",
+      "source": "./ai-quota-calibrator",
+      "strict": false,
+      "version": "1.2.3",
+      "category": "developer-tools",
+      "keywords": [
+        "quota",
+        "tokscale",
+        "antigravity",
+        "codex",
+        "gemini",
+        "claude",
+        "cost",
+        "calibration",
+        "额度",
+        "配额"
       ]
     }
   ]

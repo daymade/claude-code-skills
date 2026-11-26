@@ -1,11 +1,11 @@
 ---
 name: skill-governance
 description: >-
-  Governs the Claude Code/Codex Skill surface: reconciles source/install/catalog-visibility drift
-  without losing cold capability. Use when users ask how many Skills load, why the catalog is
-  truncated, want routers visible while other bundles stay cold, or need duplicate/superseded-Skill
-  or old-cache cleanup. Not for building a marketplace manifest (use marketplace-dev) or repo audits
-  (use marketplace-health-check).
+  Governs Claude Code/Codex/Antigravity Skill surfaces: reconciles source/install/catalog-visibility
+  drift and adaptive hot/cold evolution without losing cold capability. Use when users ask how many
+  Skills load, why catalogs truncate, want routers hot while bundles stay cold, or need
+  duplicate/old-cache cleanup. Not for marketplace manifests (marketplace-dev) or repo audits
+  (marketplace-health-check).
 ---
 
 # Skill Governance
@@ -47,7 +47,8 @@ Use current runtime truth, not remembered conventions:
 - owned source repos and their manifests for editable Skill behavior;
 - `claude plugin ... --json` for current Claude marketplace/install state;
 - the explicit source-sync activation manifest for managed Daymade links;
-- `~/.agents/skills` as Codex's current user Skill root;
+- `~/.agents/skills` as the shared user Skill root (Codex + Antigravity);
+- `~/.config/skill-governance/hot-set.json` as the adaptive hot/cold SSOT projected to Antigravity (`~/.gemini/config/skills.json`), Codex (`~/.codex/config.toml`), and Claude Code (`~/.claude/settings.json`);
 - exact-path `~/.codex/config.toml` policy for Codex discovery disables;
 - `codex debug prompt-input` for the actual fresh Codex catalog;
 - the installed vendor bundle for third-party cold resources.
@@ -64,13 +65,14 @@ completely before using that workflow.
 
 | Request | Read and use |
 |---|---|
+| Adaptive hot/cold Skill cache evolution & 3-host projection (Claude/Codex/Antigravity) | [`references/adaptive-hot-cold-evolution.md`](references/adaptive-hot-cold-evolution.md) + `scripts/evolve_skill_surface.py` |
 | Explicit delivery contract; verify source owner, registration and installed route | §16, then requested fresh-host gate in §14 |
 | What Codex really loads; count, truncation, duplicate identity, missing router | §3–4, then §11 |
 | Reconcile owned source links or `~/.agents/skills` activation | §2–5, then §11 |
 | Keep gstack/Lark/IMA/UiPath or another bundle cold behind a router | §2–4, §6, then §11 |
 | Claude marketplace/plugin source or installed-state drift | §2–3, §7, then §11 |
 | Old cache versions | §2 and §7 “Exceptional manual cache repair” |
-| Standalone plugins superseded by a suite | §7–8, then §11 |
+| Standalone plugins superseded by a suite, or a renamed Skill with a compatibility-alias plugin (multi-host hook dedup) | §7–8, then §11 |
 | Project `.claude/skills` vs `.agents/skills` drift | §9, then §11 |
 | Retire loose or duplicate Skill directories | §2–3, §10–11 |
 | Decide which Skills stay model-visible vs user-invocable-only | §15, then §11 |
@@ -129,6 +131,17 @@ targets, identical copies, real drift, and invalid state.
   grace for running sessions; manual cache removal is exceptional repair only.
 - Do not use blind marketplace remove-then-add. Removing the last scoped
   marketplace can uninstall its plugins.
+- Do not install from a stale, feature-branch or WIP source checkout. Prefer the
+  official GitHub Marketplace for durable use; verify its complete host-scoped
+  distribution against the intended published ref. If an exact temporary source
+  is required, restore the durable source through a controlled migration and
+  repeat the same complete readback before reporting adoption. Determine the
+  installed CLI's same-name source behavior before migrating: current Claude Code
+  can replace a directory source in place, which preserves plugin state, whereas
+  Marketplace removal can delete plugin options, secrets and data. Treat removal
+  as a separately authorized destructive exception with complete state backup and
+  restore; include install-ledger commit identity, declaration scopes and plugin
+  state in the migration receipt, not only CLI list output.
 - Read every candidate's unique instructions, scripts, references, and assets
   before calling it redundant. Old or short does not mean valueless.
 - Decide model-visible vs user-invocable-only per Skill from usage evidence
@@ -146,6 +159,10 @@ For Daymade source-backed Codex activation, route to the current
 `claude-switch-models-setup` dry-run/apply workflow. Its explicit
 `codex-active-skills.json` owns only links created from declared source
 marketplaces. Do not reimplement its collision, symlink, or pruning logic here.
+When the requested outcome is published-content adoption into a live canonical
+checkout with WIP, use the source owner's
+[published-content adoption procedure](https://github.com/daymade/claude-code-skills/blob/a5dc7829ef3222e1234df08bbbc5de5cbccb48ad/daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md#adopt-published-content-into-a-canonical-checkout-with-wip)
+instead of switching branches, copying a cache, or applying an ordinary sync.
 
 For Claude plugins, inspect current marketplace and install JSON, update or
 reinstall through the official CLI at the original scope, and independently
@@ -169,7 +186,10 @@ All applicable claims must be proven independently:
 - entries intended cold are absent from that catalog;
 - one representative cold capability still resolves and works;
 - source-backed links or Claude installs read back with the intended identity,
-  source/version, and scope;
+  source/version, scope, and complete host-scoped distribution against the published
+  commit; use branch/HEAD as context, not as a substitute for consumed-path equality.
+  Report stale/unknown on any difference or incomplete comparison rather than switching
+  the target branch;
 - any retired bundle and its recovery manifest still exist;
 - unresolved ownership, host-version behavior, or deliberately retained
   exceptions are explicit.

@@ -75,7 +75,7 @@ class ReleaseTests(MainlineGuardTests):
         paths = affected(self.repo, self.base, self.head)
         self.assertEqual(paths, [self.skill])
         stdin = f"refs/heads/feature {self.head} refs/heads/feature {'0'*40}\n"
-        env = dict(self.env, GIT_PII_GUARD_DIR=str(self.root / "absent"))
+        env = self.env.copy()
         blocked = run(self.repo, "bash", ".githooks/pre-push", "origin", str(self.remote), input_text=stdin, env=env, check=False)
         self.assertNotEqual(blocked.returncode, 0, blocked.stdout + blocked.stderr)
         self.assertIn("skill release blocked", blocked.stderr)
@@ -111,7 +111,7 @@ class ReleaseTests(MainlineGuardTests):
             rr.verify(self.repo, run(self.repo, "git", "rev-parse", "HEAD").stdout.strip(), [self.skill])
 
     def test_lightweight_annotated_and_published_tags(self):
-        env = dict(self.env, GIT_PII_GUARD_DIR=str(self.root / "absent"))
+        env = self.env.copy()
         run(self.repo, "git", "tag", "-a", "review-probe", "-m", "fixture", self.head)
         annotated = run(self.repo, "git", "rev-parse", "refs/tags/review-probe").stdout.strip()
         for sha in (self.head, annotated):

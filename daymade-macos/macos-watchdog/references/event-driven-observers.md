@@ -140,6 +140,16 @@ Implement in the observer and convergence worker:
 - A persistent watcher process needs its own supervision policy (an explicit
   `KeepAlive` policy and crash handling). `WatchPaths` alone supervises
   nothing; do not describe a WatchPaths-triggered job as a resident watcher.
+- **Prevent self-triggering write/prune loops**: never rewrite, rotate, or
+  prune the watched path unconditionally inside the handler; every write resets
+  the path's mtime/inode and re-arms `launchd` on the next `ThrottleInterval`
+  beat. Separate handler state from the trigger file, or gate maintenance
+  rewrites behind a strict size/age threshold under a shared sidecar lock.
+- **Keep noisy low-value writes out of watched files**: appending frequent
+  read-only telemetry (e.g., list/browse calls) to a `WatchPaths` target fires
+  the job immediately and burns the `ThrottleInterval` window, delaying or
+  starving high-value mutations that arrive seconds later. Only emit
+  state-changing signals to watched paths.
 
 ## Failure and unknown paths
 
@@ -166,7 +176,10 @@ Implement in the observer and convergence worker:
    observer's version or lifecycle. Explain its business work from the declared
    inputs, current phase and latest completed outcome, including failed rounds.
 3. Inspect the exact service with `launchctl print gui/$(id -u)/<label>` and
-   the worker's own task/queue state. A missing PID alone does not prove there
+   the worker's own task/queue state. When batch-upgrading or reloading a group
+   of LaunchAgents, also check `launchctl print-disabled gui/$(id -u)` so
+   intentionally disabled legacy or superseded jobs stay disabled rather than
+   being silently re-enabled. A missing PID alone does not prove there
    is no pending work. Coordinate or defer replacement if ownership, active
    work or pending intent is unknown; preserve pending intent for recovery.
    A shared daemon's PPID identifies a launcher, not a session. Low CPU, GUI exit
@@ -238,6 +251,19 @@ Require ALL of the following before declaring done:
 8. Failure-path evidence: force a failing convergence and capture stderr/exit
    status. Do not accept success-side freshness (log mtime, last-success
    timestamp) as health.
+
+When file events and periodic refresh have different jobs, also replay both
+orders against the actual consumer, using a distinguishable input in each:
+
+| Order to exercise | Expected result |
+| --- | --- |
+| Change an input that only the periodic path refreshes. Trigger the scheduled entry once while an event-driven run still holds the lock and once just after that run finishes. | Each scheduled refresh runs once and its downstream output includes the changed input. |
+| Deliver a file event after an active refresh has read its input, while it still holds its execution lock or is finishing. | The follow-up output includes the marked change within the delivery window. With valid refresh evidence, the follow-up uses that evidence and makes zero extra expensive refreshes. |
+
+Read the output content and count refresh invocations for each order. A lock
+that serializes execution also needs a way for contending work to wait or remain
+pending until consumed. Test that boundary with a controlled fixture instead
+of waiting for the timing to recur in production.
 
 Sources: `man launchd.plist` and `man launchctl` for key and command semantics;
 Apple's [Creating Launchd Jobs](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingLaunchdJobs.html)

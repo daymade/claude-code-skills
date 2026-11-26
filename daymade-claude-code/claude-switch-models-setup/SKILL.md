@@ -212,8 +212,14 @@ When the user says something like "set up Claude Code profiles" or "I want to us
      - `ENABLE_TOOL_SEARCH: "false"`
      - `DISABLE_GROWTHBOOK: "1"`
      - `DISABLE_TELEMETRY: "1"`
-     - `DISABLE_AUTOUPDATER: "1"`
+     - *(Optional)* `DISABLE_AUTOUPDATER: "1"` — only needed for offline or version-pinned setups. Native auto-update fetches only from public `downloads.claude.ai/claude-code-releases` without using Anthropic account login, so leaving it unset lets third-party profiles keep the shared `claude` binary up to date automatically.
    - Optionally pin `CLAUDE_CODE_EFFORT_LEVEL` (e.g. `"max"`) when this provider's model benefits from a forced thinking effort different from the default profile's. It belongs in this provider file — never in the profile's `settings.json` env, where the converger deletes it (see "Per-profile thinking effort" under How It Works).
+   - Keep `~/.claude/settings/<provider>.json` host-portable: put only host-independent routing, isolation flags, effort pins, and tool-name `permissions` here. Do **not** copy host-specific absolute-path `hooks` (such as `/Users/<user>/scripts/...`) into provider settings files — hooks are converged per machine from that machine's default `~/.claude/settings.json` by `sync-profile-settings.py`, and hardcoded host paths break when the profile file is synced to Linux or another username.
+   - **Upgrading or cloning a sibling provider profile (`<old>` → `<new>`):** `sync-profile-settings.py` intentionally does not manage provider settings files, profile-local `CLAUDE.md`, shell aliases, or fleet policy. When retiring one model generation for a sibling profile, align each layer below explicitly and read each back:
+     1. `~/.claude/settings/<new>.json`: carry over host-portable `permissions` (`deny`/`allow`), isolation flags, context-window configuration, and `CLAUDE_CODE_EFFORT_LEVEL` from `<old>.json` (keep host-specific `hooks` out).
+     2. `~/.claude-profiles/<new>/CLAUDE.md`: if `<old>` carried profile-local session constraints (such as rules paired with a `permissions.deny` entry), mirror and update them for `<new>`.
+     3. Shell aliases (`~/.zshrc` / `~/.bashrc`): add or repoint shortcuts so interactive shells launch `<new>`, and read back via an interactive shell (`alias <name>`).
+     4. Managed worker/fleet model policy (if configured on the host): update the allowed profile list, sync reachable workers, and record any offline workers separately.
 
 5. **Initialize profile directories**
    - Run `claude-profiles-init`
@@ -240,6 +246,7 @@ When the user says something like "set up Claude Code profiles" or "I want to us
    - Skip this for normal students or users who do not edit the skill source repos
    - Read the [host-specific activation contract](references/local-source-sync-architecture.md#host-specific-user-skill-activation), then edit the machine's activation manifest for the requested hosts. Use its compatibility rules only for consumers that still retain a legacy path.
    - Preview with `python3 ~/.config/claude-switch-models-setup/sync-local-skill-sources.py`, read every affected path, then apply with `python3 ~/.config/claude-switch-models-setup/sync-local-skill-sources.py --apply`.
+   - If the target canonical checkout has in-scope WIP or must consume published bytes without changing HEAD/index, do not use that ordinary preview/apply pair as a substitute for adoption. Follow the [published-content adoption procedure](references/local-source-sync-architecture.md#adopt-published-content-into-a-canonical-checkout-with-wip), including host scope, writer handoff, exact-tree comparison, backup/atomic write, and the pre-apply owner/inventory recheck. If HEAD must advance instead, wait for the WIP owner and use a verified guarded synchronizer.
    - On a maintainer macOS machine, run `~/.config/claude-switch-models-setup/sync-local-skill-sources-daemon.sh --install`
    - This watches the activation manifest, default Claude install state, and local marketplace manifests, then repairs derived state after selection, install/uninstall, or plugin topology changes
 
@@ -292,7 +299,7 @@ python3 ~/.config/claude-switch-models-setup/sync-local-skill-sources.py --apply
                                # Maintainers: install automatic macOS watcher
 ```
 
-These are not day-to-day commands. Edits to activated canonical sources are live through symlinks. The one-shot commands are for repair, bootstrap, or non-macOS environments without the LaunchAgent watcher.
+These are not day-to-day commands. Edits to activated canonical sources are live through symlinks. The one-shot commands are for repair, bootstrap, or non-macOS environments without the LaunchAgent watcher. When a repair would adopt a published ref into a live canonical checkout, use the [published-content adoption procedure](references/local-source-sync-architecture.md#adopt-published-content-into-a-canonical-checkout-with-wip) instead of treating `--apply` as sufficient.
 
 ## Provider Templates
 
@@ -504,11 +511,11 @@ Fix: Ensure the profile's `settings.json` sets:
   "env": {
     "ENABLE_TOOL_SEARCH": "false",
     "DISABLE_GROWTHBOOK": "1",
-    "DISABLE_TELEMETRY": "1",
-    "DISABLE_AUTOUPDATER": "1"
+    "DISABLE_TELEMETRY": "1"
   }
 }
 ```
+(Add `"DISABLE_AUTOUPDATER": "1"` only when you intentionally want to pin the CLI version or stay offline; native auto-update uses the public release bucket without Anthropic account credentials.)
 
 ### Subagent calls fall back to a different model
 

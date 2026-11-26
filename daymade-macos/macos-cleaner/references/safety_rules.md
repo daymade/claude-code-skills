@@ -99,6 +99,8 @@ Prefer moving to Trash over permanent deletion:
 uv run scripts/safe_delete.py "/exact/approved/path"
 ```
 
+Note: Finder's AppleScript `delete (POSIX file ...)` without `as alias` fails with `(-1728) Can't get POSIX file` on paths such as dot-hidden directories (`~/.npm/_npx`). When Finder Trash fails, do not switch to an ungated shell command; route recoverable moves through the gated `_quarantine-` `mv` fallback documented in `SKILL.md` or use authorized `scripts/safe_delete.py` for verified disposable caches.
+
 ## Never Delete These
 
 ### System Directories

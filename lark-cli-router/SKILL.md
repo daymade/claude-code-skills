@@ -167,6 +167,13 @@ a replacement.
    contract. If it defines none, perform the narrowest independent read that proves
    the requested state changed. A guide that explicitly forbids an opportunistic
    second query takes precedence. Report partial results or missing coverage.
+   - Do not guess response wrapper field names when scripting readbacks (for
+     example, `im +messages-mget` returns `data.messages`, not `data.items`):
+     inspect a live JSON sample or `lark-cli schema` before locking parser keys.
+   - Before writing to a Base/Bitable table, inspect `+field-list` so scripts
+     skip read-only `formula`/computed columns. After batch `+record-upsert`
+     writes, allow brief eventual consistency before a unified `+record-list`
+     readback rather than failing immediately on a single-row `+record-get`.
 
 On authentication or permission errors, load `lark-shared` and its embedded
 `lark-shared/references/lark-shared-identity-and-permissions.md`. Follow its

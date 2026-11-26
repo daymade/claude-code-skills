@@ -28,19 +28,10 @@ Tool results are outside this prose index; use the owning exact-session reader
 to verify them. Live-source raw search is disabled. Add `--include-agent-prompts`
 only when the question is specifically “how did I instruct the agent?”
 
-Corollary, measured 2026-10-22: an event that happened purely inside tool calls
-(a capture/cleanup command nobody narrated) has **zero footprint in both recall
-modes** — 19 candidate sessions overlapping the event window ranked nothing,
-because there was no prose to rank. Absence from recall therefore cannot even
-support "no session did it." The probe that still works: pin a high-entropy
-exact string the event must have produced (a `time_ns`-named artifact doubles
-as its own creation timestamp — read the name, get the moment), then
-literal-grep one physically date-scoped day directory (Codex
-`sessions/YYYY/MM/DD/`) for that needle. Zero needle hits across the day is a
-strong elimination of session-origin; pair it with the index's session
-inventory (started/ended) before concluding the trigger left no session record.
-(Claude-side equivalent for the same gap: `analyze_sessions.py tool-calls`;
-the day-directory needle is for Codex rollouts, which that tool does not read.)
+For an event recorded only inside a tool call, confirm the session and event
+window before reading original records. Follow the
+[Claude tool-call evidence route](../SKILL.md#original-tool-callresult-evidence)
+or the [Codex tool and record evidence route](../../read-codex-history/SKILL.md#original-tool-and-record-evidence).
 
 ## One-time setup
 
@@ -62,8 +53,15 @@ semantic retrieval.
 
 ## Build and refresh
 
-Build the versioned finder database from Claude active homes plus every archive
-in `~/.claude/history-sources.json`:
+Use the incremental prose/FTS command for scheduled and routine refresh:
+
+```bash
+python3 scripts/history_index.py index
+```
+
+For an intentional replacement of the finder database from available originals,
+verify the [source registration](../SKILL.md#evidence-surface-and-completeness)
+and use the same source scope:
 
 ```bash
 python3 scripts/history_index.py index --rebuild
@@ -72,14 +70,23 @@ python3 scripts/history_index.py index --rebuild
 The rebuild writes a separate building database, validates its schema and
 frontier, checkpoints it, and only then atomically replaces the active index.
 Incremental reconciliation is one transaction: a mid-update failure cannot
-leave half the sessions updated under the previous complete marker. Session
-freshness fingerprints include content SHA-256, not only size and mtime.
+leave half the sessions updated under the previous complete marker. When
+diagnosing a slow refresh, measure the three stages separately:
 
-Run an incremental prose/FTS refresh after new conversations:
+- **Discovery** still enumerates scoped files and collects metadata. It reuses
+  file-derived discovery metadata while the cached filesystem identity matches.
+- **Fingerprinting** reuses a verified digest for the same file identity
+  (device, inode, size, mtime and ctime). New, changed or unproven files are
+  read and hashed. The writer parses bodies for sessions it must reconcile.
+- **FTS writes** update postings for added, changed or removed sessions. On an
+  existing index, a missing `last_indexed_at` or one that differs from
+  `fts_maintained_at` marks the previous write as unqualified. The indexer
+  sweeps stored injected records for both providers and rebuilds postings. A
+  tokenizer or dictionary identity change also triggers a rebuild. A missing
+  or changed saved prefix policy triggers a sweep for that provider.
 
-```bash
-python3 scripts/history_index.py index
-```
+Initial cache population and an FTS migration can each be expensive. Measure
+steady-state refresh after both have completed.
 
 Scope a diagnostic build when needed:
 
@@ -171,48 +178,30 @@ with `--batch-size`, `--memory-limit-gb`, or `--cache-limit-gb` only after a
 bounded canary demonstrates a stable working set; the memory limit is a hard
 stop, not a throughput recommendation.
 
-Why this is load-bearing: on 2026-08-27 the former batch-64 loop had no cache
-limit and never called `mx.clear_cache()`. During a real incremental run, its
-process was user-observed past 70 GiB and was killed with exit 137 after 12,800 chunks. MLX's
-Metal allocator keeps freed buffers for reuse unless its cache is bounded or
-cleared. After the fix, a 90-second real-index canary embedded 1,872 chunks,
-held observed process RSS near 1.5 GiB, reported a 2.13 GB MLX active-memory
-peak, and exited normally under the 8 GiB limit.
+Check process memory as well as MLX active memory when changing these limits.
+The Metal allocator can retain freed buffers in its cache.
 
 ## Boilerplate policy: what never earns a vector
 
 Most of what a harness writes into a transcript was never said by anyone. Two
 mechanisms keep it out, at two different layers.
 
-**Records: machine-injected blocks are dropped by prefix.** Each provider has
-its own list, because the evidence is per harness: Codex delivers
-`<user_instructions>`, `<environment_context>`, `<goal_context>`,
-`<subagent_notification>` and `<skill>` as `role="user"` messages, and Claude
-Code delivers `<task-notification>` and `<teammate-message` the same way on the
-main thread — past the sidechain test that hides agent prompts, so they used to
-rank exactly like something a person typed. The Claude pair was measured at
-4,417 records across 712 sessions and 7.66M tokens, 11.5% of all Claude token
-mass, every one of them stored with `noise=0` and `agent_prompt=0`. Extraction
-skips these, and `index` also sweeps records already stored, because a session
-is only re-extracted when its file changes: an archived rollout would otherwise
-keep its injected records forever. The sweep is reported as `records_pruned`,
-matched with `substr` rather than `LIKE` (every Codex prefix contains `_`, which
-LIKE reads as a wildcard), scoped to the provider the evidence came from, and
-run before the FTS rebuild — `records_fts` is external-content, so a deleted
-record stays lexically searchable until the index is rebuilt from its content
-table.
+**Records: machine-injected blocks are dropped by prefix.** Extraction uses
+the [indexer's provider-specific prefix policy](../scripts/history_index.py).
+The same policy reconciles stored records under the conditions in
+[Build and refresh](#build-and-refresh), including records from unchanged
+session files. The sweep reports `records_pruned` and matches literal prefixes,
+including underscores. During incremental FTS maintenance, the delete trigger
+removes the corresponding postings within the same transaction.
 
 **Chunks: a verbatim repeat keeps exactly one embeddable copy.**
-`BOILERPLATE_MIN_COPIES = 3` is the threshold, applied on `chunks.text_hash`
-(schema v3). Measured on the live index: 68% of the 125,687-chunk embedding
-backlog was exact duplicates by text, 94% of the duplicated texts appeared in
-two or more sessions, and tagged plus untagged boilerplate together accounted
-for 42.6M of the 60.7M backlog tokens. The already-embedded set carries roughly
-23M tokens of the same material. Only the lowest-id copy stays `usable=1`; the
-rest become `usable=0`, which means *lexically searchable, but no vector*:
+`BOILERPLATE_MIN_COPIES` in [the indexer](../scripts/history_index.py) sets the
+duplicate threshold for eligible chunks sharing a `chunks.text_hash`. At the
+threshold or above, only the lowest-id eligible copy stays `usable=1`. The rest
+become `usable=0`, which means *lexically searchable, but no vector*:
 `usable` is consulted only by the embed queue, the vector query join and the
 status counts, while BM25 runs on `records.fts_text` and never looks at chunks.
-Nothing is deleted, so a text that falls back under three copies is restored on
+Nothing is deleted, so a text that falls below the threshold is restored on
 the next pass. The pass is idempotent and runs on every `chunk` invocation,
 including one that added nothing — the policy depends on what is stored, not on
 what that run produced. The nightly `chunk` stage runs without `sqlite-vec`, so
@@ -275,17 +264,16 @@ an ETA derived from remaining tokens over that recent token rate, and
 stderr, so `embed --json` leaves stdout one parseable document — the launchd
 job captures both streams in the same log, so nothing is lost. `embed` returns
 `embedded`, `embedded_tokens`, `remaining`, `remaining_tokens`,
-`orphan_vectors_dropped`, `demoted_vectors_dropped` and `stop_reason`. The two
-drop counts are the receipt for the only destructive step in this stage, and
-they are the deferred half of the chunk stage's `vectors_dropped: null`: an
+`orphan_vectors_dropped`, `demoted_vectors_dropped` and `stop_reason`. The
+drop fields report cleanup deferred by the chunk stage's `vectors_dropped: null`. An
 orphan is a vector whose chunk no longer exists, a demoted one is a vector
 whose chunk is now `usable=0`. `index --json` keeps the same rule — its
-per-500-session build progress goes to stderr too, so a fresh build or
+build progress goes to stderr too, so a fresh build or
 `--rebuild` still prints one JSON document on stdout.
 
 **One writer at a time.** `index`, `chunk` and `embed` take an exclusive
 `flock` on `<db_path>.lock` for the length of the command, wait up to
-`WRITER_LOCK_WAIT_SECONDS` (900 s, announced on stderr) if another run holds
+`WRITER_LOCK_WAIT_SECONDS` (announced on stderr) if another run holds
 it, and only then fail with the lock's path. The wait exists because the
 nightly script treats any non-zero exit as a failed night: refusing instantly
 made a one-second overlap with a manual run cost that night's index, chunk
@@ -348,11 +336,10 @@ uv run --with sqlite-vec python scripts/history_index.py status --json
 ```
 
 Add `--check-sources` to compare every current session-copy fingerprint with the
-indexed frontier. This is slower because it enumerates and content-hashes the
-source corpus. The requested source/project scope must exactly match the stored
-active scan scope (the full database scope when nothing is retired); a mismatch
-fails instead of calling healthy out-of-scope
-sessions stale:
+indexed frontier. This enumerates the source scope and hashes files without a
+matching cached proof. The requested source/project scope must exactly match
+the stored active scan scope (the full database scope when nothing is retired).
+A mismatch fails before any sessions are counted as stale:
 
 ```bash
 uv run --with sqlite-vec python scripts/history_index.py status --check-sources --json
@@ -440,31 +427,17 @@ one column. Each step checks the table before altering it and commits each
 backfill batch, so an interrupted migration re-runs cleanly, and none of it
 needs `sqlite-vec`.
 
-## Deleting source sessions deletes their index rows (measured 2026-10-21)
+## Deleting source sessions deletes their index rows
 
-The index is not a retrieval-preserving layer over deleted content. The daily
-reconciliation task (`claude-history-index.dailyupdate`) computes
-`set(known) - set(current)` and purges vanished sessions cascade-style —
-records, then chunks, then vec_chunks (`history_index.py:1759-1764`). After
-the next daily run, deleted sessions are permanently unsearchable unless they
-are restored to their original path; the state DB keeps dangling rows for
-purged sessions (current inventory: 15,202 rollout paths).
+On refresh, the index removes ordinary sessions that have vanished from the
+registered sources. Explicit retirement is an exception for a registered
+source identity, as described in [Build and refresh](#build-and-refresh).
+It cannot preserve an arbitrary subset of a still-active source.
 
-Two adjacent traps, both measured: a sibling FTS store can be an empty shell
-while looking like a search layer (`search.sqlite` 8.9 G with
-`indexed_sessions`/`search_chunks` both 0 rows — 31 G of October sessions
-never entered it, and its server-side per-session DELETE path is not
-preservation); and source retirement exists as precedent (9 claude profiles
-retired with 94,005 rows kept) but its granularity is the *whole home* —
-retiring all of `~/.codex` would freeze future indexing, which is not
-acceptable for an active home.
-
-The only deletion-safe path that preserves search: build a standalone archive
-index first — `history_index.py --db <archive-db> index --rebuild` against
-the archived copy — or accept that searching old sessions means untarring the
-archive. Any disk-cleanup plan that touches session homes must state this
-tradeoff in the plan; deletion + daily reconciliation is the point of no
-return.
+Where a plan calls for retaining search over a separate archive, build an
+isolated index with the archive's registered source scope and verify a known
+search hit against its original record. A SQLite file's existence or size
+does not prove archive coverage.
 
 ## Maintainer smoke checks
 
@@ -473,6 +446,14 @@ Run the standard-library tests on every platform:
 ```bash
 python -m unittest discover -s tests -p 'test_*.py'
 ```
+
+For refresh performance, use the synthetic tests in `tests/test_history_index.py`
+with a disposable database and fabricated sessions. After the initial build,
+assert zero session-body opens for unchanged files on a warm refresh and after
+a single edit to a different file. Verify that added and replacement terms
+become searchable, superseded and deleted terms disappear, and unchanged terms
+remain searchable. Trace the routine refresh to confirm it issues no FTS rebuild.
+Use the fixture to verify this behavior and leave the live index untouched.
 
 On macOS arm64, additionally build a disposable project-scoped index and query
 it through real `libsimple`; then chunk/embed a small fixture and verify one

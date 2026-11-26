@@ -1,12 +1,10 @@
 ---
 name: frontend-visual-qa
 description: >-
-  Audits rendered UI and specific task/object-link handoffs; excludes ordinary source citations alone.
-  Audits already-rendered UI and Markdown/Obsidian image layout — web app, deck/slide, dashboard, design-system, or Electron/native app
-  — via real-browser/native-app journeys and a Playwright sweep. Use after UI implementation to find
-  typography, overflow, responsive, routing, data-viz, browser-output, or native-shell defects, or
-  to compare a render against a reference. Not for greenfield UI design (use ui-designer) or
-  QA-program setup (use qa-expert).
+  Audits rendered UI, whole-site route censuses and task/object-link handoffs in web apps, decks, dashboards,
+  design systems, Markdown/Obsidian and Electron. Uses real-browser journeys and Playwright for typography,
+  overflow, responsive, routing, data-viz, browser-output or native-shell defects and reference comparisons.
+  Excludes source-only citation checks, greenfield design (ui-designer) and QA setup (qa-expert).
 ---
 
 # Frontend Visual QA
@@ -32,7 +30,10 @@ profile that covers the request:
 - **page contract** — dashboard/admin, landing/deck, design-system artifact,
   browser tool/game, map/GIS, or review tool;
 - **reference parity** — comparison with a named screenshot, product, or tier;
-- **data visualization** — chart hierarchy, tokens, semantics, and accessibility.
+- **data visualization** — chart hierarchy, tokens, semantics, and accessibility;
+- **whole-site census** — sitemap-derived route coverage and repeatable structural
+  errors across declared viewports, used to choose where full visual inspection
+  is required.
 
 For a specific task/object link handoff, select **state and journey** for that
 destination, including authoritative machine and run/job identity when titles
@@ -184,6 +185,14 @@ Use the strongest level required by the claim:
 | C | Fresh headless mechanical sweep from the bundled script | Overflow, wrapping, images, basic layout heuristics, screenshot candidates |
 | D | Source, lint, build, unit tests, or static DOM reasoning | Hypotheses and regression support only |
 
+On macOS, one-shot Playwright/headless automation defaults to **Chrome for Testing**
+or Playwright's bundled Chromium. It never silently falls back to regular
+`/Applications/Google Chrome.app`. `CHROME_PATH` is an explicit override; regular
+Chrome also requires `FRONTEND_VISUAL_QA_ALLOW_CLONING_CHROME=1`, because a terminated
+launch leaves a `code_sign_clone` app bundle in the user temp directory. The bundled
+`visual_layout_audit.mjs` and `route_census.mjs` share this resolver. Inline Playwright
+remains operator-controlled, so close the browser in `finally` and keep a hard timeout.
+
 Do not promote a lower level into a stronger conclusion:
 
 - A screenshot path that was never opened has no visual evidence value.
@@ -254,7 +263,8 @@ run final evidence on the original URL. The detailed page-state probe,
 §2–§5. Record the final URL and dimensions before CSS diagnosis, then restore
 the user's expected viewport when finished.
 
-For unstyled-page complaints or shared route-style changes, run the
+For unstyled-page complaints or shared route-style changes (including lazy-loaded
+route CSS chunks), run the
 [cold-entry then warm-return check](references/browser-driving-and-observation-traps.md#cold-entry-before-warm-return)
 before accepting a correctly styled return visit.
 
@@ -418,11 +428,84 @@ Pass headers through `--header-env "Name: ENV_NAME"`; argv contains only the
 header/env names, never the value. Raw `--header` is disabled. Values stay on the
 target origin; TLS stays enabled except for an explicitly trusted self-signed origin.
 
+#### Whole-Site Route Census
+
+For a release-wide or sitemap-owned surface, enumerate canonical routes and run
+the bounded structural census from the audited project so it resolves that
+project's existing Playwright dependency:
+
+    node <skill-root>/scripts/route_census.mjs \
+      --url 'https://reader.example/' \
+      --viewport 1440x900 --viewport 390x844 \
+      --limit 20 --out <new-empty-directory>
+
+Use `--sitemap <url-or-file>` instead of `--url` when the sitemap is not at the
+site-root `sitemap.xml`. Sitemap indexes are followed recursively; canonical
+routes retain sitemap order, are de-duplicated, and `--limit` both selects the
+first N and stops discovery with `discovery.truncated: true`. Discovery is also
+capped at 100 sitemap documents and 10,000 routes. A run accepts at most 20
+viewport entries and 100 explicit probes. With no `--viewport`, the census uses
+1440x900 and 390x844.
+
+URL boundaries fail closed: an HTTP(S) root never follows `file:` children; a
+local file root follows only `file:` children inside its own directory; canonical
+routes and probes are same-origin by default. Use `--allow-origin <origin>` only
+for an intentional cross-origin route set. Loopback, private and link-local
+targets require an exact `--allow-target <host>` entry. Sitemap redirects are
+validated hop by hop before the next fetch, and browser main-frame redirects are
+intercepted and checked before continuation. The browser policy applies only to
+main-frame navigations; cross-origin iframes and subresources are not blocked by
+the route-origin rule. Hostnames are also resolved and rejected when they map
+into restricted address space; documentation-only hosts (`example.*`, `.test`,
+`.invalid`) are exempt for fixtures. This reduces DNS-based bypasses but cannot
+eliminate DNS rebinding between validation and connection.
+Each route/viewport has a 45-second hard deadline covering navigation, readiness
+and evaluation; override it only with `--route-timeout-ms <1000-300000>`.
+
+Use `--probe <url> --probe-expected-status <status>` for a deliberate probe such
+as an unknown localized-404 route. Probe records carry
+`routeKind: "localized-404-probe"` and `expectedStatus`; a matching 404 is an
+observation, not a confirmed census error. Canonical records carry
+`routeKind: "canonical"` and expect HTTP 200 unless the route set is explicitly
+modeled another way.
+
+It writes `records.jsonl` plus `summary.json` and checks unexpected statuses,
+fatal page/navigation/deadline failures, horizontal overflow, console errors,
+broken and pending viewport-visible images, missing alt text, broken same-page
+hash targets, duplicate IDs, missing/duplicate visible H1, missing visible main
+landmark, and empty rendered text. Path-style hash routes such as `#/app` and
+hashbangs such as `#!dashboard` or `#!` are not treated as element anchors. Pending images
+are warnings; the other listed conditions are confirmed errors. Exit 0 means no
+confirmed structural error, 1 means at least one, and 2 means invalid input or
+runtime/setup failure. Records retain sitemap order through `routeIndex` and
+persist only redacted, hashed route evidence; keep any exact-route mapping local
+and out of shared evidence.
+
+The census is Level C triage and **does not clear visual acceptance**. It does
+not inspect composition, typography, crop, focus appearance, or the user journey,
+and a zero exit is not a visual pass. For every appearance claim, capture the
+affected routes with `visual_layout_audit.mjs` or the canonical harness and
+**open every cited screenshot**; an unopened screenshot or a clean
+`summary.json` cannot support “looks correct.”
+
 Run the probe regressions from a project that already provides Playwright:
 
 ```bash
 node --test <skill-root>/tests/test_silent_degradation_probe.mjs
+node --test <skill-root>/tests/test_browser_runtime.mjs
+node --test <skill-root>/tests/route-census/test_route_census.mjs
+node --test <skill-root>/tests/route-census/test_visual_layout_audit_regressions.mjs
+python3 -m unittest discover -s <skill-root>/tests -p 'test_verify_delivery.py'
 ```
+
+For delivery-byte checks, record the exact request profile. `verify_delivery.py`
+accepts `--user-agent` and includes it in its JSON report. Provider/custom-domain
+middleware can inject or rewrite HTML by User-Agent or cookie state, so compare
+raw bytes only when the request profile and response transformations are the
+same. If a custom-domain HTML response differs from the frozen build, verify the
+release identity and source/research links in the real browser and byte-compare
+static assets; do not report custom-domain HTML as an exact-byte pass. Never
+patch the verifier in memory to hide the profile difference.
 
 ### 5. Exercise Journeys And Outputs
 
@@ -492,6 +575,12 @@ Load
 [references/data_viz_tier_and_token_audit.md](references/data_viz_tier_and_token_audit.md)
 only for reporting-grade data pages, named tier/reference comparisons, chart
 token audits, or categorical palettes.
+
+Load
+[references/interaction-complexity-and-motion.md](references/interaction-complexity-and-motion.md)
+when auditing or polishing UX complexity, undo/bulk state safety, state-transition
+motion, `prefers-reduced-motion`, dark-mode contrast, or adversarial breakpoint
+and overlay boundaries.
 
 Before reporting a nontrivial audit, re-walk the primary path as a tired user
 without debugger context. Look first for unclear trigger or mode ownership,
@@ -582,7 +671,11 @@ produced one:
 - **Shoot the "before" while the defect still exists.** After the rebuild it is
   unreproducible, and a closure report can then only assert the improvement.
   Reuse the identical crop window for the after-shot so the pair differs by one
-  variable.
+  variable. For multi-page or full-surface UX/motion overhauls, freeze matched
+  before-edit baselines across the affected routes, states, and supported
+  viewports declared in the audit contract, and deliver a scale-matched
+  before/after visual comparison alongside the code so reviewers can verify
+  every surface without reconstructing diffs.
 - **Grep a new shared name before introducing it.** A token named after a word
   the file already spent (`rail`, `bar`, `card`) silently overrides or gets
   overridden depending on definition order, changing two subsystems at once
@@ -603,6 +696,12 @@ Call **current-render status** verified only when:
 - relevant viewports and lower sections were covered;
 - affected interactions and outputs were exercised at the required evidence
   level;
+- for any browser-automation lifecycle, launcher, or clone fix, the complete
+  active browser-launcher surface was enumerated (`chromium.launch`,
+  `executablePath`, browser wrappers, capture scripts, browser-backed tests and
+  any other active launch path); scanned roots and historical run artifacts
+  excluded from that census were recorded, and every active launcher uses the
+  shared non-cloning resolver or has a recorded exception;
 - no unresolved Blocker/Major finding contradicts the pass;
 - every explicit pass condition is met, including information necessity when
   layout/density or release readiness is in scope; calling a violation Moderate,
@@ -610,7 +709,12 @@ Call **current-render status** verified only when:
   “still usable” does not override a user's requirement;
 - remaining limitations are explicit.
 
-Call **fix-closure status** verified only after an authorized fix is rechecked against the same canonical target/state/viewport; otherwise use partial or blocked.
+Call **fix-closure status** verified only after an authorized fix is rechecked
+against the same canonical target/state/viewport. For a browser-automation
+lifecycle, launcher, or clone fix, this additionally requires **current-render
+status: verified** and the recorded complete active browser-launcher census
+described above; a target recheck alone cannot close that fix class. Otherwise
+use partial or blocked.
 
 Otherwise report **partial** or **blocked**. Never ask the user to perform a
 check the available agent tools can perform.
@@ -619,6 +723,9 @@ check the available agent tools can perform.
 
 - scripts/visual_layout_audit.mjs — Playwright-powered mechanical viewport,
   layout, and media-state sweep with screenshots and JSON evidence.
+- scripts/route_census.mjs — sitemap-derived whole-site structural census with
+  JSONL records, aggregate summary, documented exit codes, and no screenshot or
+  visual-acceptance claim.
 - scripts/attention_inventory.mjs — observed text/geometry, repetition and label
   echo inventory used by the sweep; it never certifies necessity.
 - scripts/painted_text_probe.mjs — vertical text-fragment clipping used by the
@@ -636,6 +743,10 @@ check the available agent tools can perform.
   (proxy, CSP entry point, server-log triangulation).
 - references/data_viz_tier_and_token_audit.md — conditional data-viz,
   reference-tier, token, and palette audit.
+- references/interaction-complexity-and-motion.md — UX complexity-elimination
+  axes, state-transition GPU motion standards, and adversarial boundary matrix
+  (hidden pointer-events, `inert` focus isolation, breakpoint resize cleanup,
+  clamped splits, mobile touch targets, dark-mode contrast).
 - references/reference-parity-decomposition.md — the reference-parity profile's
   method: measured structural inventory of the named reference before judging or
   fixing, per-relationship parity verdicts with match criteria, why self-authored

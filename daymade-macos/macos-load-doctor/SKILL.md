@@ -102,6 +102,13 @@ for the explanation format and short-lived-process evidence. Identify the work
 separately from whether it is faulty or causes the reported lag; keep an unknown
 task, owner, lifecycle or causal link explicit.
 
+For recurring conflicts, retries, or timeouts in scheduled jobs, trace
+[duplicate scheduled work](references/incident-playbook.md#duplicate-scheduled-work)
+through the active producer routes and their receiving system.
+
+If a slow round is still in progress, [capture its stage evidence](references/incident-playbook.md#capture-a-slow-round-while-it-is-active)
+before it exits.
+
 ### 4. Classify the shape before proposing a fix
 
 For an idle Node/Vite preview, follow
@@ -217,6 +224,9 @@ precedent for the report you are about to write.
 
 ## Troubleshooting
 
+- **One background round is taking much longer than usual**: follow
+  [live stage attribution](references/incident-playbook.md#capture-a-slow-round-while-it-is-active)
+  to separate time spent waiting, processing input and producing output.
 - **Load is high but every reading looks normal**: the suspects are short-lived
   — two `ps -Ao pid=` snapshots a few seconds apart identify surviving new PIDs:
   count the PIDs that appear only in the second

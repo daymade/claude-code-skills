@@ -779,10 +779,114 @@ class CommandArgumentTests(unittest.TestCase):
     def test_a_placeholder_is_a_stated_target(self):
         self.assertTrue(CHECKER.command_arguments('docker rmi <IMAGE_ID>'))
 
+    def test_no_prune_image_removal_names_the_full_id(self):
+        image_id = 'sha256:' + 'a' * 64
+        self.assertTrue(CHECKER.command_arguments(f'docker image rm --no-prune {image_id}'))
+        self.assertFalse(CHECKER.command_arguments('docker image rm --no-prune'))
+
     def test_a_command_in_bare_prose_is_found(self):
         commands = CHECKER.find_destructive_commands(
             'Step 3 runs uv cache prune to reclaim 50.9 GiB. No backticks are used here.\n')
         self.assertTrue(any('uv cache prune' in command.text for command in commands))
+
+
+class DockerImageRemovalScopeTests(unittest.TestCase):
+    image_id = 'sha256:' + 'a' * 64
+
+    def commands(self, command):
+        plan = f'```bash\n{command}\n```'
+        return plan, CHECKER.find_destructive_commands(plan)
+
+    def test_no_prune_exact_image_removal_is_object_scoped(self):
+        plan, commands = self.commands(f'docker image rm --no-prune {self.image_id}')
+        self.assertEqual(1, len(commands))
+        self.assertFalse(commands[0].category_wide)
+        self.assertTrue(CHECKER.exact_docker_object_removal(f'`docker image rm --no-prune {self.image_id}`'))
+        rows = CHECKER.collect_gate_rows(
+            '| Target | Class | Verdict | Governing rule |\n'
+            '|---|---|---|---|\n'
+            f'| {self.image_id} | REBUILDABLE | in action set | "Use `--no-prune` when the authorized boundary is one repository tag or one full image ID." |\n')
+        result = CHECKER.check_target_coverage(commands, rows, [], plan)
+        self.assertTrue(result.passed, result.details)
+
+    def test_force_all_short_id_missing_flag_and_subshell_forms_remain_category_wide(self):
+        for command in (
+            f'docker image rm --force {self.image_id}',
+            f'docker image rm --no-prune -ff {self.image_id}',
+            f'docker image rm {self.image_id}',
+            f'docker rmi {self.image_id}',
+            f'docker image rm --no-prune {self.image_id[:19]}',
+            f'docker image rm --no-prune {self.image_id} {self.image_id}',
+            'docker image rm --no-prune',
+            'docker image rm --no-prune $(docker images -q)',
+            'docker image rm --no-prune --all',
+        ):
+            with self.subTest(command=command):
+                _, commands = self.commands(command)
+                self.assertEqual(1, len(commands))
+                self.assertTrue(commands[0].category_wide)
+
+    def run_full_gate(self, command):
+        table_text = (
+            '| Target | Class | Verdict | Governing rule |\n'
+            '|---|---|---|---|\n'
+            f'| {self.image_id} | REBUILDABLE | in action set | "Use `--no-prune` when the authorized boundary is one repository tag or one full image ID." |\n')
+        with tempfile.TemporaryDirectory() as directory:
+            table = Path(directory) / 'table.md'
+            plan = Path(directory) / 'plan.md'
+            table.write_text(table_text)
+            plan.write_text(
+                '# Plan\n\n'
+                '## Tool verification\n'
+                'Docker CLI version 29.8.2; semantics: exact image removal, verified with `docker image rm --help`.\n\n'
+                '| Target | Command |\n|---|---|\n'
+                f'| {self.image_id} | `{command}` |\n')
+            output = io.StringIO()
+            with redirect_stdout(output):
+                code = CHECKER.main(['--table', str(table), '--plan', str(plan)])
+            return code, output.getvalue()
+
+    def test_safe_fixture_mutations_fail_the_full_gate(self):
+        safe_code, safe_output = self.run_full_gate(f'docker image rm --no-prune {self.image_id}')
+        self.assertEqual(0, safe_code, safe_output)
+        for command in (
+            f'docker image rm {self.image_id}',
+            f'docker image rm --no-prune {self.image_id[:19]}',
+            f'docker image rm --no-prune {self.image_id} {self.image_id}',
+            f'docker image rm --no-prune -ff {self.image_id}',
+            f'docker image rm --no-prune --force {self.image_id}',
+            f'docker image rm --no-pru {self.image_id}',
+            'docker image rm --no-prune $(docker images -q)',
+            'docker image rm --no-prune',
+            'docker image rm --no-prune --all',
+        ):
+            with self.subTest(command=command):
+                code, output = self.run_full_gate(command)
+                self.assertEqual(1, code, output)
+                self.assertIn('FAIL category_wide_exclusion', output)
+
+    def test_rmi_alias_is_safe_only_with_no_prune_and_full_id(self):
+        _, commands = self.commands(f'docker rmi --no-prune {self.image_id}')
+        self.assertEqual(1, len(commands))
+        self.assertFalse(commands[0].category_wide)
+
+    def test_image_removal_help_is_not_a_destructive_proposal(self):
+        self.assertEqual([], CHECKER.find_destructive_commands('`docker image rm --help`'))
+
+    def test_clone_analyzer_without_manifest_is_read_only(self):
+        plan = ('```bash\nuv run scripts/analyze_code_sign_clones.py '
+                '--root /private/tmp/example.code_sign_clone '
+                '--expect-candidate-sha deadbeef\n```')
+        self.assertEqual([], CHECKER.unrecognized_command_lines(plan, []))
+
+    def test_clone_analyzer_manifest_write_is_not_read_only(self):
+        for option in ('--write-manifest', '--write-manif', '--write', '--w', '--write-manifest=/private/tmp/clones.txt'):
+            with self.subTest(option=option):
+                plan = ('```bash\nuv run scripts/analyze_code_sign_clones.py '
+                        '--root /private/tmp/example.code_sign_clone '
+                        '--expect-candidate-sha deadbeef '
+                        f'{option} /private/tmp/clones.txt\n```')
+                self.assertTrue(CHECKER.unrecognized_command_lines(plan, []))
 
 
 class MainUsageTests(unittest.TestCase):

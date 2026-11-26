@@ -43,6 +43,14 @@ Fail closed on a mismatched rollout, missing child rollout, ambiguous physical c
 missing parent, broken byte boundary, or continuation cue with no recoverable parent
 objective. Never continue from the “closest” file.
 
+**Isolated or remote `CODEX_HOME` staging**: When taking over a Codex session staged to
+a separate directory (for example on a remote worker or an isolated handover bundle),
+pass `CODEX_HOME=<staged-codex-home>` to `read-codex-history`
+(`find_codex_session.py <session-id> --format json` and
+`read_codex_session.py --session <session-id> --full`) rather than scanning the host's
+default `~/.codex`. Require `status: "unique"` and `identity_verified: true` from the
+staged index before proceeding.
+
 ## Step 2: Rebuild the continuation contract
 
 Before choosing the next action or reporting a stage complete, fill this internal
@@ -66,16 +74,19 @@ verified parent snapshot. A local cue is not a standalone goal.
 ## Step 3: Reconcile with current reality
 
 1. Read the current target project's `AGENTS.md`/`CLAUDE.md`.
-2. Confirm cwd, branch, working tree, relevant files, and external state.
+2. Confirm cwd, branch, working tree, relevant files, and external state. When continuing
+   on a remote host or a fresh pool checkout, inspect `git status` and `git rev-parse HEAD`
+   directly rather than assuming uncommitted working-tree state from the source machine
+   exists in the target checkout.
 3. Before independent takeover edits, reruns or dispatch, execute this Skill's
-   `scripts/start_work.py` against the loaded `peer-message` Skill. Retain the
+   `scripts/start_work.py` against the loaded `agent-message` Skill. Retain the
    recovered stable task key and owned paths across Forks, but obtain the actor
    from the current host; never adopt a parent/history/context-pack ID. Native
    parent/worker work retains the host task tree and skips independent registration.
 
    ```bash
    python3 '<loaded-continue-codex-work>/scripts/start_work.py' \
-     --peer-skill '<absolute-loaded-peer-message>' -- \
+     --peer-skill '<absolute-loaded-agent-message>' -- \
      --repo '<absolute-target-checkout>' --path '<owned-repo-relative-file-or-directory>' \
      --task '<stable-issue-or-deliverable>' --actor '<exact-current-host-address>'
    ```
@@ -84,7 +95,7 @@ verified parent snapshot. A local cue is not a standalone goal.
    and exit code. On exit 3, use its existing owner/result lead before starting
    replacement work. An empty registry retains unknown occupancy. Resolve a
    missing dependency through the existing Skill owner; do not create a second
-   board. Follow peer-message's current work-entry/reconciliation contract for
+   board. Follow agent-message's current work-entry/reconciliation contract for
    non-Git resources, changed identities and released declarations. This checks
    the invoked entry; it does not enforce all host file writes.
 4. Verify that recorded patches, commits, pushes, downloads, jobs, or Agent outputs

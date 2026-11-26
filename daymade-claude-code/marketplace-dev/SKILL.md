@@ -24,7 +24,7 @@ can install skills via `claude plugin marketplace add` and get auto-updates.
 |---|---|
 | Create marketplace support for a repo that does not have it | Follow Phases 0–4 below |
 | Add or update an ordinary plugin entry | Follow “Maintaining an existing marketplace,” then Phase 3 |
-| Consolidate standalone skills into a suite, create a suite from existing skills, move a skill between suites, or rename a skill while moving it | Read [references/suite_consolidation_workflow.md](references/suite_consolidation_workflow.md) completely and follow it instead of the generic Phase 4 constraints |
+| Consolidate standalone skills into a suite, create a suite from existing skills, move a skill between suites, or rename a skill (with or without a compatibility shim) | Read [references/suite_consolidation_workflow.md](references/suite_consolidation_workflow.md) completely and follow it instead of the generic Phase 4 constraints |
 | Reconcile installed caches after a merged suite migration | Invoke `daymade-skill:skill-governance` and use its post-migration workflow; do not mutate cache state here |
 | Audit the whole repository across code, docs, security, PRs, issues, and manifest integrity | Invoke `marketplace-health-check:marketplace-health-check` only when the user requested a broad health check; it is not a prerequisite for a targeted suite migration |
 

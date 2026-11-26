@@ -138,6 +138,15 @@ Every entry here is a bug that shipped. When a hook misbehaves, match the
   and symlink into `~/.claude/hooks/`; recovery is one `ln -s`. The SessionStart
   health check's `[ -e "$h" ]` test (which follows the link) reports a dangling
   symlink at startup.
+- **Boundary — mutable multi-branch source checkouts:** the symlink layout
+  assumes the source repository's working tree stays on `main`. When multiple
+  sessions switch branches in that shared checkout, symlinking directly from
+  `~/.claude/hooks/` or `~/.gemini/config/hooks/` into the working tree makes
+  the hook go dangling whenever another session checks out a branch predating
+  the file. In that topology, materialize standalone copies from immutable
+  `origin/main` (e.g., `git show origin/main:<hook-path>`) into the host hook
+  directory instead of symlinking, and verify SHA-256 parity plus `--selftest`
+  after each merged update.
 
 ---
 
@@ -3326,57 +3335,15 @@ this list and describe defects you reach by asking a different question):
 
 ## 64. Recorded loading-evidence failures and host-specific recovery
 
-- **Codex Code Mode:** use Skill Creator's
-  [receipt recipe](https://github.com/daymade/claude-code-skills/blob/main/daymade-skill/skill-creator/references/stateful-script-verification.md#codex-code-mode-receipt).
-- **Native Claude Code observations:** the mechanics and recovery below describe
-  the recorded native Read case; do not assume its numbered-Read-only workaround
-  applies to a Codex host without that tool.
-- **Symptom:** you loaded skill-creator this session — via the Skill
-  tool, or by reading its SKILL.md in a few big paged Reads — yet the
-  guard still blocks your SKILL.md edit with "load skill-creator
-  first". Re-invoking the Skill doesn't help; neither does topping up
-  the coverage with a parallel batch of small gap Reads.
-- **Cause and fix:** the marker is written only when the session
-  ledger records the *entire* file's bytes as verified. The recorded
-  failure mechanisms were: ① The Skill
-  tool's output is invisible to the hook (`response-empty-or-unknown`),
-  so a Skill invocation records zero verified bytes and even *clears*
-  any stale marker — only Read accumulates coverage. (Literal cat/sed
-  also feeds the ledger in the current implementation, but one serial
-  `sed` was observed not to register, cause not isolated — until
-  diagnosed, the numbered serial Read is the only known-reliable
-  form; see the Real case.) ② A paged Read verifies every line *except the page's
-  last one*: the hook reconstructs file bytes from the numbered
-  output, and the final displayed line carries no trailing newline, so
-  the requested range never matches exactly and the fallback covers
-  only up to the second-to-last line. Paged Reads can leave uncovered
-  seam lines — top them up with
-  small windowed Reads centered on each seam. ③ Topping up in
-  parallel loses updates: every PostToolUse event reads the ledger,
-  merges, and writes it back with no transaction, so six parallel gap
-  Reads raced and later writes silently discarded ranges earlier calls
-  in the same batch had just recorded — the verified-byte count went
-  *down* between two of the calls. Re-read the gaps serially. Don't
-  guess which lines are missing: inspect the ledger itself — find this
-  session's file with `ls ~/.local/state/daymade-agent-hooks/skill-creator-loaded/`
-  (`<session-id>.read-coverage.json`), read the verified intervals
-  from `files["<path>"].verified_ranges`, and convert byte offsets to
-  line numbers with
-  `python3 -c "import bisect; d=open('<file>','rb').read(); s=[0]+[i+1 for i,c in enumerate(d) if c==10]; print(bisect.bisect_right(s, <byte>))"`.
-- **Real case (2026-10-07):** an o11y SKILL.md edit in a worktree was
-  blocked right after a Skill-tool load of skill-creator. The author
-  read the 220,657-byte file in 7 paged Reads (coverage stalled at
-  220,418), identified uncovered seams from the ledger, and topped
-  them up with 6 *parallel* windowed Reads — the
-  ledger dropped from 220,615 to 220,571 as the parallel PostToolUse
-  events overwrote each other, discarding the +86-byte seam one call
-  had just recorded. After one serial re-read of the last missing line,
-  the marker landed and the edit passed. A `sed -n '1428p'` read of the same
-  line in between
-  did not move coverage either (the shell-read path shares the same
-  ledger and the same race; it was not isolated further once the
-  serial Read worked — treat numbered serial Reads as the reliable
-  form).
+When the Skill source guard rejects an edit after a read, inspect the verified
+ranges for the required Skill source in the current context. For partial
+coverage, read the missing ranges. When the tool returned the complete source
+and verification is still missing, inspect the host receipt before rereading.
+
+- **Codex Code Mode:** follow the [Code Mode receipt procedure](https://github.com/daymade/claude-code-skills/blob/main/references/bounded-io.md#codex-code-mode-receipt).
+- **Claude Code:** check that the hook received the source text from Skill or
+  Read. When a paged Read leaves a gap, use the ledger to locate it and read
+  that range.
 
 ## 65. Cadence reset and generic compaction advice do not supply current project-phase facts
 
@@ -3528,3 +3495,149 @@ Replay each rejected variant through the outer entrypoint and retain a matching
 healthy control. Independently inject an internal probe failure: assert its
 declared exit code and diagnostic. A valid receipt need not authorize every
 action, and a nonblocking fault must not be reported as a healthy no-match.
+
+## 69. `$(git … || true)` can turn valid-looking stdout plus failure into approval
+
+- **Failure:** a fail-closed dispatcher captures `observed="$(git … || true)"`
+  and then compares only the text. A stub or real Git wrapper can print the exact
+  expected SHA or object type and still exit nonzero; `|| true` discards that
+  status, so the comparison succeeds and the downstream operation runs without
+  valid evidence.
+- **Fix:** preserve the command status in the condition itself, then compare its
+  output. For example:
+
+  ```bash
+  if ! observed="$(git show-ref --verify --hash "$remote_ref" 2>/dev/null)" \
+      || [[ "$observed" != "$local_sha" ]]; then
+    echo "archive tag identity could not be verified" >&2
+    return 1
+  fi
+  ```
+
+  Apply the same pattern to object-type and peeled-commit inspections. Do not
+  infer success from nonempty or syntactically valid output.
+- **Bidirectional calibration:** keep a healthy control whose Git commands exit
+  0. For every inspection used as evidence, inject the exact expected stdout
+  together with a nonzero exit, and assert both rejection and no downstream
+  call. A no-output failure fixture cannot catch this defect: the old text
+  comparison already rejects it.
+
+## 70. Dispatcher-owned shell state must not inherit the caller's environment
+
+- **Failure:** a dispatcher initializes an internal variable on its established
+  branch paths but reads it on a new path without initialization. An inherited
+  value can redirect an inspection to an unrelated repository, changing a healthy
+  request from accept to reject. An interactive shell where the variable happens
+  to be unset hides this defect.
+- **Fix:** initialize every dispatcher-owned variable at entry or declare it
+  `local` in the owning function, and reset route-specific state for each
+  invocation. For example, use `pinned_source=""` before route dispatch unless
+  that variable is an explicitly declared caller input. Do not solve this by
+  erasing the whole environment; declared credentials, paths and test controls
+  still need their documented behavior.
+- **Bidirectional calibration:** run the real entrypoint with the healthy input
+  twice, once with the internal variable unset and once with it pointing to an
+  unrelated empty repository. Require identical acceptance and downstream
+  payloads. Keep the dangerous malformed-input controls as well, so isolating
+  the environment cannot turn into unconditional approval.
+
+## 71. Raw-JSON fast-path regexes miss JSON-escaped whitespace and subshell prefixes
+
+- **Failure:** a shell PreToolUse guard avoids spawning Python on every command
+  by screening raw hook JSON with a boundary regex such as
+  `grep -E '(^|[[:space:];|&])(cp|rsync|git)[[:space:]]'`. Inside a serialized
+  JSON string (`tool_input.command`), newlines and tabs arrive as two-character
+  escape sequences (`\n`, `\t`, `\r`) rather than literal whitespace; top-level
+  commands are preceded by `"`; nested invocations (`bash -c 'cp ...'`,
+  `/bin/cp`, `\cp`, `{ cp ...; }`) or subshells (`(cp ...)`, `$(cp ...)`) begin
+  with quotes, slashes, braces, or parentheses. None satisfy `[[:space:];|&]`
+  on the leading or trailing side, so the fast path exits 0 (allow) before the
+  JSON decoder ever runs — silently bypassing the guard.
+- **Fix:** treat any raw-JSON fast path strictly as an over-approximating
+  trigger, never a shell tokenizer or boundary-regex filter. Match bare command
+  substrings using a 0-fork shell builtin (`case` / `[[ == ]]`, e.g.,
+  `*cp*|*rsync*|*git*`) without assuming literal-whitespace boundaries, and hand
+  every candidate straight to the JSON-decoding parser so `json.loads` decodes
+  escapes before shell tokenization. Follow Pitfall #22 for the fail-closed
+  malformed-JSON gate and `\uXXXX` unicode-escape blind spot.
+- **Bidirectional calibration:** pair single-line dangerous probes with
+  JSON-escaped newline (`"echo ok\n<cmd> ..."`), tab (`"<cmd>\t..."`), subshell
+  (`"(<cmd> ...)"`), command-substitution (`"$(<cmd> ...)"`), and `bash -c`
+  variants, verifying each reaches the parser and blocks. Keep healthy controls
+  that mention the command word only inside comments, filenames, or echo
+  arguments so the wider fast-path trigger does not raise false positives.
+
+## 72. Symlinking OS-level command wrappers into a shared Git checkout couples every invocation to branch switches
+
+- **Failure:** installing a `PATH`-preceding command wrapper (for example, a
+  `~/.local/bin/git` or `~/.local/bin/cp` guard shim) as a symlink directly into
+  a shared working checkout (`~/repos/tooling/bin/git`) forces every shell,
+  cron/launchd job, and agent session on the host to execute whatever branch and
+  working-tree state is currently checked out there. Switching branches,
+  rebasing, or editing the wrapper mid-task immediately alters or breaks the
+  live command (`ENOENT`, syntax errors, or unreviewed behavior) for unrelated
+  sessions (see also Pitfall #6 for the analogous hook-symlink hazard).
+- **Fix:** install OS-level command wrappers into an immutable,
+  checkout-independent runtime path (for example,
+  `~/.local/libexec/<tool>/<wrapper>` symlinked from `~/.local/bin/<cmd>`, or a
+  direct installed copy at `~/.local/bin/<cmd>`) using same-directory atomic
+  replacement (`mktemp "<target-dir>/.tmp.XXXXXX"` + `chmod` + `mv`, keeping
+  temp file and destination on the same filesystem). Update the runtime copy
+  only through an explicit install/publish step from a verified commit, never by
+  symlinking into an active working tree.
+- **Bidirectional calibration:** assert `readlink -f "$(command -v <cmd>)"`
+  resolves inside the checkout-independent install root (`~/.local/libexec/` or
+  `~/.local/bin/`) and outside any Git working tree (`git -C "$(dirname
+  "$(readlink -f "$(command -v <cmd>)")")" rev-parse --is-inside-work-tree`
+  fails); test that switching branches or deleting a feature branch in the
+  source checkout leaves the live wrapper's SHA-256 and exit status unchanged;
+  and verify an explicit reinstall from a verified ref atomically updates the
+  runtime copy and passes readback.
+## 73. An absolute executable is not necessarily a fixed Python runtime
+
+- **Failure:** a registrar accepts `--python /absolute/path/to/uv`, `env` or
+  `pip` because the path exists and is executable. Its smoke can even succeed,
+  but every later prompt/tool boundary enters a package manager or environment
+  resolver. One long-running `uv run` then holds the shared cache lock and turns
+  a local maintenance event into timeouts across many unrelated hooks.
+- **Fix:** for `.py` hooks, inspect the candidate's lexical path and every
+  symlink hop before behavior probing; reject known wrappers (`uv`, `uvx`,
+  `env`, `pip`, `pip3`), direct `.py` files and non-Python executables. Run the
+  candidate without a shell using `-I -B -c`, a small timeout and a controlled
+  environment; require stdout to report Python 3 and `os.path.samefile(
+  sys.executable, candidate)` to be true. The same-file check rejects a script
+  that merely `exec`s another interpreter. The only wrapper exception is the
+  exact direct-runtime shim declared by the machine behavior SSOT. Perform all
+  checks before writing settings or creating a hook symlink, and never put
+  `uv run`, `pip install` or another package manager on a synchronous hook path.
+- **Bidirectional calibration:** keep a healthy fixed interpreter, including a
+  path with spaces. Create dangerous fixtures named `uv`, `env` and `pip` that
+  symlink to the same working Python; static existence and behavior checks pass,
+  so only the wrapper-name assertion can reject them. Add a `python3` script
+  that `exec`s the real interpreter: it behaves like Python but must fail the
+  same-file check unless it is the exact SSOT shim. Add `/bin/sh` as the
+  non-Python control. For every rejection, assert settings are byte-for-byte
+  unchanged and no hook symlink or partial install remains.
+
+## 74. Renaming a hook-bearing plugin while keeping a compatibility-alias plugin fires the same hook twice
+
+- **Failure:** a skill that ships a `PreToolUse` or `SessionStart` hook is renamed
+  to a new canonical plugin while the old plugin remains registered as a
+  compatibility shim. If both `<new>@<marketplace>` and `<old>@<marketplace>`
+  remain enabled in `~/.claude/settings.json` (or if both old and new entries
+  persist in a sibling host's `hooks.json` or an external runtime binding under
+  `~/.config/<old>/`), the host executes the hook twice on every matching event —
+  doubling latency, emitting duplicate advisories/inbox reads, or racing on shared
+  cursor/state files.
+- **Fix:** enforce single-owner hook registration across any Skill rename: strip
+  active hook declarations from the compatibility-alias plugin at source, and run
+  the host-level reconciliation procedure in `daymade-skill:skill-governance` §8
+  ([Reconcile a compatibility-alias Skill rename](https://github.com/daymade/claude-code-skills/blob/main/daymade-skill/skill-governance/references/skill-surface-governance.md#reconcile-a-compatibility-alias-skill-rename))
+  to disable the alias plugin, migrate sibling-host hook registries, and rebind
+  external runtime pointers rather than maintaining a parallel checklist here.
+- **Bidirectional calibration:** inspect effective enabled plugins and hook
+  registries to confirm only the canonical handler is registered for the target
+  event (count = 1). Replay one matching dangerous/trigger event and verify it
+  fires and blocks/emits **exactly once** (no duplicate stdout/stderr blocks and
+  no double cursor advance); pair with one healthy non-matching control that
+  passes with exit 0.
