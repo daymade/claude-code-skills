@@ -170,6 +170,27 @@ can be selected without copying its computed membership into a per-Skill list.
 Keep the host-specific policy in the source owner's manifest; do not add
 third-party cold bundles merely to explain why they exist on disk.
 
+### Case: stale deployment-worktree symlinks or a worktree holding `main`
+
+When a PR has merged to `origin/main` yet `~/.agents/skills/<name>` or
+`~/.claude/skills/<name>` still serves older content, check for two common
+local drift states before blaming the host cache:
+
+1. **Drifted symlink targets**: inspect `readlink` across user Skill roots for
+   aliases pointing into temporary or retired deployment worktrees (for example
+   `*-deploy` or disposable review worktrees) instead of the canonical source
+   checkout. Re-point them through the source owner's syncer (dry-run, then
+   apply) rather than hand-editing individual links into temporary directories.
+2. **Stale worktree holding `main`**: if `git worktree list` shows an old
+   linked worktree still holding `[main]` and blocking the canonical checkout
+   from switching to or fast-forwarding `main`, audit that worktree's
+   `git status` first. Back up any uncommitted WIP to a timestamped archive
+   with hashes before detaching (`git checkout --detach HEAD`) or removing the
+   stale worktree; never discard unbacked work.
+
+After reconciling the canonical `main` checkout and re-running the source
+syncer, verify consumed-path readback against the published commit SHA.
+
 ### Case: the source alias resolves into concurrent work
 
 The delivery executor resolves the installed alias at readback time and compares

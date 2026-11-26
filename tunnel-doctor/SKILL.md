@@ -400,6 +400,16 @@ skip-proxy = 192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12, 100.64.0.0/10, localhost
 - `skip-proxy`: Bypasses the HTTP proxy layer only. Traffic still flows through the TUN interface and Tailscale utun handles it. Safe.
 - `tun-excluded-routes`: Removes the CIDR from the TUN routing entirely. This creates a competing `en0` route that overrides Tailscale. Breaks everything.
 
+#### Step 2C-0: Private IPv6 ULA Overlay Domains (e.g., LazyCat `*.heiyu.space`) and macOS Python `getproxies()`
+
+Private overlay clients such as LazyCat MicroServer (`*.heiyu.space`, `*.lzcapp`, `*.lzcx`, routing through a local IPv6 ULA tunnel like `fc00::/7`) exhibit a clean three-stage proxy signature:
+
+1. **Missing both `DIRECT` rule and `skip-proxy`**: `curl --noproxy '*'` succeeds in tens of milliseconds via the local `fc00::/7` tunnel, while requests sent to the local HTTP proxy (`127.0.0.1:<port>`) get forwarded to a remote exit node that cannot reach the local ULA tunnel and fail with `SSL_ERROR_SYSCALL` or TLS handshake timeout.
+2. **`DIRECT` rule present, `skip-proxy` missing**: requests forced through `127.0.0.1:<port>` fail immediately (<50 ms) with HTTP `503` — the same mechanism as Tailscale `100.64.0.0/10` above, because the proxy process cannot route into the client's private tunnel.
+3. **Both `DIRECT` and `skip-proxy` (`heiyu.space`, `*.heiyu.space`) present**: macOS `scutil --proxy` lists the domain in `ExceptionsList`, `python3 -c "import urllib.request; print(urllib.request.proxy_bypass('file.<box>.heiyu.space'))"` returns `True`, and default clients connect directly through the OS routing stack.
+
+**macOS Python `urllib.request.getproxies()` caveat**: Even when `HTTP_PROXY`/`HTTPS_PROXY` are unset in the shell, Python `urllib` reads macOS SystemConfiguration and picks up `127.0.0.1:<port>`. CLI downloaders and scripts that mix public and private targets should honor `proxy_bypass` / `NO_PROXY` and unconditionally bypass loopback, RFC 1918, Tailscale (`*.ts.net`, `100.64.0.0/10`), private IPv6 ULA (`fc00::/7`, `*.heiyu.space`, `*.lzcapp`, `*.lzcx`), fake-IP (`198.18.0.0/15`), and IPv4-mapped IPv6 (`::ffff:...`) hosts.
+
 #### Step 2C-1: Fix Local Vanity Domain Interception (`local.<domain>`)
 
 **Symptom**: `https://local.<domain>` fails in browser or default `curl`, but succeeds with direct/no-proxy command:
