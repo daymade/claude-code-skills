@@ -674,5 +674,14 @@ def create_argument_parser() -> argparse.ArgumentParser:
         help="Citation text for --attach-authority (what was verified, by "
              "which means, when)"
     )
+    parser.add_argument(
+        "--defer-shared-publish",
+        action="store_true",
+        dest="defer_shared_publish",
+        help="Persist native database writes and record the durable pending shared-dictionary "
+             "publication cursor, but skip invoking the external publisher subprocess during this "
+             "command. Useful for intermediate calls in a batch of --resolve-review / --add "
+             "commands; omit on the final call to flush publication once."
+    )
 
     return parser

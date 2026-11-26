@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **transcript-fixer** (`daymade-audio` v1.65.10 → v1.65.11): Add `--defer-shared-publish` to `fix_transcription.py` and `invoke_publisher: bool = True` to `SharedEvidence.publish()` so intermediate calls in a batch of `--resolve-review` / `--add` operations commit locally and persist durable pending publication cursors without invoking the external publisher subprocess on every item (omitting the flag on the final call flushes publication once), with end-to-end synthetic CLI coverage in `test_shared_evidence.py`.
+
 - **ghostty-use** (`ghostty-use` v1.17.1 → v1.17.2) and **capture-screen** (`daymade-macos` v1.34.32 → v1.34.33): Document Ghostty `SurfaceView` `AXValue` (`cachedScreenContents`) 500 ms cache TTL and overflowed `AXTabGroup` index drift in `ghostty-use/references/restore_mechanics.md`; add troubleshooting entries in `ghostty-use/SKILL.md` for remote-shell Automation TCC hangs on direct `tell application "Ghostty"` and per-tab CJK IME `markedText` preedit swallowing `CGEventKeyboardSetUnicodeString` input; and refine `capture-screen/SKILL.md` to warn that unapproved remote-hosted shells also trigger blocking Automation TCC modals on direct `tell application "<App>"`, recommending Swift `CGWindowListCopyWindowInfo` + `AXUIElement` for read-only inspection and `timeout` around required `osascript` calls.
 
 - **macos-watchdog** and **macos-load-doctor** (`daymade-macos` v1.34.31 → v1.34.32). Verify output freshness when scheduled refresh and file events overlap, and capture stage evidence while a slow background round is still active.

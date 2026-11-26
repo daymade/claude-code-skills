@@ -409,6 +409,54 @@ runpy.run_path(sys.argv.pop(1),run_name='__main__')
         self.assertEqual(control.returncode, 0, control.stderr)
         self.assertTrue(self.native_db.exists())
 
+    def test_defer_shared_publish_records_pending_and_flushes_on_next_call(self):
+        self.resources[0] = dictionary_resource(self.native_db)
+        publisher_calls = self.root / "defer-publisher-calls.txt"
+        publisher = self.root / "defer_publisher.py"
+        publisher.write_text("""import json, runpy, sys
+from pathlib import Path
+with open(sys.argv[1], 'a') as f:
+    f.write('call\\n')
+helpers = runpy.run_path(sys.argv[2])
+value = helpers['dictionary_resource'](Path(sys.argv[4]))
+value['version'] = 2
+value['version_uri'] = value['uri'] + '/versions/2'
+value['metadata']['sqlite_snapshot']['tables']['audit_log']['rows'].append({'id': 99999})
+print(json.dumps(value))
+""")
+        self.profile["source_publisher"] = {
+            "protocol": 1,
+            "argv": [sys.executable, str(publisher), str(publisher_calls), str(Path(__file__).resolve())],
+        }
+        self.profile["device"] = {"id": "synthetic-device-A"}
+        self.profile["evidence_bindings"]["transcript-fixer.dictionary"]["owner_device_id"] = "synthetic-device-A"
+        self.write()
+
+        # Intermediate batch call with --defer-shared-publish: commits locally and
+        # persists the durable pending cursor, with ZERO external publisher calls.
+        r1 = self.cli(["--add", "批处理错词一", "批处理正词一", "--domain", "alpha", "--defer-shared-publish"])
+        self.assertEqual(r1.returncode, 0, r1.stderr)
+        statefile = self.config / "shared-publications.json"
+        self.assertTrue(statefile.is_file())
+        state1 = json.loads(statefile.read_text())
+        self.assertEqual(len(state1["pending"]), 1)
+        self.assertFalse(publisher_calls.exists())
+
+        # An early validation failure with --defer-shared-publish must still honor
+        # deferral and must NOT flush the pre-existing pending cursor.
+        r_err = self.cli(["--review-entity-type", "system", "--defer-shared-publish"])
+        self.assertEqual(r_err.returncode, 2)
+        self.assertFalse(publisher_calls.exists())
+
+        # Final batch call without --defer-shared-publish: flushes both writes in ONE call.
+        r2 = self.cli(["--add", "批处理错词二", "批处理正词二", "--domain", "alpha"])
+        self.assertEqual(r2.returncode, 0, r2.stderr)
+        state2 = json.loads(statefile.read_text())
+        self.assertEqual(state2["pending"], {})
+        self.assertEqual(len(publisher_calls.read_text().splitlines()), 1)
+        receipt = state2["receipts"][str(self.native_db.resolve())]
+        self.assertEqual(receipt["captured_through_audit_cursor"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()
