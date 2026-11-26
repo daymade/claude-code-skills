@@ -23,8 +23,15 @@ curl -sS --max-time 20 "https://api.fxtwitter.com/<user>/status/<id>" \
   | python3 -c "import json,sys; t=json.load(sys.stdin)['tweet']; print(t['created_at']); print(t['text'])"
 ```
 
-`replies` is a count, not the reply thread. For X Articles with images, use
-`fetch_article.py` below — fxtwitter does not carry article bodies.
+`replies` is a count, not the reply thread.
+
+**X Articles (text-first via fxtwitter, verified 2026-11):** `api.fxtwitter.com/<user>/status/<id>`
+now also returns full X Article content inside `tweet.article` (`title`, `content.blocks` Draft.js
+paragraphs/headings/lists/quotes, and `content.entityMap` including `MARKDOWN` code blocks and
+`MEDIA` captions) — login-free and key-free. Use `fxtwitter` first when you only need clean article
+text/Markdown without browser cookies or Jina. Fall back to `fetch_article.py` below when you need
+local embedded image downloads (`attachments/`), engagement fields missing from `fxtwitter`, or
+when `tweet.article` is absent.
 
 ## X Articles with images: fetch_article.py
 
