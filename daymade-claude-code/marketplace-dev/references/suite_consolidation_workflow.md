@@ -65,7 +65,8 @@ Resolve these decisions explicitly:
 - Create a new suite or extend an existing one.
 - Preserve the current skill name or rename it. When directory and frontmatter names
   differ, prefer aligning them only when the user approved the rename; do not invent a
-  compatibility alias.
+  compatibility alias unless the user explicitly requested a deprecation shim (when
+  retained, complete the compatibility-shim checklist below).
 - Preserve standalone installation or remove it. Treat a suite-only request as
   approval to remove the standalone marketplace entry, not as approval to change the
   skill's runtime instructions.
@@ -136,6 +137,23 @@ For suite-only consolidation:
 Assert mechanically that the target suite contains the exact intended member set and
 that every superseded standalone name is absent.
 
+### Renaming a skill while keeping a compatibility shim
+
+When a user-approved rename keeps the old plugin/directory as a thin compatibility
+alias (for example, forwarding scripts and pointing readers to the canonical skill):
+
+1. **Resolve physical paths in forwarding scripts.** Resolve the shim directory via
+   `cd "$(dirname "$0")" && pwd -P` (or realpath) and invoke the canonical target with
+   `exec` so symlinked installations (such as `~/.agents/skills/<old>`) locate sibling
+   directories reliably and preserve exit codes and signals.
+2. **Keep manifest and README parity across translations.** When the old alias remains
+   registered in `.claude-plugin/marketplace.json`, add or retain its compatibility row
+   in both the primary `README.md` and every translated README checked by marketplace CI.
+3. **Strip duplicate hooks from the compatibility alias.** Do not let both the canonical
+   plugin and the compatibility alias ship active hooks for the same event; remove hook
+   registrations from the shim or hand off host-level plugin disabling to
+   `daymade-skill:skill-governance` §8.
+
 ## 5. Close every drift surface
 
 Search the whole repository for every old plugin name, old source path, standalone
@@ -148,6 +166,17 @@ rg -n --fixed-strings \
   -e '<old-plugin>:<skill-name>' <repo-root> \
   --glob '!.git/**' --glob '!**/*-workspace/**'
 ```
+
+When the marketplace participates in a multi-repository ecosystem, extend the same
+fixed-string scan beyond `<repo-root>` to:
+
+- sibling private or team skill repositories that link to `blob/main/<old-path>` URLs
+  (prefer adding a mechanical CI link checker for cross-repo `blob/main` file + anchor
+  links so future renames cannot silently produce 404s);
+- local skill-search or category routing tables (such as `skills-search`
+  `CATEGORY_RULES`) so the new canonical name and host keywords index alongside any
+  retained legacy alias;
+- shared operator reference docs outside the repository that invoke the old skill name.
 
 Inspect and update only directly affected surfaces:
 
@@ -267,6 +296,7 @@ changes occur, then run the repository's PR workflow. After merge:
 | Local install passes but GitHub install fails | The suite depends on files outside its source subtree | Make the suite self-contained and retest from Git |
 | Removed standalone entries remain installed locally | Manifest and installed state have diverged | Verify the suite replacement, then reconcile through Skill Governance |
 | A hardcoded suite list omits the new suite | A derived inventory drifted | Delete the list and derive it from the manifest |
+| A renamed Skill with a compatibility shim fires hooks twice or breaks sibling-repo links | Alias plugin hooks remain active or drift scan stopped at `<repo-root>` | Strip/disable alias hooks via `daymade-skill:skill-governance` §8 and extend the §5 scan across sibling repos and `skills-search` registries |
 
 ## Delivery report
 

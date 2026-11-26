@@ -191,6 +191,17 @@ local drift states before blaming the host cache:
 After reconciling the canonical `main` checkout and re-running the source
 syncer, verify consumed-path readback against the published commit SHA.
 
+When a host deliberately uses clean detached deployment mirrors (`*-deploy`) across
+multiple skill repositories so active WIP in primary checkouts is never disturbed:
+
+- advance **every** affected mirror (for example both public and private `*-deploy`
+  checkouts) to the verified merged commit SHAs rather than only the primary repo;
+- inspect `git -C <primary-checkout> status --short -- <skill-dir>` for each
+  affected skill before redirecting `~/.agents/skills/<name>`: re-point clean
+  downstream skills to the updated `-deploy` mirror, and leave any skill with
+  active uncommitted WIP in the primary checkout untouched while reporting it
+  explicitly as retained WIP.
+
 ### Case: the source alias resolves into concurrent work
 
 The delivery executor resolves the installed alias at readback time and compares
@@ -440,6 +451,27 @@ design belongs to `marketplace-dev`.
    passes all checks.
 7. Read back plugin state and, where relevant, the fresh model catalog.
 
+### Reconcile a compatibility-alias Skill rename
+
+When a published Skill rename keeps the old plugin as a thin compatibility alias
+(so legacy callers do not break immediately), reconcile all active host surfaces
+so hooks and discovery do not duplicate:
+
+1. **Deduplicate Claude plugin hooks:** enable `<new>@<marketplace>` and set
+   `"<old>@<marketplace>": false` in `~/.claude/settings.json` (keeping the alias
+   directory/scripts available for CLI fallbacks without running its plugin hooks
+   a second time).
+2. **Migrate sibling-host hook and hot-catalog configs:** update the host's hot
+   catalog (for example `~/.gemini/config/skills.json`) and hook registry (for
+   example `~/.gemini/config/hooks.json`) from the old entry name to the canonical
+   name while preserving unrelated hooks.
+3. **Rebind external runtime pointers:** check `~/.config/<old>/` (or equivalent
+   guard/helper config files) for script paths still pointing at the old skill
+   directory, update them to the canonical script path, and run one live synthetic
+   negative probe proving the guard fires once on the new path.
+4. **Read back end-to-end:** verify the resolved symlink targets, effective host
+   configs, and single-fire behavior independently before reporting activation.
+
 ## 9. Audit project dual roots
 
 When the current project exposes both `.claude/skills` and `.agents/skills`, run:
@@ -586,6 +618,9 @@ audit when the user asks.
   either copy can be deleted without identifying the owner and replacement.
 - **Current session still shows retired entries:** restart; startup metadata is
   not retroactively rewritten.
+- **A renamed Skill's hook fires twice after migration:** both the canonical plugin
+  and its compatibility-alias plugin (or sibling-host hook entries) are still active;
+  reconcile via §8 "Reconcile a compatibility-alias Skill rename" and re-probe.
 
 ## 14. Verify a newly registered Skill
 
