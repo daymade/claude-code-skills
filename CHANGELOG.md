@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-cleaner** (`daymade-macos` v1.34.34 → v1.34.35): Add a bounded batch-inspection path in `references/docker_analysis.md` Step 2C for large cohorts of automated/CI 64-hex anonymous dangling volumes — separating named volumes first, running metadata triage, and inspecting the exact enumerated candidate set in one read-only container for database signatures before bulk confirmation without weakening the Database Volume Red Flag rule.
+
 - **macos-cleaner** (`daymade-macos` v1.34.33 → v1.34.34). Use existing storage reports as diagnosis evidence, locate OrbStack's Docker CLI over SSH, and verify live image handles and archive integrity before retiring legacy images after relocating OrbStack data.
 
 - **github-ops** (`github-ops` v1.20.5 → v1.20.6) and **git-safety-net** (`git-safety-net` v1.30.7 → v1.30.8): Document deferring branch deletion (`--delete-branch=false` / omitting `--delete-branch`) when merging locally from a PR head branch in a linked worktree (routing remaining remote-branch cleanup through the exact-tip leased deletion procedure), checking PR check buckets after `gh pr checks --watch` exit `0` for canceled checks, separating `no checks reported` / transient API `HTTP 499` watch exits from real CI failures, and scoping single-workflow vs single-query `headRefOid`+`statusCheckRollup` PR wait loops with expected-check-name, conclusion, drift, and timeout checks in `github-ops/references/pr_operations.md` and `workflow_operations.md`; note non-cone root-file materialization and leading-slash `/<file>` `git sparse-checkout add` behavior in `git-safety-net/references/prevention_practices.md`.

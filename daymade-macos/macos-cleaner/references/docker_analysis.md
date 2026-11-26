@@ -265,6 +265,11 @@ docker run --rm --name <INSPECTION_CONTAINER_NAME> \
 
 Any volume reported non-empty goes through the full Database Volume Red Flag inspection above before deletion. Do not delete based on the sample-and-extrapolate shortcut this rule exists to warn against.
 
+**Large cohorts of automated/CI anonymous dangling volumes (dozens to hundreds):** spawning one inspection container per volume does not scale, yet the database-volume safeguard still applies. Follow a two-step separation without weakening coverage:
+
+1. **Separate named volumes from 64-hex anonymous dangling volumes first** using `docker volume ls -f dangling=true -q` and `docker volume inspect` (`Labels`, `CreatedAt`, `Mountpoint`). Keep every named volume out of the bulk cohort for individual ownership review.
+2. **Batch-inspect every enumerated anonymous candidate in one read-only container** under the same inspection-only authorization gate (using an already-present full image ID, `--pull=never --network=none --read-only --cap-drop=ALL --security-opt=no-new-privileges`, mounting `/var/lib/docker/volumes` read-only, and checking only the exact enumerated volume IDs — never discovering new volumes inside the loop). Check each approved ID for file count and database signatures (`PG_VERSION`, `pg_wal`, `global/pg_control`, `mysql`, `ibdata*`, `dump.rdb`, `WiredTiger`). Any volume matching a database signature or unexpected payload stays out of bulk cleanup and enters full individual inspection; only the verified clean exact list proceeds to explicit user confirmation (`docker volume rm <EXACT_ID ...>`).
+
 ## Step 2D: Root-Cause Fix — Stop the Source, Not Just the Symptom
 
 Everything above cleans up an existing backlog. When a Docker resource type keeps growing **across sessions** — not a one-time accumulation from unmanaged use, but the same category refilling every time you check — a cleanup pass alone is a symptom fix. It will be full again next week.
