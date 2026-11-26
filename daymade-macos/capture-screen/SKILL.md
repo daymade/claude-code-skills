@@ -142,11 +142,13 @@ end tell'
 
 ### Any application (basic control)
 
+> **Avoid `System Events` for read-only checks.** Querying `tell application "System Events"` just to check whether an app is running or to enumerate windows/tabs triggers a separate macOS Automation TCC consent dialog on hosts without prior approval, can hang or fail with `-609` (`Connection is invalid`), and leaves a foreground system modal that obscures target windows. Use `pgrep`, Swift `CGWindowListCopyWindowInfo`, or the target app's own AppleScript dictionary directly for read-only inspection; reserve `System Events` for authorized foreground actions on hosts where Automation permission is already verified.
+
 ```bash
 # Activate any app
 osascript -e 'tell application "Google Chrome" to activate'
 
-# Bring specific window to front (by index)
+# Bring specific window to front (by index; requires Automation permission for System Events)
 osascript -e 'tell application "System Events"
     tell process "Google Chrome"
         perform action "AXRaise" of window 1
@@ -266,6 +268,7 @@ These methods were tested and confirmed to fail on macOS:
 | `System Events` → `id of window` | Error -1728 | System Events cannot access window IDs in the format screencapture needs |
 | Python `import Quartz` (PyObjC) | `ModuleNotFoundError` | PyObjC not installed in system Python; don't attempt to install it — use Swift instead |
 | `osascript` window id | Wrong format | Returns AppleScript window index, not CGWindowID needed by `screencapture -l` |
+| `System Events` for read-only process/window checks | TCC prompt / Error `-609` | Triggers an Automation consent dialog on unapproved or remote-hosted terminals, hangs, and can leave a modal covering the target window; use `pgrep`, Swift `CGWindowListCopyWindowInfo`, or direct `tell application "<App>"` instead |
 
 ## Permission Troubleshooting
 
