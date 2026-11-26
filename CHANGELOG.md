@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **macos-watchdog** and **macos-load-doctor** (`daymade-macos` v1.34.31 → v1.34.32). Verify output freshness when scheduled refresh and file events overlap, and capture stage evidence while a slow background round is still active.
+
 - **frontend-visual-qa** (`frontend-visual-qa` v1.22.6 → v1.22.7): Add full-surface overhaul before/after visual baseline guidance (bound to the audit contract's supported viewports and states) in `SKILL.md` §6 and route lazy-loaded route CSS chunks through the §3 cold-entry/warm-return check; expand `references/interaction-complexity-and-motion.md` §3 adversarial boundary checks to cover `320px` (`scrollWidth <= clientWidth`) and `1024×500` extreme viewports, cold-entry vs post-lazy-route computed-style comparison, first-tap activation and disclosure dismissal with dismissal suppressed during interaction inside a native or app-owned modal, and light/dark WCAG AA contrast plus resolved manual-vs-OS dark token parity.
 - **prior-work-retrieval** (`daymade-claude-code` v5.3.19 → v5.3.20): Bind the status-only Stop exception to the exact `prompt_id` and marker without accepting `turn_id` as a fallback; fail closed when either binding is missing, stale or cannot be reconciled, and require normal receipt validation instead of allowing a receipt-free Stop.
 - **prior-work-retrieval** (`daymade-claude-code` v5.3.18 → v5.3.19): Document the one-turn Stop exception for standalone status prompts while retaining the write gate and re-arming on the next non-status user prompt or Stop.
