@@ -563,7 +563,7 @@ CC-Switch 支持以下中国 AI 服务提供商：
 - 共享 checkout 上别人的未提交改动、锁或分支挡住了你——先核实它是否真在飞，再问属主，别自己停手或绕开
 - 向经过确认的目标清单广播同一条协调消息
 
-📚 **文档与命令**：[agent-message/SKILL.md](./agent-message/SKILL.md) 拥有路由、稳定运行前置与“peer 不得代替用户授权”的边界；`agent-message/scripts/peer.py --help` 拥有 CLI 语法；[protocol-and-discovery.md](./agent-message/references/protocol-and-discovery.md) 拥有寻址、信封与送达证据；[official-feature.md](./agent-message/references/official-feature.md) 拥有会随产品变化的运行要求与具体机制；[coordination-and-learning-loop.md](./agent-message/references/coordination-and-learning-loop.md) 拥有回传寻址、正文与送达状态措辞、发现共享资源上有别人在制品时怎么核实、怎么开口、等多久、等不到怎么继续，判定一条 peer 断言与一组 peer 否认各值多少的两份核验合同，以及证据闸门下的改进循环。
+📚 [执行入口与详细 SOP](./agent-message/SKILL.md)。
 
 ---
 
@@ -3954,7 +3954,7 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 - **mermaid-tools**：参见 `daymade-docs/mermaid-tools/references/setup_and_troubleshooting.md` 了解设置指南
 - **statusline-generator**：参见 `daymade-claude-code/statusline-generator/references/color_codes.md` 了解自定义
 - **teams-channel-post-writer**：参见 `teams-channel-post-writer/references/writing-guidelines.md` 了解质量标准
-- **agent-message**（替代原 `peer-message`）：参见 `agent-message/SKILL.md` 了解路由、稳定运行前置与安全边界；运行 `agent-message/scripts/peer.py --help` 查看 CLI 语法；参见 `agent-message/references/protocol-and-discovery.md` 了解传输与验证；参见 `agent-message/references/official-feature.md` 了解会变化的产品要求与机制；参见 `agent-message/references/coordination-and-learning-loop.md` 了解 parent/worker 回传与证据闸门下的改进循环
+- **agent-message**（替代原 `peer-message`）：参见 `agent-message/SKILL.md`（路由与安全边界）及 `agent-message/scripts/peer.py --help`（CLI 语法）
 - **repomix-unmixer**：参见 `repomix-unmixer/references/repomix-format.md` 了解格式规范
 - **skill-creator**：参见 `daymade-skill/skill-creator/SKILL.md` 了解完整的技能创建工作流
 - **skill-evolver**：参见 [skill-evolver/SKILL.md](./skill-evolver/SKILL.md) 了解针对指定目标的研究、实施与结果验证

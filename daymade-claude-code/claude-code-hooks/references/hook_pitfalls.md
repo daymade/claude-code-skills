@@ -3629,15 +3629,12 @@ action, and a nonblocking fault must not be reported as a healthy no-match.
   `~/.config/<old>/`), the host executes the hook twice on every matching event —
   doubling latency, emitting duplicate advisories/inbox reads, or racing on shared
   cursor/state files.
-- **Fix:** treat hook ownership as single-owner across any rename:
-  1. Remove duplicate hook declarations from the compatibility-alias plugin when
-     possible, and disable the superseded alias plugin (`"<old>@<marketplace>": false`)
-     in `~/.claude/settings.json` once the canonical plugin is enabled and verified.
-  2. Migrate any sibling-host hook registry (such as `~/.gemini/config/hooks.json`)
-     from the old entry name to the canonical entry name without disturbing
-     unrelated hooks.
-  3. Rebind external helper/guard config files (such as `~/.config/<old>/...`) to
-     the canonical script path so neither stale paths nor dual invocations survive.
+- **Fix:** enforce single-owner hook registration across any Skill rename: strip
+  active hook declarations from the compatibility-alias plugin at source, and run
+  the host-level reconciliation procedure in `daymade-skill:skill-governance` §8
+  ([Reconcile a compatibility-alias Skill rename](https://github.com/daymade/claude-code-skills/blob/main/daymade-skill/skill-governance/references/skill-surface-governance.md#reconcile-a-compatibility-alias-skill-rename))
+  to disable the alias plugin, migrate sibling-host hook registries, and rebind
+  external runtime pointers rather than maintaining a parallel checklist here.
 - **Bidirectional calibration:** inspect effective enabled plugins and hook
   registries to confirm only the canonical handler is registered for the target
   event (count = 1). Replay one matching dangerous/trigger event and verify it
