@@ -117,6 +117,7 @@ Only what the reviewer can directly observe:
 - What contradicts what?
 - What does this claim exists that does not?
 - Where would you get stuck?
+- For incremental edits to an existing skill: do sibling `references/*.md` files already cover or contradict the new rule, and does every routing surface in `SKILL.md` (e.g., entry decision tree, troubleshooting quick map) reach the new section from an uncoached symptom prompt?
 
 Never *"confirm that X is fine."*
 

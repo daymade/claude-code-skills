@@ -195,9 +195,10 @@ Retirement or changed boundaries require traceable authorization.
 Run compare → classify → verify. Review every unmatched old unit with the owning
 current file, locatable evidence and semantic reason; surviving only in tests,
 evals or an unreachable reference is a gap. Regenerate stale reviews after edits.
-Inspect changed prose pointers and adjacent rule clauses with the migration
-guide's reference/self-application procedure; text survival alone does not prove
-the section's behavior survived.
+Inspect changed prose pointers, sibling references and every affected routing
+surface in `SKILL.md` with the migration guide's validation and
+reference/self-application checks; text survival or a link from one unrelated
+row alone does not prove the section's behavior survived or is reachable.
 Finish this edit only after the
 [static preservation and required task-result gates](references/change-verification.md#fix-required-acceptance-before-selecting-evidence)
 both clear.
