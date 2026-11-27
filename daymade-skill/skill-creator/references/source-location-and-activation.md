@@ -81,7 +81,7 @@ does not require a new test suite, browser or live login for an instruction-only
 
 **Multi-root symlink safety:** On hosts that mirror or auto-sync multiple local skill
 roots (such as `~/.agents/skills/<name>` and `~/.claude/skills/<name>`), check whether a
-target symlink already exists (`test -L`) or replace atomically with `ln -sfn` instead of
+target symlink already exists (`test -L`) or replace in place with `ln -sfn` instead of
 running plain `ln -s <source> <existing-symlink-dir>`. Plain `ln -s` against an existing
 symlinked directory follows the link and creates a self-referential untracked symlink
 inside the source repository. Always verify `git status --porcelain=v1 --untracked-files=all`

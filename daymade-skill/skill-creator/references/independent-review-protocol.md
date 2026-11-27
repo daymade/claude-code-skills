@@ -159,7 +159,7 @@ pass; it does not create another review obligation.
 ### Read-only CLI and script-backed Skills
 
 When a Skill ships an executable read-only CLI or collector that can run safely without paid
-probes, external mutations, or side effects, do not leave live execution in `Not Checked`
+probes, external mutations, or side effects, do not leave live execution in `Not checked`
 when the runtime is available. Within the authorized review pass, execute at least one real
 full read-only run and one subset/flag run (such as `--json`, `--brief`, or section filters)
 and inspect the actual output for:
