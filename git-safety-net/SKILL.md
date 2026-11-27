@@ -81,7 +81,7 @@ an assistant-authored restriction is a lookup lead, not a new user decision.
 | "is everything merged?", "what's still not on main?", before deleting old branches | **Mode C — Verify merged** |
 | "so this never happens again", starting parallel/multi-branch work | **Mode D — Prevent** |
 | "clean up worktrees/stashes/branches", "converge everything onto main", "only keep one main branch" | **Mode E — Retire safely** |
-| "cannot switch to main", "`'main'` is already used by worktree" | **Troubleshooting** § Primary checkout cannot switch to `main` — detach a clean idle holder non-destructively |
+| "cannot switch to main", "`'main'` is already used by worktree" | **Troubleshooting** § Primary checkout cannot switch to `main` — inspect ownership/lock first, then detach only an authorized clean idle holder |
 | "an audit already said it's clean, but is anything *else* lost?", "check again" | **Mode B, starting at Step 0** — a repeat request usually means the first pass had the wrong scope, not that it looked carelessly |
 
 When in doubt, run the **smallest read-only probe that selects a mode**. Use Mode B Step 0's
@@ -905,13 +905,22 @@ the helpers authorizes `checkout`, `reset`, `push`, `stash drop`, `branch -d`, o
   checkout, not no checkout.
 - **Primary checkout cannot switch to `main` because another linked worktree holds it**
   (`fatal: 'main' is already used by worktree at <path>`) — do not kill another session's process
-  or unlock/remove a collaborator-owned locked worktree just to reclaim the branch ref. Inspect the
-  holding worktree first (`git -C <path> status --porcelain=v1 --untracked-files=all` and read-only
-  process activity per Mode D). If that worktree is **clean and idle** (no active writer), release
-  the branch ref in place with `git -C <path> switch --detach HEAD`: zero commits or working files
-  are lost, the holding directory and any idle process stay untouched, and the primary checkout can
-  immediately `git switch main` and `git pull --ff-only`. If the holding worktree is dirty or has
-  an active writer, stop and coordinate with its owner instead.
+  or unlock/remove a locked worktree just to reclaim the branch ref. Start with
+  `git worktree list --porcelain` to inspect the holding path, branch, and any `locked <reason>`.
+  Apply the Outcome contract and
+  **[references/merge_verification.md](references/merge_verification.md)** § Worktree retirement
+  (steps 1, 2 & 7: lock reason, scheduler definitions, externally managed/runtime worktree
+  exclusions, `git -C <path> status --porcelain=v1 --untracked-files=all --ignore-submodules=none`,
+  and directory occupancy via `lsof +D <path>` / platform equivalent) before touching `<path>`:
+  if `<path>` is collaborator-owned/excluded, carries an active lock reason, is dirty, has an
+  active writer, or backs a scheduled/externally managed job, stop and coordinate with its owner.
+  Only when `<path>` is **change-authorized, clean, and verified idle**, release the branch ref
+  in place with `git -C <path> switch --detach HEAD` — this preserves all commits, working files,
+  the directory, any lock, and running processes, while leaving `<path>` on a **detached `HEAD`**
+  (disclose this to the owner/user, since a resuming session there will need to switch back to a
+  branch before `git pull` or committing). Before running `git switch main` and
+  `git pull --ff-only` in the primary checkout, confirm primary's own `git branch --show-current`
+  and cleanliness so you do not switch primary off active WIP.
 - **`refs/dangling-backup/*` refs are cluttering things later** — once you've confirmed (Mode C)
   their content is on a remote, delete them with `git for-each-ref --format='%(refname)'
   refs/dangling-backup/ | xargs -n1 git update-ref -d`. Only after you've verified.

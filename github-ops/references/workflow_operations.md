@@ -159,13 +159,13 @@ If every matching runner is `offline` or `busy` on a long-running job, diagnose 
 
 #### Triaging shared self-hosted runner contention and transport resets
 
-When a job fails on a **shared self-hosted runner** (for example, a host that shares CPU, GPU, or egress bandwidth with co-resident background workloads), inspect the failed step and failing paths with `gh run view RUN_ID -R OWNER/REPO --log-failed` (or the per-job log endpoint below while sibling jobs are still running) before attributing the failure to PR code. Separate three failure shapes before making code changes:
+When a job fails on a **shared self-hosted runner** (for example, a host that shares CPU, GPU, or egress bandwidth with co-resident background workloads), bind the triage to the exact `head_sha` and read both the failed step logs (`gh run view RUN_ID -R OWNER/REPO --log-failed`, or the per-job log endpoint below while sibling jobs are still running) and the REST jobs breakdown (`runner_name`, `labels`, step durations — see [Workflow Performance Monitoring](#workflow-performance-monitoring)) before attributing the failure to PR code. Separate three failure shapes before editing code or requesting a rerun:
 
-1. **Pre-test transport reset** — `actions/checkout`, package installation, or toolchain download fails with connection reset/EOF and zero repository tests ran.
-2. **Contention-induced timeouts in untouched files** — uniform test timeouts cluster in test files untouched by the PR diff while total job duration spiked far above normal.
-3. **Deterministic PR regression** — assertions, type/build errors, or timeouts inside code or callers affected by the PR diff.
+1. **Pre-test transport reset** — `actions/checkout`, package installation, or toolchain download fails with connection reset/EOF and zero repository tests ran. Keep repository tests reported as **unrun**, check against deterministic prerequisite/image/proxy mismatches in [Diagnose a prerequisite failure before rerunning](#diagnose-a-prerequisite-failure-before-rerunning), and only after confirming no deterministic prerequisite defect run a bounded authorized `--failed` rerun.
+2. **Contention-induced timeouts in untouched files** — uniform test timeouts cluster in test files untouched by the PR diff while step/job durations spiked on a shared runner (corroborate against runner pool telemetry and recent `main` runs). Check that the PR diff did not change shared helpers, fixtures, dependencies, or workflow config imported by those files, then run the exact failing untouched test file(s) locally in isolation as a baseline check.
+3. **Deterministic PR regression** — assertions, type/build errors, or timeouts inside code, shared fixtures/config, or callers affected by the PR diff.
 
-For shape (2), run the exact failing untouched test file(s) locally in isolation as a fast baseline check. Once local execution passes and the PR diff is exonerated, retry only failed jobs (`gh run rerun RUN_ID -R OWNER/REPO --failed`) and watch the rerun to a verified terminal state rather than editing unrelated tests or declaring the PR broken. Do not treat repeated timeouts in PR-touched paths as runner flakiness.
+In a read-only diagnosis, report the classification and recommended next step without mutating Actions state. When rerun writes are explicitly authorized, confirm the PR `head_sha` has not moved, invoke the rerun through the checked `gh` wrapper (`checked_gh.py -- run rerun RUN_ID -R OWNER/REPO --failed`), and monitor the rerun to a verified terminal state with `--interval 15` or the resilient watch loop below. Cap unchanged retries: if **untouched** files time out again on rerun, stop retrying and escalate to persistent runner/cgroup capacity diagnosis ([Self-Hosted Runner Capacity and Acceptance](#self-hosted-runner-capacity-and-acceptance)) or a `main` baseline comparison — and never treat repeated timeouts in PR-touched paths as runner flakiness.
 
 **Resilient monitoring for long runs (>5 min) and flaky links:** `gh pr checks --watch` and `gh run watch` can hang silently after a transient proxy/API `EOF` or laptop sleep, exit non-zero on a transient GitHub API error (such as `HTTP 499`) while checks are still running, or report `no checks reported` when invoked immediately after `git push` before runs register. Confirm actual check state against the expected `headSha` before treating a watch exit as a CI failure (and inspect check buckets even after exit `0`, since canceled checks can finish with exit `0` when no check failed or stayed pending). When polling instead of watching, choose the loop that matches your scope and fail explicitly on timeout rather than exiting `0`:
 
@@ -531,7 +531,10 @@ first failing step and preserve the status of every later required step:
   cause; do not infer a flaky test, runner outage or completed installation.
 
 Repair a demonstrated deterministic prerequisite mismatch within authorization
-before rerunning; an unchanged retry is not a repair. For an authorized retry,
+before rerunning; an unchanged retry is not a repair. For shared self-hosted
+runner transport resets or contention timeouts in untouched files, see
+[Triaging shared self-hosted runner contention and transport resets](#triaging-shared-self-hosted-runner-contention-and-transport-resets).
+For an authorized retry,
 read back the new attempt's actual environment, installation result and all
 required checks. Keep earlier valid evidence only while its inputs remain
 unchanged. Do not replace the failed required job with an unrelated local pass
