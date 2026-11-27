@@ -27,6 +27,7 @@ MAX_GIT_OUTPUT_BYTES = 8 * 1024 * 1024
 GIT_TIMEOUT_SECONDS = 30
 OID_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 SHA256_RE = re.compile(r"^[0-9a-fA-F]{64}$")
+REMOTE_NAME_RE = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9._/-]*")
 ZERO_OID = "0" * 40
 RETENTION_NOTE = (
     "Caller-retained presence is explicitly reported, not semantic-delivery proof; "
@@ -170,6 +171,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="require primary refs/heads/main and attached HEAD to equal this exact commit",
     )
     parser.add_argument(
+        "--only-main",
+        action="store_true",
+        help="require the entire local branch set to be main at --expected-main",
+    )
+    parser.add_argument(
+        "--hosted-remote",
+        type=nonempty,
+        metavar="NAME",
+        help="with --only-main, also read all advertised heads from this configured remote",
+    )
+    parser.add_argument(
         "--require-clean",
         action="store_true",
         help="require the primary checkout's real status, including untracked files, to be clean",
@@ -264,10 +276,18 @@ def bounded_error_text(data: bytes) -> str:
     return text[:2000] if text else "no diagnostic output"
 
 
-def run_git(repo: str, arguments: Sequence[str]) -> GitResult:
+def run_git(repo: str, arguments: Sequence[str], *, hosted: bool = False) -> GitResult:
     command = [
         "git", "--no-optional-locks", "-c", "core.fsmonitor=false", "-C", repo, *arguments
     ]
+    env = git_environment()
+    if hosted:
+        env.update(
+            GIT_ASKPASS="false", SSH_ASKPASS="false", SSH_ASKPASS_REQUIRE="never",
+            GCM_INTERACTIVE="never",
+        )
+    if arguments[0] == "fsck":
+        env["GIT_NO_LAZY_FETCH"] = "1"
     try:
         completed = subprocess.run(
             command,
@@ -276,7 +296,8 @@ def run_git(repo: str, arguments: Sequence[str]) -> GitResult:
             stderr=subprocess.PIPE,
             check=False,
             timeout=GIT_TIMEOUT_SECONDS,
-            env=git_environment(),
+            env=env,
+            start_new_session=hosted,
         )
     except subprocess.TimeoutExpired as exc:
         raise GitFailure(
@@ -529,6 +550,91 @@ def add_condition_failure(report: dict[str, Any], kind: str, identity: str, cond
     )
 
 
+def parse_branch_inventory(repo: str, data: bytes) -> dict[str, str]:
+    if data and not data.endswith(b"\n"):
+        raise GitFailure("branch_output_invalid", "Incomplete branch inventory record")
+    heads: dict[str, str] = {}
+    for raw in data.split(b"\n")[:-1]:
+        try:
+            oid, ref = raw.decode("utf-8").split("\t")
+        except ValueError as exc:
+            raise GitFailure("branch_output_invalid", "Malformed branch inventory record") from exc
+        if (not OID_RE.fullmatch(oid) or oid == ZERO_OID or
+                not ref.startswith("refs/heads/") or "\x00" in ref or ref in heads):
+            raise GitFailure("branch_output_invalid", "Invalid or duplicate branch inventory record")
+        if ref != "refs/heads/main":
+            require_git_success(run_git(repo, ["check-ref-format", ref]), "Validate branch refname")
+        heads[ref] = oid.lower()
+    return heads
+
+
+def local_branch_inventory(repo: str, common_dir: str) -> dict[str, str]:
+    result = require_git_success(
+        run_git(repo, ["for-each-ref", "--format=%(objectname)%09%(refname)", "refs/heads/"]),
+        "Enumerate all local heads",
+    )
+    heads = parse_branch_inventory(repo, result.stdout)
+    # Git silently omits unresolved symbolic refs from for-each-ref. Check loose
+    # names as well on the files backend. Reftable exposes these errors via fsck.
+    storage = run_git(repo, ["config", "--get", "extensions.refStorage"])
+    if storage.returncode == 1 and not storage.stderr and not storage.stdout:
+        backend = "files"
+    else:
+        require_git_success(storage, "Read ref storage format")
+        backend = decode_single_line(storage.stdout, "Read ref storage format").lower()
+    if backend == "reftable":
+        require_git_success(
+            run_git(repo, ["fsck", "--connectivity-only", "--no-reflogs", "--no-dangling"]),
+            "Verify reftable ref connectivity",
+        )
+    elif backend == "files":
+        root = Path(common_dir)
+        loose = root / "refs" / "heads"
+
+        def walk_error(exc: OSError) -> None:
+            raise GitFailure("branch_inventory_unknown", "Cannot read loose heads") from exc
+
+        try:
+            if not stat.S_ISDIR(loose.lstat().st_mode):
+                raise GitFailure("branch_inventory_unknown", "Loose heads path is not a directory")
+        except FileNotFoundError:
+            return heads
+        except OSError as exc:
+            walk_error(exc)
+        for parent, dirs, files in os.walk(loose, onerror=walk_error):
+            for component in dirs:
+                if (Path(parent) / component).is_symlink():
+                    raise GitFailure("branch_inventory_unknown", "Symbolic directory in loose heads")
+            for name in files:
+                ref = (Path(parent) / name).relative_to(root).as_posix()
+                if ref not in heads:
+                    valid = run_git(repo, ["check-ref-format", ref])
+                    if valid.returncode == 1 and not valid.stderr:
+                        continue
+                    require_git_success(valid, "Validate loose head")
+                    raise GitFailure("branch_inventory_unknown", f"Unresolved loose head: {ref}")
+    else:
+        raise GitFailure("branch_inventory_unknown", "Unknown Git ref storage format")
+    return heads
+
+
+def hosted_branch_inventory(repo: str, remote: str) -> dict[str, str]:
+    # ls-remote accepts paths, URLs and transport commands as well as names. Prove
+    # the argument has a configured fetch URL before making any transport call.
+    configured = run_git(repo, ["config", "--get", f"remote.{remote}.url"])
+    if configured.returncode == 1 and not configured.stderr and not configured.stdout:
+        raise InputError("invalid_hosted_remote", f"No fetch URL configured for remote {remote}")
+    require_git_success(configured, "Read configured remote")
+    decode_single_line(configured.stdout, "Read configured remote")
+    result = run_git(repo, ["ls-remote", "--heads", "--", remote], hosted=True)
+    # A transport diagnostic can include credentials from a configured URL.
+    if result.returncode != 0 or result.stderr.strip():
+        code = "git_command_failed" if result.returncode else "git_diagnostic"
+        raise GitFailure(code, f"Head inventory for {remote} reported a transport error or diagnostic "
+                               f"(Git exit {result.returncode})")
+    return parse_branch_inventory(repo, result.stdout)
+
+
 def verify(args: argparse.Namespace, report: dict[str, Any]) -> int:
     expected_hash = args.expected_manifest_sha256
     report["repository"]["requested"] = args.repo
@@ -540,6 +646,15 @@ def verify(args: argparse.Namespace, report: dict[str, Any]) -> int:
     if args.expected_main is not None:
         if not OID_RE.fullmatch(args.expected_main) or args.expected_main.lower() == ZERO_OID:
             raise InputError("invalid_expected_main", "--expected-main must be a full nonzero 40-hex OID")
+    if args.only_main and args.expected_main is None:
+        raise InputError("invalid_arguments", "--only-main requires --expected-main")
+    if args.hosted_remote is not None:
+        if not args.only_main:
+            raise InputError("invalid_arguments", "--hosted-remote requires --only-main")
+        if not REMOTE_NAME_RE.fullmatch(args.hosted_remote) or any(
+            part in ("", ".", "..") for part in args.hosted_remote.split("/")
+        ):
+            raise InputError("invalid_hosted_remote", "--hosted-remote requires a configured remote name")
     if len(args.absent_path) > MAX_PATH_ITEMS or len(args.absent_worktree) > MAX_PATH_ITEMS:
         raise InputError("too_many_paths", f"At most {MAX_PATH_ITEMS} items are allowed per path option")
     validate_no_duplicate_paths(args.absent_path, "--absent-path")
@@ -847,6 +962,27 @@ def verify(args: argparse.Namespace, report: dict[str, Any]) -> int:
                     add_condition_failure(report, "require_clean", primary.path, "dirty")
             except UnicodeDecodeError:
                 add_error(report, "status_output_invalid", "Primary status is not valid UTF-8")
+            except GitFailure as exc:
+                add_error(report, exc.code, exc.message)
+
+    if args.only_main:
+        expected_heads = {"refs/heads/main": args.expected_main.lower()}
+        inventory: dict[str, Any] = {"expected_heads": expected_heads}
+        report["only_main"] = inventory
+        for scope in (("local", "hosted") if args.hosted_remote else ("local",)):
+            item = {"observed_heads": None, "condition": "unknown"}
+            inventory[scope] = item
+            try:
+                if scope == "hosted":
+                    item["remote"] = args.hosted_remote
+                    heads = hosted_branch_inventory(repo, args.hosted_remote)
+                else:
+                    heads = local_branch_inventory(repo, actual_common)
+                item["observed_heads"] = heads
+                item["condition"] = "match" if heads == expected_heads else "mismatch"
+                if heads != expected_heads:
+                    identity = args.hosted_remote if scope == "hosted" else repo
+                    add_condition_failure(report, "only_main", identity, "mismatch")
             except GitFailure as exc:
                 add_error(report, exc.code, exc.message)
 
