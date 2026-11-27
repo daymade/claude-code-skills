@@ -49,10 +49,16 @@ the competing readings; do not make completing a fixed retrieval sequence the go
    when available. If export is denied, stop that export attempt and use other
    evidence; do not make granting download permission the user's next required
    task. Already-authorized playback can help only if the runtime can actually hear
-   or transcribe the relevant utterance. Seeing a player, captions, or a screenshot
-   is not hearing audio. Do not bypass export controls, guess another account, or
-   claim an unavailable listening capability. The clip/recognizer contract in
-   `advanced_correction_evidence.md` still applies when running that route.
+   or transcribe the relevant utterance. When source audio is downloadable and the
+   current runtime supports direct multimodal audio input, slicing a short
+   clock-calibrated clip (roughly 6–30 s around the disputed span via `ffmpeg`)
+   and listening directly is a valid rung-7 check without requiring a separate
+   external ASR engine first; exact written spelling for out-of-vocabulary proper
+   nouns still requires a written or roster anchor. Seeing a player, captions, or
+   a screenshot is not hearing audio. Do not bypass export controls, guess another
+   account, or claim an unavailable listening capability. The clip/recognizer
+   contract in `advanced_correction_evidence.md` still applies when running that
+   route.
 5. **Adjudicate the item, then continue the others.** Apply supported corrections
    through their queue rows. Use `kept_original` only when evidence supports the
    original reading. Reject a speculative correction without manufacturing proof
@@ -100,7 +106,10 @@ for a plain Fast pass.
    [correction application](native_correction_application.md) before applying
    deferrals, global replacements or context-dependent batches. Resolve agreed
    Stage 1 deferrals through their queue rows. Preserve speaker labels, numbers,
-   qualifications, false starts and readable speech; do not insert unspoken words.
+   qualifications, false starts, readable speech, and confirmed in-meeting
+   playback of external audio/video clips (do not normalize played media into the
+   meeting's own jargon or delete it; note the playback span in `asr_note` when
+   diarization merges it into a participant's label); do not insert unspoken words.
 6. **Second pass.** Run `--scan-traps` and inspect hits and `unparsed` at every
    tier. For Full, read [cold review and recovery](native_second_pass.md) before
    assigning the already-corrected artifact and raw evidence. Reviewers return

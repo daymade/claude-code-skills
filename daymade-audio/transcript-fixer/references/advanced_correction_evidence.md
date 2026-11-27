@@ -210,6 +210,25 @@ task, or require someone to enable exports before other items can be adjudicated
   (`source_clip.py frame`) showing the written spelling. Without a written or
   authoritative anchor, keep the raw text pending rather than guessing a spelling
   from sound alone.
+- **Direct multimodal clip listening when supported by the runtime.** When
+  authorized source audio has been downloaded (for example via
+  `fetch_minute_audio.py`) and the active runtime can read short audio files
+  directly, extracting a calibrated ~6–30 s clip with `ffmpeg` and listening
+  directly can adjudicate acoustic ambiguities, near-homophones, and speaker-vs-noise
+  disputes without waiting for an external second ASR engine. Acoustic listening
+  confirms what was spoken, not the canonical spelling of an out-of-vocabulary
+  proper noun; pair it with a roster, glossary, or screen-share frame before
+  changing spelling.
+- **Identify and preserve in-meeting media playback mis-clustered under a participant label.**
+  When a participant plays an external video, reference recording, or voice clip
+  aloud during a call, platform diarization frequently attributes that playback
+  to an active speaker's label, causing sudden shifts in topic, register, or
+  scripted phrasing. Confirm playback from explicit conversational cues ("let me
+  play this clip", immediate live commentary referencing the clip) or acoustic
+  shift in a calibrated clip. Preserve the verbatim spoken/played text without
+  rewriting it into the meeting's internal terminology or inventing a new speaker
+  label, and record the timestamp span in `asr_note` so downstream readers do not
+  misattribute the played clip to the live speaker.
 - **Record confirmed far-field / background-noise hallucinations explicitly.**
   When direct listening on both tight and medium clips proves the active speaker
   was silent and the disputed text was hallucinated from distant room chatter,
