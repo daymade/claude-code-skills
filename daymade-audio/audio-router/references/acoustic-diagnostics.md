@@ -30,6 +30,14 @@ speaker metrics require their prepared assets and supported GPU environment;
 installing daudio does not install those models. Do not auto-download models,
 change the engine, or fall back to CPU neural inference.
 
+When the `daudio` CLI runtime and its isolated acoustics environment (Praat/
+`parselmouth` and `tgt`) run different Python minor versions, do not prepend
+the CLI runtime's `site-packages` via `PYTHONPATH`: compiled C-extensions
+(such as `numpy`) from the wrong minor version shadow the acoustics environment
+and fail with an `ImportError`. Invoke the acoustics interpreter directly and
+append only the pure-Python `daudio` package path after the acoustics
+environment's `site-packages`.
+
 ## Bind the audio and coordinates
 
 Retain the original source and measure an identified PCM WAV. Record its actual
@@ -41,6 +49,10 @@ using them. Unknown mappings stay unknown; an ASR timestamp is not that mapping.
 Keep native artifacts and their identities with each report. For exact level
 windows, preserve integer sample coordinates when available rather than making
 a seconds-to-samples round trip. Never overwrite the source or an input report.
+When preparing the measured PCM WAV for `boundaries`, decode the full exact
+clip being cut rather than applying a fixed `-t` duration cap; even a small
+container-vs-audio tail mismatch (for example, a few milliseconds) causes
+`boundaries` to fail closed with `Cut must be inside the measured PCM`.
 
 ## Choose the observation
 

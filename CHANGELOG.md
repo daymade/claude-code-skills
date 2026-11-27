@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **audio-router** (`daymade-audio` v1.65.11 → v1.65.12): Document two operational constraints in `references/acoustic-diagnostics.md` — avoiding Python minor-version ABI shadowing when invoking `daudio acoustics` under an isolated Praat/`tgt` environment (append only the pure-Python `daudio` path after the acoustics venv's `site-packages`), and decoding the full exact clip for `boundaries` without a fixed `-t` duration cap to prevent fail-closed `Cut must be inside the measured PCM` mismatches. Change type: bounded operational diagnostic note.
+
 - **macos-cleaner** (`daymade-macos` v1.34.34 → v1.34.35): Add a bounded batch-inspection path in `references/docker_analysis.md` Step 2C for large cohorts of automated/CI 64-hex anonymous dangling volumes — separating named volumes first, running metadata triage, and inspecting the exact enumerated candidate set in one read-only container for database signatures before bulk confirmation without weakening the Database Volume Red Flag rule.
 
 - **macos-cleaner** (`daymade-macos` v1.34.33 → v1.34.34). Use existing storage reports as diagnosis evidence, locate OrbStack's Docker CLI over SSH, and verify live image handles and archive integrity before retiring legacy images after relocating OrbStack data.
