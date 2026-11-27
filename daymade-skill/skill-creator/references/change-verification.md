@@ -19,6 +19,14 @@ optional benefit claims. For an existing Skill, use the frozen old bundle to ide
 interfaces, failure/recovery cases and loading routes. Do not derive acceptance
 only from the examples the candidate already passes.
 
+When distilling a user-approved ad-hoc answer from the current session into a
+reusable Skill or script, capture the specific cross-layer insights, alerts, and
+diagnostic joins that made the original answer useful as explicit preservation
+items in the acceptance anchor. Mechanically converting an analytical narrative
+into a rigid renderer often preserves data plumbing while silently dropping
+alerts, causal links, or nuance; passing synthetic unit tests never catches that
+regression.
+
 ### Bind the intended consumer before verification
 
 In the existing acceptance plan, bind the intended consumer and distribution
