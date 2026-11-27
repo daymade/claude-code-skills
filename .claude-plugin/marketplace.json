@@ -1156,7 +1156,7 @@
       "description": "Audits rendered UI, whole-site route censuses and task/object-link handoffs in web apps, decks, dashboards, design systems, Markdown/Obsidian and Electron. Uses real-browser journeys and Playwright for typography, overflow, responsive, routing, data-viz, browser-output or native-shell defects and reference comparisons. Excludes source-only citation checks, greenfield design (ui-designer) and QA setup (qa-expert).",
       "source": "./frontend-visual-qa",
       "strict": false,
-      "version": "1.22.8",
+      "version": "1.22.9",
       "category": "design",
       "keywords": [
         "frontend",
