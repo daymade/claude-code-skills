@@ -152,6 +152,127 @@ class VerifyCloseoutTests(unittest.TestCase):
         self.assertIs(report["resource_postconditions_only"], True)
         self.assertEqual(report["business_content_delivery"], "not_assessed")
 
+    def test_only_main_reconciles_live_sets_beyond_frozen_manifest(self) -> None:
+        frozen = self.write_manifest([("refs/heads/retired", self.main_sha)])
+        args = ("--only-main", "--expected-main", self.main_sha, "--hosted-remote", "origin")
+        hosted = self.root / "bare remote"
+        self.git("clone", "--bare", "--quiet", str(self.primary), str(hosted))
+        self.in_primary("remote", "add", "origin", str(hosted))
+        self.in_primary("pack-refs", "--all")
+        expected = {"refs/heads/main": self.main_sha}
+        result = self.run_verify(*frozen, *args)
+        report = self.payload(result)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(report["only_main"]["local"]["observed_heads"], expected)
+        self.assertEqual(report["only_main"]["hosted"]["observed_heads"], expected)
+        self.assertEqual(report["primary_main"]["condition"], "match")
+        self.assert_boundaries(report)
+
+        late = "refs/heads/agent/new-after-freeze"
+        self.update_ref(late, self.other_sha)
+        scoped = self.run_verify(*frozen, "--expected-main", self.main_sha)
+        self.assertEqual(scoped.returncode, 0, scoped.stdout)
+        self.assertNotIn("only_main", self.payload(scoped))
+        result = self.run_verify(*frozen, *args)
+        report = self.payload(result)
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertEqual(report["only_main"]["local"]["observed_heads"][late], self.other_sha)
+        self.assertEqual(report["only_main"]["hosted"]["condition"], "match")
+        self.delete_ref(late)
+
+        self.git("-C", str(hosted), "update-ref", late, self.main_sha)
+        self.update_ref("refs/remotes/origin/main", self.main_sha)
+        local_only = self.run_verify(*frozen, *args[:-2])
+        self.assertEqual(local_only.returncode, 0, local_only.stdout)
+        self.assertNotIn("hosted", self.payload(local_only)["only_main"])
+        result = self.run_verify(*frozen, *args)
+        report = self.payload(result)
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertEqual(report["only_main"]["hosted"]["observed_heads"][late], self.main_sha)
+        self.assertEqual(report["only_main"]["local"]["condition"], "match")
+
+        self.git("-C", str(hosted), "update-ref", "-d", late)
+        self.in_primary("push", "--quiet", "origin", f"{self.other_sha}:refs/heads/main")
+        for hosted_tip in [self.other_sha, None]:
+            if hosted_tip is None:
+                self.git("-C", str(hosted), "update-ref", "-d", "refs/heads/main")
+            with self.subTest(hosted_tip=hosted_tip):
+                result = self.run_verify(*frozen, *args)
+                self.assertEqual(result.returncode, 1, result.stdout)
+                observed = self.payload(result)["only_main"]["hosted"]["observed_heads"]
+                self.assertEqual(observed, {"refs/heads/main": hosted_tip} if hosted_tip else {})
+
+    def test_only_main_requires_attached_primary_and_recognizes_unresolved_loose_heads(self) -> None:
+        frozen = self.write_manifest([("refs/heads/retired", self.main_sha)])
+        args = ("--only-main", "--expected-main", self.main_sha)
+        self.in_primary("checkout", "--quiet", "--detach", self.main_sha)
+        result = self.run_verify(*frozen, *args)
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertEqual(self.payload(result)["primary_main"]["condition"], "not_on_main")
+        self.in_primary("checkout", "--quiet", "main")
+        self.in_primary("symbolic-ref", "refs/heads/new-dangling", "refs/heads/missing")
+        result = self.run_verify(*frozen, *args)
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertEqual(self.payload(result)["only_main"]["local"]["condition"], "unknown")
+
+    def test_only_main_checks_options_and_remote_identity_before_transport(self) -> None:
+        frozen = self.write_manifest([("refs/heads/retired", self.main_sha)])
+        args = ("--only-main", "--expected-main", self.main_sha)
+        for invalid in [
+            ("--only-main",),
+            ("--hosted-remote", "origin"),
+            (*args, "--hosted-remote", "does-not-exist"),
+            (*args, "--hosted-remote", str(self.primary)),
+            (*args, "--hosted-remote=--upload-pack=command"),
+            (*args, "--hosted-remote", "ext::command"),
+        ]:
+            with self.subTest(invalid=invalid):
+                result = self.run_verify(*frozen, *invalid)
+                self.assertEqual(result.returncode, 2, result.stdout)
+                self.assertEqual(self.payload(result)["status"], "invalid_input")
+        self.in_primary("remote", "add", "origin", str(self.root / "missing-bare"))
+        result = self.run_verify(*frozen, *args, "--hosted-remote", "origin")
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertEqual(self.payload(result)["only_main"]["hosted"]["condition"], "unknown")
+
+    def test_suspicious_hosted_output_never_verifies(self) -> None:
+        frozen = self.write_manifest([("refs/heads/retired", self.main_sha)])
+        args = ("--only-main", "--expected-main", self.main_sha, "--hosted-remote", "origin")
+        self.in_primary("remote", "add", "origin", str(self.primary))
+        wrapper_dir = self.root / "fake-git"
+        wrapper_dir.mkdir()
+        real_git = shutil.which("git")
+        self.assertIsNotNone(real_git)
+        wrapper = wrapper_dir / "git"
+        wrapper.write_text(
+            "#!/bin/sh\n"
+            "for arg in \"$@\"; do\n"
+            "  if [ \"$arg\" = ls-remote ]; then\n"
+            "    printf '%s' \"$FIXTURE_HEADS\"\n"
+            "    printf '%s' \"$FIXTURE_DIAGNOSTIC\" >&2\n"
+            "    exit 0\n"
+            "  fi\n"
+            "done\n"
+            f"exec {shlex.quote(real_git or 'git')} \"$@\"\n", encoding="utf-8",
+        )
+        wrapper.chmod(0o755)
+        valid = f"{self.main_sha}\trefs/heads/main\n"
+        cases = [
+            (valid, "warning: incomplete list"), (valid * 2, ""), (valid.rstrip(), ""),
+            ("short\trefs/heads/main\n", ""), ("0" * 40 + "\trefs/heads/main\n", ""),
+            (f"{self.main_sha}\trefs/tags/main\n", ""),
+            (f"{self.main_sha}\trefs/heads/a..b\n", ""),
+        ]
+        for output, diagnostic in cases:
+            with self.subTest(output=output, diagnostic=diagnostic):
+                env = dict(self.env, PATH=f"{wrapper_dir}{os.pathsep}{self.env['PATH']}",
+                           FIXTURE_HEADS=output, FIXTURE_DIAGNOSTIC=diagnostic)
+                result = self.run_verify(*frozen, *args, env=env)
+                report = self.payload(result)
+                self.assertEqual(result.returncode, 2, result.stdout)
+                self.assertFalse(report["all_requested_postconditions_hold"])
+                self.assertEqual(report["only_main"]["hosted"]["condition"], "unknown")
+
     def test_all_absent_resources_are_verified_with_examined_counts(self) -> None:
         manifest, digest = self.write_manifest(
             [

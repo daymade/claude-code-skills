@@ -656,11 +656,12 @@ content delivered and current-consumer behavior verified, intentionally supersed
 ladder, intentionally caller-retained, inspect-only/excluded and untouched, or unresolved. A
 preserved export is recovery evidence, not delivery; every unresolved item remains unfinished.
 
-- the hosting service lists only the intended maintained branch;
-- local `refs/heads/` contains only `main`, and `HEAD`, local `main`, and the refreshed
-  `origin/main` resolve to the intended commit;
-- `git worktree list --porcelain` registers only the primary worktree, and every authorized linked
-  worktree path is absent;
+- for local one-main, the primary checkout is attached to `main` and the entire current
+  `refs/heads/` set contains only `main` at the intended commit;
+- when hosted one-main is also in scope, the configured remote advertises only
+  `refs/heads/main` at that same commit;
+- every worktree designated for retirement is absent from both registration and disk. For a
+  worktree designated for retention, verify its agreed path, HEAD and preserved content;
 - the index has no staged residue from the convergence;
 - every pre-existing WIP path still byte-matches its frozen source/backup, even if Git now reports
   a different tracked/untracked classification;
@@ -690,13 +691,21 @@ the caller owns whole-primary closeout, `--expected-main <full-sha>` checks the 
 `HEAD` and `refs/heads/main`, not floating `origin/main`; add `--require-clean` only when a clean
 primary, including untracked files, is part of that authorized outcome.
 
+For a local one-main outcome add `--only-main --expected-main <full-sha>` to the manifest
+invocation. It also detects a branch another writer added after the inventory was frozen.
+If the user included hosted branches, add `--hosted-remote <configured-name>` to the same
+invocation. This queries the remote's advertised heads at closeout time. If a new branch
+appears, resolve its ownership and content under the original authorization, then read back
+the final state.
+
 Exit 0 means every requested resource postcondition holds, exit 1 reports observed unresolved,
 drift, presence, dirtiness, or mismatch, and exit 2 reports invalid input, Git failure, or unknown
 state. Treat Git diagnostics as unknown even when Git exits 0. Rely on the helper's per-command
 filesystem-monitor override to avoid invoking repository callbacks. Every JSON result retains
 `resource_postconditions_only=true` and
 `business_content_delivery=not_assessed`. The helper does not prove that the initial inventory was
-complete, semantic/business delivery, remote publication, or deletion authority. It rejects a
+complete, semantic/business delivery, or deletion authority. Hosted verification covers the
+advertised branches of the named remote at the time of the query. The helper rejects a
 manifest whose bytes differ from the first recorded hash; never supply a new hash for a reduced
 final subset and call that subset the original.
 
@@ -1124,6 +1133,75 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
 
 The recovery artifacts created in step 6 may later follow § Retire task-owned temporary recovery
 artifacts. A copied ignored path that exists only in that backup keeps the artifact ineligible.
+
+### Release a non-main branch while keeping its worktree at the same path
+
+Use this when the owner explicitly wants to keep a particular linked worktree, including
+its evidence or unfinished edits, at its original path and permits detaching its non-main
+branch. Record the path, reason for retention, owner and what depends on the directory.
+The procedure ends with a registered worktree at the same commit. Retiring its former branch
+requires the separate branch disposition and recovery checks.
+
+1. Match the canonical absolute path to its record in `git worktree list --porcelain -z`.
+   From that path, resolve `--show-toplevel`, `--absolute-git-dir` and
+   `--path-format=absolute --git-common-dir` with `git rev-parse`. Match the linked
+   administrative directory and its `gitdir` backlink to the target, and the common directory
+   to the kept checkout. Freeze the full symbolic `HEAD` (`refs/heads/…`) and commit OID.
+   Verify the branch resolves to that OID and a durable recovery ref resolves to the same
+   commit, or restore and resolve it in an independent repository from the retained bundle.
+   Preserve unique working and staged bytes separately wherever recovery must cover them.
+2. Obtain an exclusive window for the target worktree, its branch and recovery carrier through
+   the final readback. Apply retirement steps 1, 2 and 7 to ownership, scheduler definitions,
+   processes and locks. Stop if a live consumer needs the branch binding, a writer can resume,
+   the worktree or index is locked, or Git shows a pending merge, rebase, cherry-pick, revert,
+   bisect or sequencer operation. A momentary empty process list cannot ensure exclusivity.
+3. Outside the checkout, save the following independent byte snapshots before and after the
+   change. Run read probes with `git -C "$wt" --no-optional-locks -c core.fsmonitor=false`.
+   Abort on any command error, even when its output file exists.
+
+   | Snapshot | Source |
+   |---|---|
+   | Raw index | Copy the file resolved by `rev-parse --path-format=absolute --git-path index`. Record presence, path and bytes of any shared index from `rev-parse --path-format=absolute --shared-index-path`. |
+   | Staged patch | `diff --cached --binary --no-ext-diff --no-textconv --ignore-submodules=none "$oid" --` |
+   | Unstaged patch | `diff --binary --no-ext-diff --no-textconv --ignore-submodules=none --` |
+   | Plain status | `status --porcelain=v1 -z --untracked-files=all --ignore-submodules=none` |
+   | Untracked and ignored names, separately | `ls-files --others --exclude-standard -z` and `ls-files --others --ignored --exclude-standard -z` |
+
+   NUL-delimited lists establish which names were present. For a content-preservation claim,
+   also compare the retained files' byte hashes, modes and symlink targets, including any
+   nested repository state needed for replay. Record the primary checkout's branch, OID and
+   independent snapshots so changes there remain visible.
+4. Use the frozen `wt`, `ref` and `oid` below. Inside the exclusive window recheck the
+   registered identity, branch, OID and recovery carrier. The first command verifies the
+   symbolic target and requires Git support for `symref-verify`. The second replaces only
+   this worktree's `HEAD` and compares its old OID. Another branch can name the same OID,
+   which is why the exclusive window must cover both calls.
+
+   ```bash
+   printf 'symref-verify HEAD %s\n' "$ref" | git -C "$wt" update-ref --no-deref --stdin &&
+     git -C "$wt" update-ref --no-deref -m 'retain checkout at recorded commit' HEAD "$oid" "$oid"
+   ```
+
+5. Independently verify that `git -C "$wt" symbolic-ref --quiet HEAD` exits **1**, that
+   the target's `HEAD`, its former branch and the recovery carrier still identify the frozen
+   commit, and that its original registered path now shows `detached`. Compare every snapshot
+   byte-for-byte, along with the primary checkout's original identity and state. Report the
+   retained path, detached OID and separate disposition of its former branch. A resumed editor
+   needs to establish a branch before continuing branch-based work.
+6. If a postcheck fails, stop branch retirement, keep both sets of snapshots and keep the
+   original branch, carrier and files. If identity and exclusivity still hold, the target
+   still has a detached `HEAD` at the exact OID, and the branch remains at that OID, restore
+   the original binding in one guarded transaction.
+
+   ```bash
+   printf 'verify %s %s\nsymref-update HEAD %s oid %s\n' "$ref" "$oid" "$ref" "$oid" |
+     git -C "$wt" update-ref --no-deref --stdin
+   ```
+
+   Recheck the symbolic target, OID and all snapshots after restoring the binding. Preserve
+   and report any remaining file or index differences for the owner. If a writer appeared or
+   the guarded transaction refused, retain the observed state for recovery. A reset or checkout
+   could overwrite the original working or staged bytes.
 
 ### Archive a retained worktree without deleting it
 

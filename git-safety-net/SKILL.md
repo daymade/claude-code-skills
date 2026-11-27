@@ -765,10 +765,11 @@ a line the survivor genuinely lacks anywhere is the one to escalate.
 for the generated recovery command, runtime prerequisites, stored-byte limits, artifact layout,
 and independent reconstruction. Use the same recovery playbook for bundle restoration.
 
-For closeout resource postconditions against the first frozen original manifest, follow
-**[references/merge_verification.md](references/merge_verification.md)** § Prove the user-visible
-terminal state and use `scripts/git_verify_closeout.py`. It does not prove that the initial inventory
-was complete, semantic/business delivery, remote publication, or deletion authority.
+Use `scripts/git_verify_closeout.py` with the first frozen manifest. For a one-main outcome,
+also enumerate current local heads with `--only-main --expected-main <full-sha>`; when the
+outcome includes a hosting service, add `--hosted-remote <configured-name>`. Follow
+[Prove the user-visible terminal state](references/merge_verification.md#5-prove-the-user-visible-terminal-state)
+for content delivery, retained worktrees and recovery evidence.
 
 **Step 5 — close the temporary recovery-artifact lifecycle only when it is separately
 authorized.** First finish Step 4 and prove the maintained survivor contains or intentionally
@@ -798,7 +799,7 @@ never tell a user to run bare `git_verify_branch_merged.sh` unless `command -v` 
 | `scripts/git_export_before_drop.sh [export options]` | Export authorized refs or stashes; follow [the recovery procedure](references/recovery_playbook.md#export-and-recover-selected-stashes) for dependencies, artifacts and restoration | Writes backup files only (never drops/deletes) |
 | `scripts/git_stash_tree_archive.py --repo PATH --tree TREE_OID --output FILE` | Internal verified frozen-tree tar exporter; use through the parent exporter under [the recovery procedure](references/recovery_playbook.md#export-and-recover-selected-stashes) | Writes only the selected backup tar |
 | `scripts/git_export_before_drop.sh --verify-current BUNDLE` | Fail if any bundled ref moved or disappeared since export | Nothing (read-only) |
-| `scripts/git_verify_closeout.py --repo PATH --expected-common-dir PATH --target-manifest TSV --expected-manifest-sha256 SHA256 [postcondition options]` | Verify only requested resource postconditions against the first frozen original manifest: ref absence or explicit caller retention, exact path/worktree absence, and optional primary-main/cleanliness conditions. JSON keeps business content delivery unassessed; initial-inventory completeness, semantic delivery, publication, and deletion authority remain with the caller | Nothing (read-only, no fetch or writes to refs, objects, index, worktrees, or files) |
+| `scripts/git_verify_closeout.py --repo PATH --expected-common-dir PATH --target-manifest TSV --expected-manifest-sha256 SHA256 [postcondition options]` | Reconcile original refs and selected paths/worktrees. With `--only-main --expected-main SHA`, also check the entire current local branch set. Add `--hosted-remote NAME` to verify the live branch set advertised by that remote. Add `--require-clean` for a clean primary checkout. | Read-only. Contacts the configured remote only when requested. |
 | `scripts/git_prepare_clone_retirement.sh --clone PATH --survivor PATH --out DIR [--full-backup]` | Default: prove every clone object retained by an independent survivor's refs, record exact recovery identities and copy only unique metadata. Refuse gaps rather than silently creating a full bundle; `--full-backup` explicitly retains the self-contained export branch. Run `--verify-current DIR` after standalone occupancy and immediately before the authorized removal/move. | Writes only the new external evidence directory and any necessary metadata/export; disables lazy fetch/fsmonitor; never moves/deletes or changes refs |
 | `scripts/git_prepare_worktree_retirement.py` | Use within [Worktree retirement](references/merge_verification.md#worktree-retirement--prove-the-checkout-is-disposable-before-removal) for supported layouts. | Writes only external evidence; never changes source refs or removes a worktree |
 | `scripts/git_prepare_sparse_worktree.py init` / `verify` | Use [sparse initialization](references/prevention_practices.md#initialize-an-authorized-sparse-worktree) for a new authorized worktree and read-only baseline/scope verification after staging. | `init`: adds only a new task branch/worktree, seeds its full index and selected files; refuses existing targets. `verify`: read-only, never repairs an index |
@@ -920,7 +921,9 @@ the helpers authorizes `checkout`, `reset`, `push`, `stash drop`, `branch -d`, o
   (disclose this to the owner/user, since a resuming session there will need to switch back to a
   branch before `git pull` or committing). Before running `git switch main` and
   `git pull --ff-only` in the primary checkout, confirm primary's own `git branch --show-current`
-  and cleanliness so you do not switch primary off active WIP.
+  and cleanliness so you do not switch primary off active WIP. When the requested outcome
+  explicitly retains a linked evidence or WIP directory at its original path while releasing
+  a **non-main** branch, follow the [in-place retention procedure](references/merge_verification.md#release-a-non-main-branch-while-keeping-its-worktree-at-the-same-path).
 - **`refs/dangling-backup/*` refs are cluttering things later** — once you've confirmed (Mode C)
   their content is on a remote, delete them with `git for-each-ref --format='%(refname)'
   refs/dangling-backup/ | xargs -n1 git update-ref -d`. Only after you've verified.
