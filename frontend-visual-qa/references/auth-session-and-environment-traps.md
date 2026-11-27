@@ -100,17 +100,27 @@ blames the network or the product while the same request succeeds from a
 different client. Run these checks before filing any "login/network broken"
 finding from a scripted browser.
 
-### 1. Shell proxy inheritance eats localhost
+### 1. Shell and OS system proxy inheritance hijacks requests
 
 A Playwright/Puppeteer-launched Chromium inherits `http_proxy`/`https_proxy`
-from the shell. On a developer machine with a system proxy, the browser then
-routes `http://127.0.0.1:<port>` API calls through the proxy, which cannot
-reach them — the frontend surfaces a generic "network error" toast that looks
-exactly like a product defect. Discriminator: the same URL answers `curl`
-directly but fails inside the scripted browser. Fix at launch time:
+from the shell—and on macOS, both Chromium and Python's `urllib` (including
+`verify_delivery.py`) also read macOS SystemConfiguration proxy settings
+(`scutil --proxy`) even after `unset HTTP_PROXY HTTPS_PROXY`. That can route
+`http://127.0.0.1:<port>` API calls through a proxy that cannot reach them, or
+silently hang/time out against public origins that answer direct `curl` in
+under a second. Discriminator: the same URL answers direct `curl` quickly but
+fails or stalls inside Python or the scripted browser. Fix at launch time:
 
     chromium.launch({ args: ['--no-proxy-server'] })
-    // or: env NO_PROXY=localhost,127.0.0.1 with the proxy vars preserved
+    # For Python/Node scripts that must reach a public or local origin directly:
+    env -u HTTP_PROXY -u HTTPS_PROXY NO_PROXY='*' no_proxy='*' <command>
+    # Or keep proxy vars for external targets while bypassing loopback only:
+    env NO_PROXY=localhost,127.0.0.1 <command>
+
+When multiple Playwright suites must route through a single local proxy to reach
+external targets, run them serially rather than concurrently; proxy contention
+can cause intermittent `waitForEvent('page' | 'popup')` timeouts that disappear
+on a standalone run.
 
 ### 2. The build's entry point is a contract — audit through it
 
@@ -150,6 +160,20 @@ signal is an *absence*: if the server log shows zero auth requests arriving
 while the browser fired one, the request went somewhere else entirely (proxy,
 wrong origin, CSP kill) — the product's auth code never ran, so no product
 finding can be filed from that run.
+
+### 4. Production telemetry beacons and client-localized text traps
+
+On live public origins with third-party analytics or telemetry beacons (such as
+Cloudflare Web Analytics), `page.goto(url, { waitUntil: 'networkidle' })` can
+time out on a completely healthy page because beacon connections remain open or
+retry in automated browsers. Prefer `waitUntil: 'domcontentloaded'` paired with
+an explicit readiness assertion (hydrated attribute, visible landmark, or target
+state marker).
+
+Similarly, when asserting visible copy on a page that localizes in client-side
+JavaScript by hiding alternate-language sibling spans (common on static
+multilingual `404.html` pages), read `innerText` rather than `textContent`:
+`textContent` concatenates hidden sibling spans and produces false mismatches.
 
 ## Fixed-Overlay Screenshot Collapse
 
