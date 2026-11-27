@@ -156,6 +156,26 @@ choice, or name the missing basis. Passing value tests proves implementation com
 that the chosen value suits the task. Add this question to the existing bounded
 pass; it does not create another review obligation.
 
+### Read-only CLI and script-backed Skills
+
+When a Skill ships an executable read-only CLI or collector that can run safely without paid
+probes, external mutations, or side effects, do not leave live execution in `Not Checked`
+when the runtime is available. Within the authorized review pass, execute at least one real
+full read-only run and one subset/flag run (such as `--json`, `--brief`, or section filters)
+and inspect the actual output for:
+
+- **Schema and live-data truth**: real upstream responses (for example numeric strings,
+  sentinel caps, localized policy fields, or missing SSH `User` directives) that synthetic
+  mocks silently hide.
+- **Clean stream separation**: machine output (`--json`) parses without shell/prompt stderr
+  contamination under the documented invocation command.
+- **Shared hard gates**: any provider, route, or resource flagged as locked, blocked,
+  quarantined, or expired must never simultaneously appear in positive availability or
+  recommendation sections.
+
+Offline mock unit tests prove formatting and helper behavior; they do not substitute for a
+safe read-only live verification when one is available.
+
 ### File identity and cached content proofs
 
 When an optimization reuses a file digest based on metadata, ask the reviewer

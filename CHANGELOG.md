@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **skill-creator** (`daymade-skill` v1.84.5 → v1.84.6): Add three reusable authoring and review safeguards across `references/independent-review-protocol.md` (require independent reviewers of read-only CLI/script-backed Skills to execute the real command and verify stdout/exit-code/secret-safety rather than reading code only), `references/change-verification.md` (distill user-approved ad-hoc outputs into skills without dropping concrete figures or actionable findings), and `references/source-location-and-activation.md` (multi-root symlink safety: never point local skill roots at temporary worktrees, and verify consumer-root symlinks after merging back to `main`).
+
 - **macos-cleaner** (`daymade-macos` v1.34.34 → v1.34.35): Add a bounded batch-inspection path in `references/docker_analysis.md` Step 2C for large cohorts of automated/CI 64-hex anonymous dangling volumes — separating named volumes first, running metadata triage, and inspecting the exact enumerated candidate set in one read-only container for database signatures before bulk confirmation without weakening the Database Volume Red Flag rule.
 
 - **macos-cleaner** (`daymade-macos` v1.34.33 → v1.34.34). Use existing storage reports as diagnosis evidence, locate OrbStack's Docker CLI over SSH, and verify live image handles and archive integrity before retiring legacy images after relocating OrbStack data.
