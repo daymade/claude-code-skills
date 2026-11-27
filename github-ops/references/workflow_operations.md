@@ -157,6 +157,16 @@ gh api -X GET 'repos/OWNER/REPO/actions/runners?per_page=100' --paginate \
 
 If every matching runner is `offline` or `busy` on a long-running job, diagnose the runner/queue instead of polling an empty queue.
 
+#### Triaging shared self-hosted runner contention and transport resets
+
+When a job fails on a **shared self-hosted runner** (for example, a host that shares CPU, GPU, or egress bandwidth with co-resident background workloads), inspect the failed step and failing paths with `gh run view RUN_ID -R OWNER/REPO --log-failed` (or the per-job log endpoint below while sibling jobs are still running) before attributing the failure to PR code. Separate three failure shapes before making code changes:
+
+1. **Pre-test transport reset** — `actions/checkout`, package installation, or toolchain download fails with connection reset/EOF and zero repository tests ran.
+2. **Contention-induced timeouts in untouched files** — uniform test timeouts cluster in test files untouched by the PR diff while total job duration spiked far above normal.
+3. **Deterministic PR regression** — assertions, type/build errors, or timeouts inside code or callers affected by the PR diff.
+
+For shape (2), run the exact failing untouched test file(s) locally in isolation as a fast baseline check. Once local execution passes and the PR diff is exonerated, retry only failed jobs (`gh run rerun RUN_ID -R OWNER/REPO --failed`) and watch the rerun to a verified terminal state rather than editing unrelated tests or declaring the PR broken. Do not treat repeated timeouts in PR-touched paths as runner flakiness.
+
 **Resilient monitoring for long runs (>5 min) and flaky links:** `gh pr checks --watch` and `gh run watch` can hang silently after a transient proxy/API `EOF` or laptop sleep, exit non-zero on a transient GitHub API error (such as `HTTP 499`) while checks are still running, or report `no checks reported` when invoked immediately after `git push` before runs register. Confirm actual check state against the expected `headSha` before treating a watch exit as a CI failure (and inspect check buckets even after exit `0`, since canceled checks can finish with exit `0` when no check failed or stayed pending). When polling instead of watching, choose the loop that matches your scope and fail explicitly on timeout rather than exiting `0`:
 
 ```bash

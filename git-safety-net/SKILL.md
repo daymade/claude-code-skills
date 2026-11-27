@@ -81,6 +81,7 @@ an assistant-authored restriction is a lookup lead, not a new user decision.
 | "is everything merged?", "what's still not on main?", before deleting old branches | **Mode C — Verify merged** |
 | "so this never happens again", starting parallel/multi-branch work | **Mode D — Prevent** |
 | "clean up worktrees/stashes/branches", "converge everything onto main", "only keep one main branch" | **Mode E — Retire safely** |
+| "cannot switch to main", "`'main'` is already used by worktree" | **Troubleshooting** § Primary checkout cannot switch to `main` — detach a clean idle holder non-destructively |
 | "an audit already said it's clean, but is anything *else* lost?", "check again" | **Mode B, starting at Step 0** — a repeat request usually means the first pass had the wrong scope, not that it looked carelessly |
 
 When in doubt, run the **smallest read-only probe that selects a mode**. Use Mode B Step 0's
@@ -902,6 +903,15 @@ the helpers authorizes `checkout`, `reset`, `push`, `stash drop`, `branch -d`, o
 - **Only one worktree remains after cleanup** — `git worktree list` always includes the primary
   repository checkout. Do not delete it merely to make the count zero; the goal is one maintained
   checkout, not no checkout.
+- **Primary checkout cannot switch to `main` because another linked worktree holds it**
+  (`fatal: 'main' is already used by worktree at <path>`) — do not kill another session's process
+  or unlock/remove a collaborator-owned locked worktree just to reclaim the branch ref. Inspect the
+  holding worktree first (`git -C <path> status --porcelain=v1 --untracked-files=all` and read-only
+  process activity per Mode D). If that worktree is **clean and idle** (no active writer), release
+  the branch ref in place with `git -C <path> switch --detach HEAD`: zero commits or working files
+  are lost, the holding directory and any idle process stay untouched, and the primary checkout can
+  immediately `git switch main` and `git pull --ff-only`. If the holding worktree is dirty or has
+  an active writer, stop and coordinate with its owner instead.
 - **`refs/dangling-backup/*` refs are cluttering things later** — once you've confirmed (Mode C)
   their content is on a remote, delete them with `git for-each-ref --format='%(refname)'
   refs/dangling-backup/ | xargs -n1 git update-ref -d`. Only after you've verified.
