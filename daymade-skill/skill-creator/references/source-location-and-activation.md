@@ -79,6 +79,14 @@ installed entry when local use is in scope. Keep source, distribution-form, inst
 identity and business-result evidence distinct. Reuse unchanged evidence; this recipe
 does not require a new test suite, browser or live login for an instruction-only Skill.
 
+**Multi-root symlink safety:** On hosts that mirror or auto-sync multiple local skill
+roots (such as `~/.agents/skills/<name>` and `~/.claude/skills/<name>`), check whether a
+target symlink already exists (`test -L`) or replace in place with `ln -sfn` instead of
+running plain `ln -s <source> <existing-symlink-dir>`. Plain `ln -s` against an existing
+symlinked directory follows the link and creates a self-referential untracked symlink
+inside the source repository. Always verify `git status --porcelain=v1 --untracked-files=all`
+on the source checkout after syncing local links.
+
 At delivery, run the read-only check against the requested Skill name and declared source owner, not merely whatever happens to appear in a catalog:
 
 ```bash
