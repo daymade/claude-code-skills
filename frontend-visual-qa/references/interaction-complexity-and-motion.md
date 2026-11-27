@@ -7,6 +7,14 @@ push state-machine edge cases onto the user.
 
 ## 1. UX Complexity-Elimination Checks (8 Axes)
 
+**Pre-polish core-loop gate:** Before auditing or polishing micro-interactions,
+visual chrome, or motion, exercise one end-to-end primary user journey (cold
+start -> core input/upload/submit -> page reload & session/context switch ->
+error recovery). Never treat 120 FPS animations or clean component polish as a
+pass while a primary workflow drops user input, streams raw machine payloads
+into user-facing text, or loses/corrupts state across reloads or context
+switches.
+
 Verify each axis against the live rendered surface, not source intent:
 
 1. **System-decidable state stays automatic.** Do not force users to triage
@@ -38,13 +46,22 @@ Verify each axis against the live rendered surface, not source intent:
    without forcing a jump to a capped raw view, sequence async refreshes so late
    responses cannot overwrite newer state, preserve unsaved drafts and open
    disclosures across re-renders, and only advance selection if the originating
-   item still owns focus.
+   item still owns focus. Keep triggering buttons mounted across loading, error,
+   and success states (attach error-shake animations to an inner `<span>` rather
+   than remounting the `<button>`, which drops keyboard focus), and bind async
+   confirmations (such as clipboard copies or background fetches) to a monotonic
+   request or session token so a late promise cannot mislabel a newer URL or
+   session.
 7. **Easy frequent actions, hard-to-mishit bulk/destructive actions.** Keep
    frequent single-item actions reachable by hover/focus and keyboard; guard
    bulk actions with a two-step inline arming flow that **freezes the exact
    target ID set at arming time** and auto-disarms on any filter, search, tab,
-   or `Escape` change. Hidden hover actions (`opacity: 0`) must set
-   `pointer-events: none` until revealed.
+   or `Escape` change. When clearing a configuration or credential that drives a
+   live runtime (such as microphone capture or an active stream), stop the live
+   runtime and return to the safe default mode as part of the two-step clear,
+   and read entitlement-dependent badges or post-clear notices reactively rather
+   than from a one-time mount snapshot. Hidden hover actions (`opacity: 0`) must
+   set `pointer-events: none` until revealed.
 8. **Self-explaining UI and honest group state.** Represent mixed statuses inside
    aggregated groups explicitly instead of letting the lead record speak for all
    members; preserve per-record notes when a group action does not deliberately
@@ -69,6 +86,30 @@ widget catalog:
     `translate3d` entry instead of animating `grid-template-rows` or `height`.
   - Avoid synchronous forced-reflow loops (`offsetWidth` reads inside per-node
     animation resets).
+  - **Tailwind v4 individual transform properties:** Utilities such as
+    `translate-*`, `scale-*`, and `rotate-*` compile to standalone CSS
+    properties rather than `transform`. While Tailwind v4's built-in
+    `transition-transform` includes `transform, translate, scale, rotate`,
+    pairing those utilities with custom CSS `transition-property: transform` or
+    arbitrary lists like `transition-[opacity,transform]` silently drops
+    interpolation (abrupt snap with zero errors), and custom
+    `prefers-reduced-motion` rules that only cover `transform` can miss them.
+    Include the explicit standalone property (`transition-[translate,transform]`,
+    `transition-[scale,transform]`, `transition-[rotate,transform]`) whenever
+    authoring custom property lists, and verify computed interpolation.
+- **Reversible exits, mid-exit reversal, and snapshot retention.** Presence
+  hooks must distinguish a fresh mount (staging across 2 `requestAnimationFrame`
+  frames from the hidden pose) from a rapid mid-exit reopen (reversing
+  immediately without a 2-frame dip). While an exit transition plays, retain the
+  last valid payload snapshot (error banner text, lightbox image, progress
+  readout) so the surface does not flash blank mid-fade, apply `inert` to block
+  stray clicks, and cancel any active drag immediately when closing.
+- **Isolate transient animation state from durable document state.** When a
+  canvas or scene engine animates live element properties (`opacity`,
+  `width`/`height`, draw `points`), never persist intermediate animation values
+  into saved checkpoints or exports. Every exit path (pause, close, jump, reset,
+  share/export) must reconcile concurrent user edits first and strip unsettled
+  transient animation attributes before writing or sharing.
 - **Direct manipulation and mid-flight interruptibility.** Resizable splitters
   must track pointer capture 1:1 with double-click reset and pixel clamping so a
   persisted split percentage cannot overflow narrower desktop viewports. Numeric
@@ -117,4 +158,7 @@ failure traps:
 | MPA cross-route shared-component CSS | Reusing a control class (such as a copy-link or state-toggle button) in a second MPA/Astro template whose layout does not import the original page's stylesheet leaves state rules missing (for example, rendering both idle and active icons simultaneously) | Visually inspect screenshots on every consuming route template and move shared control state rules into the shared base stylesheet |
 | Mobile in-flow disclosure dismissal | Collapsing an in-flow mobile disclosure/drawer on outside `pointerdown` reflows the document before `click` fires, swallowing the user's first tap below; global outside-close listeners can also fire during an active modal | A real first tap on an outside control activates it once and closes the disclosure (for example, by dismissing on bubble-phase `click`), while interacting inside an active modal (`dialog:modal` or the app's modal owner) leaves the disclosure unchanged |
 | Light/dark contrast & dark-theme parity | Low-contrast primary buttons (`<4.5:1`), unreadable dark caution/warning tokens, or manual `:root[data-theme="dark"]` drifting from OS `@media (prefers-color-scheme: dark)` | Primary buttons and status/caution cues meet WCAG AA in both light and dark themes (`>=4.5:1` normal text, `>=3:1` qualifying large text, `>=3:1` against adjacent colors for essential UI control/state cues), and resolved dark token values match between manual dark (on OS light) and OS dark (with app override cleared) |
+| Tailwind v4 individual transforms | `translate-*`, `scale-*`, or `rotate-*` paired with custom CSS `transition: transform` or arbitrary `transition-[...,transform]` snaps abruptly or bypasses `transform`-only `prefers-reduced-motion` rules | Computed `transition-property` includes the standalone property (`translate`/`scale`/`rotate`), interpolation runs smoothly, and `prefers-reduced-motion: reduce` collapses it |
+| Session switches & async feedback | Switching sessions/URLs flashes prior-session suggestions or loading indicators on the first render, a late clipboard/fetch promise mislabels the new target, or error-shake remounts `<button>` and drops focus | Session-scoped state hides prior items on the first render; async callbacks verify a monotonic request/session token; triggering buttons remain mounted and keep focus on error |
+| In-flight animation + concurrent edits | Dragging or deleting an element mid-fade/scale/draw then clicking Pause, Close, or Share writes intermediate `opacity`, `width`, or `points` into saved state or share links | Every exit path reconciles concurrent user edits and strips unsettled transient animation attributes before checkpointing or exporting |
 | Frame smoothness | Jank during tab switch or list scroll | Measured `requestAnimationFrame` deltas stay smooth (target median `<=20ms`, P95 `<=33ms`) with zero console/page errors |
