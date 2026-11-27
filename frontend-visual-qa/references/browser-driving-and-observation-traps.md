@@ -577,6 +577,28 @@ do not alter product gain to compensate for the driving harness. The gesture
 recipe in [Embedded Readers And Semantic Zoom](journey-and-page-contracts.md#embedded-readers-and-semantic-zoom)
 owns the separate physical-trackpad evidence boundary.
 
+### Mobile secondary views must preserve live access to persistent navigation
+
+Passing contrast, overflow, and touch-target checks on a mobile home/list screen
+does not prove the interactive journey works. Secondary views, full-screen
+readers, and drawers routinely trap narrow viewports (`390×844`, `320×568`) via
+two stacked defects that static screenshots hide: a `position: fixed` overlay
+physically covering the top navigation bar, and background-isolation code
+marking the persistent navigation slot `inert` or `aria-hidden="true"`.
+
+After clicking from a list/home view into a secondary view or reader on a narrow
+viewport, verify all three properties on the persistent navigation/exit control
+before calling the flow green:
+
+1. **Hit-target check**: `document.elementFromPoint(cx, cy)` at the control's
+   visible center resolves to the control itself (or its descendant), not a
+   fixed backdrop or reader container.
+2. **Interactivity check**: neither the control nor any ancestor carries
+   `inert` or `aria-hidden="true"`.
+3. **Behavioral exit**: clicking the control actually opens the navigation
+   drawer/menu or returns cleanly to the prior view with zero console/page
+   errors.
+
 ## 9. Virtual time fast-forwards timers, not I/O
 
 `--virtual-time-budget=N` makes `setTimeout`-based test scripts complete
