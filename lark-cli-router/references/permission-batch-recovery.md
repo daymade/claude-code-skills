@@ -25,6 +25,33 @@ escape hatch (passing the resource `type` in `--params` and `member_type`,
 `perm`, and `type` in `--data`), then confirm the effective role with
 `+member-list` readback.
 
+## Cross-tenant grants and export/copy settings
+
+Cross-tenant individual grants via `drive +member-add` require the source account
+and the external recipient to be direct external contacts; otherwise the API can
+fail (`1063002` or partial success) even when both users share an external group.
+Inspect source-tenant contact reachability before proposing a closed-link
+named-collaborator rollout, and surface the operational choice up front:
+
+- **Two-hop hub bridge (preferred when an external hub contact exists):** grant a
+  hub account that is already a direct external contact `full_access` on the
+  source resource (with `external_access=true` and `share_entity="anyone"`), then
+  use the hub profile to add or upgrade in-tenant teammates without adding every
+  teammate as a direct external contact.
+- **Direct external contacts or explicitly authorized link scope:** either add
+  the required external contacts first, or—only when the user explicitly approves
+  the exposure boundary for that audience—set link sharing (for example,
+  `anyone_editable`). Never broaden to internet link sharing silently as a
+  workaround for `1063002`.
+
+When opening copy/export/download alongside edit permissions, pass query
+parameters via `--params '{"type":"<resource-type>"}'` (never embed `?type=...`
+in the `lark-cli api` path). `PATCH /open-apis/drive/v1/permissions/{token}/public`
+with `security_entity` often updates Drive v2 `copy_entity` together, but v1
+success alone does not establish v2 parity: always read back
+`GET /open-apis/drive/v2/permissions/{token}/public` and patch v2 `copy_entity`
+only if it still mismatches.
+
 ## Retain per-target evidence
 
 Key each action by page, member and permission scope. Retain its observed before
@@ -46,7 +73,7 @@ old plan and need reconciliation against current authorization.
 |---|---|
 | API rate limit | Honor documented retry timing; otherwise use bounded backoff and reduce concurrency. Resume only unverified actions. |
 | Transient network or TLS timeout | Retain the uncertain outcome, reconcile by reading, then retry the still-needed authorized update within a bounded attempt budget. Persistent transport failure follows the network owner. |
-| Missing OAuth scope | Use the identity guide's incremental authorization route and [account-bound recovery](auth-recovery.md). Verify the same account and original operation afterward. |
+| Missing OAuth scope (for example, `99991679` on `PUT .../members/{id}`) | Classify strictly as a scope gap, never as a `not_owner` / `permission_denied` skip. Use the identity guide's incremental authorization route and [account-bound recovery](auth-recovery.md), then verify the same account and original operation. Never use delete-and-add on an original owner; only if the user explicitly authorizes a temporary fallback for upgrading a non-owner collaborator on a profile holding `member:delete`/`create` without `member:update`, record the brief revoke window and confirm via `+member-list` readback. |
 | Resource permission denial or explicit refusal | Stop that target/profile route. Do not treat it as a transient error or switch identities, transport or API form to bypass it. |
 | Managed launcher's source-binding rejection | Stop dispatch; locate the install/executor owner and reconcile the reviewed source through its normal release procedure. Do not edit trust records, call a vendor binary directly or change transport to bypass the rejection. |
 | Changed page, space, member or permission scope; invalid response/schema | Stop the affected actions and rebuild their plan from verified current state and supported interface. Keep unrelated completed evidence. |

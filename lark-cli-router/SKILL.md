@@ -58,10 +58,10 @@ Use the embedded IM, Wiki and Drive guides for the actual commands.
 
 ## Workflow
 
-For authorized bulk page-permission changes or interrupted permission updates,
+For authorized bulk page- or minute-permission changes (including cross-tenant grants, export/copy settings, or interrupted permission updates),
 read [permission-batch recovery](references/permission-batch-recovery.md) after
 the selected version's Drive/Wiki guides. It preserves per-target progress and
-separates transient failures from authorization and target changes.
+separates transient failures from authorization, missing-scope and target changes.
 
 ### 1. Confirm the runtime
 

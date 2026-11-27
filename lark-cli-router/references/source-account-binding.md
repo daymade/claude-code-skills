@@ -27,6 +27,13 @@ authorized account; it does not grant new access or change the global profile.
    plausible accounts and no resolving evidence, ask which account owns/can read
    the resource; until resolved, inspect account metadata only. Do not probe the
    resource through every account or access another person's account by analogy.
+6. For bare tokens or generic `my.feishu.cn` links across multiple already-authorized
+   tenants of the same user, do not infer the owning tenant merely from which
+   profile can read the resource—once bridged or opened via link sharing, a
+   non-owning profile can also read it. For Feishu Minutes, query
+   `/open-apis/minutes/v1/minutes/{token}` and use the tenant subdomain in
+   `data.minute.url` as the canonical owning host; when probing authorized
+   profiles, check source/non-hub tenants before hub tenants.
 
 After a denial, retain the exact resource/profile/identity and stop that route.
 Load the router's current identity/permission owner to distinguish missing scope,
