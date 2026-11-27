@@ -111,11 +111,57 @@ def capture_success(*, args, original_bytes, original_text, output_path, output_
         print("Stage-1 history pending: " + type(error).__name__, file=sys.stderr)
 
 
+def _needs_native_flush(state_path: Path) -> bool:
+    """Return True only when local projection state actually has work to recover.
+
+    Read-only commands and idle CLI exits must not pay a synchronous full-history
+    projection sweep across already-settled, conflict-parked (`ValueError`), or
+    still-missing (`FileNotFoundError`) historical receipts. Pending Stage-1
+    captures, interrupted `prepared` installs, active preimage recovery files,
+    transient-error `pending` receipts, restored `FileNotFoundError` targets,
+    and corrupt state files still trigger flush.
+    """
+    if not state_path.is_file():
+        return False
+    try:
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return True
+    if not isinstance(state, dict):
+        return True
+    if state.get("pending"):
+        return True
+    receipts = state.get("receipts")
+    if not isinstance(receipts, dict):
+        return True
+    for receipt in receipts.values():
+        if not isinstance(receipt, dict):
+            return True
+        status = receipt.get("status")
+        if status == "prepared":
+            return True
+        recovery = receipt.get("recovery_path")
+        if isinstance(recovery, str) and recovery and Path(recovery).exists():
+            return True
+        if status == "pending":
+            error_type = receipt.get("error_type")
+            if error_type == "FileNotFoundError":
+                output_path = receipt.get("output_path")
+                if isinstance(output_path, str) and output_path and Path(output_path).exists():
+                    return True
+                continue
+            if error_type == "ValueError":
+                continue
+            return True
+    return False
+
+
 def flush_native(config_dir):
     try:
         binding = _binding()
-        if binding is not None and _state(config_dir).exists():
-            subprocess.run([*binding, "flush", "--state", str(_state(config_dir))],
+        state_path = _state(config_dir)
+        if binding is not None and _needs_native_flush(state_path):
+            subprocess.run([*binding, "flush", "--state", str(state_path)],
                            check=True, stdout=subprocess.DEVNULL, timeout=60)
     except Exception as error:
         print("Stage-1 projection pending: " + type(error).__name__, file=sys.stderr)
@@ -225,11 +271,13 @@ def _require_device(client, receipt):
 def _project(client, receipt):
     _require_device(client, receipt)
     target = client.get(receipt["target_uri"])
-    baseline = client.get(receipt["baseline_ref"])
-    if target["version_uri"] == baseline["version_uri"]:
+    if target["version_uri"] == receipt["baseline_ref"]:
         return
     path = Path(receipt["output_path"])
     current = path.read_bytes()
+    baseline = client.get(receipt["baseline_ref"])
+    if target["version_uri"] == baseline["version_uri"]:
+        return
     derived = target["metadata"]["text"].encode("utf-8")
     base = baseline["metadata"]["text"].encode("utf-8")
     refs = [exact_ref(baseline, "previous_projection"), exact_ref(target, "new_projection")]
@@ -325,19 +373,26 @@ def flush(path):
                 continue
             try:
                 _require_device(client, receipt)
-                if receipt.get("recovery_path") and Path(receipt["recovery_path"]).exists():
+                recovery_path = receipt.get("recovery_path")
+                has_recovery = bool(recovery_path and Path(recovery_path).exists())
+                if has_recovery:
                     preimage = _preserve_preimage(client, receipt)
                     native = Path(receipt["output_path"])
                     if not native.exists():
-                        os.link(receipt["recovery_path"], native)
+                        os.link(recovery_path, native)
                     if native.read_bytes() == preimage:
-                        Path(receipt["recovery_path"]).unlink()
+                        Path(recovery_path).unlink()
                         receipt.pop("recovery_path", None)
                     elif digest(preimage) != receipt["expected_native_sha256"]:
                         raise ValueError("retained native preimage requires conflict resolution")
                     else:
-                        Path(receipt["recovery_path"]).unlink()
+                        Path(recovery_path).unlink()
                         receipt.pop("recovery_path", None)
+                if (receipt.get("status") == "pending"
+                        and receipt.get("error_type") == "FileNotFoundError"
+                        and not has_recovery
+                        and not Path(receipt["output_path"]).exists()):
+                    continue
                 if receipt.get("status") == "prepared":
                     candidate = client.get(receipt["candidate_ref"])
                     current = Path(receipt["output_path"]).read_bytes()
@@ -348,6 +403,9 @@ def flush(path):
                     atomic_json(path, state)
                     _replace_projection(client, prepared)
                     receipt.update(baseline_ref=prepared[3]["version_uri"], status="current")
+                    receipt.pop("error_type", None)
+                else:
+                    receipt["status"] = "current"
                     receipt.pop("error_type", None)
             except Exception as error:
                 receipt.update(status="pending", error_type=type(error).__name__)
