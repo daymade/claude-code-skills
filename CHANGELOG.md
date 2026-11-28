@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **frontend-visual-qa** (`frontend-visual-qa` v1.22.11 → v1.22.12): Add remote Electron CDP capture over loopback `--remote-debugging-port` (with multi-window URL target filtering and macOS Cocoa `-AppleLanguages` locale checks) to `references/journey-and-page-contracts.md`, and add the fixed-width dialog/onboarding lengthened-copy horizontal overflow trap (`minmax(0, 1fr)` + `white-space: normal`) to `references/interaction-complexity-and-motion.md`.
 - **lark-cli-router** (`lark-cli-router` v1.0.7 → v1.0.8): Align `references/permission-batch-recovery.md` opening scope ("page- or minute-permission updates") and link its delete-and-add prohibition to the narrow explicitly-authorized Missing OAuth scope fallback; clarify in `references/source-account-binding.md` Step 6 that multi-profile bare-token resolution applies only when explicitly in scope for the same user's authorized profiles (preserving Step 5); broaden the `CLAUDE.md` permission-batch pointer.
 - **transcript-fixer** (`daymade-audio` v1.65.13 → v1.65.14). Keep trap scans and correction previews out of external dispatch and shared queue replay, protect structured review metadata, and verify batch edits against occurrence-specific evidence.
 - **skill-creator and skill-governance** (`daymade-skill` v1.84.6 → v1.84.7). Document multiline review comments, preserve reviewed ancestry when integrating main before rebind, and verify source-backed installs at the symlink itself.

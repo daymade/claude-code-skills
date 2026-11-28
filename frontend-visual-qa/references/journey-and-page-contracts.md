@@ -919,6 +919,20 @@ Verify:
 
 Do not report a native-shell pass from DOM screenshots alone.
 
+### Remote Electron CDP and macOS locale verification
+
+- When SSH `screencapture` is blocked by macOS Screen Recording TCC, launch the
+  packaged Electron binary with an isolated `--user-data-dir` and
+  `--remote-debugging-port=<port>`, then capture `Page.captureScreenshot` PNGs
+  and assert DOM geometry (`scrollWidth <= innerWidth`, visible CTA bounding
+  rects inside viewport bounds, zero console/runtime errors) over loopback CDP.
+- When cold launch creates multiple windows (for example, an onboarding window
+  and a background workspace window), filter `/json/list` by the exact target
+  URL rather than attaching to the first `type === 'page'` entry.
+- On macOS, Electron resolves locale from Cocoa defaults rather than `LANG` or
+  `--lang`; pass `-AppleLanguages '(zh-Hans)'` (or the target language code) to
+  verify non-English onboarding and workspace screens.
+
 ## Landing, Deck, And Browser Tool/Game Artifacts
 
 Use the artifact's real job rather than dashboard conventions.
