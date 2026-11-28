@@ -17,6 +17,7 @@ Choose the narrowest path that can answer the request:
 
 | User signal | Route |
 |---|---|
+| The user explicitly asks to scan or reconcile the whole startup disk, including with GrandPerspective | Use [whole-volume diagnosis](references/whole-volume-diagnosis.md). A named suspect is one branch of the requested audit. |
 | Old task directories need useful work retained and intermediate state retired | Use [task evidence closeout](references/task-evidence-closeout.md); separate implementation, originals, rebuildable output and active/unknown inputs before copying or deleting |
 | A directory was already copied to an external disk; compare, sync recent work, or retire the internal copy | Start at [lightweight copied-directory verification](references/external-cold-archives.md#verify-an-already-copied-directory-lightly); reuse the copy and existing evidence, then use `scripts/relocate_directory.py` for journaled cutover and retirement |
 | Move selected cold data to an SD card or external disk while retaining its original entry | Read [external cold archives](references/external-cold-archives.md) before copying; bind volume identity, pilot metadata fidelity, verify the retained copy and test original-path consumption before retiring the internal payload |
@@ -27,7 +28,7 @@ Choose the narrowest path that can answer the request:
 | Cargo `target` trees or manual CI outputs | Read `references/cleanup_targets.md` → Cargo and manual CI outputs before selecting files; requested test executables and unknown results can live inside dependency-named directories |
 | Exact dependency/build trees, retired test Apps, release payloads or generated CI copies | Use [generated-payload plan facts](references/generated-payload-plans.md) in Phase 2; the plan checker consumes current-use, unique-state, recovery and retention facts before returning decisions. If the target contains Git metadata, use `git-safety-net` Mode E before classifying any rebuildable interior |
 | Chrome, ChromeDriver, Playwright, Codex Computer Use, Edge, or Chromium has large `*.code_sign_clone` directories | Read `references/chromium_code_sign_clones.md` completely; use the bundled analyzer to separate active, inactive, and unknown exact children and never equate `du` with physical release |
-| A named cache, directory, application, or service is already the suspect | Inspect that target first and read the matching semantics in `references/cleanup_targets.md`; do not start a home-directory or whole-disk scan |
+| The user requests inspection of a named cache, directory, application, or service only | Inspect that target first and read the matching semantics in `references/cleanup_targets.md`; do not start a home-directory or whole-disk scan |
 | The user asks what has been growing or filling the disk lately, free space fell between two readings, or an older scan export exists (GrandPerspective text export, saved `du` output) | Read `references/growth_attribution.md`; answer with a delta table whose rows name their writer, not a size ranking |
 | The source is genuinely unknown | Use the general analysis workflow below; Mole is optional, not the universal first step |
 
@@ -116,7 +117,7 @@ If the known suspect alone can meet the user's free-space target, do not scan un
 
 ### General analysis when the source is unknown
 
-First separate **occupancy discovery** from **cleanup selection**. Within each authorized root, obtain one shallow size breakdown (for example `du -x -k -d 1 "<approved-root>"`); include hidden children, record inaccessible paths as unknown, and reuse completed measurements. Show the largest occupants even when they must be preserved. Deepen the largest unexplained branches before spending another pass on small caches. Do not rescan completed siblings unless their state changed. This is read-only sizing, not permission to read file contents or delete anything; the approved-path contract below still governs content-bearing roots.
+First separate **occupancy discovery** from **cleanup selection**. Within each authorized root, obtain one shallow size breakdown (for example `du -x -k -d 1 "<approved-root>"`); include hidden children, record inaccessible paths as unknown, and reuse completed measurements. Show the largest occupants even when they must be preserved. Deepen only branches that can materially explain the pressure, close a meaningful coverage gap, meet the requested capacity target, or change a keep/archive/remove decision. Before another pass, state which decision it could change. Defer individually small items unless they are a material aggregate or a proven growth source. Do not rescan completed siblings unless their state changed. This is read-only sizing, not permission to read file contents or delete anything; the approved-path contract below still governs content-bearing roots.
 
 Then run the smallest ordered sequence below that can classify the relevant occupants. For a cleanup target, candidates need supported exact actions and defensible expected physical release before they can satisfy it. Raw allocation totals, logical cache sizes, shared Docker layers, Trash moves, and unverified “potential savings” do not satisfy the stop condition. For an inventory-only request, stop when the authorized roots' largest occupants and coverage gaps are explained; keep deletion pending authorization.
 
@@ -309,6 +310,7 @@ Load only the branch relevant to the current task:
 - `references/chromium_code_sign_clones.md` — Chrome/Chromium/Edge code-sign-clone semantics, nominal-versus-physical reporting, exact inactive-target manifests, cleanup verification, and recurrence prevention.
 - `references/cleanup_targets.md` — cache, log, application, developer, large-file, and Time Machine target semantics.
 - `references/proving-redundancy-before-deletion.md` — Load BEFORE proposing deletion of any big project-asset / media / dataset directory; a size ranking is not evidence.
+- `references/whole-volume-diagnosis.md` — reconcile an explicitly requested startup-volume audit, use GrandPerspective or bounded CLI discovery, and rank decision-changing follow-up.
 - `references/growth_attribution.md` — "what grew lately" questions: finding and calibrating a baseline export, the not-scanned trap, which file timestamp answers "arrived since", reconciling path-accounted deltas with `df` (swap, snapshots, short-lived copies), and naming the writer.
 - `references/docker_analysis.md` — per-object Docker and OrbStack analysis, database-volume safeguards, and refill root-cause diagnosis.
 - `references/mole_integration.md` — TTY workflow for interactive Mole analysis and preview.
