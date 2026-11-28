@@ -46,6 +46,11 @@ an actual version-counter collision or changed source requires reconciliation
 and a binding for the resulting exact candidate. Review only the changed delta
 and reuse unaffected evidence.
 
+When assigning parallel work for a public Skill release, cover the three paths
+typically required by the repository's version-progression checker in the
+workers' `owned_paths`: the Skill directory, `.claude-plugin/marketplace.json`,
+and root `CHANGELOG.md` when the checker requires a changelog entry.
+
 ### Case: two releases share a plugin version
 
 The release executor checks the owning plugin, not just the edited Skill name,
@@ -217,6 +222,22 @@ block with each delimiter on its own line. A single-line comment yields
 {"schema":1,"candidate":"<full 40-hex reviewed commit>","skill_paths":["<repository-relative Skill root>"],"result":"passed"}
 -->
 ```
+
+Generate a draft for the selected candidate and review base:
+
+```bash
+python3 <skill-creator-path>/scripts/release_readiness.py review-template \
+  --repo <source-worktree> --candidate <candidate-revision> \
+  --base <base-revision> --skill-path <skill-root> \
+  --output <new-private-review-path>
+```
+
+Repeat `--skill-path` for each root and `--rebind-dependency` for each dependency
+in an [opt-in rebind scope](#rebind-an-unchanged-distribution-after-main-integration).
+Supply `--reviewer` to replace the reviewer placeholder, or omit `--output` to
+print the draft. Fill in the verbatim prompt, reviewer findings and limits, and
+record author checks in their own section. Replace `pending` with the review's
+actual `passed` or `failed` result. `attest` accepts only `passed`.
 
 List every changed shipped Skill root. Include the exact commit under review;
 resolve it with `git rev-parse HEAD`. Commit the archive and inspect that command's

@@ -1,15 +1,17 @@
-"""Bind a local release receipt to an exact commit and committed review evidence.
+"""Prepare review evidence and bind a local release receipt to an exact commit.
 
 Evidence is author-supplied; this checks persistence and identity, not review quality,
 reviewer independence or private-repository visibility. Receipts stay in .git.
 """
 import argparse
 import hashlib
+from html import escape
 import json
 import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import tempfile
 
 try:
@@ -149,6 +151,50 @@ def _parse_review_block(text: str):
                        "(not `--->`)")
 
 
+def review_template(repo, candidate, base, paths, dependency_paths, reviewer):
+    candidate = git(repo, "rev-parse", "--verify", "--end-of-options", candidate + "^{commit}")
+    base = git(repo, "rev-parse", "--verify", "--end-of-options", base + "^{commit}")
+    identity(repo, candidate)
+    identity(repo, base)
+    reviewer = reviewer.strip()
+    if reviewer.splitlines() != [reviewer]:
+        raise ReleaseError("reviewer must be a nonblank single line")
+
+    metadata = dict(schema=1, candidate=candidate, skill_paths=scope(paths), result="pending")
+    if dependency_paths is not None:
+        metadata["rebind_dependencies"] = dependencies(dependency_paths, relative)
+    # Preserve JSON path values without letting a path close the HTML comment.
+    block = json.dumps(metadata, indent=2).replace("-->", r"--\u003e")
+    return f"""# Independent Release Review
+
+- Reviewer {escape(reviewer, quote=False)}
+- Review candidate `{candidate}`
+- Review base `{base}`
+
+[Replace `pending` with `passed` or `failed` after recording the independent review outcome.]
+
+<!-- skill-release-review
+{block}
+-->
+
+## Verbatim Reviewer Prompt
+
+[Paste the exact prompt sent to the reviewer, including any reader specification.]
+
+## Independent Reviewer Findings
+
+[Record the reviewer's findings and evidence. Include the disposition and reason for each finding.]
+
+## Verification Limits
+
+[Record what the reviewer could not verify and why.]
+
+## Separate Author / Pre-Commit Checks (Not Performed by Reviewer)
+
+[Record the commands and results from author checks and pre-commit validation.]
+"""
+
+
 def attest(repo, candidate, paths, review_repo=None, review_commit=None, review_path=None,
            review_not_required=None, reason=None):
     identity(repo, candidate)
@@ -264,8 +310,38 @@ def rebind(repo, candidate, paths, original_candidate, base):
     return target
 
 
+def review_template_main(argv):
+    p = argparse.ArgumentParser(
+        prog=f"{Path(sys.argv[0]).name} review-template",
+        description="Generate a pending Markdown review for a release candidate.",
+    )
+    p.add_argument("--repo", required=True, type=Path)
+    p.add_argument("--candidate", required=True, help="candidate commit revision")
+    p.add_argument("--base", required=True, help="review base commit revision")
+    p.add_argument("--skill-path", required=True, action="append", help="repository-relative Skill root")
+    p.add_argument("--rebind-dependency", action="append", help="repository-relative reviewed dependency path")
+    p.add_argument("--reviewer", default="[Reviewer name or ID]", help="reviewer name or identifier")
+    p.add_argument("--output", type=Path, help="create a new file instead of writing to stdout")
+    a = p.parse_args(argv)
+    try:
+        template = review_template(a.repo, a.candidate, a.base, a.skill_path, a.rebind_dependency, a.reviewer)
+        if a.output is None:
+            print(template, end="")
+        else:
+            with a.output.open("x", encoding="utf-8") as output:
+                output.write(template)
+    except (ValueError, OSError) as e:
+        p.exit(2, f"review template blocked: {e}\n")
+
+
 def main():
-    p = argparse.ArgumentParser(description=__doc__)
+    if sys.argv[1:2] == ["review-template"]:
+        return review_template_main(sys.argv[2:])
+
+    p = argparse.ArgumentParser(
+        description=__doc__,
+        epilog="Generate a review draft with %(prog)s review-template --help.",
+    )
     p.add_argument("command", choices=("attest", "verify", "rebind"))
     p.add_argument("--repo", required=True, type=Path)
     p.add_argument("--candidate", required=True)
