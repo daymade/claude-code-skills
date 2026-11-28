@@ -146,7 +146,7 @@ required only when local availability is part of the authorized delivery.
 |---|---|---|
 | Candidate and base | Full candidate SHA, full fetched base SHA, clean or declared WIP state | Base moved into a version collision or conflict |
 | Version progression | Repository checker passes for the exact index/commit and projected merge | Any regression, missing bump or stale suite version |
-| Review block | Private review contains `<!-- skill-release-review ... -->` with the exact candidate and every shipped Skill root | Missing, malformed, stale or narrowed block |
+| Review block | Private review contains the [multiline JSON comment](#commit-the-current-review-first) with the exact candidate and every shipped Skill root | Missing, malformed, stale or narrowed block |
 | Review source | Review path is committed and unchanged at the recorded review commit; a temporary review worktree is clean | Dirty, replaced, uncommitted or ambiguous review path |
 | Receipt binding | `release_readiness.py attest` succeeds for the exact candidate and review commit | Missing receipt, wrong scope or candidate changed after attestation |
 | Sparse hook closure | Materialize every repository-managed pre-commit/pre-push dependency before invoking hooks | Missing module, validator or helper; never bypass the hook |
@@ -208,7 +208,9 @@ or review-evidence change.
 
 Keep the review in the private knowledge repository's permitted directory. Preserve
 the reviewer prompt verbatim, findings/dispositions and limits required by
-[independent review](independent-review-protocol.md). Add one JSON comment block:
+[independent review](independent-review-protocol.md). Add exactly one JSON comment
+block with each delimiter on its own line. A single-line comment yields
+`0 parseable block(s)`.
 
 ```text
 <!-- skill-release-review
@@ -338,7 +340,9 @@ The machine check prevents a later caller from narrowing or expanding the
 original exact Skill/dependency scope; it does not certify the original
 declaration's semantic completeness.
 
-After fetching and integrating `origin/main`, run:
+Fetch current `origin/main` and integrate it with `git merge origin/main` so the
+original reviewed commit remains an ancestor of the candidate. A rebase or rewrite
+that drops that ancestry requires a new review. Then run:
 
 ```bash
 python3 <skill-creator-path>/scripts/release_readiness.py rebind \
@@ -350,9 +354,7 @@ python3 <skill-creator-path>/scripts/release_readiness.py verify \
   --skill-path <same-skill-root>
 ```
 
-Repeat every original `--skill-path`; changed or omitted scope fails. The original
-candidate must remain an ancestor and the new candidate must include current
-fetched main. Rebased or rewritten ancestry needs a normal reviewed binding.
+Repeat every original `--skill-path`; changed or omitted scope fails.
 Rebind writes a schema-2 local receipt and leaves both the original receipt and
 committed review untouched. The verifier reopens the original archive, checks its
 current committed clean path, original receipt digest, source identity, complete
