@@ -1,6 +1,6 @@
 # Resume an authorized permission batch
 
-Use this procedure for page-member permission updates already authorized by the
+Use this procedure for page- or minute-permission updates already authorized by the
 user. Load the installed CLI version's Drive/Wiki and identity guides first;
 take commands, supported fields, retry instructions and limits from those guides
 and actual help/schema. Use the router's documented API escape hatch only when
@@ -14,7 +14,7 @@ sharing settings and original ownership, then execute the smallest authorized
 update and independently read it back before expanding the batch. A collaborator
 with management permission is not necessarily the original owner. Preserve the
 member ID/type, permission scope and role unless changing them is authorized;
-do not replace an update with delete-and-add or ownership transfer.
+do not transfer ownership or replace an update with delete-and-add (except under the narrow explicitly-authorized non-owner fallback in the Missing OAuth scope row of Classify the failure before continuing below).
 
 Do not use `drive +member-add` to change an already-present collaborator's role
 (for example, upgrading `view` to `edit`): it can return `ok: true` with the
