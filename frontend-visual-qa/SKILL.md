@@ -323,6 +323,9 @@ and inspect the affected text positions rather than accepting scroll movement al
 Before judging wheel-driven pan/zoom sensitivity, load the same reference's
 **Wheel requests are not browser-received wheel events** recipe; compare movement
 with received input rather than the harness request.
+On narrow mobile viewports with a secondary view, drawer, or full-screen reader open,
+run the [mobile secondary-view persistent navigation check](references/browser-driving-and-observation-traps.md#mobile-secondary-views-must-preserve-live-access-to-persistent-navigation)
+so fixed overlays or over-broad `inert`/`aria-hidden` isolation cannot silently trap navigation.
 
 For a promised continuous same-map overview-to-detail interaction, load
 [Continuous zoomable maps](references/journey-and-page-contracts.md#continuous-zoomable-maps)

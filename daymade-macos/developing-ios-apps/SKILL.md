@@ -364,7 +364,7 @@ osxSign: {
 security find-identity -v -p codesigning | grep "Developer ID Application"
 ```
 
-For complete step-by-step guide, entitlements, workflow examples, and full troubleshooting (7 real-world errors with root causes): **[references/apple-codesign-notarize.md](references/apple-codesign-notarize.md)**
+For complete step-by-step guide, entitlements, workflow examples, and full real-world troubleshooting with root causes: **[references/apple-codesign-notarize.md](references/apple-codesign-notarize.md)**
 
 ---
 
