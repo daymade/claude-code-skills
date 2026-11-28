@@ -143,11 +143,31 @@ def straddles_word_boundary(text: str, pos: int, match: str) -> bool:
 # NOT in this list (e.g. `keywords:`) are still processed — metadata is a
 # search surface too.
 _LEDGER_FRONTMATTER_KEYS = ("asr_note", "asr_pending", "asr_review")
+_STRUCTURED_AUDIT_KEY = re.compile(
+    r"""^(?P<key>asr_(?:pending|review)|'[^']*'|"(?:[^"\\]|\\.)*")[ \t]*:[ \t]*(?P<value>.*)$"""
+)
+_YAML_HEX_ESCAPE = re.compile(r"\\(?:x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8})")
 # Sentinel anchoring contains no matcher-visible padding: a transcript body can
 # legitimately contain □ (checkbox glyph / illegible-speech convention), and a
 # rule for that symbol must never disable ledger protection.
 _LEDGER_PREFIX = "⟪TFLEDGER"
 LedgerSpan: TypeAlias = tuple[str, str]
+
+
+def _structured_audit_match(line: str) -> re.Match[str] | None:
+    match = _STRUCTURED_AUDIT_KEY.match(line)
+    if match is None:
+        return None
+    key = match["key"]
+    if key.startswith('"'):
+        # These are the YAML escapes that can produce letters or underscores.
+        try:
+            key = _YAML_HEX_ESCAPE.sub(lambda m: chr(int(m[0][2:], 16)), key[1:-1])
+        except ValueError:
+            return None
+    elif key.startswith("'"):
+        key = key[1:-1]
+    return match if key in ("asr_pending", "asr_review") else None
 
 
 def _yaml_flow_line_state(line: str, depth: int, quote: str) -> tuple[int, str]:
@@ -219,7 +239,7 @@ def _mask_ledger_spans(text: str) -> Tuple[str, List[LedgerSpan]]:
     flow_depth, flow_quote = 0, ""
     for i in range(1, close_idx):
         line = lines[i]
-        pending = re.match(r"""^(['"]?)asr_(?:pending|review)\1:[ \t]*(?P<value>.*)$""", line)
+        pending = _structured_audit_match(line)
         if pending or (pending_continuation and (
             flow_depth > 0 or flow_quote or not line.strip()
             or line.startswith((" ", "\t", "-", "#", "]", "}"))
