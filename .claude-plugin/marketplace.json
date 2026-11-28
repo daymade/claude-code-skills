@@ -383,7 +383,7 @@
       "description": "Apple-platform development and operations suite for macOS window capture, TCC and Keychain dialog diagnosis, Full Disk Access repair, iOS/macOS app development, disk cleanup, and launchd watchdogs.",
       "source": "./daymade-macos",
       "strict": false,
-      "version": "1.34.37",
+      "version": "1.34.38",
       "category": "suite",
       "keywords": [
         "suite",
@@ -1156,7 +1156,7 @@
       "description": "Audits rendered UI, whole-site route censuses and task/object-link handoffs in web apps, decks, dashboards, design systems, Markdown/Obsidian and Electron. Uses real-browser journeys and Playwright for typography, overflow, responsive, routing, data-viz, browser-output or native-shell defects and reference comparisons. Excludes source-only citation checks, greenfield design (ui-designer) and QA setup (qa-expert).",
       "source": "./frontend-visual-qa",
       "strict": false,
-      "version": "1.22.10",
+      "version": "1.22.11",
       "category": "design",
       "keywords": [
         "frontend",
