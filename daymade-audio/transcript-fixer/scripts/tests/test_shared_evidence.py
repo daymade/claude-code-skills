@@ -464,9 +464,20 @@ print(json.dumps(value))
         context.write_text("- **示例错字 → 共享正字** — 禁裸词\n")
         transcript = self.root / "preview.txt"
         transcript.write_text("Speaker 1 00:00:01\n这句包含示例错字。\n")
+        reader_before = self.calls.read_bytes()
+        for options in [
+            ["--dry-run", "--input", str(transcript)],
+            ["--scan-traps", "--input", str(transcript), "--context-file", str(context)],
+            ["--probe", "示例错字", "--corpus", str(self.root)],
+        ]:
+            result = self.cli(["--add", "qzvxwrong", "synthetic wrong", "--domain", "alpha", *options])
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertIsNone(self.native.get_correction("qzvxwrong", "alpha"))
+        self.assertEqual(self.calls.read_bytes(), reader_before)
         for command in [
             ["--help"],
             ["--scan-traps", "--input", str(transcript), "--context-file", str(context), "--json"],
+            ["--probe", "示例错字", "--corpus", str(self.root), "--json"],
             ["--input", str(transcript), "--stage", "1", "--dry-run", "--json"],
         ]:
             with self.subTest(command=command):
@@ -478,6 +489,8 @@ print(json.dumps(value))
                 self.assertEqual(history_state.read_bytes(), before_history)
                 self.assertEqual(statefile.read_bytes(), before_dictionary)
                 self.assertIn("示例错字", transcript.read_text())
+                if "--dry-run" not in command:
+                    self.assertEqual(self.calls.read_bytes(), reader_before)
 
         # Final batch call without --defer-shared-publish: flushes both writes in ONE call.
         r2 = self.cli(["--add", "qzvxbeta", "synthetic beta", "--domain", "alpha"])

@@ -111,8 +111,8 @@ for a plain Fast pass.
    meeting's own jargon or delete it; note the playback span in `asr_note` when
    diarization merges it into a participant's label); do not insert unspoken words.
 6. **Second pass.** Run `--scan-traps` and inspect hits and `unparsed` at every
-   tier. Scan results give occurrence coverage. They do not record a correction
-   verdict or replay dictionary or Stage 1 history publication. For Full, read
+   tier. Use scan results for occurrence coverage and the review queue for
+   verdicts. For Full, read
    [cold review and recovery](native_second_pass.md) before
    assigning the already-corrected artifact and raw evidence. Reviewers return
    candidates; adjudicate them, including already-applied edits. A failed,

@@ -77,7 +77,7 @@ uv run scripts/fix_transcription.py --scan-traps \
 
 Safe mode is the Stage 1 default: low-risk rules apply; medium/high-risk matches defer to `*_needs_review.md` and the persistent review queue. `Applied: 0` is a valid result, not proof that the transcript is clean.
 
-`--scan-traps`, `--probe` and `--dry-run` leave both shared publication queues untouched. A correction preview runs locally, can read configured evidence and can write its local dry-run report. A subsequent ordinary write still replays pending work.
+`--scan-traps`, `--probe` and `--dry-run` each run as their own operation and leave both shared publication queues untouched. A correction preview runs locally, can read configured evidence and can write its local dry-run report. A subsequent ordinary write still replays pending work.
 
 ### Stage 1 result contract
 

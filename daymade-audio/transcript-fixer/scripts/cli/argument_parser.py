@@ -265,7 +265,7 @@ def create_argument_parser() -> argparse.ArgumentParser:
              "variant with line number + context window, and lists no-hit entries "
              "so 'scanned and absent' is distinguishable from 'never scanned'. "
              "Replaces the manual per-trap grep loop in the native pass's "
-             "trap-scan step."
+             "trap-scan step. Run separately from write commands."
     )
     parser.add_argument(
         "--context-file",
@@ -281,7 +281,8 @@ def create_argument_parser() -> argparse.ArgumentParser:
         help="Measure TERM's real-meaning frequency across --corpus before "
              "deciding a dictionary rule: per-file counts + sampled context "
              "windows, with the verdict criterion attached. Advisory — the "
-             "operator reads the samples and decides; the probe never blocks."
+             "operator reads the samples and decides; the probe never blocks. "
+             "Run separately from write commands."
     )
     parser.add_argument(
         "--corpus",
@@ -461,7 +462,7 @@ def create_argument_parser() -> argparse.ArgumentParser:
         "--dry-run",
         dest="dry_run",
         action="store_true",
-        help="Dry run mode (no actual changes)"
+        help="Preview the input workflow or audit-log cleanup without replaying shared writes"
     )
     parser.add_argument(
         "--archive-file",

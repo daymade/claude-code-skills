@@ -81,6 +81,44 @@ from cli import (
 )
 
 
+COMMAND_OPTIONS = (
+    "init", "health", "metrics", "config_action", "migration_action",
+    "audit_retention_action", "validate", "add_correction", "add_context_rule",
+    "list_context_rules", "disable_context_rule", "enable_context_rule",
+    "audit_dictionary", "list_corrections", "export_path", "import_path",
+    "review_learned", "approve", "report_false_positive", "load_presets",
+    "extract_uncertain", "enqueue_review", "list_review", "show_review",
+    "reanchor_review", "attach_authority", "resolve_review", "consolidate_review",
+    "scan_traps", "probe_term", "close_sidecars", "lookup_term", "input",
+)
+
+
+def _active_commands(args: argparse.Namespace) -> set[str]:
+    return {
+        name for name in COMMAND_OPTIONS
+        if getattr(args, name) is not None and getattr(args, name) is not False
+    }
+
+
+def _validate_preview(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    if args.scan_traps:
+        allowed = {"scan_traps", "input"}
+    elif args.probe_term is not None:
+        allowed = {"probe_term"}
+    elif args.dry_run:
+        if args.audit_retention_action == "cleanup":
+            allowed = {"audit_retention_action"}
+        elif args.input:
+            allowed = {"input", "close_sidecars"}
+        else:
+            parser.error("--dry-run requires --input or --audit-retention cleanup")
+    else:
+        return
+
+    if _active_commands(args) - allowed:
+        parser.error("run --scan-traps, --probe or --dry-run as its own operation")
+
+
 def _main(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     """Dispatch the parsed command."""
     if getattr(args, "defer_shared_publish", False):
@@ -95,21 +133,7 @@ def _main(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     if state_commands:
         # Check before every dispatch path, including the early queue return.
         # Otherwise an earlier command can ignore the explicit state DB.
-        other_commands = (
-            "init", "health", "metrics", "config_action", "migration_action",
-            "audit_retention_action", "validate", "add_correction", "add_context_rule",
-            "list_context_rules", "audit_dictionary", "list_corrections",
-            "export_path", "import_path", "review_learned", "approve",
-            "report_false_positive", "load_presets", "extract_uncertain",
-            "enqueue_review", "list_review", "show_review", "reanchor_review",
-            "attach_authority", "resolve_review", "consolidate_review",
-            "scan_traps", "probe_term", "close_sidecars", "lookup_term", "input",
-        )
-        conflicts = [
-            name for name in other_commands
-            if getattr(args, name, None) is not None
-            and getattr(args, name) is not False
-        ]
+        conflicts = _active_commands(args) - set(state_commands)
         if len(state_commands) != 1 or conflicts:
             parser.error(
                 "--disable-context-rule/--enable-context-rule must be the only "
@@ -282,11 +306,14 @@ def main() -> None:
 
     parser = create_argument_parser()
     args = parser.parse_args()
-    preview = args.scan_traps or args.probe_term is not None or args.dry_run
+    _validate_preview(args, parser)
     if not sys.argv[1:]:
         parser.print_help()
         return
-    with evidence_operation(replay_pending=not preview):
+    if args.scan_traps or args.probe_term is not None:
+        _main(args, parser)
+        return
+    with evidence_operation(replay_pending=not args.dry_run):
         _main(args, parser)
 
 

@@ -219,12 +219,12 @@ def _mask_ledger_spans(text: str) -> Tuple[str, List[LedgerSpan]]:
     flow_depth, flow_quote = 0, ""
     for i in range(1, close_idx):
         line = lines[i]
-        pending = re.match(r"^asr_(?:pending|review):[ \t]*(.*)$", line)
+        pending = re.match(r"""^(['"]?)asr_(?:pending|review)\1:[ \t]*(?P<value>.*)$""", line)
         if pending or (pending_continuation and (
             flow_depth > 0 or flow_quote or not line.strip()
             or line.startswith((" ", "\t", "-", "#", "]", "}"))
         )):
-            start = pending.start(1) if pending else 0
+            start = pending.start("value") if pending else 0
             value = line[start:]
             flow_start = pending and re.match(
                 r"^[ \t]*(?:(?:&[^\s]+|!<[^>]+>|![^\s]*)[ \t]+)*[\[{]", value)

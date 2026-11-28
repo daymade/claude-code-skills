@@ -18,6 +18,10 @@ In a complete leading YAML frontmatter block:
 - `asr_pending` holds pending IDs or candidate audit data. Its scalar, block
   list/scalar and flow list/map values are protected, including continuation rows.
   Do not text-correct quoted candidates as if they were spoken words.
+- `asr_review` holds the recorded first-pass, cold-review and audio states and
+  correction counts. Its flow and block mappings use the same protection.
+  Update it through the review record, keeping its line position stable once
+  the review queue has recorded body anchors.
 
 The shared boundary is implemented by `_mask_ledger_spans` and
 `project_without_ledger_values` in [dictionary_processor.py](../scripts/core/dictionary_processor.py).

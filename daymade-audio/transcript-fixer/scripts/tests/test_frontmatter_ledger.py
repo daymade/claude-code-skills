@@ -52,6 +52,8 @@ class TestLedgerMasking:
         records = (
             'asr_review: {audio_spans: "00:14:22–00:14:36 丹娜"}\n',
             'asr_review:\n  audio_spans: "00:14:22–00:14:36 丹娜"\n',
+            '"asr_review": {audio_spans: "00:14:22–00:14:36 丹娜"}\n',
+            "'asr_review':\n  audio_spans: '00:14:22–00:14:36 丹娜'\n",
         )
         for record in records:
             text = LEDGER_TRANSCRIPT.replace("date: '2026-08-17'\n", record + "date: '2026-08-17'\n")
