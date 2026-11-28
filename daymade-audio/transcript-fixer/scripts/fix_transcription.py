@@ -39,6 +39,7 @@ Usage:
 
 from __future__ import annotations
 
+import argparse
 import contextlib
 import json
 import sys
@@ -80,10 +81,8 @@ from cli import (
 )
 
 
-def _main() -> None:
-    """Main entry point - parse arguments and dispatch to commands"""
-    parser = create_argument_parser()
-    args = parser.parse_args()
+def _main(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    """Dispatch the parsed command."""
     if getattr(args, "defer_shared_publish", False):
         import shared_evidence as _se
         _ev = _se.current()
@@ -260,8 +259,9 @@ def _main() -> None:
     elif getattr(args, "lookup_term", None) is not None:
         cmd_lookup(args)
     elif args.input:
-        from external_dispatch import dispatch_cli
-        dispatch_cli("transcript.correct", __file__, args)
+        if not args.dry_run:
+            from external_dispatch import dispatch_cli
+            dispatch_cli("transcript.correct", __file__, args)
         if getattr(args, "json_output", False):
             # --json contract: stdout carries ONLY the machine-readable Stage 1
             # status object so consumers never infer no-op vs failure from whether
@@ -279,8 +279,15 @@ def _main() -> None:
 
 def main() -> None:
     from shared_evidence import evidence_operation
-    with evidence_operation():
-        _main()
+
+    parser = create_argument_parser()
+    args = parser.parse_args()
+    preview = args.scan_traps or args.probe_term is not None or args.dry_run
+    if not sys.argv[1:]:
+        parser.print_help()
+        return
+    with evidence_operation(replay_pending=not preview):
+        _main(args, parser)
 
 
 if __name__ == "__main__":

@@ -434,7 +434,7 @@ print(json.dumps(value))
 
         # Intermediate batch call with --defer-shared-publish: commits locally and
         # persists the durable pending cursor, with ZERO external publisher calls.
-        r1 = self.cli(["--add", "批处理错词一", "批处理正词一", "--domain", "alpha", "--defer-shared-publish"])
+        r1 = self.cli(["--add", "qzvxalpha", "synthetic alpha", "--domain", "alpha", "--defer-shared-publish"])
         self.assertEqual(r1.returncode, 0, r1.stderr)
         statefile = self.config / "shared-publications.json"
         self.assertTrue(statefile.is_file())
@@ -448,12 +448,44 @@ print(json.dumps(value))
         self.assertEqual(r_err.returncode, 2)
         self.assertFalse(publisher_calls.exists())
 
+        # A real preview with both backlogs populated must leave their bytes and
+        # all three external writer entry points untouched.
+        history_calls = self.root / "history-calls.txt"
+        history_state = self.config / "history-projections.json"
+        history_state.write_text(json.dumps({"pending": {"fixture": {}}, "receipts": {}}))
+        before_history, before_dictionary = history_state.read_bytes(), statefile.read_bytes()
+        dispatch_calls = self.root / "dispatch-calls.txt"
+        recorder = self.root / "record.py"
+        recorder.write_text("from pathlib import Path\nimport sys\nPath(sys.argv[1]).touch()\n")
+        self.profile["history_projection"] = {"protocol": 1, "argv": [sys.executable, str(recorder), str(history_calls)]}
+        self.profile["external_dispatch"] = {"protocol": 1, "argv": [sys.executable, str(recorder), str(dispatch_calls)]}
+        self.write()
+        context = self.root / "context.md"
+        context.write_text("- **示例错字 → 共享正字** — 禁裸词\n")
+        transcript = self.root / "preview.txt"
+        transcript.write_text("Speaker 1 00:00:01\n这句包含示例错字。\n")
+        for command in [
+            ["--help"],
+            ["--scan-traps", "--input", str(transcript), "--context-file", str(context), "--json"],
+            ["--input", str(transcript), "--stage", "1", "--dry-run", "--json"],
+        ]:
+            with self.subTest(command=command):
+                result = self.cli(command)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                if "--json" in command:
+                    self.assertIsInstance(json.loads(result.stdout), dict)
+                self.assertFalse(any(path.exists() for path in (publisher_calls, history_calls, dispatch_calls)))
+                self.assertEqual(history_state.read_bytes(), before_history)
+                self.assertEqual(statefile.read_bytes(), before_dictionary)
+                self.assertIn("示例错字", transcript.read_text())
+
         # Final batch call without --defer-shared-publish: flushes both writes in ONE call.
-        r2 = self.cli(["--add", "批处理错词二", "批处理正词二", "--domain", "alpha"])
+        r2 = self.cli(["--add", "qzvxbeta", "synthetic beta", "--domain", "alpha"])
         self.assertEqual(r2.returncode, 0, r2.stderr)
         state2 = json.loads(statefile.read_text())
         self.assertEqual(state2["pending"], {})
         self.assertEqual(len(publisher_calls.read_text().splitlines()), 1)
+        self.assertTrue(history_calls.exists())
         receipt = state2["receipts"][str(self.native_db.resolve())]
         self.assertEqual(receipt["captured_through_audit_cursor"], 2)
 

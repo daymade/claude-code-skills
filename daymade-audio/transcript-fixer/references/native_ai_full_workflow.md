@@ -111,11 +111,18 @@ for a plain Fast pass.
    meeting's own jargon or delete it; note the playback span in `asr_note` when
    diarization merges it into a participant's label); do not insert unspoken words.
 6. **Second pass.** Run `--scan-traps` and inspect hits and `unparsed` at every
-   tier. For Full, read [cold review and recovery](native_second_pass.md) before
+   tier. Scan results give occurrence coverage. They do not record a correction
+   verdict or replay dictionary or Stage 1 history publication. For Full, read
+   [cold review and recovery](native_second_pass.md) before
    assigning the already-corrected artifact and raw evidence. Reviewers return
    candidates; adjudicate them, including already-applied edits. A failed,
    empty/truncated or retryable result does not complete independent review.
    Use [packets](native_review_packets.md) for split/batch/resumed work.
+   Bind the cold reader to the reviewed version and its same-meeting evidence.
+   For example, if the primary pass changed one occurrence of a normal word to a
+   product name but the speaker was describing the ordinary meaning, revert only
+   that occurrence. If the cold reader finds an adjacent misheard technical term,
+   adjudicate it on its own evidence. A complete read can end with zero changes.
 7. **Record unresolved items and enqueue them.** Use the escalation policy above.
    Before enqueueing/resolving, read
    [queue payload and closure](native_queue_finalization.md) and
@@ -133,6 +140,11 @@ for a plain Fast pass.
    Numbers/audio/multi-recording claims use
    [advanced evidence](advanced_correction_evidence.md), including complete-source
    coverage where the requested result requires it.
+
+   Record the first pass against the input version, the independent review against
+   its snapshot, actual listened spans, confirmed edits and exact-file pendings
+   as separate facts. Mark Full after independent review and adjudication.
+   Archive or publication status comes from the delivery owner and its readback.
 
    **9b. Repair path drift before verdicts.** Use the re-anchor/accepted-without-write
    exits in [queue/finalization](native_queue_finalization.md); terminal verdicts

@@ -142,7 +142,7 @@ def straddles_word_boundary(text: str, pos: int, match: str) -> bool:
 # that had to be resolved kept_original by hand). Keywords/frontmatter fields
 # NOT in this list (e.g. `keywords:`) are still processed — metadata is a
 # search surface too.
-_LEDGER_FRONTMATTER_KEYS = ("asr_note", "asr_pending")
+_LEDGER_FRONTMATTER_KEYS = ("asr_note", "asr_pending", "asr_review")
 # Sentinel anchoring contains no matcher-visible padding: a transcript body can
 # legitimately contain □ (checkbox glyph / illegible-speech convention), and a
 # rule for that symbol must never disable ledger protection.
@@ -190,8 +190,8 @@ def _mask_ledger_spans(text: str) -> Tuple[str, List[LedgerSpan]]:
     order. Each masked value becomes a unique sentinel. The projection need not
     preserve columns: Change.line_number counts newlines, and restore locates
     the sentinel rather than an absolute offset. Only the value
-    portion of a single-line `asr_note: value` is masked. `asr_pending` also
-    protects block sequences/scalars and their continuation lines, one sentinel
+    portion of a single-line `asr_note: value` is masked. `asr_pending` and
+    `asr_review` also protect structured values and their continuation lines, one sentinel
     per line so scan projections retain the original line numbers. Multi-line
     `asr_note` YAML values
     (`asr_note: |` / `>` / folded, optionally with a trailing `# comment`)
@@ -219,7 +219,7 @@ def _mask_ledger_spans(text: str) -> Tuple[str, List[LedgerSpan]]:
     flow_depth, flow_quote = 0, ""
     for i in range(1, close_idx):
         line = lines[i]
-        pending = re.match(r"^asr_pending:[ \t]*(.*)$", line)
+        pending = re.match(r"^asr_(?:pending|review):[ \t]*(.*)$", line)
         if pending or (pending_continuation and (
             flow_depth > 0 or flow_quote or not line.strip()
             or line.startswith((" ", "\t", "-", "#", "]", "}"))

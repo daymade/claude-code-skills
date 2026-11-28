@@ -48,6 +48,18 @@ def _processor() -> DictionaryProcessor:
 
 
 class TestLedgerMasking:
+    def test_structured_review_values_survive_body_correction(self):
+        records = (
+            'asr_review: {audio_spans: "00:14:22–00:14:36 丹娜"}\n',
+            'asr_review:\n  audio_spans: "00:14:22–00:14:36 丹娜"\n',
+        )
+        for record in records:
+            text = LEDGER_TRANSCRIPT.replace("date: '2026-08-17'\n", record + "date: '2026-08-17'\n")
+            corrected, changes = _processor().process(text)
+            assert record in corrected
+            assert len(changes) == 1
+            assert "我们今天聊Dyna这个模型。" in corrected
+
     def test_ledger_value_untouched_body_corrected(self):
         corrected, changes = _processor().process(LEDGER_TRANSCRIPT)
         assert "asr_note: 主会已过纠错。修正含：丹娜→Dyna、图度→苏度。未修：小鱼说。" in corrected
