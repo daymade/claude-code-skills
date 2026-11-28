@@ -200,5 +200,6 @@ SID+cwd+unique-runtime gate above before any account or process claim about it.
 
 - Remote login can use device authorization with a browser on another machine; follow the OAuth guide instead of requiring a desktop app on the remote host.
 - Inspect the selected binary's `doctor --help` before using its diagnostics; when supported, use the full report for endpoint/remedy details rather than `--summary`. Interpret the failed check, not only the aggregate exit code, and read the emitted JSON schema instead of assuming an older build's keys.
+- For large thread-history databases, run `codex doctor --json` once. Back-to-back `--all` and `--json` runs can each repeat full SQLite integrity scans across multi-gigabyte databases.
 - Shell environment inheritance follows the selected build's `shell_environment_policy`; inspect the effective configuration. Keep credentials out of prompts.
 - Large file operations may need increased timeout

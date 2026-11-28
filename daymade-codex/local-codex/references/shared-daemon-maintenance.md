@@ -77,6 +77,28 @@ checks even if the target version is already running.
    pass `--yes` if the selected release requires it for noninteractive use.
    For an in-service App Server, follow
    the [work preservation and restart procedure](#bind-the-service-and-preserve-affected-work).
+
+   For a Unix standalone CLI resolved from `~/.codex/packages/standalone/`,
+   use the exact-release installer for a prerelease. In
+   [0.174.0-alpha.9](https://github.com/openai/codex/blob/rust-v0.174.0-alpha.9/codex-rs/tui/src/update_action.rs#L51-L56),
+   bare `codex update` invokes the unversioned installer with the stable
+   default (`CODEX_RELEASE=latest`). Recheck that behavior for the target
+   release. If standalone comes first on `PATH`, running
+   `npm install -g @openai/codex@alpha` under nvm/npm leaves the ordinary
+   standalone CLI selected.
+
+   1. Download `install.sh` from the exact official release and verify it
+      against its published release asset SHA-256. Use the same release's
+      `codex-package_SHA256SUMS` to verify the matching platform package
+      archive. In the ordinary login shell, run
+      `CODEX_NON_INTERACTIVE=1 sh ./install.sh --release <exact-version>`.
+      Re-resolve `codex` and verify its version, binary signature and
+      required package companions before proceeding.
+   2. From that verified CLI, run
+      `codex app-server daemon update --from-cli --yes` after the package
+      layout and work-preservation checks above. The command copies and
+      pins the package and restarts the running App Server.
+
 4. Close the operation only when the ordinary CLI, the daemon's selected
    package and the running backend all read back the target. Verify package
    provenance and process identity as described in
