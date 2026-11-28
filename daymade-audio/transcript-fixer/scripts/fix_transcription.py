@@ -39,6 +39,7 @@ Usage:
 
 from __future__ import annotations
 
+import argparse
 import contextlib
 import json
 import sys
@@ -80,10 +81,46 @@ from cli import (
 )
 
 
-def _main() -> None:
-    """Main entry point - parse arguments and dispatch to commands"""
-    parser = create_argument_parser()
-    args = parser.parse_args()
+COMMAND_OPTIONS = (
+    "init", "health", "metrics", "config_action", "migration_action",
+    "audit_retention_action", "validate", "add_correction", "add_context_rule",
+    "list_context_rules", "disable_context_rule", "enable_context_rule",
+    "audit_dictionary", "list_corrections", "export_path", "import_path",
+    "review_learned", "approve", "report_false_positive", "load_presets",
+    "extract_uncertain", "enqueue_review", "list_review", "show_review",
+    "reanchor_review", "attach_authority", "resolve_review", "consolidate_review",
+    "scan_traps", "probe_term", "close_sidecars", "lookup_term", "input",
+)
+
+
+def _active_commands(args: argparse.Namespace) -> set[str]:
+    return {
+        name for name in COMMAND_OPTIONS
+        if getattr(args, name) is not None and getattr(args, name) is not False
+    }
+
+
+def _validate_preview(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    if args.scan_traps:
+        allowed = {"scan_traps", "input"}
+    elif args.probe_term is not None:
+        allowed = {"probe_term"}
+    elif args.dry_run:
+        if args.audit_retention_action == "cleanup":
+            allowed = {"audit_retention_action"}
+        elif args.input:
+            allowed = {"input", "close_sidecars"}
+        else:
+            parser.error("--dry-run requires --input or --audit-retention cleanup")
+    else:
+        return
+
+    if _active_commands(args) - allowed:
+        parser.error("run --scan-traps, --probe or --dry-run as its own operation")
+
+
+def _main(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    """Dispatch the parsed command."""
     if getattr(args, "defer_shared_publish", False):
         import shared_evidence as _se
         _ev = _se.current()
@@ -96,21 +133,7 @@ def _main() -> None:
     if state_commands:
         # Check before every dispatch path, including the early queue return.
         # Otherwise an earlier command can ignore the explicit state DB.
-        other_commands = (
-            "init", "health", "metrics", "config_action", "migration_action",
-            "audit_retention_action", "validate", "add_correction", "add_context_rule",
-            "list_context_rules", "audit_dictionary", "list_corrections",
-            "export_path", "import_path", "review_learned", "approve",
-            "report_false_positive", "load_presets", "extract_uncertain",
-            "enqueue_review", "list_review", "show_review", "reanchor_review",
-            "attach_authority", "resolve_review", "consolidate_review",
-            "scan_traps", "probe_term", "close_sidecars", "lookup_term", "input",
-        )
-        conflicts = [
-            name for name in other_commands
-            if getattr(args, name, None) is not None
-            and getattr(args, name) is not False
-        ]
+        conflicts = _active_commands(args) - set(state_commands)
         if len(state_commands) != 1 or conflicts:
             parser.error(
                 "--disable-context-rule/--enable-context-rule must be the only "
@@ -260,8 +283,9 @@ def _main() -> None:
     elif getattr(args, "lookup_term", None) is not None:
         cmd_lookup(args)
     elif args.input:
-        from external_dispatch import dispatch_cli
-        dispatch_cli("transcript.correct", __file__, args)
+        if not args.dry_run:
+            from external_dispatch import dispatch_cli
+            dispatch_cli("transcript.correct", __file__, args)
         if getattr(args, "json_output", False):
             # --json contract: stdout carries ONLY the machine-readable Stage 1
             # status object so consumers never infer no-op vs failure from whether
@@ -279,8 +303,18 @@ def _main() -> None:
 
 def main() -> None:
     from shared_evidence import evidence_operation
-    with evidence_operation():
-        _main()
+
+    parser = create_argument_parser()
+    args = parser.parse_args()
+    _validate_preview(args, parser)
+    if not sys.argv[1:]:
+        parser.print_help()
+        return
+    if args.scan_traps or args.probe_term is not None:
+        _main(args, parser)
+        return
+    with evidence_operation(replay_pending=not args.dry_run):
+        _main(args, parser)
 
 
 if __name__ == "__main__":

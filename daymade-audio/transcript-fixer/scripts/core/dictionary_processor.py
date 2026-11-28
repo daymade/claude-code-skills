@@ -142,12 +142,32 @@ def straddles_word_boundary(text: str, pos: int, match: str) -> bool:
 # that had to be resolved kept_original by hand). Keywords/frontmatter fields
 # NOT in this list (e.g. `keywords:`) are still processed — metadata is a
 # search surface too.
-_LEDGER_FRONTMATTER_KEYS = ("asr_note", "asr_pending")
+_LEDGER_FRONTMATTER_KEYS = ("asr_note", "asr_pending", "asr_review")
+_STRUCTURED_AUDIT_KEY = re.compile(
+    r"""^(?P<key>asr_(?:pending|review)|'[^']*'|"(?:[^"\\]|\\.)*")[ \t]*:[ \t]*(?P<value>.*)$"""
+)
+_YAML_HEX_ESCAPE = re.compile(r"\\(?:x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8})")
 # Sentinel anchoring contains no matcher-visible padding: a transcript body can
 # legitimately contain □ (checkbox glyph / illegible-speech convention), and a
 # rule for that symbol must never disable ledger protection.
 _LEDGER_PREFIX = "⟪TFLEDGER"
 LedgerSpan: TypeAlias = tuple[str, str]
+
+
+def _structured_audit_match(line: str) -> re.Match[str] | None:
+    match = _STRUCTURED_AUDIT_KEY.match(line)
+    if match is None:
+        return None
+    key = match["key"]
+    if key.startswith('"'):
+        # These are the YAML escapes that can produce letters or underscores.
+        try:
+            key = _YAML_HEX_ESCAPE.sub(lambda m: chr(int(m[0][2:], 16)), key[1:-1])
+        except ValueError:
+            return None
+    elif key.startswith("'"):
+        key = key[1:-1]
+    return match if key in ("asr_pending", "asr_review") else None
 
 
 def _yaml_flow_line_state(line: str, depth: int, quote: str) -> tuple[int, str]:
@@ -190,8 +210,8 @@ def _mask_ledger_spans(text: str) -> Tuple[str, List[LedgerSpan]]:
     order. Each masked value becomes a unique sentinel. The projection need not
     preserve columns: Change.line_number counts newlines, and restore locates
     the sentinel rather than an absolute offset. Only the value
-    portion of a single-line `asr_note: value` is masked. `asr_pending` also
-    protects block sequences/scalars and their continuation lines, one sentinel
+    portion of a single-line `asr_note: value` is masked. `asr_pending` and
+    `asr_review` also protect structured values and their continuation lines, one sentinel
     per line so scan projections retain the original line numbers. Multi-line
     `asr_note` YAML values
     (`asr_note: |` / `>` / folded, optionally with a trailing `# comment`)
@@ -219,12 +239,12 @@ def _mask_ledger_spans(text: str) -> Tuple[str, List[LedgerSpan]]:
     flow_depth, flow_quote = 0, ""
     for i in range(1, close_idx):
         line = lines[i]
-        pending = re.match(r"^asr_pending:[ \t]*(.*)$", line)
+        pending = _structured_audit_match(line)
         if pending or (pending_continuation and (
             flow_depth > 0 or flow_quote or not line.strip()
             or line.startswith((" ", "\t", "-", "#", "]", "}"))
         )):
-            start = pending.start(1) if pending else 0
+            start = pending.start("value") if pending else 0
             value = line[start:]
             flow_start = pending and re.match(
                 r"^[ \t]*(?:(?:&[^\s]+|!<[^>]+>|![^\s]*)[ \t]+)*[\[{]", value)
