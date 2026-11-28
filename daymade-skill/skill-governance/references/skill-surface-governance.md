@@ -160,8 +160,10 @@ Use this workflow for owned source repos managed by
    source collisions from unresolved Skill names. Keep unresolved requested
    targets in the expected set; do not remove them to obtain a passing audit.
 4. Apply only after the requested active set is explicit.
-5. Read back every selected `~/.agents/skills/<name>` link and verify it resolves
-   into the declared canonical source.
+5. Run `test -L` on each installed directory declared as source-backed (for
+   example, `~/.agents/skills/<name>`) before resolving it. Inspect the link with
+   `readlink` and verify its resolved target matches the declared canonical source
+   directory. Report a physical copy as drift even if its files currently match.
 6. Run the real Codex surface audit. A correct symlink set with a wrong prompt
    catalog is not complete.
 
