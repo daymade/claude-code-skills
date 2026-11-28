@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **local-codex** (`daymade-codex` v2.4.24 → v2.4.25): Document exact-release standalone CLI and shared App Server prerelease upgrades and avoid duplicate SQLite integrity scans during diagnostics.
 - **skill-creator** (`daymade-skill` v1.84.7 → v1.84.8). Generate release review templates that require a recorded passing verdict before attestation, and document the three paths to assign for a public Skill release.
 - **frontend-visual-qa** (`frontend-visual-qa` v1.22.11 → v1.22.12): Add remote Electron CDP capture over loopback `--remote-debugging-port` (with multi-window URL target filtering and macOS Cocoa `-AppleLanguages` locale checks) to `references/journey-and-page-contracts.md`, and add the fixed-width dialog/onboarding lengthened-copy horizontal overflow trap (`minmax(0, 1fr)` + `white-space: normal`) to `references/interaction-complexity-and-motion.md`.
 - **lark-cli-router** (`lark-cli-router` v1.0.7 → v1.0.8): Align `references/permission-batch-recovery.md` opening scope ("page- or minute-permission updates") and link its delete-and-add prohibition to the narrow explicitly-authorized Missing OAuth scope fallback; clarify in `references/source-account-binding.md` Step 6 that multi-profile bare-token resolution applies only when explicitly in scope for the same user's authorized profiles (preserving Step 5); broaden the `CLAUDE.md` permission-batch pointer.
