@@ -219,9 +219,8 @@ def test_public_json_contract_lists_the_complete_always_present_shape():
     parameters = (SKILL_DIR / "references" / "script_parameters.md").read_text(
         encoding="utf-8"
     )
-    stage1_contract = skill_text.split("The Stage 1 JSON contract is:", 1)[1].split(
-        "For a native end-to-end example", 1
-    )[0]
+    stage1_contract = re.search(r"^### Stage 1 result contract\n(.*?)(?=^#{1,3} |\Z)", skill_text, re.M | re.S)
+    assert stage1_contract is not None, "Skill must document its Stage 1 result contract"
     fields = (
         '"applied"',
         '"deferred"',
@@ -236,19 +235,13 @@ def test_public_json_contract_lists_the_complete_always_present_shape():
         '"boundary_refused"',
         '"boundary_check_active"',
     )
-    example = re.search(r"~~~json\s*(\{.*?\})\s*~~~", stage1_contract, re.S)
+    example = re.search(r"~~~json\s*(\{.*?\})\s*~~~", stage1_contract.group(1), re.S)
     assert example is not None, "Stage 1 contract must include its JSON example"
     names = {field.strip('"') for field in fields}
     assert set(json.loads(example.group(1))) == names
     assert "- `--json` (optional):" in parameters
     parameter_contract = parameters.split("- `--json` (optional):", 1)[1].split("\n\n", 1)[0]
-    for name in names:
-        assert f"`{name}`" in parameter_contract
-    assert re.search(
-        r"(?:^|(?<=[.!?]))\s*(?:the\s+)?(?:all|listed) fields are always present\b",
-        parameter_contract,
-        re.I,
-    )
+    assert "(../SKILL.md#stage-1-result-contract)" in parameter_contract
     assert "Stage 2/3 runs add" not in parameters
 
     parser = runpy.run_path(str(ARGUMENT_PARSER_PY))["create_argument_parser"]()

@@ -114,7 +114,7 @@ def capture_success(*, args, original_bytes, original_text, output_path, output_
 def _needs_native_flush(state_path: Path) -> bool:
     """Return True only when local projection state actually has work to recover.
 
-    Read-only commands and idle CLI exits must not pay a synchronous full-history
+    Idle replay-capable CLI exits must not pay a synchronous full-history
     projection sweep across already-settled, conflict-parked (`ValueError`), or
     still-missing (`FileNotFoundError`) historical receipts. Pending Stage-1
     captures, interrupted `prepared` installs, active preimage recovery files,
